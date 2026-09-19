@@ -20,7 +20,7 @@ import {
   type WarehouseCatalogSnapshotV1,
 } from '@duckcodeailabs/dql-core';
 import type { ConnectionConfig, QueryExecutor } from '@duckcodeailabs/dql-connectors';
-import type { ConnectionMetadataScopeV1 } from './warehouse-metadata.js';
+import { sqliteColumnsOneByOne, type ConnectionMetadataScopeV1 } from './warehouse-metadata.js';
 
 const MAX_ROWS = 50_000;
 const QUERY_OPTIONS = { maxRows: MAX_ROWS, maxBytes: 32 * 1024 * 1024, batchSize: 1_000, deadlineMs: 60_000 };
@@ -297,6 +297,14 @@ export async function syncWarehouseCatalog(input: {
         results.push({ query, rows: result.rows as Row[] });
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
+        // One broken SQLite view fails the one-statement column read: read
+        // the relations one at a time and leave the broken ones out.
+        if (query.kind === 'columns' && input.connection.driver.toLowerCase() === 'sqlite') {
+          const fallback = await sqliteColumnsOneByOne(input.executor, input.connection, scope.catalogOrDatabase, QUERY_OPTIONS);
+          results.push({ query, rows: fallback.rows.map((row) => ({ ...row, is_nullable: Number(row.not_null) === 1 ? 'NO' : 'YES' })) as Row[] });
+          warnings.push(`some relations of ${scope.catalogOrDatabase} could not be described and were left out: ${message.split('\n')[0]!.slice(0, 200)}`);
+          continue;
+        }
         if (query.kind === 'columns') throw new Error(`Reading columns of ${scope.catalogOrDatabase} failed: ${message}`);
         warnings.push(`${query.kind.replace('_', ' ')} of ${scope.catalogOrDatabase} not read: ${message.split('\n')[0]!.slice(0, 200)}`);
       }

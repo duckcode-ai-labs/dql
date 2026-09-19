@@ -182,17 +182,23 @@ export async function syncWarehouseMetadata(input: {
   let queryCount = 0;
   let truncated = false;
   for (const query of queries) {
-    const result = await input.executor.executePositional(
-      query.sql,
-      [],
-      input.connection,
-      {
-        maxRows: MAX_METADATA_ROWS_PER_QUERY,
-        maxBytes: MAX_METADATA_BYTES_PER_QUERY,
-        batchSize: 1_000,
-        deadlineMs: METADATA_QUERY_DEADLINE_MS,
-      },
-    );
+    const options = {
+      maxRows: MAX_METADATA_ROWS_PER_QUERY,
+      maxBytes: MAX_METADATA_BYTES_PER_QUERY,
+      batchSize: 1_000,
+      deadlineMs: METADATA_QUERY_DEADLINE_MS,
+    };
+    let result: Awaited<ReturnType<QueryExecutor['executePositional']>>;
+    try {
+      result = await input.executor.executePositional(query.sql, [], input.connection, options);
+    } catch (error) {
+      // SQLite reads every relation's columns in one statement, so a single
+      // broken view (one naming a column that no longer exists) fails them
+      // all. Read the relations one at a time instead and leave the broken
+      // ones out: they cannot be queried anyway.
+      if (input.connection.driver !== 'sqlite') throw error;
+      result = await sqliteColumnsOneByOne(input.executor, input.connection, query.catalogOrDatabase, options);
+    }
     queryCount += 1;
     truncated ||= result.truncated === true || result.rows.length >= MAX_METADATA_ROWS_PER_QUERY;
     for (const row of result.rows) {
@@ -463,6 +469,39 @@ export function buildWarehouseMetadataQueries(
       ].join('\n'),
     }];
   });
+}
+
+/** SQLite columns relation by relation, skipping any relation SQLite cannot describe. */
+export async function sqliteColumnsOneByOne(
+  executor: QueryExecutor,
+  connection: ConnectionConfig,
+  catalogOrDatabase: string,
+  options: Parameters<QueryExecutor['executePositional']>[3],
+): Promise<Awaited<ReturnType<QueryExecutor['executePositional']>>> {
+  const literal = `'${catalogOrDatabase.replace(/'/g, "''")}'`;
+  const listed = await executor.executePositional(
+    `SELECT name FROM "${catalogOrDatabase.replace(/"/g, '""')}".sqlite_master WHERE type IN ('table', 'view') AND name NOT LIKE 'sqlite_%' ORDER BY name`,
+    [],
+    connection,
+    options,
+  );
+  const rows: Array<Record<string, unknown>> = [];
+  for (const row of listed.rows as Array<Record<string, unknown>>) {
+    const name = String(row.name ?? '');
+    if (!name) continue;
+    try {
+      const columns = await executor.executePositional(
+        `SELECT ${literal} AS table_catalog, ${literal} AS table_schema, '${name.replace(/'/g, "''")}' AS table_name, name AS column_name, type AS data_type, "notnull" AS not_null, pk AS pk_position, cid + 1 AS ordinal_position FROM pragma_table_info('${name.replace(/'/g, "''")}', ${literal})`,
+        [],
+        connection,
+        options,
+      );
+      rows.push(...(columns.rows as Array<Record<string, unknown>>));
+    } catch {
+      // A relation SQLite cannot describe (a broken view) is left out.
+    }
+  }
+  return { ...listed, rows, rowCount: rows.length } as Awaited<ReturnType<QueryExecutor['executePositional']>>;
 }
 
 function addMetadataRow(

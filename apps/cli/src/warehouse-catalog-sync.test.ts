@@ -142,6 +142,23 @@ describe('syncing a live SQLite warehouse', () => {
   const roots: string[] = [];
   afterEach(() => { for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true }); });
 
+  it('leaves out a broken view instead of failing the whole sync', async () => {
+    const projectRoot = mkdtempSync(join(tmpdir(), 'dql-warehouse-broken-view-'));
+    roots.push(projectRoot);
+    const db = new Database(':memory:');
+    db.exec(`
+      CREATE TABLE customers (customer_id INTEGER PRIMARY KEY, name TEXT);
+      CREATE TABLE staging (a INTEGER);
+      CREATE VIEW stale AS SELECT a FROM staging;
+      DROP TABLE staging;
+    `);
+    const executor = { executePositional: async (sql: string) => ({ rows: db.prepare(sql).all(), columns: [], rowCount: 0 }) } as unknown as QueryExecutor;
+    const result = await syncWarehouseCatalog({ projectRoot, executor, connection: { driver: 'sqlite' } as ConnectionConfig, scope: scope('main', ['main']) });
+    expect(result.snapshot.relations.map((relation) => relation.name)).toEqual(['customers']);
+    expect(result.snapshot.relations[0]).toMatchObject({ primaryKey: ['customer_id'] });
+    expect(result.warnings.join(' ')).toMatch(/could not be described and were left out/);
+  });
+
   it('reads declared keys and views, writes the snapshot, and reports an unreadable optional part as a warning', async () => {
     const projectRoot = mkdtempSync(join(tmpdir(), 'dql-warehouse-sync-'));
     roots.push(projectRoot);
