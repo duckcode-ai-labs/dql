@@ -1,3 +1,4 @@
+import { DatabaseSync } from 'node:sqlite';
 import { describe, expect, it } from 'vitest';
 import type { DQLManifest } from '@duckcodeailabs/dql-core';
 import { catalogKeyTypes, relationshipEvidenceFromRow, relationshipValidationSql, validateRelationshipOnWarehouse } from './relationship-validation.js';
@@ -10,12 +11,26 @@ describe('the one relationship proof', () => {
   it('asks the warehouse one statement: counts, null keys, rows per key on both sides, joined rows and rows the join would drop', () => {
     const sql = relationshipValidationSql(spec, quote);
     expect(sql).toContain('FROM "analytics"."marts"."fct_orders" f');
-    expect(sql).toContain('JOIN "analytics"."marts"."dim_customers" t ON f."customer_id" = t."customer_id"');
-    expect(sql).toContain('LEFT JOIN "analytics"."marts"."dim_customers" t ON f."customer_id" = t."customer_id" WHERE t."customer_id" IS NULL');
+    // Joined and dropped rows come from per-key counts, never from running a possibly many-to-many join.
+    expect(sql).toContain('from_keys AS (SELECT "customer_id", COUNT(*) AS key_count FROM "analytics"."marts"."fct_orders" GROUP BY "customer_id")');
+    expect(sql).toContain('FROM from_keys f JOIN to_keys t ON f."customer_id" = t."customer_id"');
+    expect(sql).toContain('FROM from_keys f LEFT JOIN to_keys t ON f."customer_id" = t."customer_id" WHERE t.key_count IS NULL');
     for (const column of ['from_rows', 'to_rows', 'joined_rows', 'from_null_keys', 'to_null_keys', 'unmatched_from', 'max_from_per_key', 'max_to_per_key']) expect(sql).toContain(`AS ${column}`);
     expect(() => relationshipValidationSql({ ...spec, keys: [{ from: 'customer_id; drop table x', to: 'customer_id' }] }, quote)).toThrow();
-    // The text (and so every existing proof's query fingerprint) is the same on every engine but
-    // MySQL/MariaDB, where `rows` is reserved and the inner alias is renamed; the columns read back are unchanged.
+    // The counts equal the ones a real join gives: NULL keys, unmatched keys and a many-to-many key included.
+    const db = new DatabaseSync(':memory:');
+    db.exec(`CREATE TABLE f (k INTEGER, j INTEGER); CREATE TABLE t (k INTEGER, j INTEGER);
+      INSERT INTO f VALUES (1,1),(1,1),(1,2),(2,1),(NULL,1),(3,NULL),(9,9);
+      INSERT INTO t VALUES (1,1),(1,1),(1,1),(2,1),(2,2),(NULL,1),(3,NULL)`);
+    for (const keys of [[{ from: 'k', to: 'k' }], [{ from: 'k', to: 'k' }, { from: 'j', to: 'j' }]]) {
+      const grouped = db.prepare(relationshipValidationSql({ ...spec, fromRelation: 'f', toRelation: 't', keys }, quote)).get() as Record<string, number>;
+      const on = keys.map((key) => `f.${key.from} = t.${key.to}`).join(' AND ');
+      const direct = db.prepare(`SELECT (SELECT COUNT(*) FROM f JOIN t ON ${on}) AS joined_rows,
+        (SELECT COUNT(*) FROM f LEFT JOIN t ON ${on} WHERE t.${keys[0]!.to} IS NULL) AS unmatched_from`).get() as Record<string, number>;
+      expect({ joined_rows: grouped.joined_rows, unmatched_from: grouped.unmatched_from }).toEqual(direct);
+    }
+    // The text is the same on every engine but MySQL/MariaDB, where `rows` is reserved and the inner
+    // alias is renamed; the columns read back are unchanged.
     expect(relationshipValidationSql(spec, quote, 'snowflake')).toBe(sql);
     expect(sql).toContain('COUNT(*) AS rows');
     const mysql = relationshipValidationSql(spec, (identifier) => `\`${identifier}\``, 'mysql');

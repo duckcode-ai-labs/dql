@@ -37,8 +37,15 @@ const ROWS_RESERVED = new Set(['mysql', 'mariadb']);
 
 /**
  * The validation statement: row counts, null keys, max rows per key on both sides, joined rows, and rows the join would drop.
- * `dialect` only renames the inner `rows` alias where the engine reserves it; every other engine keeps the same text, and so
- * the same query fingerprint its existing proofs were written with.
+ *
+ * Joined and dropped rows are summed from per-key row counts rather than by
+ * running the join: a many-to-many candidate (two big tables sharing a
+ * five-value channel id) would otherwise make the warehouse enumerate billions
+ * of row pairs. The counts are exact either way; a row whose key is NULL never
+ * joins, and is counted as dropped, as a real join would drop it.
+ *
+ * `dialect` renames the inner `rows` alias on engines that reserve the word
+ * (MySQL, MariaDB); every other engine gets the same statement text.
  */
 export function relationshipValidationSql(spec: RelationshipValidationSpec, quote: (identifier: string) => string, dialect?: string): string {
   if (!spec.keys.length) throw new Error('At least one join key pair is required.');
@@ -50,15 +57,16 @@ export function relationshipValidationSql(spec: RelationshipValidationSpec, quot
   const join = spec.keys.map((key) => `f.${safeQuote(key.from)} = t.${safeQuote(key.to)}`).join(' AND ');
   const fromKeys = spec.keys.map((key) => safeQuote(key.from)).join(', ');
   const toKeys = spec.keys.map((key) => safeQuote(key.to)).join(', ');
-  const firstToKey = safeQuote(spec.keys[0]!.to);
   const rows = dialect && ROWS_RESERVED.has(dialect.toLowerCase()) ? 'row_total' : 'rows';
   return `WITH
 from_counts AS (SELECT COUNT(*) AS ${rows}, SUM(CASE WHEN ${fromNull} THEN 1 ELSE 0 END) AS null_keys FROM ${fromRelation} f),
 to_counts AS (SELECT COUNT(*) AS ${rows}, SUM(CASE WHEN ${toNull} THEN 1 ELSE 0 END) AS null_keys FROM ${toRelation} t),
-from_max AS (SELECT COALESCE(MAX(key_count), 0) AS max_per_key FROM (SELECT COUNT(*) AS key_count FROM ${fromRelation} GROUP BY ${fromKeys}) x),
-to_max AS (SELECT COALESCE(MAX(key_count), 0) AS max_per_key FROM (SELECT COUNT(*) AS key_count FROM ${toRelation} GROUP BY ${toKeys}) x),
-joined AS (SELECT COUNT(*) AS ${rows} FROM ${fromRelation} f JOIN ${toRelation} t ON ${join}),
-unmatched AS (SELECT COUNT(*) AS ${rows} FROM ${fromRelation} f LEFT JOIN ${toRelation} t ON ${join} WHERE t.${firstToKey} IS NULL)
+from_keys AS (SELECT ${fromKeys}, COUNT(*) AS key_count FROM ${fromRelation} GROUP BY ${fromKeys}),
+to_keys AS (SELECT ${toKeys}, COUNT(*) AS key_count FROM ${toRelation} GROUP BY ${toKeys}),
+from_max AS (SELECT COALESCE(MAX(key_count), 0) AS max_per_key FROM from_keys),
+to_max AS (SELECT COALESCE(MAX(key_count), 0) AS max_per_key FROM to_keys),
+joined AS (SELECT COALESCE(SUM(f.key_count * t.key_count), 0) AS ${rows} FROM from_keys f JOIN to_keys t ON ${join}),
+unmatched AS (SELECT COALESCE(SUM(f.key_count), 0) AS ${rows} FROM from_keys f LEFT JOIN to_keys t ON ${join} WHERE t.key_count IS NULL)
 SELECT from_counts.${rows} AS from_rows, to_counts.${rows} AS to_rows, joined.${rows} AS joined_rows,
   from_counts.null_keys AS from_null_keys, to_counts.null_keys AS to_null_keys,
   unmatched.${rows} AS unmatched_from, from_max.max_per_key AS max_from_per_key, to_max.max_per_key AS max_to_per_key
