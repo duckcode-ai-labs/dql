@@ -688,8 +688,8 @@ function buildRelationships(
     }
     const fromKey = resolveScopedKey(entities, from, domain);
     const toKey = resolveScopedKey(entities, to, domain);
-    const fromEntity = fromKey ? entities[fromKey] : undefined;
-    const toEntity = toKey ? entities[toKey] : undefined;
+    const fromEntity = fromKey ? ownRecord(entities, fromKey) : undefined;
+    const toEntity = toKey ? ownRecord(entities, toKey) : undefined;
     if (!fromEntity || !toEntity) {
       diagnostics.push(modelingError(sourcePath, `relationship "${id}" references unknown entity "${!fromEntity ? from : toEntity ? to : `${from}" and "${to}`}`));
       continue;
@@ -932,18 +932,28 @@ type ScopedManifestObject = {
  * Manifest v3 always uses canonical qualified keys. Source-local ids are kept
  * only for display and package-local authoring references.
  */
+/**
+ * A record's OWN entry for a name. A model can legitimately call a thing
+ * `constructor` (Formula 1 has a constructors table) or `toString`; a plain
+ * `record[name]` would hand back JavaScript's own built-in instead, which
+ * passed the "unknown entity" guard and then failed to compile.
+ */
+function ownRecord<T>(record: Record<string, T>, name: string): T | undefined {
+  return Object.prototype.hasOwnProperty.call(record, name) ? record[name] : undefined;
+}
+
 function insertScopedRecord<T extends ScopedManifestObject>(record: Record<string, T>, value: T): boolean {
-  if (record[value.qualifiedId]) return false;
+  if (ownRecord(record, value.qualifiedId)) return false;
   record[value.qualifiedId] = value;
   return true;
 }
 
 function resolveScopedKey<T extends ScopedManifestObject>(record: Record<string, T>, reference: string, ownerDomain?: string): string | undefined {
-  if (record[reference]) return reference;
+  if (ownRecord(record, reference)) return reference;
   if (ownerDomain) {
     const kind = Object.values(record)[0]?.qualifiedId.split('::')[1];
     const localQualified = kind ? qualifiedObjectId(ownerDomain, kind, reference) : undefined;
-    if (localQualified && record[localQualified]) return localQualified;
+    if (localQualified && ownRecord(record, localQualified)) return localQualified;
   }
   const matches = Object.entries(record).filter(([, item]) => item.localId === reference
     || item.qualifiedId === reference
