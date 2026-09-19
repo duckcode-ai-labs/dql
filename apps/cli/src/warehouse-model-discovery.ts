@@ -499,7 +499,7 @@ export async function validateWarehouseDiscovery(
   snapshot: WarehouseCatalogSnapshotV1,
   execute: (sql: string) => Promise<{ rows: Array<Record<string, unknown>> }>,
   quote: (identifier: string) => string,
-  options: { maxRelationships?: number } = {},
+  options: { maxRelationships?: number; dialect?: string } = {},
 ): Promise<WarehouseDiscoveryReport> {
   // Joins the data proves come first, then every draft is checked the same way.
   report = await inferSharedKeyJoins(report, snapshot, execute, quote);
@@ -536,7 +536,7 @@ export async function validateWarehouseDiscovery(
     }
     try {
       const keyTypes = relationship.keys.map((pair) => ({ from: typesOf.get(relationship.fromRelation)?.get(pair.from.toLowerCase()), to: typesOf.get(relationship.toRelation)?.get(pair.to.toLowerCase()) }));
-      const profile = await profileRelationshipOnWarehouse({ fromRelation: relationship.fromRelation, toRelation: relationship.toRelation, keys: relationship.keys, keyTypes }, execute, quote);
+      const profile = await profileRelationshipOnWarehouse({ fromRelation: relationship.fromRelation, toRelation: relationship.toRelation, keys: relationship.keys, keyTypes }, execute, quote, new Date(), options.dialect);
       relationships.push({ ...relationship, cardinality: profile.proposed.cardinality, fanout: profile.proposed.fanout, validation: profile.evidence });
     } catch (error) {
       relationships.push({ ...relationship, validationError: error instanceof Error ? error.message.split('\n')[0]!.slice(0, 200) : String(error) });

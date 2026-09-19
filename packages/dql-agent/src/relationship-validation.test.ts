@@ -14,6 +14,13 @@ describe('the one relationship proof', () => {
     expect(sql).toContain('LEFT JOIN "analytics"."marts"."dim_customers" t ON f."customer_id" = t."customer_id" WHERE t."customer_id" IS NULL');
     for (const column of ['from_rows', 'to_rows', 'joined_rows', 'from_null_keys', 'to_null_keys', 'unmatched_from', 'max_from_per_key', 'max_to_per_key']) expect(sql).toContain(`AS ${column}`);
     expect(() => relationshipValidationSql({ ...spec, keys: [{ from: 'customer_id; drop table x', to: 'customer_id' }] }, quote)).toThrow();
+    // The text (and so every existing proof's query fingerprint) is the same on every engine but
+    // MySQL/MariaDB, where `rows` is reserved and the inner alias is renamed; the columns read back are unchanged.
+    expect(relationshipValidationSql(spec, quote, 'snowflake')).toBe(sql);
+    expect(sql).toContain('COUNT(*) AS rows');
+    const mysql = relationshipValidationSql(spec, (identifier) => `\`${identifier}\``, 'mysql');
+    expect(mysql).not.toMatch(/\bAS rows\b|\.rows\b/);
+    expect(mysql).toContain('from_counts.row_total AS from_rows');
   });
   it('reads the same evidence whoever ran it, and the declared cardinality decides pass or fail', async () => {
     const checkedAt = new Date('2026-09-09T00:00:00.000Z');

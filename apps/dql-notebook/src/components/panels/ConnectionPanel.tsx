@@ -783,7 +783,7 @@ export function ConnectionPanel({
     <div style={{ ...card, marginBottom: 12 }}>
       <div style={{ fontSize: 12, fontWeight: 650, color: t.textPrimary, fontFamily: t.font }}>Import dbt profiles.yml</div>
       <div style={{ marginTop: 3, fontSize: 10.5, color: t.textMuted, lineHeight: 1.45, fontFamily: t.font }}>
-        Load a profiles.yml, profiles.yaml, profile.yml, or profile.yaml file. DuckDB, Snowflake, and Databricks targets are supported.
+        Load a profiles.yml, profiles.yaml, profile.yml, or profile.yaml file. Targets for every warehouse listed below are supported; secrets stay in the private secrets file.
       </div>
       <div style={{ display: 'flex', gap: 7, marginTop: 9 }}>
         <input
