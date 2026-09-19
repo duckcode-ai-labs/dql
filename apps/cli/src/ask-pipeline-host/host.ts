@@ -195,7 +195,7 @@ function probePredicate(relation: ProbeIdentifier): string {
  * only, a bounded predicate list, a row cap. It reads column names and types,
  * never row values, so it is a metadata point lookup rather than discovery.
  */
-export function relationColumnsProbeSql(relations: string[], maxRelations = 8, offset = 0, driver = 'snowflake'): string | undefined {
+export function relationColumnsProbeSql(relations: string[], maxRelations = 8, offset = 0, driver = 'snowflake', location?: string): string | undefined {
   const groups = new Map<string, ProbeIdentifier[]>();
   const seen = new Set<string>();
   for (const raw of relations) {
@@ -225,8 +225,12 @@ export function relationColumnsProbeSql(relations: string[], maxRelations = 8, o
     // schema directly; prefixing it with the dbt catalog produces a relation
     // that does not exist. Keep exact database identity for Snowflake while
     // retaining a valid local-MetricFlow discovery path.
-    const source = database && databaseScopedInformationSchema ? `${probeSegment(database)}.information_schema.columns` : 'information_schema.columns';
-    const catalog = database ? sqlLiteral(database.value) : 'CURRENT_DATABASE()';
+    const source = driver.toLowerCase() === 'bigquery'
+      // BigQuery has no session information_schema: read the project's
+      // columns in the connection's location.
+      ? `${database ? `\`${database.value.replace(/`/g, '')}\`.` : ''}\`region-${(location ?? 'US').toLowerCase()}\`.INFORMATION_SCHEMA.COLUMNS`
+      : database && databaseScopedInformationSchema ? `${probeSegment(database)}.information_schema.columns` : 'information_schema.columns';
+    const catalog = database ? sqlLiteral(database.value) : currentCatalogExpression(driver);
     const predicate = group.map(probePredicate).join(' OR ');
     return [
       'SELECT table_catalog, table_schema, table_name, column_name, data_type, ordinal_position, dql_column_total',
@@ -242,6 +246,27 @@ export function relationColumnsProbeSql(relations: string[], maxRelations = 8, o
     ].join('\n');
   });
   return `${branches.join('\nUNION ALL\n')}\nORDER BY table_catalog, table_schema, table_name, ordinal_position`;
+}
+
+/**
+ * The session's database, as each engine spells it. MySQL, ClickHouse and
+ * Athena name tables `database.table` (schema.table): no third part is
+ * recorded, so their relations keep the two-part name users write.
+ */
+function currentCatalogExpression(driver: string): string {
+  switch (driver.toLowerCase()) {
+    case 'mssql':
+    case 'fabric':
+      return 'DB_NAME()';
+    case 'trino':
+      return 'current_catalog';
+    case 'mysql':
+    case 'clickhouse':
+    case 'athena':
+      return 'NULL';
+    default:
+      return 'CURRENT_DATABASE()';
+  }
 }
 
 /**
@@ -1322,7 +1347,7 @@ export function createAskPipelineHost(deps: AskPipelineHostDeps): AskPipelineHos
     const settled = new Set<string>();
     const runPage = async (relations: string[], offset: number): Promise<ProbedRelation[] | undefined> => {
       if (signal?.aborted || budgetLeft() <= 0) return undefined;
-      const sql = relationColumnsProbeSql(relations, Math.max(relations.length, 1), offset, connection.driver);
+      const sql = relationColumnsProbeSql(relations, Math.max(relations.length, 1), offset, connection.driver, connection.location);
       if (!sql) return [];
       const result = await deps.executor.executeQuery(sql, [], {}, connection, {
         ...(signal ? { signal } : {}),

@@ -6083,10 +6083,12 @@ export const api = {
   async saveConnections(
     connections: Record<string, unknown>,
     defaultConnectionName?: string,
+    /** New name → old name, so a renamed connection keeps its saved secrets. */
+    renames?: Record<string, string>,
   ): Promise<{ ok: boolean }> {
     return request<{ ok: boolean }>('/api/connections', {
       method: 'PUT',
-      body: JSON.stringify({ connections, defaultConnectionName }),
+      body: JSON.stringify({ connections, defaultConnectionName, ...(renames ? { renames } : {}) }),
     });
   },
 

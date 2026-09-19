@@ -630,6 +630,7 @@ import {
   type DatasetSource,
 } from "./notebook-datasets.js";
 import { prepareBlockInvocation } from './block-invocation.js';
+import { redactConnections, resolveSecretReferences, storeConnectionSecrets } from './connection-secrets.js';
 import { boundAgentSchemaColumns, mergeAgentSchemaCompleteness } from './ask-schema-context.js';
 
 export const APP_SOURCE_REUSABLE_TAG = 'app-source';
@@ -766,7 +767,7 @@ export interface DbtProfileConnectionCandidate {
 }
 
 export interface ConnectorInstallStatus {
-  driver: 'duckdb' | 'snowflake' | 'databricks';
+  driver: ConnectionConfig['driver'];
   label: string;
   packageName?: string;
   packageSpec?: string;
@@ -5065,6 +5066,13 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
   // driver lives in gitignored, per-project .dql/connectors). Best-effort + non-fatal.
   if (connection) assertConnectionNodeCompatibility(connection);
   ensureConnectorInstalledForStartup(projectRoot, connection?.driver);
+  if (connection && connectorAddonPackages(connection).length > 0) {
+    try {
+      ensureConnectionPackages(projectRoot, connection);
+    } catch (error) {
+      console.log(`[dql] Could not install the packages this connection needs (${error instanceof Error ? error.message : String(error)}).`);
+    }
+  }
 
   // Load semantic layer via provider system (dql native, dbt, cubejs, etc.)
   let semanticLayer: SemanticLayer | undefined;
@@ -8114,6 +8122,10 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
               bindings?.sqlParams ?? [],
               runtimeVariables(bindings?.variables ?? {}),
               preparation.connection,
+              // Where no LIMIT could be written into the statement (SQL
+              // Server has none), the connector stops reading one row past
+              // the bound instead of fetching the whole result.
+              preparation.rowBound?.outcome === 'skipped' ? { maxRows: rowBound + 1 } : undefined,
             );
           }
         });
@@ -19257,8 +19269,9 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
       res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(serializeJSON({
         default: defaultKey,
-        connections,
-        dbtProfiles,
+        // Saved secrets never travel to the browser.
+        connections: redactConnections(connections),
+        dbtProfiles: dbtProfiles.map((profile) => ({ ...profile, connection: redactConnections({ c: profile.connection }).c })),
         activeConnection,
         connectorStatus,
         metadataScope,
@@ -19691,7 +19704,12 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
           raw = JSON.parse(readFileSync(configPath, 'utf-8')) as Record<string, unknown>;
         }
         if (body.connections && typeof body.connections === 'object') {
-          raw.connections = body.connections;
+          const previousConnections = getStoredConnections(raw);
+          const renames = body.renames && typeof body.renames === 'object' ? body.renames as Record<string, string> : {};
+          raw.connections = storeConnectionSecrets(projectRoot, body.connections as Record<string, unknown>, previousConnections, {
+            renames,
+            fallback: (name, field) => dbtProfileSecret(projectRoot, loadProjectConfig(projectRoot), name, field),
+          });
         }
         const connections = getStoredConnections(raw);
         if (body.connections && typeof body.connections === 'object') {
@@ -19718,6 +19736,13 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
         const newDefault = projectConfig.defaultConnection;
         if (newDefault) {
           connection = normalizeProjectConnection(newDefault, projectRoot);
+          // The driver and any add-on (SSH tunnel, IAM sign-in) the saved
+          // connection needs are installed now, so the first test just works.
+          try {
+            ensureConnectionPackages(projectRoot, connection);
+          } catch {
+            // The test reports the missing package with its install command.
+          }
           // Auto-register data files if DuckDB/file driver
           if (connection.driver === 'file' || connection.driver === 'duckdb') {
             const dataDir = projectConfig.dataDir
@@ -26600,7 +26625,106 @@ const CONNECTOR_INSTALLS: Record<string, Omit<ConnectorInstallStatus, 'installed
     label: 'Databricks',
     builtIn: true,
   },
+  sqlite: {
+    driver: 'sqlite',
+    label: 'SQLite',
+    // better-sqlite3 ships with the CLI.
+    builtIn: true,
+  },
+  postgresql: {
+    driver: 'postgresql',
+    label: 'PostgreSQL',
+    packageName: 'pg',
+    packageSpec: 'pg@^8.13.0',
+    builtIn: false,
+  },
+  redshift: {
+    driver: 'redshift',
+    label: 'Amazon Redshift',
+    packageName: 'pg',
+    packageSpec: 'pg@^8.13.0',
+    builtIn: false,
+  },
+  mysql: {
+    driver: 'mysql',
+    label: 'MySQL / MariaDB',
+    packageName: 'mysql2',
+    packageSpec: 'mysql2@^3.11.0',
+    builtIn: false,
+  },
+  mssql: {
+    driver: 'mssql',
+    label: 'SQL Server',
+    packageName: 'mssql',
+    packageSpec: 'mssql@^11.0.0',
+    builtIn: false,
+  },
+  fabric: {
+    driver: 'fabric',
+    label: 'Microsoft Fabric',
+    packageName: 'mssql',
+    packageSpec: 'mssql@^11.0.0',
+    builtIn: false,
+  },
+  bigquery: {
+    driver: 'bigquery',
+    label: 'BigQuery',
+    packageName: '@google-cloud/bigquery',
+    packageSpec: '@google-cloud/bigquery@^7.9.0',
+    builtIn: false,
+  },
+  athena: {
+    driver: 'athena',
+    label: 'Amazon Athena',
+    packageName: '@aws-sdk/client-athena',
+    packageSpec: '@aws-sdk/client-athena@^3.700.0',
+    builtIn: false,
+  },
+  trino: {
+    driver: 'trino',
+    label: 'Trino / Starburst',
+    // Spoken over HTTP; nothing to install.
+    builtIn: true,
+  },
+  clickhouse: {
+    driver: 'clickhouse',
+    label: 'ClickHouse',
+    // Spoken over HTTP; nothing to install.
+    builtIn: true,
+  },
 };
+
+/**
+ * Packages a connection needs beyond its driver: an SSH tunnel client, or the
+ * AWS SDK pieces that mint IAM database tokens. Installed with the driver,
+ * only for a connection that uses them.
+ */
+export function connectorAddonPackages(connection: Partial<ConnectionConfig>): string[] {
+  const packages: string[] = [];
+  if (connection.sshTunnel) packages.push('ssh2@^1.16.0');
+  const aws = connection.authMethod === 'aws_default' || connection.authMethod === 'aws_profile' || connection.authMethod === 'aws_access_key';
+  if (aws && connection.driver === 'redshift') {
+    packages.push(connection.workgroup ? '@aws-sdk/client-redshift-serverless@^3.700.0' : '@aws-sdk/client-redshift@^3.700.0');
+  }
+  if (aws && connection.driver === 'postgresql') packages.push('@aws-sdk/rds-signer@^3.700.0');
+  return packages;
+}
+
+function packageNameOf(spec: string): string {
+  return spec.startsWith('@') ? `@${spec.slice(1).split('@')[0]}` : spec.split('@')[0]!;
+}
+
+/** Install whatever the connection needs that is not yet present. */
+export function ensureConnectionPackages(projectRoot: string, connection: Partial<ConnectionConfig>): string[] {
+  const definition = connection.driver ? CONNECTOR_INSTALLS[connection.driver] : undefined;
+  const wanted = [
+    ...(definition && !definition.builtIn && definition.packageSpec ? [definition.packageSpec] : []),
+    ...connectorAddonPackages(connection),
+  ].filter((spec) => !isConnectorPackageInstalled(projectRoot, packageNameOf(spec)));
+  if (wanted.length === 0) return [];
+  installPackages(projectRoot, wanted);
+  return wanted;
+}
 
 function connectorInstallRoot(projectRoot: string): string {
   return join(projectRoot, '.dql', 'connectors');
@@ -26658,6 +26782,11 @@ function installConnectorPackage(projectRoot: string, driver: string): Connector
     return getConnectorInstallStatuses(projectRoot).find((status) => status.driver === definition.driver)!;
   }
 
+  installPackages(projectRoot, [definition.packageSpec]);
+  return getConnectorInstallStatuses(projectRoot).find((status) => status.driver === definition.driver)!;
+}
+
+function installPackages(projectRoot: string, packageSpecs: string[]): void {
   const installRoot = connectorInstallRoot(projectRoot);
   mkdirSync(installRoot, { recursive: true });
   const packageJsonPath = join(installRoot, 'package.json');
@@ -26675,7 +26804,7 @@ function installConnectorPackage(projectRoot: string, driver: string): Connector
   const npm = resolveNpmInvocation();
   execFileSync(
     npm.command,
-    [...npm.argsPrefix, 'install', '--prefix', installRoot, '--no-audit', '--no-fund', definition.packageSpec],
+    [...npm.argsPrefix, 'install', '--prefix', installRoot, '--no-audit', '--no-fund', ...packageSpecs],
     {
       cwd: projectRoot,
       encoding: 'utf-8',
@@ -26683,8 +26812,6 @@ function installConnectorPackage(projectRoot: string, driver: string): Connector
       timeout: 10 * 60 * 1000,
     },
   );
-
-  return getConnectorInstallStatuses(projectRoot).find((status) => status.driver === definition.driver)!;
 }
 
 /**
@@ -28397,14 +28524,16 @@ function needsSemanticTableMapping(cell: NotebookCell): boolean {
 }
 
 export function normalizeProjectConnection(connection: ConnectionConfig, projectRoot: string): ConnectionConfig {
-  const normalized: ConnectionConfig = expandConnectionEnvPlaceholders({ ...connection });
+  const normalized: ConnectionConfig = expandConnectionEnvPlaceholders(resolveSecretReferences({ ...connection }, projectRoot));
 
   if ((normalized.driver === 'file' || normalized.driver === 'duckdb') && normalized.filepath && normalized.filepath !== ':memory:' && !isAbsoluteLikePath(normalized.filepath)) {
     normalized.filepath = resolve(projectRoot, normalized.filepath);
   }
 
-  if (normalized.driver === 'file' || normalized.driver === 'duckdb' || normalized.driver === 'snowflake') {
-    normalized.moduleSearchPaths = connectorModuleSearchPaths(projectRoot);
+  // Every driver's client library loads from the project's connector folder.
+  normalized.moduleSearchPaths = connectorModuleSearchPaths(projectRoot);
+  if (normalized.sslRootCert && !normalized.sslRootCert.includes('-----BEGIN') && !isAbsoluteLikePath(normalized.sslRootCert) && !normalized.sslRootCert.startsWith('~')) {
+    normalized.sslRootCert = resolve(projectRoot, normalized.sslRootCert);
   }
 
   if (normalized.driver === 'sqlite' && normalized.database && normalized.database !== ':memory:' && !isAbsoluteLikePath(normalized.database)) {
@@ -28423,10 +28552,13 @@ export function normalizeProjectConnection(connection: ConnectionConfig, project
 
 function expandConnectionEnvPlaceholders(connection: ConnectionConfig): ConnectionConfig {
   const expanded: Record<string, unknown> = {};
+  const expand = (value: unknown): unknown => typeof value === 'string'
+    ? value.replace(/\$\{([A-Za-z_][A-Za-z0-9_]*)\}/g, (match, envKey: string) => process.env[envKey] ?? match)
+    : value;
   for (const [key, value] of Object.entries(connection)) {
-    expanded[key] = typeof value === 'string'
-      ? value.replace(/\$\{([A-Za-z_][A-Za-z0-9_]*)\}/g, (match, envKey: string) => process.env[envKey] ?? match)
-      : value;
+    expanded[key] = key === 'sshTunnel' && value && typeof value === 'object'
+      ? Object.fromEntries(Object.entries(value as Record<string, unknown>).map(([inner, nested]) => [inner, expand(nested)]))
+      : expand(value);
   }
   return expanded as unknown as ConnectionConfig;
 }
@@ -34816,6 +34948,22 @@ interface DbtProfileTextResult {
   envRefs: string[];
 }
 
+/**
+ * The secret a dbt profile holds for a connection imported from it on the
+ * Connections page. The page only ever sees the mask, so the save looks the
+ * value up here, by the name the page gives an imported profile.
+ */
+function dbtProfileSecret(projectRoot: string, projectConfig: ProjectConfig, connectionName: string, field: string): string | undefined {
+  if (field.includes('.')) return undefined;
+  for (const candidate of discoverDbtProfileConnections(projectRoot, projectConfig)) {
+    const name = `${candidate.profileName}_${candidate.targetName}`.toLowerCase().replace(/[^a-z0-9_-]+/g, '_').replace(/^_+|_+$/g, '') || 'dbt_profile';
+    if (name !== connectionName) continue;
+    const value = (candidate.connection as unknown as Record<string, unknown>)[field];
+    return typeof value === 'string' && value ? value : undefined;
+  }
+  return undefined;
+}
+
 export function discoverDbtProfileConnections(projectRoot: string, projectConfig: ProjectConfig, explicitPath?: string): DbtProfileConnectionCandidate[] {
   const dbtProjectPath = findDbtProjectPath(projectRoot, projectConfig);
   const projectProfileName = explicitPath ? null : readDbtProjectProfileName(dbtProjectPath);
@@ -35117,6 +35265,153 @@ function mapDbtProfileOutput(output: DbtProfileOutput): {
         warnings,
       };
     }
+    // The keys below are each dbt adapter's own profile keys.
+    case 'postgres':
+    case 'redshift': {
+      const iam = adapter === 'redshift' && (read('method') ?? '').toLowerCase() === 'iam';
+      const sslMode = read('sslmode');
+      return {
+        adapter,
+        connection: compactConnection({
+          driver: adapter === 'postgres' ? 'postgresql' : 'redshift',
+          host: read('host'),
+          port: readNumber(output, 'port'),
+          database: read('dbname', 'database'),
+          schema: read('schema'),
+          username: read('user', 'username'),
+          password: iam ? undefined : read('password', 'pass'),
+          ...(iam ? { authMethod: read('iam_profile') ? 'aws_profile' as const : 'aws_default' as const, profile: read('iam_profile'), clusterId: read('cluster_id'), region: read('region') } : {}),
+          ...(sslMode && ['disable', 'require', 'verify-ca', 'verify-full'].includes(sslMode) ? { sslMode: sslMode as ConnectionConfig['sslMode'] } : {}),
+          sslRootCert: read('sslrootcert'),
+        }),
+        envRefs: [...envRefs],
+        warnings,
+      };
+    }
+    case 'bigquery': {
+      const method = (read('method') ?? 'oauth').toLowerCase();
+      const keyfileJson = output.keyfile_json && typeof output.keyfile_json === 'object' ? JSON.stringify(output.keyfile_json) : undefined;
+      if (method === 'oauth-secrets') warnings.push('BigQuery oauth-secrets sign-in is not supported; use gcloud application-default login or a service account.');
+      return {
+        adapter,
+        connection: compactConnection({
+          driver: 'bigquery',
+          projectId: read('project', 'database'),
+          schema: read('dataset', 'schema'),
+          location: read('location'),
+          authMethod: method === 'service-account' ? 'service_account_key_file' : method === 'service-account-json' ? 'service_account_json' : 'application_default',
+          keyFilename: method === 'service-account' ? read('keyfile') : undefined,
+          serviceAccountJson: method === 'service-account-json' ? keyfileJson : undefined,
+          byteLimit: readNumber(output, 'maximum_bytes_billed'),
+        }),
+        envRefs: [...envRefs],
+        warnings,
+      };
+    }
+    case 'mysql':
+    case 'mariadb':
+      return {
+        adapter,
+        connection: compactConnection({
+          driver: 'mysql',
+          host: read('server', 'host'),
+          port: readNumber(output, 'port'),
+          // dbt-mysql names the database `schema`.
+          database: read('database', 'schema'),
+          username: read('username', 'user'),
+          password: read('password'),
+        }),
+        envRefs: [...envRefs],
+        warnings,
+      };
+    case 'sqlserver':
+    case 'fabric': {
+      const authentication = (read('authentication') ?? 'sql').toLowerCase();
+      const authMethod: ConnectionConfig['authMethod'] = authentication === 'serviceprincipal'
+        ? 'azure_service_principal'
+        : authentication === 'activedirectorypassword'
+          ? 'azure_password'
+          : ['cli', 'activedirectorymsi', 'environment', 'auto', 'activedirectoryinteractive', 'activedirectoryintegrated'].includes(authentication)
+            ? 'azure_default'
+            : adapter === 'fabric' ? 'azure_default' : 'password';
+      const trustCert = readBoolean(output, 'trust_cert');
+      const encrypt = readBoolean(output, 'encrypt');
+      return {
+        adapter,
+        connection: compactConnection({
+          driver: adapter === 'fabric' ? 'fabric' : 'mssql',
+          host: read('server', 'host'),
+          port: readNumber(output, 'port'),
+          database: read('database'),
+          schema: read('schema'),
+          authMethod,
+          username: read('user', 'username'),
+          password: read('password'),
+          oauthClientId: read('client_id'),
+          oauthClientSecret: read('client_secret'),
+          tenantId: read('tenant_id'),
+          ...(encrypt === false ? { sslMode: 'disable' as const } : {}),
+          ...(trustCert !== undefined ? { trustServerCertificate: trustCert } : {}),
+        }),
+        envRefs: [...envRefs],
+        warnings,
+      };
+    }
+    case 'trino': {
+      const method = (read('method') ?? 'none').toLowerCase();
+      return {
+        adapter,
+        connection: compactConnection({
+          driver: 'trino',
+          host: read('host'),
+          port: readNumber(output, 'port'),
+          catalog: read('database', 'catalog'),
+          schema: read('schema'),
+          username: read('user', 'username'),
+          ...(method === 'jwt' || method === 'oauth' ? { authMethod: 'token' as const, token: read('jwt_token', 'token') } : { password: read('password') }),
+          ssl: (read('http_scheme') ?? '').toLowerCase() === 'https' ? true : undefined,
+        }),
+        envRefs: [...envRefs],
+        warnings,
+      };
+    }
+    case 'clickhouse':
+      return {
+        adapter,
+        connection: compactConnection({
+          driver: 'clickhouse',
+          host: read('host'),
+          port: readNumber(output, 'port'),
+          database: read('schema', 'database'),
+          username: read('user', 'username'),
+          password: read('password'),
+          ssl: readBoolean(output, 'secure'),
+        }),
+        envRefs: [...envRefs],
+        warnings,
+      };
+    case 'athena': {
+      const accessKey = read('aws_access_key_id');
+      const profile = read('aws_profile_name');
+      return {
+        adapter,
+        connection: compactConnection({
+          driver: 'athena',
+          region: read('region_name'),
+          catalog: read('database'),
+          database: read('schema'),
+          workgroup: read('work_group'),
+          outputLocation: read('s3_staging_dir'),
+          authMethod: accessKey ? 'aws_access_key' : profile ? 'aws_profile' : 'aws_default',
+          profile,
+          accessKeyId: accessKey,
+          secretAccessKey: read('aws_secret_access_key'),
+          sessionToken: read('aws_session_token'),
+        }),
+        envRefs: [...envRefs],
+        warnings,
+      };
+    }
     default:
       return null;
   }
@@ -35225,6 +35520,38 @@ function requiredConnectionFields(connection: ConnectionConfig, envRefs: string[
       needs('host');
       if (!connection.httpPath && !connection.warehouse) missing.add('httpPath');
       needs('token');
+      break;
+    case 'postgresql':
+    case 'mysql':
+      needs('host');
+      needs('database');
+      needs('username');
+      break;
+    case 'redshift':
+      needs('host');
+      needs('database');
+      if (connection.authMethod !== 'aws_default' && connection.authMethod !== 'aws_profile' && connection.authMethod !== 'aws_access_key') needs('username');
+      break;
+    case 'mssql':
+    case 'fabric':
+      needs('host');
+      needs('database');
+      break;
+    case 'bigquery':
+      needs('projectId');
+      if (connection.authMethod === 'service_account_key_file') needs('keyFilename');
+      break;
+    case 'trino':
+      needs('host');
+      needs('catalog');
+      break;
+    case 'clickhouse':
+      needs('host');
+      break;
+    case 'athena':
+      needs('region');
+      break;
+    default:
       break;
   }
 

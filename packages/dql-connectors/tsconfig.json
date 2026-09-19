@@ -5,16 +5,5 @@
     "rootDir": "./src"
   },
   "include": ["src/**/*"],
-  "exclude": [
-    "src/**/*.test.ts",
-    "src/drivers/athena.ts",
-    "src/drivers/bigquery.ts",
-    "src/drivers/clickhouse.ts",
-    "src/drivers/fabric.ts",
-    "src/drivers/mssql.ts",
-    "src/drivers/mysql.ts",
-    "src/drivers/postgresql.ts",
-    "src/drivers/redshift.ts",
-    "src/drivers/trino.ts"
-  ]
+  "exclude": ["src/**/*.test.ts"]
 }

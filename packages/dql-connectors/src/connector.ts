@@ -24,6 +24,29 @@ export interface ConnectionConfig {
   password?: string;
   token?: string;
   ssl?: boolean;
+  /** TLS policy (libpq terms): `require` encrypts, `verify-full` also checks the certificate. */
+  sslMode?: 'disable' | 'require' | 'verify-ca' | 'verify-full';
+  /** A CA bundle for `verify-ca` / `verify-full`: a PEM file path or the PEM text. */
+  sslRootCert?: string;
+  /** Redshift provisioned cluster, for IAM sign-in. */
+  clusterId?: string;
+  /**
+   * Reach a database inside a private network through an SSH bastion.
+   * Supported for PostgreSQL, Redshift, MySQL and SQL Server.
+   */
+  sshTunnel?: {
+    host: string;
+    port?: number;
+    username: string;
+    password?: string;
+    privateKey?: string;
+    privateKeyPath?: string;
+    passphrase?: string;
+  };
+  /** The name TLS checks the certificate against when the socket goes through a tunnel. */
+  tlsServername?: string;
+  /** SQL Server / Fabric: accept a self-signed server certificate. */
+  trustServerCertificate?: boolean;
   filepath?: string;
   projectId?: string;
   account?: string;
@@ -84,7 +107,10 @@ export interface ConnectionConfig {
     | 'aws_default'
     | 'aws_profile'
     | 'aws_access_key'
-    | 'token';
+    | 'token'
+    | 'azure_default'
+    | 'azure_service_principal'
+    | 'azure_password';
   authenticator?: string;
   keyFilename?: string;
   serviceAccountJson?: string;
@@ -94,6 +120,8 @@ export interface ConnectionConfig {
   secretAccessKey?: string;
   sessionToken?: string;
   profile?: string;
+  /** Microsoft Entra tenant for SQL Server / Fabric service principals. */
+  tenantId?: string;
   moduleSearchPaths?: string[];
 }
 

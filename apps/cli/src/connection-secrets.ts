@@ -1,0 +1,259 @@
+/**
+ * Connection secrets live outside `dql.config.json`.
+ *
+ * The config is shared through git, so a password typed on the Connections
+ * page is written to `.dql/local/private/connection-secrets.json` (git-ignored,
+ * readable only by this user) and the config keeps a `${secret:<conn>.<field>}`
+ * reference in its place. The API never sends a stored secret back to the
+ * browser: a saved secret reads as a mask, and saving the mask keeps it.
+ *
+ * Literal secrets already in a config, and `${ENV_VAR}` references, keep
+ * working unchanged; a literal moves to the private file the next time the
+ * connection is saved from the page.
+ */
+import { chmodSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+
+/** Connection fields that hold a secret. `sshTunnel.*` fields are nested. */
+export const SECRET_FIELDS = [
+  'password',
+  'token',
+  'privateKey',
+  'privateKeyPassphrase',
+  'passcode',
+  'oauthClientSecret',
+  'proxyPassword',
+  'secretAccessKey',
+  'sessionToken',
+  'serviceAccountJson',
+  'sshTunnel.password',
+  'sshTunnel.privateKey',
+  'sshTunnel.passphrase',
+] as const;
+
+/** What the API shows for a saved secret. Saving it back keeps the stored value. */
+export const SECRET_MASK = '••••••••';
+
+const SECRET_REFERENCE = /^\$\{secret:([^}]+)\}$/;
+
+type Secrets = Record<string, Record<string, string>>;
+
+export function connectionSecretsPath(projectRoot: string): string {
+  return join(projectRoot, '.dql', 'local', 'private', 'connection-secrets.json');
+}
+
+function readSecrets(projectRoot: string): Secrets {
+  const path = connectionSecretsPath(projectRoot);
+  if (!existsSync(path)) return {};
+  try {
+    const parsed = JSON.parse(readFileSync(path, 'utf-8')) as unknown;
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed as Secrets : {};
+  } catch {
+    return {};
+  }
+}
+
+function writeSecrets(projectRoot: string, secrets: Secrets): void {
+  const path = connectionSecretsPath(projectRoot);
+  mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
+  const temp = `${path}.${process.pid}.tmp`;
+  writeFileSync(temp, JSON.stringify(secrets, null, 2) + '\n', { encoding: 'utf-8', mode: 0o600 });
+  renameSync(temp, path);
+  try {
+    chmodSync(path, 0o600);
+  } catch {
+    // Best effort on file systems without POSIX modes.
+  }
+}
+
+function getField(connection: Record<string, unknown>, field: string): unknown {
+  const [head, tail] = field.split('.') as [string, string | undefined];
+  if (!tail) return connection[head];
+  const nested = connection[head];
+  return nested && typeof nested === 'object' && !Array.isArray(nested) ? (nested as Record<string, unknown>)[tail] : undefined;
+}
+
+function setField(connection: Record<string, unknown>, field: string, value: unknown): void {
+  const [head, tail] = field.split('.') as [string, string | undefined];
+  if (!tail) {
+    if (value === undefined) delete connection[head];
+    else connection[head] = value;
+    return;
+  }
+  const nested = connection[head];
+  if (!nested || typeof nested !== 'object' || Array.isArray(nested)) return;
+  const copy = { ...(nested as Record<string, unknown>) };
+  if (value === undefined) delete copy[tail];
+  else copy[tail] = value;
+  connection[head] = copy;
+}
+
+function isReference(value: unknown): boolean {
+  return typeof value === 'string' && /^\$\{[^}]+\}$/.test(value.trim());
+}
+
+/**
+ * Connections as the API shows them: every saved secret is the mask. An
+ * `${ENV_VAR}` reference is not a secret and is shown as written.
+ */
+export function redactConnections(connections: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [name, value] of Object.entries(connections)) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      out[name] = value;
+      continue;
+    }
+    const copy = { ...(value as Record<string, unknown>) };
+    if (copy.credentials !== undefined) copy.credentials = SECRET_MASK;
+    for (const field of SECRET_FIELDS) {
+      const current = getField(copy, field);
+      if (typeof current !== 'string' || current === '') continue;
+      if (isReference(current) && !SECRET_REFERENCE.test(current)) continue;
+      setField(copy, field, SECRET_MASK);
+    }
+    out[name] = copy;
+  }
+  return out;
+}
+
+/**
+ * Store the secrets of connections saved from the page. A new literal goes to
+ * the private file and becomes a reference; the mask keeps whatever was saved
+ * before; an empty value removes the secret. Secrets of connections that no
+ * longer exist are dropped.
+ */
+export function storeConnectionSecrets(
+  projectRoot: string,
+  incoming: Record<string, unknown>,
+  previous: Record<string, unknown>,
+  options: {
+    /** New name → old name, for a connection renamed on the page. */
+    renames?: Record<string, string>;
+    /** A secret the page could not have sent, e.g. from the dbt profile it was imported from. */
+    fallback?: (connection: string, field: string) => string | undefined;
+  } = {},
+): Record<string, unknown> {
+  const secrets = readSecrets(projectRoot);
+  const next: Secrets = {};
+  const out: Record<string, unknown> = {};
+  for (const [name, value] of Object.entries(incoming)) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      out[name] = value;
+      continue;
+    }
+    const connection = { ...(value as Record<string, unknown>) };
+    const priorName = previous[name] !== undefined ? name : options.renames?.[name] ?? name;
+    const before = previous[priorName] && typeof previous[priorName] === 'object' ? previous[priorName] as Record<string, unknown> : {};
+    if (connection.credentials === SECRET_MASK) connection.credentials = before.credentials;
+    if (connection.credentials && typeof connection.credentials === 'object' && !connection.serviceAccountJson) {
+      // An inline key object is a secret too: it moves out as JSON text.
+      connection.serviceAccountJson = JSON.stringify(connection.credentials);
+      delete connection.credentials;
+    }
+    for (const field of SECRET_FIELDS) {
+      const current = getField(connection, field);
+      if (current === SECRET_MASK) {
+        // Unchanged on the page: keep the stored secret where it lives now.
+        const kept = getField(before, field);
+        const reference = typeof kept === 'string' ? kept.match(SECRET_REFERENCE)?.[1] : undefined;
+        if (reference) {
+          const stored = lookupSecret(secrets, reference);
+          if (stored !== undefined) {
+            putSecret(next, name, field, stored);
+            setField(connection, field, referenceFor(name, field));
+            continue;
+          }
+        }
+        if (typeof kept === 'string' && kept !== '' && !SECRET_REFERENCE.test(kept)) {
+          if (isReference(kept)) {
+            setField(connection, field, kept);
+          } else {
+            putSecret(next, name, field, kept);
+            setField(connection, field, referenceFor(name, field));
+          }
+          continue;
+        }
+        const fallback = options.fallback?.(name, field);
+        if (fallback) {
+          if (isReference(fallback)) {
+            setField(connection, field, fallback);
+          } else {
+            putSecret(next, name, field, fallback);
+            setField(connection, field, referenceFor(name, field));
+          }
+          continue;
+        }
+        setField(connection, field, undefined);
+        continue;
+      }
+      if (typeof current !== 'string' || current === '') {
+        if (current === '') setField(connection, field, undefined);
+        continue;
+      }
+      if (isReference(current)) {
+        const reference = current.match(SECRET_REFERENCE)?.[1];
+        const stored = reference ? lookupSecret(secrets, reference) : undefined;
+        if (stored !== undefined) {
+          putSecret(next, name, field, stored);
+          setField(connection, field, referenceFor(name, field));
+        }
+        continue;
+      }
+      putSecret(next, name, field, current);
+      setField(connection, field, referenceFor(name, field));
+    }
+    out[name] = connection;
+  }
+  writeSecrets(projectRoot, next);
+  return out;
+}
+
+function referenceFor(connection: string, field: string): string {
+  return `\${secret:${connection}.${field}}`;
+}
+
+function putSecret(secrets: Secrets, connection: string, field: string, value: string): void {
+  (secrets[connection] ??= {})[field] = value;
+}
+
+function lookupSecret(secrets: Secrets, reference: string): string | undefined {
+  // `<connection>.<field>` where the field may itself be `sshTunnel.password`.
+  for (const field of SECRET_FIELDS) {
+    const suffix = `.${field}`;
+    if (reference.endsWith(suffix)) {
+      const connection = reference.slice(0, -suffix.length);
+      const value = secrets[connection]?.[field];
+      if (value !== undefined) return value;
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Replace `${secret:...}` references with the stored values. A reference
+ * whose secret is missing is an error that names the connection, never a
+ * sign-in attempt with the reference text as the password.
+ */
+export function resolveSecretReferences<T extends object>(connection: T, projectRoot: string): T {
+  let secrets: Secrets | null = null;
+  const resolveValue = (value: unknown): unknown => {
+    if (typeof value !== 'string') return value;
+    const match = value.trim().match(SECRET_REFERENCE);
+    if (!match) return value;
+    secrets ??= readSecrets(projectRoot);
+    const stored = lookupSecret(secrets, match[1]!);
+    if (stored === undefined) {
+      throw new Error(`The saved secret ${match[1]} is missing from .dql/local/private/connection-secrets.json. Re-enter it on the Connections page.`);
+    }
+    return stored;
+  };
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(connection as Record<string, unknown>)) {
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+      out[key] = Object.fromEntries(Object.entries(value as Record<string, unknown>).map(([inner, nested]) => [inner, resolveValue(nested)]));
+    } else {
+      out[key] = resolveValue(value);
+    }
+  }
+  return out as T;
+}

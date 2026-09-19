@@ -4,6 +4,16 @@ import { DuckDBConnector } from './drivers/duckdb.js';
 import { FileConnector } from './drivers/file.js';
 import { DatabricksConnector } from './drivers/databricks.js';
 import { SQLiteConnector } from './drivers/sqlite.js';
+import { PostgreSQLConnector } from './drivers/postgresql.js';
+import { RedshiftConnector } from './drivers/redshift.js';
+import { MySQLConnector } from './drivers/mysql.js';
+import { MSSQLConnector } from './drivers/mssql.js';
+import { FabricConnector } from './drivers/fabric.js';
+import { TrinoConnector } from './drivers/trino.js';
+import { ClickHouseConnector } from './drivers/clickhouse.js';
+import { AthenaConnector } from './drivers/athena.js';
+import { BigQueryConnector } from './drivers/bigquery.js';
+import { openSshTunnel } from './drivers/ssh-tunnel.js';
 import { createHash } from 'node:crypto';
 
 function stableSerialize(value: unknown): string {
@@ -33,6 +43,13 @@ export function createConnectionConfigKey(config: ConnectionConfig): string {
     password: config.password,
     token: config.token,
     ssl: config.ssl,
+    sslMode: config.sslMode,
+    trustServerCertificate: config.trustServerCertificate,
+    tenantId: config.tenantId,
+    sslRootCert: config.sslRootCert,
+    clusterId: config.clusterId,
+    sshTunnel: config.sshTunnel,
+    tlsServername: config.tlsServername,
     filepath: config.filepath,
     projectId: config.projectId,
     account: config.account,
@@ -107,8 +124,21 @@ export class ConnectionPoolManager {
 
     const connectPromise = (async () => {
       const connector = this.createConnector(config);
+      // A database in a private network is reached through an SSH bastion;
+      // the tunnel lives exactly as long as the connector.
+      const tunnel = config.sshTunnel ? await openSshTunnel(config) : null;
+      if (tunnel) {
+        const disconnect = connector.disconnect.bind(connector);
+        connector.disconnect = async () => {
+          try {
+            await disconnect();
+          } finally {
+            await tunnel.close();
+          }
+        };
+      }
       try {
-        await connector.connect(config);
+        await connector.connect(tunnel ? tunnel.config : config);
         this.connectors.set(key, connector);
         return connector;
       } catch (error) {
@@ -163,10 +193,26 @@ export class ConnectionPoolManager {
         return new DatabricksConnector();
       case 'sqlite':
         return new SQLiteConnector();
+      case 'postgresql':
+        return new PostgreSQLConnector();
+      case 'redshift':
+        return new RedshiftConnector();
+      case 'mysql':
+        return new MySQLConnector();
+      case 'mssql':
+        return new MSSQLConnector();
+      case 'fabric':
+        return new FabricConnector();
+      case 'trino':
+        return new TrinoConnector();
+      case 'clickhouse':
+        return new ClickHouseConnector();
+      case 'athena':
+        return new AthenaConnector();
+      case 'bigquery':
+        return new BigQueryConnector();
       default:
-        throw new Error(
-          `Unsupported database driver: ${config.driver}. This lightweight DQL package includes DuckDB, SQLite, Snowflake, and Databricks connectors.`,
-        );
+        throw new Error(`Unsupported database driver: ${String((config as { driver?: unknown }).driver)}.`);
     }
   }
 

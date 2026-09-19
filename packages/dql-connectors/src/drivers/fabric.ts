@@ -1,14 +1,20 @@
 import { MSSQLConnector } from './mssql.js';
-import type { ConnectionConfig } from '../connector.js';
+import type { ConnectionConfig, DriverName } from '../connector.js';
 
+/**
+ * A Microsoft Fabric warehouse or SQL endpoint: SQL Server's protocol, always
+ * encrypted, signed in with Microsoft Entra ID unless told otherwise.
+ */
 export class FabricConnector extends MSSQLConnector {
-  readonly driverName = 'fabric';
+  readonly driverName: DriverName = 'fabric';
+  protected engine = 'Fabric';
 
-  async connect(config: ConnectionConfig): Promise<void> {
-    await super.connect({
+  protected poolConfig(config: ConnectionConfig): Record<string, unknown> {
+    return super.poolConfig({
       ...config,
-      driver: 'fabric',
-      port: config.port ?? 1433,
+      ssl: true,
+      sslMode: config.sslMode === 'disable' ? 'require' : config.sslMode,
+      authMethod: config.authMethod ?? 'azure_default',
     });
   }
 }

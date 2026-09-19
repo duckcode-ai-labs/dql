@@ -8,9 +8,10 @@
  * and view definitions are best effort, so a warehouse or role that does not
  * expose one still syncs, with a warning naming what was skipped.
  *
- * Per driver: DuckDB, SQLite, Postgres/Redshift, Snowflake, Databricks (Unity
- * Catalog) and BigQuery read keys and comments; every other driver reads
- * tables, views and columns from information_schema.
+ * Per driver: DuckDB, SQLite, Postgres/Redshift, MySQL, SQL Server/Fabric,
+ * Snowflake, Databricks (Unity Catalog) and BigQuery read keys and comments;
+ * ClickHouse, Trino and Athena read comments and views (they declare no keys);
+ * any other driver reads tables, views and columns from information_schema.
  */
 
 import {
@@ -108,6 +109,44 @@ export function buildWarehouseCatalogQueries(driver: string, scope: { catalogOrD
       { kind: 'keys', catalogOrDatabase: db, sql: union((dataset) => `SELECT tc.constraint_type, tc.constraint_name, kcu.table_schema, kcu.table_name, kcu.column_name, kcu.ordinal_position AS position, ccu.table_catalog AS ref_catalog, ccu.table_schema AS ref_schema, ccu.table_name AS ref_table, ccu.column_name AS ref_column FROM ${view(dataset, 'TABLE_CONSTRAINTS')} tc JOIN ${view(dataset, 'KEY_COLUMN_USAGE')} kcu ON kcu.constraint_name = tc.constraint_name LEFT JOIN ${view(dataset, 'CONSTRAINT_COLUMN_USAGE')} ccu ON tc.constraint_type = 'FOREIGN KEY' AND ccu.constraint_name = tc.constraint_name WHERE tc.constraint_type = 'PRIMARY KEY' OR (tc.constraint_type = 'FOREIGN KEY' AND (SELECT COUNT(*) FROM ${view(dataset, 'KEY_COLUMN_USAGE')} k WHERE k.constraint_name = tc.constraint_name) = 1)`) },
     ];
   }
+  if (d === 'mysql') {
+    // MySQL: a database is the schema. Comments, keys and view text all come
+    // from information_schema; a foreign key names its target directly.
+    return [
+      { kind: 'columns', catalogOrDatabase: db, sql: `SELECT table_schema AS table_schema, table_name AS table_name, column_name AS column_name, column_type AS data_type, is_nullable AS is_nullable, column_comment AS comment FROM information_schema.columns WHERE ${schemaFilter('table_schema')} ORDER BY table_schema, table_name, ordinal_position LIMIT ${MAX_ROWS}` },
+      { kind: 'tables', catalogOrDatabase: db, sql: `SELECT table_schema AS table_schema, table_name AS table_name, table_type AS table_type, NULLIF(table_comment, '') AS comment, table_rows AS row_count FROM information_schema.tables WHERE ${schemaFilter('table_schema')}` },
+      { kind: 'views', catalogOrDatabase: db, sql: `SELECT table_schema AS table_schema, table_name AS table_name, view_definition AS view_definition FROM information_schema.views WHERE ${schemaFilter('table_schema')}` },
+      { kind: 'keys', catalogOrDatabase: db, sql: `SELECT tc.constraint_type AS constraint_type, kcu.constraint_name AS constraint_name, kcu.table_schema AS table_schema, kcu.table_name AS table_name, kcu.column_name AS column_name, kcu.ordinal_position AS position, kcu.referenced_table_schema AS ref_schema, kcu.referenced_table_name AS ref_table, kcu.referenced_column_name AS ref_column FROM information_schema.key_column_usage kcu JOIN information_schema.table_constraints tc ON tc.constraint_schema = kcu.constraint_schema AND tc.constraint_name = kcu.constraint_name AND tc.table_name = kcu.table_name WHERE tc.constraint_type IN ('PRIMARY KEY', 'FOREIGN KEY') AND ${schemaFilter('kcu.table_schema')} ORDER BY kcu.table_schema, kcu.table_name, kcu.constraint_name, kcu.ordinal_position` },
+    ];
+  }
+  if (d === 'mssql' || d === 'fabric') {
+    // SQL Server: descriptions are MS_Description extended properties; keys
+    // come from sys catalog views, which order composite keys reliably.
+    const objectId = `OBJECT_ID(QUOTENAME(c.TABLE_SCHEMA) + '.' + QUOTENAME(c.TABLE_NAME))`;
+    return [
+      { kind: 'columns', catalogOrDatabase: db, sql: `SELECT TOP (${MAX_ROWS}) c.TABLE_CATALOG AS table_catalog, c.TABLE_SCHEMA AS table_schema, c.TABLE_NAME AS table_name, c.COLUMN_NAME AS column_name, c.DATA_TYPE AS data_type, c.IS_NULLABLE AS is_nullable, CAST(ep.value AS NVARCHAR(4000)) AS comment FROM INFORMATION_SCHEMA.COLUMNS c LEFT JOIN sys.extended_properties ep ON ep.class = 1 AND ep.name = 'MS_Description' AND ep.major_id = ${objectId} AND ep.minor_id = COLUMNPROPERTY(${objectId}, c.COLUMN_NAME, 'ColumnId') WHERE ${schemaFilter('c.TABLE_SCHEMA')} ORDER BY c.TABLE_SCHEMA, c.TABLE_NAME, c.ORDINAL_POSITION` },
+      { kind: 'tables', catalogOrDatabase: db, sql: `SELECT c.TABLE_CATALOG AS table_catalog, c.TABLE_SCHEMA AS table_schema, c.TABLE_NAME AS table_name, c.TABLE_TYPE AS table_type, CAST(ep.value AS NVARCHAR(4000)) AS comment FROM INFORMATION_SCHEMA.TABLES c LEFT JOIN sys.extended_properties ep ON ep.class = 1 AND ep.name = 'MS_Description' AND ep.minor_id = 0 AND ep.major_id = ${objectId} WHERE ${schemaFilter('c.TABLE_SCHEMA')}` },
+      { kind: 'views', catalogOrDatabase: db, sql: `SELECT c.TABLE_CATALOG AS table_catalog, c.TABLE_SCHEMA AS table_schema, c.TABLE_NAME AS table_name, OBJECT_DEFINITION(${objectId}) AS view_definition FROM INFORMATION_SCHEMA.VIEWS c WHERE ${schemaFilter('c.TABLE_SCHEMA')}` },
+      { kind: 'keys', catalogOrDatabase: db, sql: `SELECT 'PRIMARY KEY' AS constraint_type, kc.name AS constraint_name, s.name AS table_schema, t.name AS table_name, col.name AS column_name, ic.key_ordinal AS position, NULL AS ref_schema, NULL AS ref_table, NULL AS ref_column FROM sys.key_constraints kc JOIN sys.tables t ON t.object_id = kc.parent_object_id JOIN sys.schemas s ON s.schema_id = t.schema_id JOIN sys.index_columns ic ON ic.object_id = kc.parent_object_id AND ic.index_id = kc.unique_index_id JOIN sys.columns col ON col.object_id = ic.object_id AND col.column_id = ic.column_id WHERE kc.type = 'PK' AND ${schemaFilter('s.name')} UNION ALL SELECT 'FOREIGN KEY', fk.name, s.name, t.name, col.name, fkc.constraint_column_id, rs.name, rt.name, rc.name FROM sys.foreign_keys fk JOIN sys.foreign_key_columns fkc ON fkc.constraint_object_id = fk.object_id JOIN sys.tables t ON t.object_id = fkc.parent_object_id JOIN sys.schemas s ON s.schema_id = t.schema_id JOIN sys.columns col ON col.object_id = fkc.parent_object_id AND col.column_id = fkc.parent_column_id JOIN sys.tables rt ON rt.object_id = fkc.referenced_object_id JOIN sys.schemas rs ON rs.schema_id = rt.schema_id JOIN sys.columns rc ON rc.object_id = fkc.referenced_object_id AND rc.column_id = fkc.referenced_column_id WHERE ${schemaFilter('s.name')}` },
+    ];
+  }
+  if (d === 'clickhouse') {
+    // ClickHouse: a database is the schema. It has no foreign keys; its
+    // primary (sorting) key is not a uniqueness guarantee, so none is read.
+    return [
+      { kind: 'columns', catalogOrDatabase: db, sql: `SELECT database AS table_schema, table AS table_name, name AS column_name, type AS data_type, if(startsWith(type, 'Nullable('), 'YES', 'NO') AS is_nullable, nullIf(comment, '') AS comment FROM system.columns WHERE ${schemaFilter('database')} ORDER BY database, table, position LIMIT ${MAX_ROWS}` },
+      { kind: 'tables', catalogOrDatabase: db, sql: `SELECT database AS table_schema, name AS table_name, if(engine IN ('View', 'MaterializedView', 'LiveView'), if(engine = 'MaterializedView', 'MATERIALIZED VIEW', 'VIEW'), 'BASE TABLE') AS table_type, nullIf(comment, '') AS comment, total_rows AS row_count, if(engine = 'View', as_select, NULL) AS view_definition FROM system.tables WHERE ${schemaFilter('database')} AND NOT is_temporary` },
+    ];
+  }
+  if (d === 'trino' || d === 'athena') {
+    // Trino / Athena: one information_schema per catalog, no declared keys.
+    const is = d === 'trino' ? `${ident(db)}.information_schema` : 'information_schema';
+    return [
+      { kind: 'columns', catalogOrDatabase: db, sql: `SELECT table_catalog, table_schema, table_name, column_name, data_type, is_nullable, comment FROM ${is}.columns WHERE ${schemaFilter('table_schema')} ORDER BY table_schema, table_name, ordinal_position LIMIT ${MAX_ROWS}` },
+      { kind: 'tables', catalogOrDatabase: db, sql: `SELECT table_catalog, table_schema, table_name, table_type FROM ${is}.tables WHERE ${schemaFilter('table_schema')}` },
+      { kind: 'views', catalogOrDatabase: db, sql: `SELECT table_catalog, table_schema, table_name, view_definition FROM ${is}.views WHERE ${schemaFilter('table_schema')}` },
+    ];
+  }
   // Every other driver: tables, views and columns from information_schema.
   return [
     { kind: 'columns', catalogOrDatabase: db, sql: `SELECT table_catalog, table_schema, table_name, column_name, data_type, is_nullable FROM information_schema.columns WHERE ${schemaFilter('table_schema')} ORDER BY table_schema, table_name, ordinal_position LIMIT ${MAX_ROWS}` },
@@ -140,7 +179,7 @@ export function assembleWarehouseCatalog(driver: string, results: Array<{ query:
   // relation (ids stay as they were): Ask's schema index names these tables
   // `database.schema.table`, and a table must have one name everywhere or its
   // columns are not found under the name it was chosen by.
-  const recordDatabase = includeCatalog || ['duckdb', 'postgres', 'postgresql', 'redshift'].includes(driver.toLowerCase());
+  const recordDatabase = includeCatalog || ['duckdb', 'postgres', 'postgresql', 'redshift', 'mssql', 'fabric', 'trino'].includes(driver.toLowerCase());
   const relations = new Map<string, WarehouseCatalogRelationV1>();
   const ensure = (row: Row, catalogOrDatabase: string): WarehouseCatalogRelationV1 | undefined => {
     const schema = text(row, 'table_schema');

@@ -5,7 +5,7 @@ import { compile, writeBundle } from '@duckcodeailabs/dql-compiler';
 import { QueryExecutor } from '@duckcodeailabs/dql-connectors';
 import { DataLexContractRegistry, resolveDataLexManifestPath } from '@duckcodeailabs/dql-core';
 import type { CLIFlags } from '../args.js';
-import { assertLocalQueryRuntimeReady, findProjectRoot, loadProjectConfig, startLocalServer } from '../local-runtime.js';
+import { assertLocalQueryRuntimeReady, findProjectRoot, loadProjectConfig, normalizeProjectConnection, startLocalServer } from '../local-runtime.js';
 import { maybeOpenBrowser } from '../open-browser.js';
 
 export async function runPreview(filePath: string, flags: CLIFlags): Promise<void> {
@@ -36,7 +36,9 @@ export async function runPreview(filePath: string, flags: CLIFlags): Promise<voi
   writeBundle(result.dashboards[0], previewDir);
 
   const executor = new QueryExecutor();
-  const connection = config.defaultConnection ?? { driver: 'file', filepath: ':memory:' };
+  const connection = config.defaultConnection
+    ? normalizeProjectConnection(config.defaultConnection, projectRoot)
+    : { driver: 'file' as const, filepath: ':memory:' };
   process.chdir(projectRoot);
   await assertLocalQueryRuntimeReady(executor, connection);
   const port = await startLocalServer({

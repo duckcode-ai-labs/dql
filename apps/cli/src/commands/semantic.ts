@@ -16,7 +16,7 @@ import {
 } from '@duckcodeailabs/dql-core';
 import { QueryExecutor } from '@duckcodeailabs/dql-connectors';
 import type { CLIFlags } from '../args.js';
-import { findProjectRoot, loadProjectConfig, resolveProjectSemanticConfig } from '../local-runtime.js';
+import { findProjectRoot, loadProjectConfig, normalizeProjectConnection, resolveProjectSemanticConfig } from '../local-runtime.js';
 import { loadSemanticImportManifest, performSemanticImport, syncSemanticImport } from '../semantic-import.js';
 
 export async function runSemantic(
@@ -453,10 +453,7 @@ function createSnowflakeQueryExecutor(
     throw new Error('Snowflake semantic import requires a default Snowflake connection in dql.config.json.');
   }
   const executor = new QueryExecutor();
-  const normalizedConnection = {
-    ...connection,
-    filepath: connection.filepath ? resolve(projectRoot, connection.filepath) : connection.filepath,
-  };
+  const normalizedConnection = normalizeProjectConnection(connection, projectRoot);
   return async (sql: string) => {
     const result = await executor.executeQuery(sql, [], {}, normalizedConnection);
     return { rows: result.rows };

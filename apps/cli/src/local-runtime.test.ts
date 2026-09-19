@@ -155,6 +155,7 @@ import { setClaudeCredentials } from './providers/oauth/oauth-store.js';
 import { ClaudeCodeCliProvider } from './providers/subscription-cli.js';
 import { afterEach } from 'vitest';
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { storeConnectionSecrets } from './connection-secrets.js';
 import { EventEmitter } from 'node:events';
 import { dirname, join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -7121,11 +7122,27 @@ describe('normalizeProjectConnection', () => {
       expect(normalizeProjectConnection(
         { driver: 'postgresql', host: 'localhost', database: '${DQL_TEST_DATABASE}', username: 'dql' },
         '/tmp/demo-project',
-      )).toEqual({ driver: 'postgresql', host: 'localhost', database: 'analytics', username: 'dql' });
+      )).toEqual({
+        driver: 'postgresql',
+        host: 'localhost',
+        database: 'analytics',
+        username: 'dql',
+        // Every driver loads its client library from the project's connector folder.
+        moduleSearchPaths: ['/tmp/demo-project/.dql/connectors', '/tmp/demo-project'],
+      });
     } finally {
       if (previous === undefined) delete process.env.DQL_TEST_DATABASE;
       else process.env.DQL_TEST_DATABASE = previous;
     }
+  });
+
+  it('signs in with the secret saved outside the config, never with the reference text', () => {
+    const projectRoot = mkdtempSync(join(tmpdir(), 'dql-secret-ref-'));
+    const stored = storeConnectionSecrets(projectRoot, { warehouse: { driver: 'postgresql', host: 'db', password: 'hunter22', sshTunnel: { host: 'b', username: 'u', password: 'tunnel-pass' } } }, {});
+    const normalized = normalizeProjectConnection(stored.warehouse as never, projectRoot);
+    expect(normalized).toMatchObject({ password: 'hunter22', sshTunnel: { password: 'tunnel-pass' } });
+    expect(() => normalizeProjectConnection({ driver: 'postgresql', password: '${secret:gone.password}' } as never, projectRoot))
+      .toThrow(/Re-enter it on the Connections page/);
   });
 });
 
@@ -7707,7 +7724,7 @@ describe('discoverDbtProfileConnections', () => {
     expect(fromFolder).toEqual(fromFile);
   });
 
-  it('maps only lightweight-supported dbt profiles.yml targets into DQL connection drafts', () => {
+  it('maps dbt profiles.yml targets into DQL connection drafts, keeping unset secrets as references', () => {
     const projectRoot = mkdtempSync(join(tmpdir(), 'dql-dbt-profiles-'));
     tempDirs.push(projectRoot);
     writeFileSync(join(projectRoot, 'dbt_project.yml'), 'name: banking\nprofile: banking\n', 'utf-8');
@@ -7740,7 +7757,76 @@ describe('discoverDbtProfileConnections', () => {
       filepath: join(projectRoot, 'banking.duckdb'),
     });
     expect(candidate?.warnings).toContain('Not the default dbt target "dev".');
-    expect(candidates.some((item) => item.adapter === 'postgres')).toBe(false);
+    const postgres = candidates.find((item) => item.path === profilePath && item.adapter === 'postgres');
+    const previous = process.env.PGPASSWORD;
+    expect(postgres?.connection).toMatchObject({ driver: 'postgresql', database: 'analytics', schema: 'marts', username: 'analyst', port: 5432 });
+    if (previous === undefined) {
+      expect(postgres?.connection.password).toBe('${PGPASSWORD}');
+      expect(postgres?.missingFields).toContain('env:PGPASSWORD');
+    }
+  });
+
+  it('maps the other warehouse adapters with their dbt profile keys', () => {
+    const projectRoot = mkdtempSync(join(tmpdir(), 'dql-dbt-profiles-wide-'));
+    tempDirs.push(projectRoot);
+    writeFileSync(join(projectRoot, 'dbt_project.yml'), 'name: wide\nprofile: wide\n', 'utf-8');
+    writeFileSync(join(projectRoot, 'profiles.yml'), [
+      'wide:',
+      '  target: bq',
+      '  outputs:',
+      '    bq:',
+      '      type: bigquery',
+      '      method: service-account',
+      '      project: acme-analytics',
+      '      dataset: marts',
+      '      location: EU',
+      '      keyfile: /keys/reader.json',
+      '      maximum_bytes_billed: 1000000000',
+      '    rs:',
+      '      type: redshift',
+      '      method: iam',
+      '      host: c.abc.us-east-2.redshift.amazonaws.com',
+      '      dbname: dev',
+      '      user: reader',
+      '      cluster_id: c',
+      '      iam_profile: analytics',
+      '      region: us-east-2',
+      '    ms:',
+      '      type: sqlserver',
+      '      server: sql.example.com',
+      '      database: sales',
+      '      authentication: ServicePrincipal',
+      '      client_id: app',
+      '      client_secret: s3cret',
+      '      tenant_id: t1',
+      '    tr:',
+      '      type: trino',
+      '      method: jwt',
+      '      host: trino.example.com',
+      '      port: 443',
+      '      http_scheme: https',
+      '      database: hive',
+      '      schema: sales',
+      '      user: analyst',
+      '      jwt_token: tok',
+      '    at:',
+      '      type: athena',
+      '      region_name: us-east-1',
+      '      database: awsdatacatalog',
+      '      schema: sales',
+      '      work_group: analytics',
+      '      s3_staging_dir: s3://results/',
+      '      aws_profile_name: analytics',
+    ].join('\n'), 'utf-8');
+
+    const byTarget = new Map(discoverDbtProfileConnections(projectRoot, {}).map((item) => [item.targetName, item]));
+    expect(byTarget.get('bq')?.connection).toMatchObject({ driver: 'bigquery', projectId: 'acme-analytics', schema: 'marts', location: 'EU', authMethod: 'service_account_key_file', keyFilename: '/keys/reader.json', byteLimit: 1000000000 });
+    expect(byTarget.get('rs')?.connection).toMatchObject({ driver: 'redshift', authMethod: 'aws_profile', profile: 'analytics', clusterId: 'c', region: 'us-east-2', username: 'reader' });
+    expect(byTarget.get('rs')?.connection.password).toBeUndefined();
+    expect(byTarget.get('ms')?.connection).toMatchObject({ driver: 'mssql', host: 'sql.example.com', authMethod: 'azure_service_principal', oauthClientId: 'app', oauthClientSecret: 's3cret', tenantId: 't1' });
+    expect(byTarget.get('tr')?.connection).toMatchObject({ driver: 'trino', catalog: 'hive', schema: 'sales', authMethod: 'token', token: 'tok', ssl: true, port: 443 });
+    expect(byTarget.get('at')?.connection).toMatchObject({ driver: 'athena', region: 'us-east-1', catalog: 'awsdatacatalog', database: 'sales', workgroup: 'analytics', outputLocation: 's3://results/', authMethod: 'aws_profile', profile: 'analytics' });
+    for (const target of ['bq', 'rs', 'ms', 'tr', 'at']) expect(byTarget.get(target)?.missingFields, target).toEqual([]);
   });
 
   it('resolves a relative duckdb path against the dbt project dir, not the DQL workspace (regression)', () => {

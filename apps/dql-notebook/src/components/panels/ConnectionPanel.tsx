@@ -16,6 +16,18 @@ import {
 } from '../../api/client';
 import { PanelFrame } from '@duckcodeailabs/dql-ui';
 import { DriverLogo } from './DriverLogo';
+import {
+  CONNECTOR_SCHEMAS,
+  CONNECTOR_SCHEMA_BY_DRIVER,
+  DRIVER_COLORS,
+  DRIVER_LABELS,
+  DRIVER_TAGLINES,
+  connectionFromFormFields,
+  fieldApplies,
+  formFieldsFromConnection,
+  normalizeDriverName,
+  type ConnectorFieldSchema,
+} from './connection-forms';
 import { ConnectionRuntimeSettings } from '../settings/SettingsPage';
 import { DbtProjectEditor } from '../settings/DbtProjectEditor';
 import {
@@ -25,22 +37,6 @@ import {
   parseMetadataScopeEditor,
   toggleAdditionalMetadataScope,
 } from './connection-metadata-scope';
-
-interface ConnectorFieldSchema {
-  key: string;
-  label: string;
-  type: 'text' | 'number' | 'password' | 'checkbox' | 'select' | 'textarea';
-  placeholder?: string;
-  required?: boolean;
-  options?: Array<{ value: string; label: string }>;
-  helpText?: string;
-}
-
-interface ConnectorFormSchema {
-  driver: string;
-  label: string;
-  fields: ConnectorFieldSchema[];
-}
 
 interface ConnectionInfo {
   default: string;
@@ -56,7 +52,7 @@ interface ConnectionInfo {
 }
 
 interface ConnectorInstallStatus {
-  driver: 'duckdb' | 'snowflake' | 'databricks';
+  driver: string;
   label: string;
   packageName?: string;
   packageSpec?: string;
@@ -65,125 +61,6 @@ interface ConnectorInstallStatus {
   installPath: string;
   installCommand?: string;
 }
-
-const DRIVER_LABELS: Record<string, string> = {
-  duckdb: 'DuckDB',
-  file: 'Local File / DuckDB',
-  snowflake: 'Snowflake',
-  databricks: 'Databricks',
-};
-
-const DRIVER_COLORS: Record<string, string> = {
-  duckdb: '#f4bc00',
-  file: '#f4bc00',
-  snowflake: '#29b5e8',
-  databricks: '#ff3621',
-};
-
-// Short one-line blurbs for the driver cards.
-const DRIVER_TAGLINES: Record<string, string> = {
-  duckdb: 'In-process analytical database',
-  file: 'Local CSV / Parquet via DuckDB',
-  snowflake: 'Cloud data platform',
-  databricks: 'Lakehouse platform',
-};
-
-const CONNECTOR_SCHEMAS: ConnectorFormSchema[] = [
-  {
-    driver: 'duckdb',
-    label: 'DuckDB',
-    fields: [
-      { key: 'filepath', label: 'DuckDB file path', type: 'text', placeholder: './local/dev.duckdb', required: true },
-    ],
-  },
-  {
-    driver: 'snowflake',
-    label: 'Snowflake',
-    fields: [
-      { key: 'account', label: 'Account', type: 'text', required: true },
-      { key: 'warehouse', label: 'Warehouse', type: 'text', required: true },
-      { key: 'database', label: 'Database', type: 'text', required: true },
-      { key: 'schema', label: 'Schema', type: 'text', required: true },
-      { key: 'username', label: 'Username', type: 'text', required: true },
-      {
-        key: 'authMethod',
-        label: 'Authentication',
-        type: 'select',
-        options: [
-          { value: 'password', label: 'Password' },
-          { value: 'mfa', label: 'Password + MFA' },
-          { value: 'key_pair', label: 'Key pair / private key' },
-          { value: 'external_browser', label: 'SSO / external browser' },
-          { value: 'oauth', label: 'OAuth token' },
-          { value: 'oauth_authorization_code', label: 'OAuth authorization code' },
-          { value: 'oauth_client_credentials', label: 'OAuth client credentials' },
-          { value: 'programmatic_access_token', label: 'Programmatic access token' },
-          { value: 'workload_identity', label: 'Workload identity' },
-        ],
-      },
-      { key: 'password', label: 'Password', type: 'password' },
-      { key: 'token', label: 'Token', type: 'password', helpText: 'OAuth, programmatic access token, or OIDC workload identity token.' },
-      { key: 'privateKeyPath', label: 'Private key file path', type: 'text', placeholder: '~/.ssh/snowflake_key.p8' },
-      { key: 'privateKey', label: 'Private key PEM', type: 'textarea', helpText: 'Paste PEM only when a key file cannot be referenced.' },
-      { key: 'privateKeyPassphrase', label: 'Private key passphrase', type: 'password' },
-      { key: 'authenticator', label: 'Authenticator override', type: 'text', placeholder: 'EXTERNALBROWSER, OAUTH, WORKLOAD_IDENTITY, or Okta URL' },
-      { key: 'role', label: 'Role', type: 'text' },
-      { key: 'accessUrl', label: 'Access URL', type: 'text' },
-      { key: 'application', label: 'Application name', type: 'text', placeholder: 'DQL' },
-      { key: 'queryTag', label: 'Query tag', type: 'text', placeholder: 'team=analytics;app=dql' },
-      { key: 'passcode', label: 'MFA passcode', type: 'password' },
-      { key: 'passcodeInPassword', label: 'MFA passcode is appended to password', type: 'checkbox' },
-      { key: 'clientRequestMFAToken', label: 'Reuse cached MFA token', type: 'checkbox' },
-      { key: 'clientStoreTemporaryCredential', label: 'Cache SSO token locally', type: 'checkbox' },
-      { key: 'clientSessionKeepAlive', label: 'Keep session alive', type: 'checkbox' },
-      { key: 'clientSessionKeepAliveHeartbeatFrequency', label: 'Keep-alive heartbeat seconds', type: 'number', placeholder: '3600' },
-      { key: 'credentialCacheDir', label: 'Credential cache directory', type: 'text' },
-      { key: 'browserActionTimeout', label: 'Browser SSO timeout ms', type: 'number', placeholder: '120000' },
-      { key: 'keepAlive', label: 'Socket keep-alive', type: 'checkbox' },
-      { key: 'timeout', label: 'Connection timeout ms', type: 'number', placeholder: '60000' },
-      { key: 'proxyHost', label: 'Proxy host', type: 'text' },
-      { key: 'proxyPort', label: 'Proxy port', type: 'number' },
-      { key: 'proxyProtocol', label: 'Proxy protocol', type: 'text', placeholder: 'https' },
-      { key: 'proxyUser', label: 'Proxy user', type: 'text' },
-      { key: 'proxyPassword', label: 'Proxy password', type: 'password' },
-      { key: 'noProxy', label: 'No proxy hosts', type: 'text', placeholder: '*.amazonaws.com|*.internal' },
-      { key: 'oauthClientId', label: 'OAuth client ID', type: 'text' },
-      { key: 'oauthClientSecret', label: 'OAuth client secret', type: 'password' },
-      { key: 'oauthAuthorizationUrl', label: 'OAuth authorization URL', type: 'text' },
-      { key: 'oauthTokenRequestUrl', label: 'OAuth token request URL', type: 'text' },
-      { key: 'oauthScope', label: 'OAuth scope', type: 'text' },
-      { key: 'oauthRedirectUri', label: 'OAuth redirect URI', type: 'text' },
-      { key: 'workloadIdentityProvider', label: 'Workload identity provider', type: 'text', placeholder: 'AWS, AZURE, GCP, or OIDC' },
-      { key: 'workloadIdentityAzureClientId', label: 'Azure client ID', type: 'text' },
-    ],
-  },
-  {
-    driver: 'databricks',
-    label: 'Databricks SQL',
-    fields: [
-      { key: 'host', label: 'Workspace URL', type: 'text', required: true, placeholder: 'https://adb-123.cloud.databricks.com' },
-      { key: 'database', label: 'Catalog / database', type: 'text' },
-      { key: 'schema', label: 'Schema', type: 'text' },
-      { key: 'warehouse', label: 'Warehouse ID', type: 'text', helpText: 'Use the SQL warehouse ID when you have it.' },
-      { key: 'httpPath', label: 'SQL warehouse ID or path', type: 'text', placeholder: '/sql/1.0/warehouses/abc123', helpText: 'Paste the warehouse ID or its JDBC/HTTP path.' },
-      {
-        key: 'authMethod',
-        label: 'Authentication',
-        type: 'select',
-        options: [
-          { value: 'token', label: 'Access token' },
-          { value: 'oauth', label: 'OAuth bearer token' },
-        ],
-      },
-      { key: 'token', label: 'Bearer token', type: 'password', required: true, helpText: 'Use an OAuth token for automation when possible, or a service-principal PAT.' },
-      { key: 'waitTimeout', label: 'Statement wait timeout', type: 'text', placeholder: '50s' },
-      { key: 'byteLimit', label: 'Inline byte limit', type: 'number', placeholder: '25000000' },
-    ],
-  },
-];
-const CONNECTOR_SCHEMA_BY_DRIVER = Object.fromEntries(
-  CONNECTOR_SCHEMAS.map((schema) => [schema.driver, schema]),
-) as Record<string, ConnectorFormSchema>;
 
 const QUICK_CONNECT_PRESETS = [
   {
@@ -206,57 +83,6 @@ const QUICK_CONNECT_PRESETS = [
   },
 ];
 
-function normalizeDriverName(driver: string): string {
-  return driver === 'postgres' ? 'postgresql' : driver;
-}
-
-function normalizeFieldName(field: string): string {
-  const aliases: Record<string, string> = {
-    dbname: 'database',
-    dataset: 'schema',
-    access_url: 'accessUrl',
-    auth_method: 'authMethod',
-    auth_type: 'authMethod',
-    browser_action_timeout: 'browserActionTimeout',
-    byte_limit: 'byteLimit',
-    client_request_mfa_token: 'clientRequestMFAToken',
-    client_session_keep_alive: 'clientSessionKeepAlive',
-    client_session_keep_alive_heartbeat_frequency: 'clientSessionKeepAliveHeartbeatFrequency',
-    client_store_temporary_credential: 'clientStoreTemporaryCredential',
-    credential_cache_dir: 'credentialCacheDir',
-    http_path: 'httpPath',
-    keep_alive: 'keepAlive',
-    keyFile: 'keyFilename',
-    keyFileName: 'keyFilename',
-    no_proxy: 'noProxy',
-    oauth_authorization_url: 'oauthAuthorizationUrl',
-    oauth_client_id: 'oauthClientId',
-    oauth_client_secret: 'oauthClientSecret',
-    oauth_redirect_uri: 'oauthRedirectUri',
-    oauth_scope: 'oauthScope',
-    oauth_token_request_url: 'oauthTokenRequestUrl',
-    passcode_in_password: 'passcodeInPassword',
-    private_key: 'privateKey',
-    private_key_path: 'privateKeyPath',
-    private_key_passphrase: 'privateKeyPassphrase',
-    proxy_host: 'proxyHost',
-    proxy_password: 'proxyPassword',
-    proxy_port: 'proxyPort',
-    proxy_protocol: 'proxyProtocol',
-    proxy_user: 'proxyUser',
-    query_tag: 'queryTag',
-    path: 'filepath',
-    project: 'projectId',
-    server: 'host',
-    server_hostname: 'host',
-    user: 'username',
-    wait_timeout: 'waitTimeout',
-    workload_identity_azure_client_id: 'workloadIdentityAzureClientId',
-    workload_identity_provider: 'workloadIdentityProvider',
-  };
-  return aliases[field] ?? field;
-}
-
 function connectionNameFromProfile(profile: DbtProfileConnectionCandidate): string {
   const name = `${profile.profileName}_${profile.targetName}`
     .toLowerCase()
@@ -266,13 +92,7 @@ function connectionNameFromProfile(profile: DbtProfileConnectionCandidate): stri
 }
 
 function connectionFieldsFromProfile(profile: DbtProfileConnectionCandidate): Record<string, string> {
-  const fields: Record<string, string> = {};
-  Object.entries(profile.connection ?? {}).forEach(([key, value]) => {
-    if (key !== 'driver' && value !== undefined && value !== null) {
-      fields[normalizeFieldName(key)] = String(value);
-    }
-  });
-  return fields;
+  return formFieldsFromConnection(profile.connection as unknown as Record<string, unknown>);
 }
 
 function shortPath(path: string): string {
@@ -468,11 +288,7 @@ export function ConnectionPanel({
     seededIdentityRef.current = identity;
     if (cfg) {
       setPrimaryDriver(normalizeDriverName(String(cfg.driver ?? cfg.type ?? 'duckdb')));
-      const fields: Record<string, string> = {};
-      Object.entries(cfg).forEach(([k, v]) => {
-        if (k !== 'driver' && k !== 'type') fields[normalizeFieldName(k)] = String(v ?? '');
-      });
-      setPrimaryFields(fields);
+      setPrimaryFields(formFieldsFromConnection(cfg));
     } else {
       setPrimaryDriver('duckdb');
       setPrimaryFields({});
@@ -594,11 +410,7 @@ export function ConnectionPanel({
     setAddingNew(false);
     setEditName(key);
     setEditDriver(normalizeDriverName(cfg?.driver ?? cfg?.type ?? 'duckdb'));
-    const fields: Record<string, string> = {};
-    Object.entries(cfg ?? {}).forEach(([k, v]) => {
-      if (k !== 'driver' && k !== 'type') fields[normalizeFieldName(k)] = String(v ?? '');
-    });
-    setEditFields(fields);
+    setEditFields(formFieldsFromConnection(cfg));
   };
 
   const startAdd = () => {
@@ -647,21 +459,7 @@ export function ConnectionPanel({
     setSaveMsg(null);
 
     const name = opts.name.trim() || (opts.previousName ?? 'default');
-    const newConn: Record<string, unknown> = { driver: opts.driver };
-    const schema = CONNECTOR_SCHEMA_BY_DRIVER[opts.driver];
-    const fieldSchemas = new Map((schema?.fields ?? []).map((field) => [field.key, field]));
-    Object.entries(opts.fields).forEach(([k, v]) => {
-      const fieldSchema = fieldSchemas.get(k as ConnectorFieldSchema['key']);
-      if (fieldSchema?.type === 'checkbox') {
-        if (v !== '') newConn[k] = v === 'true';
-        return;
-      }
-      const trimmed = v.trim();
-      if (trimmed) {
-        if (fieldSchema?.type === 'number' && !isNaN(Number(trimmed))) newConn[k] = Number(trimmed);
-        else newConn[k] = trimmed;
-      }
-    });
+    const newConn = connectionFromFormFields(opts.driver, opts.fields);
 
     const previousConnections = { ...info.connections };
     const previousDefault = info.default;
@@ -673,7 +471,11 @@ export function ConnectionPanel({
 
     let ok = false;
     try {
-      await api.saveConnections(connections, nextDefault);
+      await api.saveConnections(
+        connections,
+        nextDefault,
+        opts.previousName && opts.previousName !== name ? { [name]: opts.previousName } : undefined,
+      );
       // Refresh
       const refreshed = await api.getConnections();
       setInfo(refreshed);
@@ -1781,7 +1583,7 @@ function ConnectionForm({
   saving: boolean; isNew: boolean;
 }) {
   const schema = CONNECTOR_SCHEMA_BY_DRIVER[editDriver];
-  const fields = schema?.fields ?? [];
+  const fields = (schema?.fields ?? []).filter((field) => fieldApplies(field, editFields));
 
   const inputStyle = {
     background: t.inputBg,
@@ -1929,7 +1731,9 @@ function ConnectionForm({
 // the credentials for the selected auth method. Everything uncommon remains
 // available under Advanced options or is carried through untouched from dbt.
 function primaryFieldKeys(driver: string, fields: Record<string, string>): string[] {
-  if (driver === 'duckdb') return ['filepath'];
+  const declared = CONNECTOR_SCHEMA_BY_DRIVER[driver]?.primary;
+  if (declared) return declared(fields.authMethod ?? '');
+  if (driver === 'duckdb' || driver === 'sqlite') return ['filepath'];
   if (driver === 'databricks') return ['host', 'httpPath', 'database', 'schema', 'authMethod', 'token'];
   if (driver !== 'snowflake') return [];
 
@@ -1985,7 +1789,7 @@ function DatabaseConnectionForm({
 }) {
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const schema = CONNECTOR_SCHEMA_BY_DRIVER[driver];
-  const allFields = schema?.fields ?? [];
+  const allFields = (schema?.fields ?? []).filter((field) => fieldApplies(field, fields));
   const primaryKeys = primaryFieldKeys(driver, fields);
   const primaryKeySet = new Set(primaryKeys);
   // Preserve the schema's declared order within each group.

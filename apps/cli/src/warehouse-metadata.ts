@@ -99,8 +99,8 @@ export function normalizeConnectionMetadataScope(
   input: ConnectionMetadataScopeInput | undefined,
   defaults: { relations?: string[]; dbtFingerprint?: string } = {},
 ): ConnectionMetadataScopeV1 {
-  const defaultDatabase = cleanIdentifier(connection.catalog ?? connection.database) ?? defaultCatalogForDriver(connection.driver);
-  const defaultSchema = cleanIdentifier(connection.schema) ?? defaultSchemaForDriver(connection.driver);
+  const defaultDatabase = configuredCatalog(connection);
+  const defaultSchema = configuredSchema(connection);
   const mode = input?.mode
     ?? ((defaults.relations?.length ?? input?.relations?.length ?? 0) > 0
       ? 'dbt_relations'
@@ -264,8 +264,8 @@ export async function discoverWarehouseMetadataScopes(input: {
   assertObservedScopeCompatible(input.connection, observedIdentity.redactedContext);
   const dbtScopes = scopesFromRelations(
     input.dbtRelations ?? [],
-    cleanIdentifier(input.connection.catalog ?? input.connection.database),
-    cleanIdentifier(input.connection.schema),
+    configuredCatalog(input.connection),
+    configuredSchema(input.connection),
   );
   const dbtCounts = dbtRelationCountsByScope(input.dbtRelations ?? [], input.connection);
   const discovered = new Map<string, { catalogOrDatabase: string; schemas: Map<string, string> }>();
@@ -344,8 +344,8 @@ export async function discoverWarehouseMetadataScopes(input: {
     } else {
       supported = false;
       add(
-        input.connection.catalog ?? input.connection.database ?? defaultCatalogForDriver(input.connection.driver),
-        input.connection.schema ?? defaultSchemaForDriver(input.connection.driver),
+        configuredCatalog(input.connection),
+        configuredSchema(input.connection),
       );
     }
   }
@@ -457,15 +457,16 @@ export function buildWarehouseMetadataQueries(
       ? `(${exactPredicate} OR ${schemaPredicate})`
       : exactPredicate ?? schemaPredicate;
     if (!predicate) return [];
+    const top = connection.driver === 'mssql' || connection.driver === 'fabric';
     return [{
       catalogOrDatabase,
       sql: [
-        'SELECT table_catalog, table_schema, table_name, column_name, data_type, ordinal_position',
-        `FROM ${informationSchemaColumnsRelation(connection.driver, catalogOrDatabase)}`,
+        `SELECT ${top ? `TOP (${MAX_METADATA_ROWS_PER_QUERY}) ` : ''}table_catalog, table_schema, table_name, column_name, data_type, ordinal_position`,
+        `FROM ${informationSchemaColumnsRelation(connection, catalogOrDatabase)}`,
         `WHERE ${predicate}`,
         `  AND UPPER(table_schema) NOT IN ('INFORMATION_SCHEMA', 'PG_CATALOG')`,
         'ORDER BY table_schema, table_name, ordinal_position',
-        `LIMIT ${MAX_METADATA_ROWS_PER_QUERY}`,
+        ...(top ? [] : [`LIMIT ${MAX_METADATA_ROWS_PER_QUERY}`]),
       ].join('\n'),
     }];
   });
@@ -604,8 +605,8 @@ function groupRelations(
   relations: string[],
   connection: ConnectionConfig,
 ): Map<string, Array<{ schema: string; table: string }>> {
-  const fallbackDatabase = cleanIdentifier(connection.catalog ?? connection.database);
-  const fallbackSchema = cleanIdentifier(connection.schema);
+  const fallbackDatabase = configuredCatalog(connection);
+  const fallbackSchema = configuredSchema(connection);
   const grouped = new Map<string, Array<{ schema: string; table: string }>>();
   for (const relation of relations) {
     const parts = relationParts(relation);
@@ -660,10 +661,14 @@ function buildSchemaPredicate(schemas: string[]): string | undefined {
   return `UPPER(table_schema) IN (${schemas.map((schema) => `UPPER(${sqlLiteral(schema)})`).join(', ')})`;
 }
 
-function informationSchemaColumnsRelation(driver: string, catalogOrDatabase: string): string {
+function informationSchemaColumnsRelation(connection: ConnectionConfig, catalogOrDatabase: string): string {
+  const driver = connection.driver;
   if (driver === 'snowflake') return `${quoteIdentifier(catalogOrDatabase, '"')}.INFORMATION_SCHEMA.COLUMNS`;
   if (driver === 'databricks') return `${quoteIdentifier(catalogOrDatabase, '`')}.information_schema.columns`;
-  if (driver === 'bigquery') return `${quoteIdentifier(catalogOrDatabase, '`')}.INFORMATION_SCHEMA.COLUMNS`;
+  // BigQuery: the project's columns across datasets in one location.
+  if (driver === 'bigquery') return `${quoteIdentifier(catalogOrDatabase, '`')}.${quoteIdentifier(`region-${(connection.location ?? 'US').toLowerCase()}`, '`')}.INFORMATION_SCHEMA.COLUMNS`;
+  // Trino has one information_schema per catalog.
+  if (driver === 'trino') return `${quoteIdentifier(catalogOrDatabase, '"')}.information_schema.columns`;
   return 'information_schema.columns';
 }
 
@@ -711,8 +716,8 @@ function dbtRelationCountsByScope(
   connection: ConnectionConfig,
 ): Map<string, number> {
   const counts = new Map<string, number>();
-  const fallbackDatabase = cleanIdentifier(connection.catalog ?? connection.database);
-  const fallbackSchema = cleanIdentifier(connection.schema);
+  const fallbackDatabase = configuredCatalog(connection);
+  const fallbackSchema = configuredSchema(connection);
   for (const relation of relations) {
     const parts = relationParts(relation);
     const catalog = parts.catalogOrDatabase ?? fallbackDatabase;
@@ -728,7 +733,13 @@ function scopeKey(catalogOrDatabase: string, schema: string): string {
   return `${normalizeIdentifierKey(catalogOrDatabase)}::${normalizeIdentifierKey(schema)}`;
 }
 
-const GENERIC_SCHEMA_DISCOVERY_DRIVERS = new Set(['duckdb', 'file', 'postgresql', 'postgres', 'redshift', 'mysql', 'sqlserver', 'mssql']);
+const GENERIC_SCHEMA_DISCOVERY_DRIVERS = new Set(['duckdb', 'file', 'postgresql', 'postgres', 'redshift', 'mysql', 'sqlserver', 'mssql', 'fabric', 'clickhouse', 'trino', 'athena']);
+
+/** System schemas no user models live in, per engine. */
+const SYSTEM_SCHEMAS = new Set([
+  'information_schema', 'pg_catalog', 'pg_internal', 'pg_toast', 'sys', 'system', 'mysql', 'performance_schema',
+  'guest', 'db_owner', 'db_accessadmin', 'db_securityadmin', 'db_ddladmin', 'db_backupoperator', 'db_datareader', 'db_datawriter', 'db_denydatareader', 'db_denydatawriter',
+]);
 
 async function listSchemasGenerically(
   executor: QueryExecutor,
@@ -741,16 +752,38 @@ async function listSchemasGenerically(
       .filter((name): name is string => Boolean(name) && name !== 'temp')
       .map((name) => ({ catalog: name, schema: name }));
   }
+  if (connection.driver === 'bigquery') {
+    // Datasets of the billing project in the connection's location.
+    const project = configuredCatalog(connection);
+    const region = `region-${(connection.location ?? 'US').toLowerCase()}`;
+    const result = await executor.executePositional(
+      `SELECT catalog_name, schema_name FROM ${project ? `\`${project.replace(/`/g, '')}\`.` : ''}\`${region}\`.INFORMATION_SCHEMA.SCHEMATA LIMIT ${MAX_DISCOVERY_SCHEMAS}`,
+      [],
+      connection,
+      discoveryQueryOptions(),
+    );
+    return result.rows.flatMap((row) => {
+      const catalog = firstRowString(row, ['catalog_name']);
+      const schema = firstRowString(row, ['schema_name']);
+      return catalog && schema ? [{ catalog, schema }] : [];
+    });
+  }
   if (!GENERIC_SCHEMA_DISCOVERY_DRIVERS.has(connection.driver)) return undefined;
+  const mssql = connection.driver === 'mssql' || connection.driver === 'fabric';
   const result = await executor.executePositional(
-    `SELECT catalog_name, schema_name FROM information_schema.schemata LIMIT ${MAX_DISCOVERY_SCHEMAS}`,
+    mssql
+      ? `SELECT TOP (${MAX_DISCOVERY_SCHEMAS}) catalog_name, schema_name FROM information_schema.schemata`
+      : `SELECT catalog_name, schema_name FROM information_schema.schemata LIMIT ${MAX_DISCOVERY_SCHEMAS}`,
     [],
     connection,
     discoveryQueryOptions(),
   );
   return result.rows.flatMap((row) => {
-    const catalog = firstRowString(row, ['catalog_name', 'CATALOG_NAME']);
+    const reportedCatalog = firstRowString(row, ['catalog_name', 'CATALOG_NAME']);
     const schema = firstRowString(row, ['schema_name', 'SCHEMA_NAME']);
+    // MySQL reports every database under the catalog "def": the database is the scope.
+    const catalog = connection.driver === 'mysql' ? schema : reportedCatalog;
+    if (schema && SYSTEM_SCHEMAS.has(schema.toLowerCase())) return [];
     // DuckDB's built-in catalogs hold no user tables.
     if (!catalog || !schema || ((connection.driver === 'duckdb' || connection.driver === 'file') && (catalog === 'system' || catalog === 'temp'))) return [];
     if (schema.toLowerCase().startsWith('pg_')) return [];
@@ -763,11 +796,33 @@ function isSystemSchema(schema: string): boolean {
     .includes(normalizeIdentifierKey(schema));
 }
 
+/**
+ * The database/catalog a connection's unqualified names resolve in. Engines
+ * name it differently: BigQuery's is the project, Athena's the data catalog,
+ * and MySQL and ClickHouse have one level only, the database, which serves as
+ * both catalog and schema of a scope.
+ */
+function configuredCatalog(connection: ConnectionConfig): string | undefined {
+  const driver = connection.driver;
+  if (driver === 'bigquery') return cleanIdentifier(connection.catalog ?? connection.projectId ?? connection.database);
+  if (driver === 'athena') return cleanIdentifier(connection.catalog) ?? 'awsdatacatalog';
+  return cleanIdentifier(connection.catalog ?? connection.database) ?? defaultCatalogForDriver(driver);
+}
+
+function configuredSchema(connection: ConnectionConfig): string | undefined {
+  const driver = connection.driver;
+  if (driver === 'mysql' || driver === 'clickhouse') return cleanIdentifier(connection.schema ?? connection.database) ?? (driver === 'clickhouse' ? 'default' : undefined);
+  if (driver === 'athena') return cleanIdentifier(connection.database ?? connection.schema);
+  return cleanIdentifier(connection.schema) ?? defaultSchemaForDriver(driver);
+}
+
 function defaultCatalogForDriver(driver: string): string | undefined {
   return driver === 'duckdb' || driver === 'file' ? 'memory' : driver === 'sqlite' ? 'main' : undefined;
 }
 
 function defaultSchemaForDriver(driver: string): string | undefined {
+  if (driver === 'postgresql' || driver === 'redshift') return 'public';
+  if (driver === 'mssql' || driver === 'fabric') return 'dbo';
   return driver === 'duckdb' || driver === 'file' || driver === 'sqlite' ? 'main' : undefined;
 }
 

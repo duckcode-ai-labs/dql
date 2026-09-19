@@ -134,7 +134,65 @@ describe('assembling a warehouse catalog from metadata rows', () => {
   });
 
   it('another driver reads tables, views and columns from information_schema only', () => {
-    expect(buildWarehouseCatalogQueries('mysql', { catalogOrDatabase: 'shop', schemas: ['shop'] }).map((query) => query.kind)).toEqual(['columns', 'tables']);
+    expect(buildWarehouseCatalogQueries('vertica', { catalogOrDatabase: 'shop', schemas: ['shop'] }).map((query) => query.kind)).toEqual(['columns', 'tables']);
+  });
+
+  it('MySQL: a database is the schema; comments and keys come with names of their targets', () => {
+    const queries = buildWarehouseCatalogQueries('mysql', { catalogOrDatabase: 'shop', schemas: ['shop'] });
+    expect(queries.map((query) => query.kind)).toEqual(['columns', 'tables', 'views', 'keys']);
+    const byKind = (kind: string) => queries.find((query) => query.kind === kind)!;
+    // MySQL 8 returns information_schema column names in upper case.
+    const relations = assembleWarehouseCatalog('mysql', [
+      { query: byKind('columns'), rows: [
+        { TABLE_SCHEMA: 'shop', TABLE_NAME: 'orders', COLUMN_NAME: 'id', DATA_TYPE: 'bigint', IS_NULLABLE: 'NO', COMMENT: '' },
+        { TABLE_SCHEMA: 'shop', TABLE_NAME: 'orders', COLUMN_NAME: 'customer_id', DATA_TYPE: 'bigint', IS_NULLABLE: 'YES', COMMENT: 'Who ordered' },
+        { TABLE_SCHEMA: 'shop', TABLE_NAME: 'customers', COLUMN_NAME: 'id', DATA_TYPE: 'bigint', IS_NULLABLE: 'NO', COMMENT: '' },
+      ] },
+      { query: byKind('tables'), rows: [{ TABLE_SCHEMA: 'shop', TABLE_NAME: 'orders', TABLE_TYPE: 'BASE TABLE', COMMENT: 'One row per order', ROW_COUNT: 50 }] },
+      { query: byKind('keys'), rows: [
+        { CONSTRAINT_TYPE: 'PRIMARY KEY', CONSTRAINT_NAME: 'PRIMARY', TABLE_SCHEMA: 'shop', TABLE_NAME: 'orders', COLUMN_NAME: 'id', POSITION: 1 },
+        { CONSTRAINT_TYPE: 'FOREIGN KEY', CONSTRAINT_NAME: 'orders_customer', TABLE_SCHEMA: 'shop', TABLE_NAME: 'orders', COLUMN_NAME: 'customer_id', POSITION: 1, REF_SCHEMA: 'shop', REF_TABLE: 'customers', REF_COLUMN: 'id' },
+      ] },
+    ]);
+    const orders = relations.find((relation) => relation.name === 'orders')!;
+    // Two parts: MySQL has no catalog to qualify with.
+    expect(orders).toMatchObject({ relation: 'shop.orders', comment: 'One row per order', primaryKey: ['id'], rowCountEstimate: 50 });
+    expect(orders.foreignKeys).toEqual([{ columns: ['customer_id'], references: { relation: 'shop.customers', columns: ['id'] }, name: 'orders_customer' }]);
+    expect(orders.columns.find((column) => column.name === 'customer_id')?.comment).toBe('Who ordered');
+  });
+
+  it('SQL Server: TOP instead of LIMIT, MS_Description comments, keys from sys views, three-part names', () => {
+    const queries = buildWarehouseCatalogQueries('mssql', { catalogOrDatabase: 'sales', schemas: ['dbo'] });
+    expect(queries.map((query) => query.kind)).toEqual(['columns', 'tables', 'views', 'keys']);
+    expect(queries.every((query) => !/\bLIMIT\b/.test(query.sql))).toBe(true);
+    expect(queries[0]!.sql).toContain('MS_Description');
+    const byKind = (kind: string) => queries.find((query) => query.kind === kind)!;
+    const relations = assembleWarehouseCatalog('mssql', [
+      { query: byKind('columns'), rows: [
+        { table_catalog: 'sales', table_schema: 'dbo', table_name: 'orders', column_name: 'id', data_type: 'bigint', is_nullable: 'NO', comment: null },
+        { table_catalog: 'sales', table_schema: 'dbo', table_name: 'orders', column_name: 'line', data_type: 'int', is_nullable: 'NO', comment: null },
+      ] },
+      { query: byKind('keys'), rows: [
+        { constraint_type: 'PRIMARY KEY', constraint_name: 'pk_orders', table_schema: 'dbo', table_name: 'orders', column_name: 'line', position: 2 },
+        { constraint_type: 'PRIMARY KEY', constraint_name: 'pk_orders', table_schema: 'dbo', table_name: 'orders', column_name: 'id', position: 1 },
+      ] },
+    ]);
+    expect(relations[0]).toMatchObject({ relation: 'sales.dbo.orders', primaryKey: ['id', 'line'] });
+  });
+
+  it('ClickHouse: system tables, no keys (a sorting key is not unique)', () => {
+    const queries = buildWarehouseCatalogQueries('clickhouse', { catalogOrDatabase: 'analytics', schemas: ['analytics'] });
+    expect(queries.map((query) => query.kind)).toEqual(['columns', 'tables']);
+    expect(queries[0]!.sql).toContain('system.columns');
+  });
+
+  it('Trino reads its catalog\'s own information_schema and names relations with the catalog', () => {
+    const queries = buildWarehouseCatalogQueries('trino', { catalogOrDatabase: 'hive', schemas: ['sales'] });
+    expect(queries[0]!.sql).toContain('"hive".information_schema.columns');
+    const relations = assembleWarehouseCatalog('trino', [
+      { query: queries[0]!, rows: [{ table_catalog: 'hive', table_schema: 'sales', table_name: 'orders', column_name: 'id', data_type: 'bigint', is_nullable: 'NO', comment: null }] },
+    ]);
+    expect(relations[0]!.relation).toBe('hive.sales.orders');
   });
 });
 
