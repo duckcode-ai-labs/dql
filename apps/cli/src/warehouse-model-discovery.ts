@@ -100,6 +100,22 @@ const NON_KEY_TYPE = /^(double|float|real|decimal|numeric|money|bool|boolean|dat
 const MAX_TABLES_SHARING_A_KEY = 12;
 /** Share of the referencing side's values that may be missing on the unique side. */
 const MAX_UNMATCHED_SHARE = 0.05;
+
+/**
+ * Whether reading a relation costs no more than reading a table: a base
+ * table, or a view that only projects one relation (no join, grouping,
+ * aggregate, window or union). A view that joins or aggregates can take
+ * minutes to compute, so the data checks leave it out; its joins are still
+ * drafted from declared keys, view SQL and names, for a person to validate.
+ */
+export function cheapToRead(relation: WarehouseCatalogRelationV1): boolean {
+  if (relation.kind === 'table') return true;
+  if (relation.kind !== 'view' || !relation.viewSql) return false;
+  const body = relation.viewSql.replace(/'[^']*'/g, "''");
+  return !/\b(join|group\s+by|having|distinct|union|intersect|except|over\s*\(|window)\b/i.test(body)
+    && !/\b(sum|count|avg|min|max|median|array_agg|string_agg|listagg|group_concat)\s*\(/i.test(body)
+    && (body.match(/\bfrom\b/gi) ?? []).length === 1;
+}
 /** A join seen fewer times than this in query history is noise, not evidence. */
 const MIN_OBSERVED_JOINS = 2;
 const GENERIC_SCHEMAS = new Set(['main', 'public', 'dbo', 'default']);
@@ -366,9 +382,9 @@ export async function inferSharedKeyJoins(
   options: { maxChecks?: number } = {},
 ): Promise<WarehouseDiscoveryReport> {
   const quoteRelation = (relation: string) => relation.split('.').map(quote).join('.');
-  // Tables and views alike: dbt builds models as views by default, and the
-  // data checks below read a view exactly as they read a table.
-  const tables = snapshot.relations.filter((relation) => relation.columns.length > 0);
+  // Tables and simple views alike (dbt builds models as views by default);
+  // a view that joins or aggregates is left out of the data checks.
+  const tables = snapshot.relations.filter((relation) => relation.columns.length > 0 && cheapToRead(relation));
   const holders = new Map<string, Array<{ relation: WarehouseCatalogRelationV1; column: string }>>();
   for (const relation of tables) {
     for (const column of relation.columns) {
@@ -489,9 +505,11 @@ export async function validateWarehouseDiscovery(
   report = await inferSharedKeyJoins(report, snapshot, execute, quote);
   const typesOf = new Map(snapshot.relations.map((relation) => [relation.relation, new Map(relation.columns.map((column) => [column.name.toLowerCase(), column.type?.toLowerCase()]))]));
   const quoteRelation = (relation: string) => relation.split('.').map(quote).join('.');
+  const relationById = new Map(snapshot.relations.map((relation) => [relation.relation, relation]));
+  const cheap = (relation: string) => { const found = relationById.get(relation); return found ? cheapToRead(found) : false; };
   const entities: DiscoveredEntity[] = [];
   for (const entity of report.entities) {
-    if (entity.grain || !entity.grainCandidate) {
+    if (entity.grain || !entity.grainCandidate || !cheap(entity.relation)) {
       entities.push(entity);
       continue;
     }
@@ -510,6 +528,10 @@ export async function validateWarehouseDiscovery(
   for (const [index, relationship] of report.relationships.entries()) {
     if (index >= limit) {
       relationships.push({ ...relationship, validationError: `not validated: discovery validates at most ${limit} relationships per run` });
+      continue;
+    }
+    if (!cheap(relationship.fromRelation) || !cheap(relationship.toRelation)) {
+      relationships.push({ ...relationship, validationError: 'not validated: a view that joins or aggregates is only checked when a person validates it' });
       continue;
     }
     try {

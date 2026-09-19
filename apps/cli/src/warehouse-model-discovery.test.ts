@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import Database from 'better-sqlite3';
 import { normalizeWarehouseCatalog, warehouseRelationId, type DQLManifest, type WarehouseCatalogRelationV1 } from '@duckcodeailabs/dql-core';
-import { discoverWarehouseModel, inferSharedKeyJoins, observedJoinsFromQueries, queryHistorySql, validateWarehouseDiscovery, viewJoins, warehouseDiscoveryChanges } from './warehouse-model-discovery.js';
+import { cheapToRead, discoverWarehouseModel, inferSharedKeyJoins, observedJoinsFromQueries, queryHistorySql, validateWarehouseDiscovery, viewJoins, warehouseDiscoveryChanges } from './warehouse-model-discovery.js';
 
 const table = (schema: string, name: string, columns: string[], extra: Partial<WarehouseCatalogRelationV1> = {}): WarehouseCatalogRelationV1 => ({
   id: warehouseRelationId({ schema, name }),
@@ -196,6 +196,18 @@ describe('query-history evidence (opt-in)', () => {
     expect(queryHistorySql('bigquery', { location: 'EU' })).toContain('`region-eu`.INFORMATION_SCHEMA.JOBS_BY_PROJECT');
     expect(queryHistorySql('duckdb')).toBeUndefined();
     expect(queryHistorySql('sqlite')).toBeUndefined();
+  });
+});
+
+describe('which relations the data checks read', () => {
+  it('reads tables and projection views, and leaves out views that join or aggregate', () => {
+    const view = (viewSql: string) => ({ id: 'v', name: 'v', relation: 'v', kind: 'view' as const, columns: [{ name: 'a' }], viewSql });
+    expect(cheapToRead({ id: 't', name: 't', relation: 't', kind: 'table', columns: [] })).toBe(true);
+    expect(cheapToRead(view('CREATE VIEW claim AS SELECT Claim_Identifier, Claim_Open_Date FROM acme.main__seed.Claim;'))).toBe(true);
+    expect(cheapToRead(view('CREATE VIEW profits AS SELECT s.prod_id, c.unit_cost FROM costs c JOIN sales s ON c.prod_id = s.prod_id'))).toBe(false);
+    expect(cheapToRead(view('CREATE VIEW m AS SELECT prod_id, SUM(amount) FROM sales GROUP BY 1'))).toBe(false);
+    expect(cheapToRead(view("CREATE VIEW n AS SELECT 'join' AS word, a FROM t"))).toBe(true);
+    expect(cheapToRead({ id: 'w', name: 'w', relation: 'w', kind: 'view', columns: [] })).toBe(false);
   });
 });
 
