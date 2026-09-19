@@ -1404,7 +1404,27 @@ export function proveTimeRoles(intent: AnalyticalIntentV1, vocabulary: Vocabular
   });
 }
 
-const CAUSAL_OPERATORS = ['why', 'because', 'driver', 'drivers', 'reason', 'reasons', 'invest', 'investment', 'recommend', 'recommendation', 'recommendations', 'should', 'decide', 'decision', 'forecast', 'predict', 'prediction', 'projection'];
+/**
+ * Asking for an explanation or a decision is a USE of these words, not the
+ * words themselves. `driver`, `reason`, `investment`, `decision` and
+ * `forecast` are ordinary nouns in real warehouses — Formula 1 drivers, a
+ * delivery driver, a `reason` column, an investments table, a forecast table —
+ * and reading them as "why did this happen?" declined questions the warehouse
+ * can answer. Genuine prediction questions are caught by PREDICTIVE_PHRASES.
+ */
+const CAUSAL_USAGE: RegExp[] = [
+  /\bwhy\b/,
+  /\bbecause\b/,
+  /\broot causes?\b/,
+  /\bwhat (?:caused|drove|drives|is driving|explains|explain)\b/,
+  /\b(?:drivers?|reasons?|causes?) (?:of|behind|for)\b/,
+  /\bexplain(?:s|ed|ing)? (?:why|the (?:drop|fall|rise|increase|decrease|decline|change|difference))\b/,
+  /\brecommend(?:s|ed|ation|ations)?\b/,
+  /\bshould (?:i|we|you|they|the)\b/,
+  /\bdecide (?:whether|if|between|on)\b/,
+  /\b(?:invest|investing) in\b/,
+  /\bworth (?:investing|the investment)\b/,
+];
 
 const PREDICTIVE_PHRASES = [/\blikely to\b/, /\blikelihood\b/, /\bprobability of\b/, /\bchances? (?:of|to|that)\b/, /\bnext (?:season|year|quarter|month|week|game)\b/, /\bgoing to (?!be (?:the )?(?:top|best))\w+/, /\bwill (?:get|be|win|lose|score|churn|leave|buy)\b/];
 
@@ -1414,10 +1434,11 @@ export function predictiveOperatorsIn(question: string): string[] {
   return PREDICTIVE_PHRASES.map((pattern) => pattern.exec(text)?.[0]).filter((phrase): phrase is string => Boolean(phrase));
 }
 
-/** The causal or decision words a question carries (why, drivers, should, invest...). */
+/** The causal or decision phrasing a question carries ("why", "drivers of", "should we"...). */
 export function causalOperatorsIn(question: string): string[] {
-  const words = normalizeVocabularyText(question).split(' ').filter(Boolean);
-  return CAUSAL_OPERATORS.filter((word) => words.includes(word));
+  const text = normalizeVocabularyText(question);
+  const found = CAUSAL_USAGE.map((pattern) => pattern.exec(text)?.[0]?.trim()).filter((phrase): phrase is string => Boolean(phrase));
+  return [...new Set(found)];
 }
 const BREAKDOWN_STOP = new Set(['day', 'week', 'month', 'quarter', 'year', 'date', 'time', 'period', 'each', 'the', 'total', 'far', 'now', 'default', 'itself', 'category', 'type', 'name']);
 

@@ -86,3 +86,20 @@ describe('analytical request ingress policy', () => {
     expect(evaluateAnalyticalRequestPolicy(question)).toEqual({ allowed: true });
   });
 });
+
+describe('a race is a race', () => {
+  it.each([
+    'Which constructor scored the most points in each race?',
+    'How many pit stops did each driver make per race in 2019?',
+    'Considering all races where pit stop data is available, how many overtakes related to Pit Stops occurred?',
+  ])('allows motor-racing questions: %s', (question) => {
+    expect(evaluateAnalyticalRequestPolicy(question)).toEqual({ allowed: true });
+  });
+
+  it.each([
+    'Show each applicant\'s race',
+    'Break down customers by race and ethnicity',
+  ])('still refuses race as a protected attribute: %s', (question) => {
+    expect(evaluateAnalyticalRequestPolicy(question)).toMatchObject({ allowed: false, code: 'SENSITIVE_PERSONAL_DATA_REQUEST' });
+  });
+});

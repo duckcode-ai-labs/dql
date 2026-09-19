@@ -321,6 +321,35 @@ export class VocabularyIndex {
   renderCardsDetailed(options: RenderCardsOptions = {}): RenderedCards {
     const maxChars = options.maxChars ?? 24_000;
     const caps = { ...DEFAULT_SECTION_CAPS, ...(options.sectionCaps ?? {}) };
+    // THE SECTIONS A PROJECT DOES NOT HAVE PAY FOR THE ONES IT DOES. The caps
+    // split the card budget the way a modeled project uses it: most of it for
+    // metrics, dimensions and blocks. A project with no semantic layer has
+    // only its tables, and the relation cap alone showed a handful of them —
+    // so a warehouse of thirty tables reached the model as six, and Ask
+    // reported a column it had never been shown as missing. Absent kinds hand
+    // their share to the relations and columns that carry the schema; a
+    // project that does have them renders exactly as before.
+    if (!options.sectionCaps) {
+      const present = new Set(this.entries.map((entry) => entry.kind));
+      // Only a project with NO semantic layer: no metric, measure, dimension
+      // or block to spend that budget on. A dbt project renders exactly as it
+      // did, whatever else it is missing; widening this to modeled projects is
+      // a separate, deliberate change, because it moves what every repo shows.
+      const semantic = (['block', 'metric', 'measure', 'dimension'] as VocabularyKind[]).some((kind) => present.has(kind));
+      const spare = semantic ? 0 : (['block', 'metric', 'measure', 'dimension', 'concept', 'model'] as VocabularyKind[])
+        .filter((kind) => !present.has(kind))
+        .reduce((total, kind) => total + caps[kind], 0);
+      // Only where the schema would otherwise be cut. A project whose
+      // relations already fit renders exactly as before, whatever else it
+      // has; nothing is moved on a hunch that more would be better.
+      const demand = (kind: VocabularyKind) => this.entries
+        .filter((entry) => entry.kind === kind)
+        .reduce((total, entry) => total + renderCard(entry).length + 1, 0);
+      if (spare > 0 && demand('relation') > caps.relation) {
+        caps.relation += Math.round(spare * 0.75);
+        caps.column += spare - Math.round(spare * 0.75);
+      }
+    }
     const seedScore = new Map<VocabularyEntry, number>();
     for (const seed of options.seeds ?? []) {
       for (const hit of this.lookup(seed, { limit: 40, minScore: 0.35 })) {

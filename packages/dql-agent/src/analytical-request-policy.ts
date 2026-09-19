@@ -45,12 +45,21 @@ const SENSITIVE_PERSONAL_DATA_RE = /\b(?:credit\s*card|debit\s*card|card\s*(?:nu
  * refused a customer's zip code used to refuse an insurer's question about its
  * insured properties. These are refused when the question is about people.
  */
-const PERSONAL_WHEN_ABOUT_A_PERSON_RE = /\b(?:street(?:\s*(?:address|name))?|postal\s*code|post\s*code|zip\s*code|zipcode|race|ethnicity|religion|gender)\b/i;
+const PERSONAL_WHEN_ABOUT_A_PERSON_RE = /\b(?:street(?:\s*(?:address|name))?|postal\s*code|post\s*code|zip\s*code|zipcode|ethnicity|religion|gender)\b/i;
+/**
+ * "Race" is a protected attribute in one sense and a motor race, a boat race
+ * or an election race in another. It counts as personal data only where the
+ * question reads it as a person's attribute: alongside another protected
+ * attribute, or as a person's own ("their race", "each applicant's race").
+ */
+const RACE_RE = /\braces?\b/i;
+const RACE_AS_ATTRIBUTE_RE = /\b(?:ethnic(?:ity)?|religio(?:n|us)|gender|demographics?|minorit(?:y|ies)|diversity|discriminat(?:e|ion|ory)|protected\s+(?:attribute|class|characteristic)s?)\b/i;
+const RACE_OF_A_PERSON_RE = /\b(?:their|his|her|customers?'?s?|clients?'?s?|employees?'?s?|applicants?'?s?|patients?'?s?|members?'?s?|students?'?s?|people'?s?)\s+races?\b/i;
 const PERSON_POPULATION_RE = /\b(?:customers?|clients?|policy\s*holders?|policyholders?|members?|people|persons?|individuals?|employees?|staff|users?|residents?|applicants?|claimants?|patients?|students?|citizens?|voters?|tenants?)\b/i;
 
 const COMPENSATION_RE = /\b(?:salary|compensation|pay|wage|bonus|earnings)\b/i;
 const INDIVIDUAL_SUBJECT_RE = /\b(?:ceo|cfo|coo|cto|chief\s+\w+\s+officer|founder|employee|person|individual|manager|director|executive|their|his|her)\b/i;
-const NAMED_INDIVIDUAL_REFERENCE_RE = /\b(?:for|to|of)\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,2}\b|\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,2}(?:'s|’s)\b/;
+const NAMED_INDIVIDUAL_REFERENCE_RE = /\b(?:for|to|of)\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,2}\b|\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,2}(?:'s|’s)\b/g;
 // `number` only counts as an aggregate when it is the phrase "number of".
 // Otherwise a literal such as "bank account number" would accidentally become
 // a safe aggregate.  The same rule excludes a bare `account` from the
@@ -80,13 +89,31 @@ function isExplicitPopulationAggregate(question: string): boolean {
  * code" is about stores.
  */
 function isAboutPeople(question: string): boolean {
-  return NAMED_INDIVIDUAL_REFERENCE_RE.test(question)
+  return namesAPerson(question)
     || /\b(?:his|her|ceo|cfo|coo|cto|chief\s+\w+\s+officer|founder|manager|director|executive)\b/i.test(question)
     || PERSON_POPULATION_RE.test(question);
 }
 
+/**
+ * A capitalized phrase is a person's name only when it reads as one. A
+ * document heading ("Overtake related to Pit Stops") and a proper noun the
+ * question also writes in lower case are not people: reading them as names
+ * turned motor-racing questions into personal-data refusals.
+ */
+function namesAPerson(question: string): boolean {
+  for (const match of question.matchAll(NAMED_INDIVIDUAL_REFERENCE_RE)) {
+    const phrase = match[0].replace(/^(?:for|to|of)\s+/i, '').replace(/(?:'s|’s)$/, '').trim();
+    if (!phrase) continue;
+    // The same words in lower case elsewhere make this a domain noun, not a name.
+    const elsewhere = new RegExp(`(^|[^A-Za-z])${phrase.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}([^A-Za-z]|$)`);
+    if (elsewhere.test(question.replace(phrase, ''))) continue;
+    return true;
+  }
+  return false;
+}
+
 function namesAnIndividual(question: string): boolean {
-  return INDIVIDUAL_SUBJECT_RE.test(question) || NAMED_INDIVIDUAL_REFERENCE_RE.test(question);
+  return INDIVIDUAL_SUBJECT_RE.test(question) || namesAPerson(question);
 }
 
 /**
@@ -113,8 +140,10 @@ export function evaluateAnalyticalRequestPolicy(question: string): AnalyticalReq
     };
   }
 
+  const raceAsPersonalData = RACE_RE.test(normalized)
+    && (RACE_AS_ATTRIBUTE_RE.test(normalized) || RACE_OF_A_PERSON_RE.test(normalized));
   const sensitive = SENSITIVE_PERSONAL_DATA_RE.test(normalized)
-    || (PERSONAL_WHEN_ABOUT_A_PERSON_RE.test(normalized) && isAboutPeople(normalized));
+    || ((PERSONAL_WHEN_ABOUT_A_PERSON_RE.test(normalized) || raceAsPersonalData) && isAboutPeople(normalized));
   if (sensitive && !isSystemPolicyQuestion && !isPopulationAggregate) {
     return {
       allowed: false,

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { pinnedRefsFor } from './pipeline.js';
 import { projectVocabularySource, rankedRefsFromPack  } from './vocabulary-from-pack.js';
-import { buildVocabularyIndex, type VocabularySource } from './vocabulary.js';
+import { DEFAULT_SECTION_CAPS, buildVocabularyIndex, type VocabularySource } from './vocabulary.js';
 import type { EligibleContextSet, LocalContextSkill } from '../metadata/catalog.js';
 
 const base: VocabularySource = {
@@ -211,5 +211,41 @@ describe('columns the retrieval ranked reach the vocabulary and lead their relat
     expect(card).toMatch(/columns: (amount, col_59|col_59, amount)/);
     expect(card).toContain(', ...');
     expect(index.withEntries([{ ref: 'column:ada.ada_sfdc_opportunity.new_col', kind: 'column', name: 'new_col', aliases: [], model: 'ada.ada_sfdc_opportunity', roles: ['numeric'], dataType: 'NUMBER' }]).get('column:ada.ada_sfdc_opportunity.new_col')?.dataType).toBe('NUMBER');
+  });
+});
+
+describe('the card budget follows what the project has', () => {
+  const tables = (count: number): VocabularySource => ({
+    relations: Array.from({ length: count }, (_, index) => ({
+      schema: 'main',
+      name: `table_${index}`,
+      columns: ['id', 'name', 'other_id', 'amount', 'created_at', 'status', 'note'].map((name) => ({ name, dataType: 'TEXT' })),
+    })),
+  });
+
+  it('shows a warehouse-only project its whole schema, not the first few tables', () => {
+    const cards = buildVocabularyIndex(tables(30)).renderCardsDetailed({});
+    const shown = (cards.text.match(/table_\d+/g) ?? []).length;
+    expect(shown).toBeGreaterThanOrEqual(30);
+    // A table is no use without the columns that join it to the next one.
+    expect(cards.text).toContain('other_id');
+    expect(cards.truncated ?? []).not.toContain('relation');
+  });
+
+  it('gives a drafted warehouse model its schema too: entities alone are not a semantic layer', () => {
+    const drafted: VocabularySource = {
+      ...tables(30),
+      entities: Array.from({ length: 30 }, (_, index) => ({ name: `table_${index}`, model: `main.table_${index}`, sourceId: `e${index}` })),
+    };
+    const cards = buildVocabularyIndex(drafted).renderCardsDetailed({});
+    expect((cards.text.match(/table_\d+ /g) ?? []).length).toBeGreaterThanOrEqual(30);
+  });
+
+  it('leaves a project that has a semantic layer exactly as it was', () => {
+    const modeled: VocabularySource = { ...base, ...tables(30) };
+    const withFix = buildVocabularyIndex(modeled).renderCardsDetailed({});
+    const asBefore = buildVocabularyIndex(modeled).renderCardsDetailed({ sectionCaps: DEFAULT_SECTION_CAPS });
+    expect(withFix.text).toBe(asBefore.text);
+    for (const metric of base.metrics ?? []) expect(withFix.text).toContain(metric.name);
   });
 });

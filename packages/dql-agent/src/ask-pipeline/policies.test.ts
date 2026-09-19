@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { AnalyticalIntentV1 } from './intent.js';
 import { applySkillPolicies, bindRequiredFilter } from './policies.js';
+import { causalOperatorsIn } from './resolve-intent.js';
 import { buildVocabularyIndex, type VocabularySource } from './vocabulary.js';
 
 const NOW = Date.parse('2026-09-20T12:00:00.000Z');
@@ -223,5 +224,28 @@ describe('applySkillPolicies', () => {
     expect(JSON.stringify(target)).toBe(before);
     const chat = intent({ kind: 'conversation' });
     expect(applySkillPolicies(chat, vocabularyWith([{ ref: 'skill:x', id: 'x', requiredFilters: ['nothing = 1'] }]), { now: () => NOW }).refusal).toBeUndefined();
+  });
+});
+
+describe('what counts as asking for an explanation', () => {
+  it('reads the phrasing, not the nouns: a warehouse may have drivers, reasons and investments', () => {
+    // Every one of these asks the warehouse for a number it holds.
+    for (const question of [
+      'which five constructors have had the most seasons where their drivers scored the fewest points?',
+      'how many deliveries did each driver complete last week?',
+      'list the reason codes for returns in March',
+      'total investment by fund in 2024',
+      'what is the forecast accuracy by product?',
+      'which decision maker approved each claim?',
+    ]) expect(causalOperatorsIn(question), question).toEqual([]);
+  });
+
+  it('still names an explanation or a decision request', () => {
+    expect(causalOperatorsIn('why is revenue down this month?')).toEqual(['why']);
+    expect(causalOperatorsIn('what are the drivers of churn?')).toEqual(['drivers of']);
+    expect(causalOperatorsIn('what caused the drop in signups?')).toEqual(['what caused']);
+    expect(causalOperatorsIn('reasons for the decline in renewals')).toEqual(['reasons for']);
+    expect(causalOperatorsIn('should we open a store in Leeds?')).toEqual(['should we']);
+    expect(causalOperatorsIn('what do you recommend we do about churn?')).toEqual(['recommend']);
   });
 });
