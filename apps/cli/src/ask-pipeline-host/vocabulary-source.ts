@@ -35,6 +35,8 @@ export function normalizeRelationName(value: string | undefined): string | undef
 }
 
 const MAX_EMBEDDED_MANIFEST_COLUMNS = 60_000;
+/** A catalog relation's columns reach the vocabulary; a pathological table does not drown it. */
+const MAX_CATALOG_COLUMNS_PER_RELATION = 400;
 const MAX_EMBEDDED_MANIFEST_DESCRIPTIONS = 2_000;
 
 /**
@@ -189,15 +191,19 @@ function warehouseCatalogRelations(manifest: DQLManifest | undefined, projectRoo
       ...(relation.schema ? { schema: relation.schema } : {}),
       name: relation.name,
       ...(relation.comment ? { description: relation.comment } : {}),
-      columns: [],
-      ...(relation.columns.length ? {
-        embeddedColumns: relation.columns.slice(0, MAX_EMBEDDED_MANIFEST_COLUMNS).map((column) => ({
-          name: column.name,
-          ...(column.type ? { dataType: column.type } : {}),
-          ...(column.comment ? { description: column.comment } : {}),
-        })),
-      } : {}),
-      columnCompleteness: 'partial' as const,
+      // THE WAREHOUSE CATALOG IS THE COLUMNS, NOT A HINT ABOUT THEM. A dbt
+      // manifest keeps columns off the relation because a large one carries
+      // tens of thousands of them for ranking alone; a warehouse catalog is
+      // the schema DQL synced, bounded by the scope the user chose, and it is
+      // complete. Leaving these off the relation showed Ask a warehouse as a
+      // list of bare table names — it then reported columns it had never been
+      // shown as missing, and declined questions the tables could answer.
+      columns: relation.columns.slice(0, MAX_CATALOG_COLUMNS_PER_RELATION).map((column) => ({
+        name: column.name,
+        ...(column.type ? { dataType: column.type } : {}),
+        ...(column.comment ? { description: column.comment } : {}),
+      })),
+      columnCompleteness: (relation.columns.length <= MAX_CATALOG_COLUMNS_PER_RELATION ? 'complete' : 'partial') as 'complete' | 'partial',
     }));
 }
 
@@ -539,6 +545,18 @@ export function buildVocabularySource(input: VocabularySourceInput): VocabularyS
           existing.binding = relationBinding;
           relationKeyByIdentity.set(physicalRelationIdentity(physicalRelationText(relationBinding)), key);
           relationKeyByLooseIdentity.set(looseIdentity(relationBinding), key);
+        }
+        // THE COLUMNS THE HOST INTROSPECTED REACH THE RELATION THAT HAS NONE.
+        // A warehouse catalog relation is added first and carries its columns
+        // for ranking only (`embeddedColumns`), so a project with no dbt
+        // manifest rendered every table as a bare name: Ask was shown thirty
+        // table names and no columns, and reported columns it had never been
+        // shown as missing. A later source that did read the columns fills
+        // them in; a relation that already has columns keeps them.
+        if (existing.columns.length === 0 && relation.columns.length > 0) {
+          existing.columns = relation.columns.map((column) => ({ ...column }));
+          relationColumns.set(key, new Set(relation.columns.map((column) => column.name)));
+          for (const column of relation.columns) if (column.description) columnDescriptions.set(`${key}.${column.name}`, column.description);
         }
         if (relation.columnCompleteness === 'complete') existing.columnCompleteness = 'complete';
         else if (!existing.columnCompleteness) existing.columnCompleteness = relation.columnCompleteness ?? 'partial';
