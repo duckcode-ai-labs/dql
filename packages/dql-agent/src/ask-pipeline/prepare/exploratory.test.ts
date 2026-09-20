@@ -35,6 +35,28 @@ describe('the last tier: SQL drafted from the schema when nothing governed prepa
     expect(forced.chosen?.proof[0]).toContain('review-required');
     expect(forced.attempts.find((attempt) => attempt.tier === 'exploratory')?.outcome).toBe('prepared');
   });
+  it('an unproven clause travels with the answer as a caveat instead of ending the turn', async () => {
+    // The host ran its checks, could not see a stated value applied, and says
+    // so. The statement is read-only and in scope, so the reader gets the
+    // answer AND the doubt, rather than silence.
+    const unbound = parseIntent({ version: 1, kind: 'analytics', reading: 'x', measures: [{ ref: 'metric:sales.lost_amount' }], groupBy: [], display: [], filters: [], unresolved: [], provenance: {}, expectedShape: 'scalar' }).intent!;
+    const withMetric = buildVocabularyIndex({ metrics: [{ name: 'lost_amount', model: 'sales', aggregation: 'sum' }], relations: [{ schema: 'ada', name: 'ada_sfdc_opportunity', columns: [{ name: 'amount', dataType: 'NUMBER' }] }] });
+    const unmet = ['it does not apply "Closed Lost" from the question'];
+    const result = await prepare({ intent: unbound, vocabulary: withMetric, deps: { draftSql: async () => ({ ...draft, unmetChecks: unmet }) }, explorationAuto: true, question: 'lost amount' });
+    expect(result.chosen?.tier).toBe('exploratory');
+    expect(result.chosen?.trust).toBe('review_required');
+    expect(result.chosen?.caveats).toEqual(unmet);
+    expect(result.refusals.some((refusal) => refusal.code === 'exploration_check_failed')).toBe(false);
+  });
+
+  it('a check the host refused outright still ends the turn', async () => {
+    const unbound = parseIntent({ version: 1, kind: 'analytics', reading: 'x', measures: [{ ref: 'metric:sales.lost_amount' }], groupBy: [], display: [], filters: [], unresolved: [], provenance: {}, expectedShape: 'scalar' }).intent!;
+    const withMetric = buildVocabularyIndex({ metrics: [{ name: 'lost_amount', model: 'sales', aggregation: 'sum' }] });
+    const refused = await prepare({ intent: unbound, vocabulary: withMetric, deps: { draftSql: async () => ({ refused: 'its join of a and b on id = id repeats the key on both sides' }) }, explorationAuto: true, question: 'lost amount' });
+    expect(refused.candidates).toEqual([]);
+    expect(refused.refusals.some((refusal) => refusal.code === 'exploration_check_failed')).toBe(true);
+  });
+
   it('stays opt-in when automatic exploration is off; a failed or unsafe draft is a refusal, never an execution', async () => {
     const unbound = parseIntent({ version: 1, kind: 'analytics', reading: 'x', measures: [{ ref: 'metric:sales.lost_amount' }], groupBy: [], display: [], filters: [], unresolved: [], provenance: {}, expectedShape: 'scalar' }).intent!;
     const withMetric = buildVocabularyIndex({ metrics: [{ name: 'lost_amount', model: 'sales', aggregation: 'sum' }] });

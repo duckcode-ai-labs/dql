@@ -1009,14 +1009,18 @@ describe('the schema lane on the host: no governed reading, the AI drafts SQL fr
     expect(result.status).toBe('completed');
   });
 
-  it('a value the draft keeps leaving out is refused, named, and never run', async () => {
+  it('a value the draft keeps leaving out is asked about once, then runs review-required and says what it could not prove', async () => {
     const provider = drafter("SELECT COUNT(*) AS lost_deals FROM sales.opportunities WHERE LOWER(stage) = 'closed lost'");
     const statements: string[] = [];
     const result = await ask(routeFor(provider, statements));
+    // Asked once to fix it, and the second statement still leaves the value out.
     expect(provider.draftPrompts).toHaveLength(2);
-    expect(statements.every((sql) => sql.includes('information_schema'))).toBe(true);
-    expect(result.status).not.toBe('completed');
-    expect(JSON.stringify(result)).toContain('failed a check: it does not apply \\"Splunk\\" from the question');
+    // The answer is given, review-required, with the unproven clause said in
+    // words: a reader can judge that, and cannot judge silence.
+    const text = JSON.stringify(result);
+    expect(text).toContain('one check could not be proven');
+    expect(text).toContain('Splunk');
+    expect(statements.some((sql) => !sql.includes('information_schema'))).toBe(true);
   });
 
   it('a decline over the first tables searches every table for the missing field, adds it, and drafts again', async () => {

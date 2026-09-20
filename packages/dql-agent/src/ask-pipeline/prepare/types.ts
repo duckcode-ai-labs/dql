@@ -28,6 +28,8 @@ export interface PreparedCandidate {
   params?: unknown[];
   /** Why this candidate answers the intent, in the host's words. */
   proof: string[];
+  /** What a check could not prove about this statement; said with the answer, never swallowed. */
+  caveats?: string[];
   /** The block ref for a certified candidate; the engine for a semantic one. */
   sourceRef?: string;
   engine?: string;
@@ -240,7 +242,7 @@ export interface PrepareDeps {
    * answered; `previous` carries a draft the warehouse rejected, with its
    * error, for one correction. `declined` means the tables cannot answer.
    */
-  draftSql?: (input: { question: string; intent?: AnalyticalIntentV1; vocabulary: VocabularyIndex; reason?: string; previous?: { sql: string; error: string } }) => Promise<{ sql: string; relations: string[]; proof: string[]; engine?: string } | { error: string } | { declined: string } | { refused: string } | undefined>;
+  draftSql?: (input: { question: string; intent?: AnalyticalIntentV1; vocabulary: VocabularyIndex; reason?: string; previous?: { sql: string; error: string } }) => Promise<{ sql: string; relations: string[]; proof: string[]; engine?: string; /** Checks the host could not see applied: the statement still runs, review-required, and says these. */ unmetChecks?: string[] } | { error: string } | { declined: string } | { refused: string } | undefined>;
   /** Dialect for relational composition. */
   dialect?: SqlDialectLike;
   /** Certified block source text by block ref. */

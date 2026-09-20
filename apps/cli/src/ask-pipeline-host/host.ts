@@ -2139,6 +2139,37 @@ export function createAskPipelineHost(deps: AskPipelineHostDeps): AskPipelineHos
           : await deps.executor.executeQuery(sql, [], {}, connection, options);
         return (result.rows?.length ?? 0) > 0;
       };
+      /**
+       * The check failures whose answer would be WRONG, not merely unproven:
+       * a join that multiplies the rows it totals, or one that ignores how the
+       * team certified two tables connect. These end the turn; everything else
+       * travels with the answer as a caveat.
+       */
+      const COUNTS_ROWS_TWICE = /repeats the key on both sides|across its join to|uses none of its columns|which both only reference|but the certified relationship/;
+      /** A relation's columns, when the project lists them completely. */
+      const completeColumnsFor = (relation: string): string[] | undefined => {
+        const entry = current.entries.find((item) => item.kind === 'relation' && entryPhysicalRelation(item) !== undefined && sameRelation(entryPhysicalRelation(item)!, relation));
+        const listed = entry && entry.physical?.binding?.columnCompleteness === 'complete'
+          ? current.entries.filter((item) => item.kind === 'column' && samePhysicalEntry(item, entry)).map((item) => item.physical?.column ?? item.name.split('.').pop()!)
+          : [];
+        return listed.length ? listed : undefined;
+      };
+      /**
+       * A join that repeats its key on both sides is usually a composite key
+       * joined on one column. The tables' own column lists say which columns
+       * they share, so the repair names them instead of asking the model to
+       * guess again.
+       */
+      const sharedKeyHint = (sql: string): string => {
+        const pairs = joinKeyPairs(sql).slice(0, 3).flatMap((pair) => {
+          const left = completeColumnsFor(pair.left.relation);
+          const right = completeColumnsFor(pair.right.relation);
+          if (!left || !right) return [];
+          const shared = left.filter((column) => right.some((other) => other.toLowerCase() === column.toLowerCase()));
+          return shared.length > 1 ? [`${pair.left.relation} and ${pair.right.relation} both have ${shared.join(', ')}`] : [];
+        });
+        return pairs.length ? ` Join on every column of the key, not one: ${pairs.join('; ')}.` : '';
+      };
       const failedChecks = async (sql: string): Promise<string[]> => {
         const failures: string[] = [];
         const missing = missingStatedValues(sql, stated);
@@ -2159,12 +2190,8 @@ export function createAskPipelineHost(deps: AskPipelineHostDeps): AskPipelineHos
         // restriction it stood for was not applied. Judged only with the
         // table's complete column list, so a bare column is never misread.
         const completeColumnsOf = (relation: string): string[] | undefined => {
-          const entry = current.entries.find((item) => item.kind === 'relation' && entryPhysicalRelation(item) !== undefined && sameRelation(entryPhysicalRelation(item)!, relation));
-          const listed = entry && entry.physical?.binding?.columnCompleteness === 'complete'
-            ? current.entries.filter((item) => item.kind === 'column' && samePhysicalEntry(item, entry)).map((item) => item.physical?.column ?? item.name.split('.').pop()!)
-            : [];
           const read = sourceColumns(relation);
-          return read.length ? read : listed.length ? listed : undefined;
+          return read.length ? read : completeColumnsFor(relation);
         };
         // An inner join used nowhere else only restricts, which is harmless
         // when it matches one row per row; when its key repeats, every total
@@ -2229,21 +2256,39 @@ export function createAskPipelineHost(deps: AskPipelineHostDeps): AskPipelineHos
           if (!retried || !('sql' in retried)) return retried;
           drafted = retried;
         }
+        // A decline is the drafter's judgement about tables it was shown, not
+        // a fact about the project: it is asked once more before the turn ends
+        // with nothing, because a statement the reader can check beats silence.
+        if (drafted && 'declined' in drafted) {
+          hostStep({ phase: 'schema', title: 'The AI declined: asking it once more from the listed columns', state: 'failed', detail: drafted.declined });
+          const retried = await attemptDraft(`You declined: ${drafted.declined}. Decline only if the listed tables truly cannot answer the question. Otherwise write the best statement the listed columns allow; the answer is labelled review-required and the reader checks it.`);
+          if (!retried || !('sql' in retried)) return drafted;
+          drafted = retried;
+        }
         if (!drafted || !('sql' in drafted)) return drafted;
         let chosen = drafted;
+        let unmetChecks: string[] = [];
         let failures = await failedChecks(chosen.sql);
         if (failures.length > 0) {
           hostStep({ phase: 'schema', title: 'The drafted SQL failed a check: asking the AI to fix it', state: 'failed', detail: failures.join('; ') });
-          const repaired = await attemptDraft(`The previous statement was not run because ${failures.join('; ')}. Fix exactly that and keep everything else the question asks.`);
+          const repaired = await attemptDraft(`The previous statement was not run because ${failures.join('; ')}. Fix exactly that and keep everything else the question asks.${failures.some((message) => COUNTS_ROWS_TWICE.test(message)) ? sharedKeyHint(chosen.sql) : ''}`);
           if (!repaired || !('sql' in repaired)) return repaired;
           chosen = repaired;
           failures = await failedChecks(chosen.sql);
-          if (failures.length > 0) return { refused: failures.join('; ') };
+          // A statement that would count rows more than once, or read across a
+          // join the team certified differently, still ends the turn: its
+          // numbers would be wrong and no label makes them right. A clause the
+          // checker could not see applied is different — the statement runs,
+          // review-required, and says what could not be proven, because a
+          // reader can judge that and cannot judge silence.
+          if (failures.some((message) => COUNTS_ROWS_TWICE.test(message))) return { refused: failures.join('; ') };
+          unmetChecks = failures;
         }
         const applied = appliedConditions(chosen.sql);
         hostStep({ phase: 'schema', title: 'Checked the drafted SQL', state: 'done', detail: [stated.length ? `applies ${stated.map((item) => item.value).join(', ')}` : '', required.length ? `required filters present: ${required.map((item) => item.text).join(', ')}` : '', applied ? `filters on ${applied}` : ''].filter(Boolean).join('; ') || 'read-only and in scope' });
         return {
           ...chosen,
+          ...(unmetChecks.length ? { unmetChecks } : {}),
           sql: withRowGuard(chosen.sql, (deps.maxRows ?? 500) + 1),
           proof: [
             ...chosen.proof,

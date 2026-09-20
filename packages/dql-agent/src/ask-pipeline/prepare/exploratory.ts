@@ -82,6 +82,9 @@ export async function prepareExploratory(
   return {
     candidates: [{
       tier: 'exploratory', trust: 'review_required', sql,
+      // A check the host could not see applied travels WITH the answer: the
+      // reader is told what is unproven about the statement they are reading.
+      ...(drafted.unmetChecks?.length ? { caveats: drafted.unmetChecks } : {}),
       artifact: sqlAnswerArtifact(sql, intent?.reading ?? question),
       ...(drafted.relations.length ? { relations: drafted.relations } : {}),
       proof: [
