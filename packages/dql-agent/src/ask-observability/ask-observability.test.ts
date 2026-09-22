@@ -10,6 +10,21 @@ import { AskTraceSqliteStoreV1 } from './store.js';
 import { assertSafeTraceValue, canonicalJson, fingerprint, sha256 } from './utils.js';
 import type { AskTraceDataV1, AskTraceEnvelopeV1, AskTraceLinkV1, AskTraceSpanV1, CandidateDecisionV1 } from './types.js';
 
+/**
+ * Fixtures below are dated 2026-08-22 and the store expires trace detail
+ * after 30 days of the real clock, so a test reading them back failed a month
+ * after it was written. Such a test runs with the clock on the next day.
+ */
+function onFixtureDay<T>(run: () => T): T {
+  vi.useFakeTimers({ toFake: ['Date'] });
+  vi.setSystemTime(new Date('2026-08-23T00:00:00.000Z'));
+  try {
+    return run();
+  } finally {
+    vi.useRealTimers();
+  }
+}
+
 const dirs: string[] = [];
 afterEach(() => {
   for (const directory of dirs.splice(0)) rmSync(directory, { recursive: true, force: true });
@@ -628,7 +643,7 @@ describe.runIf(sqliteAvailable())('AskTraceSqliteStoreV1 lifecycle (supported SQ
     store.close();
   });
 
-  it('marks open traces interrupted after a restart without affecting trace history', () => {
+  it('marks open traces interrupted after a restart without affecting trace history', () => onFixtureDay(() => {
     const { directory, store } = fixtureStore();
     const path = join(directory, 'ask-observability.sqlite');
     const envelope = makeEnvelope('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 'run-interrupted');
@@ -637,7 +652,7 @@ describe.runIf(sqliteAvailable())('AskTraceSqliteStoreV1 lifecycle (supported SQ
     const restarted = new AskTraceSqliteStoreV1({ path });
     expect(restarted.getByRun('run-interrupted')?.envelope).toMatchObject({ status: 'interrupted', recordingStatus: 'partial' });
     restarted.close();
-  });
+  }));
 
   it('durably admits an observer root before its first queued flush, then exports a restarted trace', () => {
     const { directory } = fixtureStore();
@@ -854,7 +869,7 @@ describe.runIf(sqliteAvailable())('AskTraceSqliteStoreV1 lifecycle (supported SQ
     }
   });
 
-  it('enforces span/detail/summary retention caps while retaining recent trace summaries', () => {
+  it('enforces span/detail/summary retention caps while retaining recent trace summaries', () => onFixtureDay(() => {
     const directory = mkdtempSync(join(tmpdir(), 'dql-ask-observability-retention-'));
     dirs.push(directory);
     const store = new AskTraceSqliteStoreV1({
@@ -885,7 +900,7 @@ describe.runIf(sqliteAvailable())('AskTraceSqliteStoreV1 lifecycle (supported SQ
     expect(store.get(third)?.spans).toHaveLength(2);
     expect(store.list({ limit: 100 }).traces).toHaveLength(2);
     store.close();
-  });
+  }));
 
   it('filters the paginated trace catalog by persisted receipt fields without retaining question text', () => {
     const { store } = fixtureStore();
