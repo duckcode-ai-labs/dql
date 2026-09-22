@@ -73,7 +73,7 @@ import {
   type AgentMessage,
   type RuntimeSchemaTable,
 } from '@duckcodeailabs/dql-agent';
-import { buildProjectVocabulary, buildVocabularySource, embeddedManifestRelations, normalizeRelationName, type VocabularySourceInput } from './vocabulary-source.js';
+import { buildProjectVocabulary, buildVocabularySource, embeddedManifestRelations, normalizeRelationName, warehouseFirstCatalog, type VocabularySourceInput } from './vocabulary-source.js';
 import { businessIdentifierLine, businessIdentifiers, modelingEntityTexts, certifiedJoinViolations, classifySqlJoins, ledgerJoins, markerTableLine, markerTables, modeledJoinPaths, modelingRelationshipEdges, sameRelation, sharedParentShortcuts, type LedgerJoin } from './join-relationships.js';
 
 /**
@@ -1964,6 +1964,24 @@ export function createAskPipelineHost(deps: AskPipelineHostDeps): AskPipelineHos
           }
         } catch { /* the tables chosen so far stand */ }
       }
+      // THE WHOLE SCHEMA WHEN IT FITS. On a warehouse-first project the synced
+      // catalog is the entire account of the data, and a plain text-to-SQL
+      // prompt reads every table of it. Choosing five by word overlap meant a
+      // needed table was simply never shown. When every described table fits
+      // the budget, the drafter sees all of them, the chosen ones first, with
+      // the keys the warehouse declares. Above the budget it chooses as before.
+      const warehouseKeys = warehouseFirstCatalog(deps.getManifest().manifest, deps.projectRoot);
+      let wholeSchema = false;
+      if (warehouseKeys) {
+        const described = current.entries
+          .filter((item) => item.kind === 'relation' && entryPhysicalRelation(item) !== undefined && current.entries.some((column) => column.kind === 'column' && samePhysicalEntry(column, item)))
+          .map((item) => entryPhysicalRelation(item)!);
+        const size = current.entries.filter((item) => item.kind === 'column').reduce((total, item) => total + renderCard(item).length + 1, 0) + described.length * 160;
+        if (described.length > relations.length && size <= WHOLE_SCHEMA_CHARS) {
+          for (const relation of described) if (!relations.some((known) => physicalRelationIdentity(known) === physicalRelationIdentity(relation))) relations.push(relation);
+          wholeSchema = true;
+        }
+      }
       const needsColumns = relations.filter((relation) => {
         const entry = current.entries.find((item) => item.kind === 'relation' && entryPhysicalRelation(item) !== undefined && physicalRelationIdentity(entryPhysicalRelation(item)!) === physicalRelationIdentity(relation));
         return !entry || entry.physical?.binding?.columnCompleteness !== 'complete' || !current.entries.some((item) => item.kind === 'column' && samePhysicalEntry(item, entry));
@@ -1986,7 +2004,7 @@ export function createAskPipelineHost(deps: AskPipelineHostDeps): AskPipelineHos
       // Only tables whose columns are known can be drafted over.
       relations = relations.filter((relation) => current.entries.some((item) => item.kind === 'column' && (() => { const physical = entryPhysicalRelation(item); return physical !== undefined && physicalRelationIdentity(physical) === physicalRelationIdentity(relation); })()));
       if (relations.length === 0) return { error: 'the tables that match the question could not be described on this connection' };
-      hostStep({ phase: 'schema', title: `Chose ${relations.length === 1 ? 'the table' : 'the tables'} ${relations.join(', ')}`, state: 'done', detail: `picked from ${refs.length ? 'the fields the reading named' : 'the words of the question'}${catalogPicked.length ? `; found by the catalog search: ${catalogPicked.join(', ')}` : ''}${bridged.length ? `; added to connect them over modeled relationships: ${bridged.join(', ')}` : ''}${needsColumns.length ? `; columns of ${needsColumns.slice(0, 4).join(', ')} read from the warehouse` : ''}` });
+      hostStep({ phase: 'schema', title: wholeSchema ? `Showed the whole schema: all ${relations.length} tables, with their declared keys` : `Chose ${relations.length === 1 ? 'the table' : 'the tables'} ${relations.join(', ')}`, state: 'done', detail: `picked from ${refs.length ? 'the fields the reading named' : 'the words of the question'}${catalogPicked.length ? `; found by the catalog search: ${catalogPicked.join(', ')}` : ''}${bridged.length ? `; added to connect them over modeled relationships: ${bridged.join(', ')}` : ''}${needsColumns.length ? `; columns of ${needsColumns.slice(0, 4).join(', ')} read from the warehouse` : ''}` });
       // THE CONTEXT THE DRAFT READS: what the user said, the previous reading,
       // and what the project says about this data (domain notes, business
       // terms the question uses, approved hints).
@@ -2072,16 +2090,22 @@ export function createAskPipelineHost(deps: AskPipelineHostDeps): AskPipelineHos
             const physical = entryPhysicalRelation(item);
             return physical !== undefined && physicalRelationIdentity(physical) === physicalRelationIdentity(relation);
           });
+          const declared = warehouseKeys?.get(physicalRelationIdentity(relation));
           const lines = [
             entry ? `- executable relation:${relation} [${entry.physical?.binding?.columnCompleteness ?? 'partial'} columns; logical ${entry.physical?.binding?.logicalRelation ?? entry.model ?? relation}]` : `- executable relation:${relation}`,
             ...current.entries.filter((item) => item.kind === 'column' && samePhysicalEntry(item, entry)).map((item) => renderCard(item)),
+            // What one row is, and how this table points at others, as the
+            // warehouse declares them (warehouse-first projects only).
+            ...(declared?.primaryKey ? [`  primary key (${declared.primaryKey.join(', ')}): one row per ${declared.primaryKey.join(', ')}`] : []),
+            ...(declared?.foreignKeys ?? []).map((key) => `  foreign key (${key.columns.join(', ')}) references ${key.references.relation} (${key.references.columns.join(', ')})`),
           ];
-          for (const line of lines) { if (chars + line.length > 18_000) break; cards.push(line); chars += line.length + 1; }
+          const cap = wholeSchema ? WHOLE_SCHEMA_CHARS : 18_000;
+          for (const line of lines) { if (chars + line.length > cap) break; cards.push(line); chars += line.length + 1; }
         }
         const dialect = connection?.driver ?? 'duckdb';
         const messages: AgentMessage[] = [
           { role: 'system', content: `You write exactly ONE read-only SQL statement for ${dialect} that answers the question from the tables below. No certified block or semantic metric answers it, so you choose the tables, columns, joins and filters. Use ONLY the executable physical relations and columns listed below, spelled exactly as listed (including database and quoting where shown). Join two relations only on columns that exist in both. Apply every restriction the question states; when unsure how a text value is stored, match it case-insensitively; aggregate at the grain the question asks for; when the answer lists people or things, select and group by their id column beside the name (two can share a name); a term with a standard definition (a double-double, a win rate, a repeat customer) is computed from the listed columns that define it, and the definition is not a missing field; order and limit as it asks; never return more than 500 rows. No DDL or DML, no comments, no explanation. The CONTEXT lines are what the user and the project have said about this data (definitions, rules, where values are kept): follow them, and use a table or field the user names as named. A semantic metric listed in CONTEXT is computed exactly as it is defined there. A preferred join listed in CONTEXT is how those tables join unless the question needs another. When no column is dedicated to a restriction the question states, apply it to the text, tag, category or custom field that most plausibly holds that value, matched case-insensitively (a partial match is allowed). Reply exactly NO_SQL: followed by one sentence naming what is missing only when no listed column could hold a measure or a restriction the question asks for, and never substitute a different measure for the one asked. Otherwise return the SQL only.` },
-          { role: 'user', content: `QUESTION: ${question}\n${reason ? `WHY NO GOVERNED ANSWER: ${reason.slice(0, 600)}\n` : ''}${intent ? `READING: ${intent.reading}\nINTENT: ${JSON.stringify({ measures: intent.measures, groupBy: intent.groupBy, display: intent.display, filters: intent.filters, time: intent.time ?? null, ordering: intent.ordering ?? null, limit: intent.limit ?? null })}\n` : ''}${contextLines.length ? `CONTEXT:\n${contextLines.join('\n')}\n` : ''}${note ? `NOTE: ${note}\n` : ''}${previous ? `PREVIOUS SQL (the warehouse rejected it; fix it):\n${previous.sql}\nWAREHOUSE ERROR: ${previous.error.slice(0, 600)}\n` : ''}RELATIONS AND COLUMNS:\n${cards.join('\n')}` },
+          { role: 'user', content: `QUESTION: ${question}\n${reason ? `WHY NO GOVERNED ANSWER: ${reason.slice(0, 600)}\n` : ''}${intent && !(warehouseKeys && process.env.DQL_ASK_DRAFT_WITHOUT_READING === '1') ? `READING: ${intent.reading}\nINTENT: ${JSON.stringify({ measures: intent.measures, groupBy: intent.groupBy, display: intent.display, filters: intent.filters, time: intent.time ?? null, ordering: intent.ordering ?? null, limit: intent.limit ?? null })}\n` : ''}${contextLines.length ? `CONTEXT:\n${contextLines.join('\n')}\n` : ''}${warehouseKeys && DIALECT_NOTES[dialect.toLowerCase()] ? `DIALECT NOTES (${dialect}): ${DIALECT_NOTES[dialect.toLowerCase()]}\n` : ''}${note ? `NOTE: ${note}\n` : ''}${previous ? `PREVIOUS SQL (the warehouse rejected it; fix it):\n${previous.sql}\nWAREHOUSE ERROR: ${previous.error.slice(0, 600)}\n` : ''}RELATIONS AND COLUMNS:\n${cards.join('\n')}` },
         ];
         const draftStarted = Date.now();
         const trace = deps.dispatchOptions?.('draft', request);
@@ -2972,6 +2996,26 @@ function relationsInSql(sql: string): string[] {
  * case-insensitively (their compilers quote every component), so only the
  * component count and the folded spelling count there.
  */
+/** The schema a warehouse-first draft may read whole: about ten thousand tokens. */
+const WHOLE_SCHEMA_CHARS = 40_000;
+
+/**
+ * What a draft for an engine must know that the model gets wrong by default.
+ * Facts about the engine, not about any question. Shown on warehouse-first
+ * projects, where they were measured; a dbt project's prompts are recorded
+ * provider evidence (the golden replays) and change only with a re-record.
+ * Engines without an entry get no line.
+ */
+const DIALECT_NOTES: Record<string, string> = {
+  sqlite: [
+    'there is no MEDIAN, PERCENTILE_CONT or STDDEV function: compute a median by ordering the values and averaging the middle one or two (ROW_NUMBER() and COUNT(*) OVER ()), and a standard deviation from AVG(x*x) - AVG(x)*AVG(x)',
+    'integer divided by integer truncates: multiply by 1.0 first for a ratio or average of counts',
+    'dates and timestamps are stored as TEXT: use date(), strftime(\'%Y\', col), strftime(\'%Y-%m\', col) and julianday(); check the stored format before comparing',
+    'concatenate with ||; there is no LEFT() or RIGHT(): use substr()',
+    'window functions (ROW_NUMBER, RANK, LAG, SUM() OVER) and WITH RECURSIVE are supported',
+  ].join('; '),
+};
+
 /** One rule with the validator: which engines name a table regardless of quoting and case. */
 function executionRelationIdentityFor(relation: string, driver: string | undefined): string {
   return executionRelationIdentity(relation, driver);

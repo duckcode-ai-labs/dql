@@ -173,6 +173,38 @@ function warehouseCatalogSnapshot(path: string): WarehouseCatalogSnapshotV1 | un
   return snapshot;
 }
 
+export interface DeclaredRelationKeys {
+  relation: string;
+  primaryKey?: string[];
+  foreignKeys: Array<{ columns: string[]; references: { relation: string; columns: string[] } }>;
+}
+
+/**
+ * THE WAREHOUSE-FIRST CATALOG, with the keys the warehouse declares.
+ *
+ * Only for a project with no dbt project (RFC 0007 warehouse-first): there the
+ * synced catalog is the whole schema and the only account of how its tables
+ * join. A primary key says what one row is; a foreign key says how two tables
+ * connect. A plain text-to-SQL prompt reads both from `CREATE TABLE`; the
+ * drafter had neither. Returns undefined for a dbt or hybrid project, whose
+ * prompts stay as they are.
+ */
+export function warehouseFirstCatalog(manifest: DQLManifest | undefined, projectRoot: string | undefined): Map<string, DeclaredRelationKeys> | undefined {
+  const provenance = manifest?.dbtProvenance;
+  if (!provenance?.warehouseCatalogPath || provenance.manifestPath || !projectRoot) return undefined;
+  const snapshot = warehouseCatalogSnapshot(join(projectRoot, provenance.warehouseCatalogPath));
+  if (!snapshot) return undefined;
+  const keys = new Map<string, DeclaredRelationKeys>();
+  for (const relation of snapshot.relations) {
+    keys.set(physicalRelationIdentity(relation.relation), {
+      relation: relation.relation,
+      ...(relation.primaryKey?.length ? { primaryKey: relation.primaryKey } : {}),
+      foreignKeys: (relation.foreignKeys ?? []).map((key) => ({ columns: key.columns, references: { relation: key.references.relation, columns: key.references.columns } })),
+    });
+  }
+  return keys;
+}
+
 /**
  * RFC 0007: in warehouse-first and hybrid modeling the warehouse catalog
  * snapshot plays the dbt artifact's part — table and column comments become

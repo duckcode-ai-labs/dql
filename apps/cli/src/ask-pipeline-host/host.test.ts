@@ -1,4 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import type { QueryExecutor } from '@duckcodeailabs/dql-connectors';
 import type { AgentMessage, AgentProvider, AgentRunRequest } from '@duckcodeailabs/dql-agent';
 import type { ConnectionConfig } from '@duckcodeailabs/dql-connectors';
@@ -1346,6 +1349,81 @@ describe('the tables between two named tables come from the Modeling map', () =>
     expect(first).toContain('ins.cd_link');
     expect(first).toContain('preferred join (declared, not validated: link_to_claim)');
     expect(first).toContain('preferred join (declared, not validated: detail_to_policy)');
+  });
+});
+
+describe('a warehouse-first draft reads the whole schema with its declared keys', () => {
+  // Six tables; the question names one. A plain text-to-SQL prompt shows all
+  // six with their keys, and so must the drafter when they fit.
+  const tables: Record<string, { columns: string[]; primaryKey?: string[]; foreignKeys?: Array<{ columns: string[]; references: { relation: string; columns: string[] } }> }> = {
+    customers: { columns: ['customer_id', 'name', 'country'], primaryKey: ['customer_id'] },
+    invoices: { columns: ['invoice_id', 'customer_id', 'total'], primaryKey: ['invoice_id'], foreignKeys: [{ columns: ['customer_id'], references: { relation: 'main.customers', columns: ['customer_id'] } }] },
+    invoice_lines: { columns: ['invoice_id', 'line_no', 'track_id', 'unit_price'], primaryKey: ['invoice_id', 'line_no'], foreignKeys: [{ columns: ['invoice_id'], references: { relation: 'main.invoices', columns: ['invoice_id'] } }] },
+    tracks: { columns: ['track_id', 'album_id', 'title'], primaryKey: ['track_id'] },
+    albums: { columns: ['album_id', 'artist_id', 'title'], primaryKey: ['album_id'] },
+    artists: { columns: ['artist_id', 'name'], primaryKey: ['artist_id'] },
+  };
+  const setup = (hybrid: boolean) => {
+    const projectRoot = mkdtempSync(join(tmpdir(), 'dql-whole-schema-'));
+    mkdirSync(join(projectRoot, '.dql'), { recursive: true });
+    const relations = Object.entries(tables).map(([name, table]) => ({
+      id: `warehouse.main.${name}`, schema: 'main', name, relation: `main.${name}`, kind: 'table',
+      columns: table.columns.map((column) => ({ name: column, type: column.endsWith('_id') || column === 'line_no' ? 'INTEGER' : 'TEXT' })),
+      ...(table.primaryKey ? { primaryKey: table.primaryKey } : {}), ...(table.foreignKeys ? { foreignKeys: table.foreignKeys } : {}),
+    }));
+    writeFileSync(join(projectRoot, '.dql', 'warehouse-catalog.json'), JSON.stringify({ version: 1, driver: 'sqlite', connectionId: 'default', scopes: [{ catalogOrDatabase: 'main', schemas: ['main'] }], relations, capturedAt: '2026-09-22T00:00:00.000Z', fingerprint: 'sha256:test' }));
+    const manifest = {
+      sources: {},
+      dbtProvenance: {
+        // A hybrid project has a dbt manifest beside the catalog: dbt owns
+        // its prompts, so the warehouse keys are not added to them.
+        manifestPath: hybrid ? 'target/manifest.json' : '', manifestFingerprint: 'none', metricFlow: {},
+        warehouseCatalogPath: '.dql/warehouse-catalog.json', warehouseCatalogFingerprint: 'sha256:test',
+        nodes: Object.fromEntries(relations.map((relation) => [relation.id, { uniqueId: relation.id, resourceType: 'warehouse', name: relation.name, relation: relation.relation, identityFingerprint: relation.id, available: { description: false, columns: true, tests: false, catalogTypes: true, dqlMeta: false } }])),
+      },
+    };
+    return { projectRoot, manifest };
+  };
+  const unreadable = JSON.stringify({ version: 1, kind: 'analytics', reading: 'Invoice totals by country.', measures: [{ ref: 'metric:shop.invoice_total' }], groupBy: [], display: [], filters: [], unresolved: [], provenance: {}, expectedShape: 'grouped' });
+  const draftPromptFor = async (driver: string, hybrid = false): Promise<string> => {
+    const { projectRoot, manifest } = setup(hybrid);
+    const prompts: string[] = [];
+    const route = createAskPipelineRouteExecutor({
+      projectRoot,
+      executor: { executeQuery: vi.fn(async () => ({ columns: [], rowCount: 0, executionTimeMs: 1, rows: [] })) } as unknown as QueryExecutor,
+      resolveConnection: async () => ({ driver } as ConnectionConfig),
+      getSemanticLayer: () => undefined,
+      getManifest: () => ({ snapshotId: 'snapshot:whole-schema', manifest: manifest as never }),
+      selectProvider: async () => ({
+        name: 'ollama', available: async () => true,
+        generate: async (messages) => {
+          if (!messages[0]!.content.startsWith('You write exactly ONE read-only SQL statement')) return unreadable;
+          prompts.push(messages.map((message) => message.content).join('\n'));
+          return 'NO_SQL: nothing to draft in this test.';
+        },
+      }) as AgentProvider,
+      compileSemantic: async () => { throw new Error('no semantic layer'); },
+      priorIntent: () => undefined,
+    });
+    await route({ runId: 'run:whole-schema', request: { question: 'Total invoice amount for each customer country', requestedMode: 'ask' } as AgentRunRequest, route: 'generated_answer', maxRepairAttempts: 0, attempt: 0, emit: () => {} });
+    rmSync(projectRoot, { recursive: true, force: true });
+    expect(prompts.length).toBeGreaterThan(0);
+    return prompts[0]!;
+  };
+
+  it('shows every table, the primary keys and the foreign keys the warehouse declares', async () => {
+    const prompt = await draftPromptFor('sqlite');
+    for (const name of Object.keys(tables)) expect(prompt).toContain(`executable relation:main.${name}`);
+    expect(prompt).toContain('primary key (invoice_id, line_no): one row per invoice_id, line_no');
+    expect(prompt).toContain('foreign key (customer_id) references main.customers (customer_id)');
+    expect(prompt).toContain('DIALECT NOTES (sqlite): there is no MEDIAN');
+  });
+
+  it('an engine without notes gets none, and a hybrid dbt project gets no warehouse keys', async () => {
+    expect(await draftPromptFor('duckdb')).not.toContain('DIALECT NOTES');
+    const hybrid = await draftPromptFor('duckdb', true);
+    expect(hybrid).not.toContain('primary key (');
+    expect(hybrid).not.toContain('foreign key (');
   });
 });
 
