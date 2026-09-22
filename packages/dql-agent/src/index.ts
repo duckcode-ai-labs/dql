@@ -1060,6 +1060,7 @@ export type {
 } from "./metadata/grain-gate.js";
 export {
   validateSqlAgainstLocalContext,
+  executionRelationIdentity,
 } from "./metadata/sql-context-validation.js";
 export { upgradeVectorIndexForProject, awaitVectorIndexUpgrade } from "./metadata/catalog.js";
 export { indexedVectorProviderId } from "./metadata/catalog-indexed-provider.js";

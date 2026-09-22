@@ -1339,6 +1339,75 @@ describe('the tables between two named tables come from the Modeling map', () =>
   });
 });
 
+describe('a join on a composite key is judged by the whole key', () => {
+  const connection = { driver: 'duckdb' } as ConnectionConfig;
+  // One row per (match_id, ball_id) on each side, while each column alone
+  // repeats: a ball number recurs in every match.
+  const manifest = { sources: {
+    deliveries: { name: 'deliveries', origin: 'dbt', referencedBy: [], dbtModel: { uniqueId: 'model.deliveries', schema: 'cricket', columns: { match_id: { name: 'match_id' }, ball_id: { name: 'ball_id' }, bowler: { name: 'bowler' } } } },
+    scores: { name: 'scores', origin: 'dbt', referencedBy: [], dbtModel: { uniqueId: 'model.scores', schema: 'cricket', columns: { match_id: { name: 'match_id' }, ball_id: { name: 'ball_id' }, runs: { name: 'runs' } } } },
+  } };
+  const unreadable = JSON.stringify({ version: 1, kind: 'analytics', reading: 'Runs conceded per bowler.', measures: [{ ref: 'metric:cricket.runs' }], groupBy: [], display: [], filters: [], unresolved: [], provenance: {}, expectedShape: 'grouped' });
+  const onFullKey = 'SELECT d.bowler, SUM(s.runs) AS runs FROM cricket.deliveries d JOIN cricket.scores s ON s.match_id = d.match_id AND s.ball_id = d.ball_id GROUP BY d.bowler';
+  const route = (drafts: string[], tupleRepeats: boolean, statements: string[], prompts: string[]) => createAskPipelineRouteExecutor({
+    projectRoot: '/tmp/ask-composite-key',
+    executor: { executeQuery: vi.fn(async (sql: string) => {
+      statements.push(sql);
+      const probe = /GROUP BY (.+?) HAVING COUNT\(\*\) > 1/.exec(sql);
+      if (probe) {
+        const columns = probe[1]!.split(',').length;
+        const repeats = columns === 1 || tupleRepeats;
+        return { columns: [], rowCount: repeats ? 1 : 0, executionTimeMs: 1, rows: repeats ? [{ x: 1 }] : [] };
+      }
+      if (sql.includes('information_schema.columns')) {
+        const rows = [
+          ...(/'deliveries'/.test(sql) ? ['match_id', 'ball_id', 'bowler'].map((column) => ({ table_schema: 'cricket', table_name: 'deliveries', column_name: column, data_type: 'INTEGER' })) : []),
+          ...(/'scores'/.test(sql) ? ['match_id', 'ball_id', 'runs'].map((column) => ({ table_schema: 'cricket', table_name: 'scores', column_name: column, data_type: 'INTEGER' })) : []),
+        ];
+        return { columns: [], rowCount: rows.length, executionTimeMs: 1, rows };
+      }
+      return { columns: ['bowler', 'runs'], rowCount: 1, executionTimeMs: 1, rows: [{ bowler: 7, runs: 120 }] };
+    }) } as unknown as QueryExecutor,
+    resolveConnection: async () => connection,
+    getSemanticLayer: () => undefined,
+    getManifest: () => ({ snapshotId: 'snapshot:composite-key', manifest: manifest as never }),
+    selectProvider: async () => ({
+      name: 'ollama', available: async () => true,
+      generate: async (messages) => {
+        if (!messages[0]!.content.startsWith('You write exactly ONE read-only SQL statement')) return unreadable;
+        prompts.push(messages.map((message) => message.content).join('\n'));
+        return drafts[Math.min(prompts.length - 1, drafts.length - 1)]!;
+      },
+    }) as AgentProvider,
+    compileSemantic: async () => { throw new Error('no semantic layer'); },
+    priorIntent: () => undefined,
+  });
+  const run = (executor: ReturnType<typeof route>) => executor({
+    runId: 'run:composite-key',
+    request: { question: 'Total runs conceded by each bowler, from the deliveries and scores tables', requestedMode: 'ask' } as AgentRunRequest,
+    route: 'generated_answer', maxRepairAttempts: 0, attempt: 0, emit: () => {},
+  });
+
+  it('runs a join on every column of a unique composite key, where each column alone repeats', async () => {
+    const statements: string[] = [];
+    const prompts: string[] = [];
+    const result = await run(route([onFullKey], false, statements, prompts));
+    expect(result.status).toBe('completed');
+    expect(prompts).toHaveLength(1);
+    // The probe groups by the key tuple, not by one of its columns.
+    expect(statements.some((sql) => /GROUP BY "match_id", "ball_id" HAVING COUNT/.test(sql))).toBe(true);
+    expect(statements.some((sql) => /GROUP BY "?ball_id"? HAVING COUNT/.test(sql))).toBe(false);
+  });
+
+  it('still refuses a join whose whole key repeats on both sides', async () => {
+    const statements: string[] = [];
+    const prompts: string[] = [];
+    const result = await run(route([onFullKey], true, statements, prompts));
+    expect(result.status).not.toBe('completed');
+    expect(JSON.stringify(result)).toContain('on match_id = match_id and ball_id = ball_id repeats the key on both sides');
+  });
+});
+
 describe('a wide question keeps the linking tables when many tables need columns', () => {
   const connection: ConnectionConfig = { driver: 'duckdb', path: ':memory:' } as ConnectionConfig;
   const tables: Record<string, string[]> = {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { aggregatesRows, appliedConditions, joinKeyPairs, missingRequiredFilters, missingStatedValues, requiredFilterFromText, statedValues, withRowGuard, aggregatesColumnOf } from './sql-checks.js';
+import { aggregatesRows, appliedConditions, joinKeyGroups, joinKeyPairs, questionProper, missingRequiredFilters, missingStatedValues, requiredFilterFromText, statedValues, withRowGuard, aggregatesColumnOf } from './sql-checks.js';
 
 describe('the checks an AI-drafted statement passes before it runs', () => {
   const office = 'Lost opportunities count ,Lost Amount by month for fiscal year FY26 and competitor involved is Splunk';
@@ -46,6 +46,35 @@ describe('the checks an AI-drafted statement passes before it runs', () => {
       { left: { relation: 'crm.deal_notes', column: 'deal_ref', qualifier: 'd' }, right: { relation: 'sales.opportunities', column: 'deal_ref', qualifier: 'o' } },
     ]);
     expect(joinKeyPairs('WITH lost AS (SELECT * FROM sales.opportunities) SELECT COUNT(*) FROM lost l JOIN crm.deal_notes d ON d.deal_ref = l.deal_ref')).toEqual([]);
+  });
+
+  it('reads every equality of a composite-key join, grouped into one key per pair of tables', () => {
+    const sql = `SELECT b.bowler, SUM(s.runs_scored) AS runs
+      FROM main.ball_by_ball AS b
+      JOIN main.batsman_scored AS s ON s.ball_id = b.ball_id AND s.innings_no = b.innings_no AND s.match_id = b.match_id AND s.over_id = b.over_id
+      LEFT JOIN main.wicket_taken w ON (w.match_id = b.match_id AND w.ball_id = b.ball_id)
+      GROUP BY b.bowler`;
+    expect(joinKeyPairs(sql).map((pair) => `${pair.left.qualifier}.${pair.left.column}=${pair.right.qualifier}.${pair.right.column}`)).toEqual([
+      's.ball_id=b.ball_id', 's.innings_no=b.innings_no', 's.match_id=b.match_id', 's.over_id=b.over_id', 'w.match_id=b.match_id', 'w.ball_id=b.ball_id',
+    ]);
+    expect(joinKeyGroups(sql)).toEqual([
+      { left: { relation: 'main.batsman_scored', qualifier: 's', columns: ['ball_id', 'innings_no', 'match_id', 'over_id'] }, right: { relation: 'main.ball_by_ball', qualifier: 'b', columns: ['ball_id', 'innings_no', 'match_id', 'over_id'] } },
+      { left: { relation: 'main.wicket_taken', qualifier: 'w', columns: ['match_id', 'ball_id'] }, right: { relation: 'main.ball_by_ball', qualifier: 'b', columns: ['match_id', 'ball_id'] } },
+    ]);
+  });
+
+  it('an ON clause ends at the next clause or the parenthesis that closes its query, and a recursive CTE is still a CTE', () => {
+    const sql = `WITH RECURSIVE tree(id, root_id) AS (SELECT p.id, p.id FROM packaging p UNION ALL SELECT r.contains_id, t.root_id FROM packaging_relations r JOIN tree t ON r.packaging_id = t.id)
+      SELECT COUNT(*) FROM orders o JOIN customers c ON c.id = o.customer_id WHERE o.total > 5`;
+    expect(joinKeyGroups(sql)).toEqual([
+      { left: { relation: 'customers', qualifier: 'c', columns: ['id'] }, right: { relation: 'orders', qualifier: 'o', columns: ['customer_id'] } },
+    ]);
+  });
+
+  it('a definitions document pasted after the question states no values: its headings are not data', () => {
+    const question = 'List each player with their batting average for Mumbai Indians.\n\nReference document (definitions.md):\n# Special Words Definition\n\n## Batting Average\n- Batting Average = Total Runs ÷ Total Dismissals';
+    expect(questionProper(question)).toBe('List each player with their batting average for Mumbai Indians.');
+    expect(statedValues(question).map((item) => item.value)).toEqual(['Mumbai', 'Indians']);
   });
 
   it('guards the rows a statement returns and recognises aggregation', () => {

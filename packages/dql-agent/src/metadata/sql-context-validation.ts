@@ -215,8 +215,16 @@ function physicalRelationsInSql(sql: string): string[] {
  * very inspected object after compilation.  Component count remains part of
  * the identity in both cases, so a two-part alias cannot select a database.
  */
-function executionRelationIdentity(relation: string, dialect?: string): string {
-  if (dialect?.trim().toLowerCase() !== 'duckdb') return physicalRelationIdentity(relation);
+/**
+ * Engines whose table names do not depend on quoting or case: there
+ * `"main"."Movie"` and `main.Movie` name one table, so a drafted statement
+ * quoting an inspected relation is that relation. Snowflake, PostgreSQL and
+ * BigQuery keep quote-sensitive identities.
+ */
+const CASE_INSENSITIVE_RELATION_ENGINES = new Set(['duckdb', 'sqlite', 'mysql', 'mariadb', 'mssql', 'sqlserver', 'fabric', 'trino', 'athena']);
+
+export function executionRelationIdentity(relation: string, dialect?: string): string {
+  if (!CASE_INSENSITIVE_RELATION_ENGINES.has(dialect?.trim().toLowerCase() ?? '')) return physicalRelationIdentity(relation);
   return parsePhysicalIdentifier(relation)
     .map((part) => `d:${part.value.toLocaleLowerCase('en-US')}`)
     .join('.');
@@ -408,6 +416,7 @@ export function validateSqlAgainstLocalContext(
     analysis,
     allowed,
     outputAliases,
+    usingColumns: usingJoinColumns(sql),
     // The exact physical walk above validates relation admission. Avoid
     // allowing a parser-normalized quoted relation to overwrite that result.
     ...(quotedPhysicalRelations.length > 0 ? { relationsResolved: true } : {}),
@@ -794,6 +803,8 @@ export function checkSqlReferences(input: {
   outputAliases: Set<string>;
   /** Skip the relation walk (the caller resolved relations its own way). */
   relationsResolved?: boolean;
+  /** Columns merged by `USING (…)` joins: never ambiguous when unqualified. */
+  usingColumns?: Set<string>;
 }): SqlReferenceFinding | undefined {
   const { analysis, allowed, outputAliases } = input;
   if (!input.relationsResolved) {
@@ -803,8 +814,11 @@ export function checkSqlReferences(input: {
   }
   const unknownColumn = findUnknownColumn(analysis.columns, allowed, outputAliases);
   if (unknownColumn) return { kind: 'unknown_column', ...unknownColumn };
+  const merged = input.usingColumns;
   const ambiguousColumn = findScopeAwareAmbiguousColumn(
-    analysis.scopes ?? [],
+    (analysis.scopes ?? []).map((scope) => merged?.size
+      ? { ...scope, columns: scope.columns.filter((column) => !(column.unqualified && merged.has(normalizeColumnName(column.column)))) }
+      : scope),
     allowed,
     new Set((analysis.ctes ?? []).flatMap(relationLookupKeys)),
   );
@@ -858,17 +872,75 @@ function relationColumnCompleteness(relation: MetadataAllowedSqlRelation): 'comp
   return relation.columns.length === 0 ? 'partial' : 'complete';
 }
 
-function extractSelectAliases(sql: string): Set<string> {
+/**
+ * The select list of every SELECT: from the keyword to the FROM at the same
+ * parenthesis depth. A lazy `SELECT … FROM` match stops at the first FROM it
+ * meets, which is inside the subquery of `CASE WHEN EXISTS (SELECT 1 FROM …)
+ * … END AS category`, so the alias the statement defines was never seen.
+ */
+function selectLists(sql: string): string[] {
+  const text = sql.replace(/--[^\n]*/g, ' ');
+  const lists: string[] = [];
+  for (const match of text.matchAll(/\bselect\b/gi)) {
+    let depth = 0;
+    const start = match.index! + match[0].length;
+    let index = start;
+    for (; index < text.length; index += 1) {
+      const char = text[index]!;
+      if (char === '(') depth += 1;
+      else if (char === ')') {
+        if (depth === 0) break;
+        depth -= 1;
+      } else if (char === "'") {
+        const close = text.indexOf("'", index + 1);
+        if (close < 0) break;
+        index = close;
+      } else if (depth === 0 && /\bfrom\b/iy.test(text.slice(index, index + 5)) && /[^\w$]/.test(text[index - 1] ?? ' ')) break;
+    }
+    lists.push(text.slice(start, index));
+  }
+  return lists;
+}
+
+/**
+ * Every name the statement itself defines, which is therefore never "outside
+ * the inspected metadata": the aliases of every select list (a CTE's outputs
+ * are read unqualified by the query after it) and the columns a CTE declares
+ * in its own list (`WITH RECURSIVE tree(root_id, node_id) AS (…)`).
+ */
+export function extractSelectAliases(sql: string): Set<string> {
   const aliases = new Set<string>();
-  for (const section of sql.matchAll(/\bSELECT\b([\s\S]*?)\bFROM\b/gi)) {
-    for (const item of splitTopLevelSelectItems(section[1] ?? '')) {
+  for (const list of selectLists(sql)) {
+    for (const item of splitTopLevelSelectItems(list)) {
       const alias = selectItemAlias(item);
       if (alias) {
         aliases.add(normalizeColumnName(alias));
       }
     }
   }
+  for (const match of sql.matchAll(/(?:\bwith\b(?:\s+recursive\b)?|,)\s*(?:"[^"]+"|[A-Za-z_][\w$]*)\s*\(([^()]*)\)\s*as\s*\(/gi)) {
+    for (const name of match[1]!.split(',')) {
+      const column = cleanIdentifier(name.trim());
+      if (column) aliases.add(normalizeColumnName(column));
+    }
+  }
   return aliases;
+}
+
+/**
+ * Columns named in a `JOIN … USING (a, b)`: the join merges each into one
+ * column, so an unqualified reference to it is not ambiguous between the two
+ * tables that both carry it.
+ */
+export function usingJoinColumns(sql: string): Set<string> {
+  const names = new Set<string>();
+  for (const match of sql.matchAll(/\busing\s*\(([^()]*)\)/gi)) {
+    for (const name of match[1]!.split(',')) {
+      const column = cleanIdentifier(name.trim());
+      if (column) names.add(normalizeColumnName(column));
+    }
+  }
+  return names;
 }
 
 function splitTopLevelSelectItems(section: string): string[] {

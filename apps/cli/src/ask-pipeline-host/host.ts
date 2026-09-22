@@ -56,6 +56,8 @@ import {
   aggregatesRows,
   appliedConditions,
   joinKeyPairs,
+  joinKeyGroups,
+  type JoinKeyGroup,
   unusedJoins,
   aggregatesColumnOf,
   missingRequiredFilters,
@@ -67,6 +69,7 @@ import {
   type PhysicalIdentifierPartV1,
   renderCard,
   validateSqlAgainstLocalContext,
+  executionRelationIdentity,
   type AgentMessage,
   type RuntimeSchemaTable,
 } from '@duckcodeailabs/dql-agent';
@@ -2131,6 +2134,14 @@ export function createAskPipelineHost(deps: AskPipelineHostDeps): AskPipelineHos
       // The relationships on the Modeling map, as edges between the warehouse
       // relations a statement names.
       const relationshipEdges = modelingRelationshipEdges(deps.getManifest().manifest);
+      // Key columns in a probe are quoted the warehouse's way: a double-quoted
+      // name is a string literal on MySQL, where GROUP BY "id" groups every
+      // row into one and reports a repeating key that is not there.
+      const keyDialect = connection ? getDialect(connection.driver) : undefined;
+      const quoteKey = (column: string) => {
+        const bare = column.replace(/^["`\[]|["`\]]$/g, '');
+        return keyDialect ? keyDialect.quoteIdentifier(bare) : `"${bare.replace(/"/g, '')}"`;
+      };
       const probeOne = async (sql: string): Promise<boolean> => {
         if (!connection) return false;
         const options = { maxRows: 1, ...(request.signal ? { signal: request.signal } : {}), ...(request.runBudget ? { deadlineMs: Math.min(8_000, request.runBudget.remainingMs()) } : {}) };
@@ -2161,12 +2172,15 @@ export function createAskPipelineHost(deps: AskPipelineHostDeps): AskPipelineHos
        * guess again.
        */
       const sharedKeyHint = (sql: string): string => {
-        const pairs = joinKeyPairs(sql).slice(0, 3).flatMap((pair) => {
-          const left = completeColumnsFor(pair.left.relation);
-          const right = completeColumnsFor(pair.right.relation);
+        const pairs = joinKeyGroups(sql).slice(0, 3).flatMap((group) => {
+          const left = completeColumnsFor(group.left.relation);
+          const right = completeColumnsFor(group.right.relation);
           if (!left || !right) return [];
+          const joined = new Set(group.left.columns.map((column) => column.replace(/"/g, '').toLowerCase()));
           const shared = left.filter((column) => right.some((other) => other.toLowerCase() === column.toLowerCase()));
-          return shared.length > 1 ? [`${pair.left.relation} and ${pair.right.relation} both have ${shared.join(', ')}`] : [];
+          // Only the shared columns the join leaves out are news to the model.
+          const unjoined = shared.filter((column) => !joined.has(column.toLowerCase()));
+          return shared.length > 1 && unjoined.length ? [`${group.left.relation} and ${group.right.relation} both have ${shared.join(', ')}; the join leaves out ${unjoined.join(', ')}`] : [];
         });
         return pairs.length ? ` Join on every column of the key, not one: ${pairs.join('; ')}.` : '';
       };
@@ -2204,7 +2218,7 @@ export function createAskPipelineHost(deps: AskPipelineHostDeps): AskPipelineHos
             continue;
           }
           if (!totals || join.keys.length === 0) continue;
-          const key = join.keys.map((column) => `"${column.replace(/"/g, '')}"`).join(', ');
+          const key = join.keys.map(quoteKey).join(', ');
           let repeats = false;
           try { repeats = await probeOne(`SELECT ${key} FROM ${join.relation} GROUP BY ${key} HAVING COUNT(*) > 1`); } catch { repeats = false; }
           if (repeats) failures.push(`it joins ${name} but uses none of its columns, and ${name} has several rows per ${join.keys.join(', ')}, so every total is counted once per matching ${name} row; leave the join out, or aggregate ${name} at its own grain first if it restricts which rows count`);
@@ -2212,21 +2226,28 @@ export function createAskPipelineHost(deps: AskPipelineHostDeps): AskPipelineHos
         state.hostJoins = ledgerJoins(joinUses);
         const certifiedUses = joinUses.filter((use) => use.relationship?.level === 'certified');
         if (aggregatesRows(sql)) {
-          for (const pair of joinKeyPairs(sql).slice(0, 3)) {
-            const repeats = async (side: { relation: string; column: string }) => {
-              try { return await probeOne(`SELECT ${side.column} FROM ${side.relation} GROUP BY ${side.column} HAVING COUNT(*) > 1`); } catch { return false; }
+          // A join repeats rows when its WHOLE key repeats: the tuple of
+          // columns it matches on together, probed as one GROUP BY. A column
+          // of a composite key repeats on its own by design (a ball number
+          // recurs in every over), so probing it alone condemned correct
+          // joins on the full key.
+          for (const group of joinKeyGroups(sql).slice(0, 3)) {
+            const repeats = async (side: JoinKeyGroup['left']) => {
+              const key = side.columns.map(quoteKey).join(', ');
+              try { return await probeOne(`SELECT ${key} FROM ${side.relation} GROUP BY ${key} HAVING COUNT(*) > 1`); } catch { return false; }
             };
-            const leftRepeats = await repeats(pair.left);
-            const rightRepeats = await repeats(pair.right);
-            if (leftRepeats && rightRepeats) failures.push(`its join of ${pair.left.relation} and ${pair.right.relation} on ${pair.left.column} = ${pair.right.column} repeats the key on both sides, so totals would count rows more than once`);
+            const leftRepeats = await repeats(group.left);
+            const rightRepeats = await repeats(group.right);
+            const on = group.left.columns.map((column, index) => `${column} = ${group.right.columns[index]}`).join(' and ');
+            if (leftRepeats && rightRepeats) failures.push(`its join of ${group.left.relation} and ${group.right.relation} on ${on} repeats the key on both sides, so totals would count rows more than once`);
             else if (leftRepeats !== rightRepeats) {
               // ONE ROW PER KEY ON ONE SIDE, SEVERAL ON THE OTHER: a total of the
               // one side's columns (an order's cost) is counted once per matching
               // row of the other (each order item). It is aggregated at its own
               // grain before the join, or the number is wrong.
-              const one = leftRepeats ? pair.right : pair.left;
-              const many = leftRepeats ? pair.left : pair.right;
-              if (one.qualifier && aggregatesColumnOf(sql, one.qualifier)) failures.push(`it aggregates columns of ${one.relation} (one row per ${one.column}) across its join to ${many.relation}, which has several rows per ${many.column}, so those totals count each ${one.relation} row once per ${many.relation} row; aggregate ${one.relation} at its own grain (a subquery or CTE) before joining`);
+              const one = leftRepeats ? group.right : group.left;
+              const many = leftRepeats ? group.left : group.right;
+              if (one.qualifier && aggregatesColumnOf(sql, one.qualifier)) failures.push(`it aggregates columns of ${one.relation} (one row per ${one.columns.join(', ')}) across its join to ${many.relation}, which has several rows per ${many.columns.join(', ')}, so those totals count each ${one.relation} row once per ${many.relation} row; aggregate ${one.relation} at its own grain (a subquery or CTE) before joining`);
             }
           }
         }
@@ -2931,10 +2952,9 @@ function relationsInSql(sql: string): string[] {
  * case-insensitively (their compilers quote every component), so only the
  * component count and the folded spelling count there.
  */
+/** One rule with the validator: which engines name a table regardless of quoting and case. */
 function executionRelationIdentityFor(relation: string, driver: string | undefined): string {
-  const lower = driver?.trim().toLowerCase();
-  if (lower !== 'duckdb' && lower !== 'sqlite') return physicalRelationIdentity(relation);
-  return parsePhysicalIdentifier(relation).map((part) => `d:${part.value.toLocaleLowerCase('en-US')}`).join('.');
+  return executionRelationIdentity(relation, driver);
 }
 
 /** Exact Snowflake-aware identity for a relation already written in SQL. */

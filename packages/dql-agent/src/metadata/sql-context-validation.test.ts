@@ -85,6 +85,48 @@ describe('validateSqlAgainstLocalContext', () => {
     expect(result.referencedRelations).toEqual(['"nba_analysis"."TRANSFORMED"."local_player_game_facts"']);
   });
 
+  describe('SQL the statement defines itself is never outside the inspected metadata', () => {
+    const table = (relation: string, columns: string[]) => ({ relation, columns: columns.map((name) => ({ name, type: 'INTEGER' })), source: 'warehouse probe', columnCompleteness: 'complete' as const });
+    const validate = (sql: string, runtimeSchema: ReturnType<typeof table>[], dialect = 'sqlite') => validateSqlAgainstLocalContext(sql, undefined, { dialect, runtimeSchema, runtimeSchemaExact: true, enforceGenerationReadiness: false });
+
+    it('a quoted relation on a case-insensitive engine is the inspected relation', () => {
+      const schema = [table('main.Movie', ['MID', 'title'])];
+      expect(validate('SELECT m."title" FROM "main"."Movie" AS m', schema).ok).toBe(true);
+      expect(validate('SELECT title FROM MAIN.movie', schema).ok).toBe(true);
+      // Snowflake keeps quote state in the identity: a different object.
+      expect(validate('SELECT "title" FROM "main"."Movie"', [table('MAIN.MOVIE', ['TITLE'])], 'snowflake').ok).toBe(false);
+    });
+
+    it('a recursive CTE column list and the aliases of a CTE select list are defined names', () => {
+      const schema = [table('main.relations', ['parent_id', 'child_id', 'qty'])];
+      const recursive = validate(`WITH RECURSIVE tree(root_id, node_id, qty) AS (
+          SELECT r.parent_id, r.child_id, r.qty FROM main.relations AS r
+          UNION ALL
+          SELECT t.root_id, r.child_id, t.qty * r.qty FROM tree AS t JOIN main.relations AS r ON r.parent_id = t.node_id)
+        SELECT root_id, SUM(qty) AS total FROM tree GROUP BY root_id`, schema);
+      expect(recursive).toMatchObject({ ok: true });
+      const labelled = validate(`WITH classified AS (
+          SELECT CASE WHEN EXISTS (SELECT 1 FROM main.relations AS x WHERE x.child_id = r.parent_id) THEN 'nested' ELSE 'top' END AS category
+          FROM main.relations AS r)
+        SELECT category, COUNT(*) AS n FROM classified GROUP BY category`, schema);
+      expect(labelled).toMatchObject({ ok: true });
+      // A column no table and no part of the statement defines is still unknown.
+      expect(validate('SELECT r.parent_id, colour FROM main.relations AS r', schema)).toMatchObject({ ok: false, code: 'unknown_column' });
+    });
+
+    it('a column merged by JOIN … USING is not ambiguous when read unqualified', () => {
+      const schema = [table('main.deliveries', ['match_id', 'ball_id', 'bowler']), table('main.scores', ['match_id', 'ball_id', 'runs'])];
+      expect(validate('SELECT match_id, bowler, SUM(runs) AS runs FROM main.deliveries LEFT JOIN main.scores USING (match_id, ball_id) GROUP BY match_id, bowler', schema)).toMatchObject({ ok: true });
+      expect(validate('SELECT match_id FROM main.deliveries AS d JOIN main.scores AS s ON s.ball_id = d.ball_id', schema)).toMatchObject({ ok: false, code: 'unknown_column' });
+    });
+
+    it('casting to REAL before SUM is not a precision loss on SQLite, which stores no DECIMAL', () => {
+      const schema = [table('main.stock', ['product_id', 'qty'])];
+      expect(validate('SELECT SUM(CAST(s.qty AS REAL)) AS total FROM main.stock AS s', schema)).toMatchObject({ ok: true });
+      expect(validate('SELECT SUM(CAST(s.qty AS REAL)) AS total FROM main.stock AS s', schema, 'duckdb')).toMatchObject({ ok: false, code: 'unsafe_aggregation' });
+    });
+  });
+
   it('rejects a positional candidate whose bound-value count does not match its SQL', () => {
     const result = validateSqlAgainstLocalContext(
       'SELECT SUM(p.points_scored) FROM nba_analysis.TRANSFORMED.local_player_game_facts p WHERE p.player_name = ?',

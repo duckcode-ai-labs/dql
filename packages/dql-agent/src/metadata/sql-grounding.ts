@@ -23,7 +23,7 @@
  * crash the offline path.
  */
 
-import { allowedRelationLookupFromTables, checkSqlReferences } from './sql-context-validation.js';
+import { allowedRelationLookupFromTables, checkSqlReferences, extractSelectAliases, usingJoinColumns } from './sql-context-validation.js';
 import { analyzeSqlReferences } from '@duckcodeailabs/dql-core';
 import type { DbtArtifacts, DbtModelNode, DbtSourceNode } from '../propose/dbt-artifacts.js';
 
@@ -538,6 +538,7 @@ export function validateSqlAgainstGrounding(
       source: 'grounded schema',
     }))),
     outputAliases: extractSelectAliases(sql),
+    usingColumns: usingJoinColumns(sql),
     relationsResolved: true,
   });
   if (finding?.kind === 'unknown_column') {
@@ -564,17 +565,6 @@ export function validateSqlAgainstGrounding(
   }
 
   return { ok: true, warnings, referencedRelations };
-}
-
-function extractSelectAliases(sql: string): Set<string> {
-  const aliases = new Set<string>();
-  for (const section of sql.matchAll(/\bSELECT\b([\s\S]*?)\bFROM\b/gi)) {
-    for (const alias of (section[1] ?? '').matchAll(/\bAS\s+(["`]?\w+["`]?)/gi)) {
-      const name = (alias[1] ?? '').replace(/["`]/g, '').trim().toLowerCase();
-      if (name) aliases.add(name);
-    }
-  }
-  return aliases;
 }
 
 // ─── Prompt rendering ─────────────────────────────────────────────────────────

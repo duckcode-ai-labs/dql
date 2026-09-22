@@ -38,8 +38,22 @@ function properNouns(text: string): string[] {
   return found;
 }
 
+/**
+ * The question itself, without a document pasted after it. A definitions
+ * document ("# Special Words Definition … ## Strike Rate") is context for
+ * reading the question: its headings and capitalised terms are not values
+ * the data holds, and demanding them in the SQL fails every correct draft.
+ */
+export function questionProper(question: string): string {
+  const cut = question.search(/\n\s*\n(?=\s*(?:reference document\b|#{1,6}\s))/i);
+  const body = cut >= 0 ? question.slice(0, cut) : question;
+  // Markdown heading lines inside the question are titles, never values.
+  return body.split('\n').filter((line) => !/^\s*#{1,6}\s/.test(line)).join('\n');
+}
+
 /** The values a question (and its reading, when there is one) states and a correct statement must apply. */
 export function statedValues(question: string, intent?: AnalyticalIntentV1): StatedValue[] {
+  question = questionProper(question);
   const values: StatedValue[] = [];
   const add = (value: string, kind: StatedValue['kind']) => {
     const trimmed = value.trim();
@@ -140,9 +154,39 @@ export interface JoinKeyPair { left: { relation: string; column: string; qualifi
 const RELATION_TOKEN = String.raw`((?:"[^"]+"|[A-Za-z_$][\w$]*)(?:\.(?:"[^"]+"|[A-Za-z_$][\w$]*)){0,2})`;
 const NOT_ALIAS = new Set(['on', 'where', 'join', 'left', 'right', 'inner', 'outer', 'full', 'cross', 'group', 'order', 'limit', 'using', 'natural', 'union', 'having', 'qualify', 'lateral']);
 
-/** The equi-join keys of a statement, with aliases resolved to the relations they name. CTE references are left out. */
+/**
+ * The text of every ON clause: from the keyword to the next clause keyword,
+ * or to the parenthesis that closes the query the join sits in. Parentheses
+ * opened inside the clause (`ON (a.x = b.x AND a.y = b.y)`) stay part of it.
+ */
+function onClauses(sql: string): string[] {
+  const text = sql.replace(/--[^\n]*/g, ' ');
+  const clauses: string[] = [];
+  const boundary = /^\s*\b(?:left|right|inner|full|cross|natural|join|where|group\s+by|order\s+by|limit|having|union|intersect|except|window|qualify)\b/i;
+  for (const match of text.matchAll(/\bon\b/gi)) {
+    let depth = 0;
+    let index = match.index! + match[0].length;
+    for (; index < text.length; index += 1) {
+      const char = text[index]!;
+      if (char === '(') depth += 1;
+      else if (char === ')') {
+        if (depth === 0) break;
+        depth -= 1;
+      } else if (depth === 0 && /\s/.test(char) && boundary.test(text.slice(index))) break;
+    }
+    clauses.push(text.slice(match.index! + match[0].length, index));
+  }
+  return clauses;
+}
+
+/**
+ * The equi-join keys of a statement, with aliases resolved to the relations
+ * they name: EVERY equality of every ON clause, so a composite key joined on
+ * all its columns (`ON s.match_id = b.match_id AND s.ball_id = b.ball_id …`)
+ * reads as that key, not as its first column. CTE references are left out.
+ */
 export function joinKeyPairs(sql: string): JoinKeyPair[] {
-  const ctes = new Set([...sql.matchAll(/(?:\bwith\b|,)\s*([A-Za-z_][\w$]*)\s+as\s*\(/gi)].map((match) => match[1]!.toLowerCase()));
+  const ctes = new Set([...sql.matchAll(/(?:\bwith\b(?:\s+recursive\b)?|,)\s*([A-Za-z_][\w$]*)(?:\s*\([^)]*\))?\s+as\s*\(/gi)].map((match) => match[1]!.toLowerCase()));
   const aliases = new Map<string, string>();
   for (const match of sql.matchAll(new RegExp(String.raw`\b(?:from|join)\s+${RELATION_TOKEN}(?:\s+(?:as\s+)?([A-Za-z_][\w$]*))?`, 'gi'))) {
     const relation = match[1]!;
@@ -152,14 +196,46 @@ export function joinKeyPairs(sql: string): JoinKeyPair[] {
     if (alias) aliases.set(alias.toLowerCase(), relation);
   }
   const pairs: JoinKeyPair[] = [];
-  for (const match of sql.matchAll(/\bon\s+("?[\w$]+"?)\.("?[\w$]+"?)\s*=\s*("?[\w$]+"?)\.("?[\w$]+"?)/gi)) {
-    const left = aliases.get(match[1]!.replace(/"/g, '').toLowerCase());
-    const right = aliases.get(match[3]!.replace(/"/g, '').toLowerCase());
-    if (!left || !right) continue;
-    if (ctes.has(left.replace(/"/g, '').toLowerCase()) || ctes.has(right.replace(/"/g, '').toLowerCase())) continue;
-    pairs.push({ left: { relation: left, column: match[2]!, qualifier: match[1]!.replace(/"/g, '') }, right: { relation: right, column: match[4]!, qualifier: match[3]!.replace(/"/g, '') } });
+  for (const clause of onClauses(sql)) {
+    for (const match of clause.matchAll(/("?[\w$]+"?)\.("?[\w$]+"?)\s*=\s*("?[\w$]+"?)\.("?[\w$]+"?)/g)) {
+      const left = aliases.get(match[1]!.replace(/"/g, '').toLowerCase());
+      const right = aliases.get(match[3]!.replace(/"/g, '').toLowerCase());
+      if (!left || !right) continue;
+      if (ctes.has(left.replace(/"/g, '').toLowerCase()) || ctes.has(right.replace(/"/g, '').toLowerCase())) continue;
+      pairs.push({ left: { relation: left, column: match[2]!, qualifier: match[1]!.replace(/"/g, '') }, right: { relation: right, column: match[4]!, qualifier: match[3]!.replace(/"/g, '') } });
+    }
   }
   return pairs;
+}
+
+export interface JoinKeyGroup {
+  left: { relation: string; qualifier?: string; columns: string[] };
+  right: { relation: string; qualifier?: string; columns: string[] };
+}
+
+/**
+ * The same equalities grouped into one key per pair of joined tables: the
+ * columns a join matches on together. Whether a join repeats rows is a
+ * property of that whole key — a (match, over, ball, innings) row is unique
+ * even though a ball number repeats across matches — so a cardinality check
+ * probes the tuple, never a column of it alone.
+ */
+export function joinKeyGroups(sql: string): JoinKeyGroup[] {
+  const groups: JoinKeyGroup[] = [];
+  for (const pair of joinKeyPairs(sql)) {
+    const sameSides = (group: JoinKeyGroup) => group.left.qualifier === pair.left.qualifier && group.right.qualifier === pair.right.qualifier;
+    const swapped = (group: JoinKeyGroup) => group.left.qualifier === pair.right.qualifier && group.right.qualifier === pair.left.qualifier;
+    const existing = groups.find((group) => sameSides(group) || swapped(group));
+    if (!existing) {
+      groups.push({ left: { relation: pair.left.relation, qualifier: pair.left.qualifier, columns: [pair.left.column] }, right: { relation: pair.right.relation, qualifier: pair.right.qualifier, columns: [pair.right.column] } });
+      continue;
+    }
+    const [mine, theirs] = sameSides(existing) ? [pair.left, pair.right] : [pair.right, pair.left];
+    if (existing.left.columns.some((column, index) => column === mine.column && existing.right.columns[index] === theirs.column)) continue;
+    existing.left.columns.push(mine.column);
+    existing.right.columns.push(theirs.column);
+  }
+  return groups;
 }
 
 /**
