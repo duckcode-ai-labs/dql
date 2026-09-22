@@ -4,7 +4,7 @@ import type { AgentMessage, AgentProvider, AgentRunRequest } from '@duckcodeaila
 import type { ConnectionConfig } from '@duckcodeailabs/dql-connectors';
 import { buildVocabularyIndex, classifyWarehouseError, createAgentRunBudget, parseIntent, physicalRelationBinding, type AnalyticalIntentV1 } from '@duckcodeailabs/dql-agent';
 import { SemanticLayer } from '@duckcodeailabs/dql-core';
-import { preferredJoinHints, preferredJoinLine, skillsForDraft, mentionsName, joinHintUsed, hintsForQuestion, joinsAnyRelation, sharedKeyPair, relationsFromCatalogHits, missingFieldWords, relationsWithColumnWords, columnProbeBudgetMs, columnsForPhysicalEntry, connectionKey, physicalRelationName, relationColumnsProbeSql, relationDatabases, relationsFromProbeRows, relevantRelationsForQuestion, snowflakeShowColumnsRows, underAskedNames, coverageEvaluations, governedCoverageDoubt, createAskPipelineRouteExecutor, explainOutOfScope, explainOutOfScopeWords, gapPresentation, groundIntentLiterals, knownMissingRelation, memberCandidatesSql, normalizeExecutedRow, prepareBlockForAsk, recordRelationEvidence, resetRelationEvidence, runtimeSchemaForVocabulary, tracedProbes, vocabularyViewKey } from './host.js';
+import { preferredJoinHints, preferredJoinLine, skillsForDraft, mentionsName, joinHintUsed, hintsForQuestion, joinsAnyRelation, sharedKeyPair, relationsFromCatalogHits, missingFieldWords, relationsWithColumnWords, columnProbeBudgetMs, columnsForPhysicalEntry, connectionKey, physicalRelationName, relationColumnsProbeSql, relationDatabases, relationsFromProbeRows, relevantRelationsForQuestion, snowflakeShowColumnsRows, underAskedNames, coverageEvaluations, governedCoverageDoubt, effectiveAnsweredTrust, createAskPipelineRouteExecutor, explainOutOfScope, explainOutOfScopeWords, gapPresentation, groundIntentLiterals, knownMissingRelation, memberCandidatesSql, normalizeExecutedRow, prepareBlockForAsk, recordRelationEvidence, resetRelationEvidence, runtimeSchemaForVocabulary, tracedProbes, vocabularyViewKey } from './host.js';
 
 function scripted(replies: string[]): AgentProvider & { calls: AgentMessage[][] } {
   const calls: AgentMessage[][] = [];
@@ -97,6 +97,16 @@ describe('a ref outside the envelope is explained as out of scope, never as none
     expect(governedCoverageDoubt({ coverage: [{ word: 'revenue', state: 'uncertain', names: ['metric'] }], unmet: [{ obligation: 'coverage', message: 'this answer carries nothing for "tax"' }] }).reasons).toEqual([]);
     // A requested identity the answer could not carry: the label goes.
     expect(governedCoverageDoubt({ unmet: [{ obligation: 'display_label', message: 'the rows carry no team name' }] }).reasons).toEqual(['the rows carry no team name']);
+  });
+
+  it('downgrades every answer trust field when governed coverage is incomplete', () => {
+    expect(effectiveAnsweredTrust({ certified: false, reviewRequired: false, coverageDoubt: true })).toEqual({
+      trustState: 'review_required',
+      certification: 'review_required',
+      reviewStatus: 'review_required',
+      stopReason: 'generated_review_required',
+    });
+    expect(effectiveAnsweredTrust({ certified: false, reviewRequired: false, coverageDoubt: false }).certification).toBe('governed');
   });
 });
 

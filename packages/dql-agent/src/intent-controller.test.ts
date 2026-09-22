@@ -15,6 +15,10 @@ describe('decideAgentAction', () => {
     expect(decideAgentAction({ question: 'I want to monitor orders over time', intent: 'ad_hoc_ranking' }).action).toBe('compose_app');
   });
 
+  it('keeps a generated report request in the analytical answer lane', () => {
+    expect(decideAgentAction({ question: 'generate a report of total orders by city', intent: 'ad_hoc_ranking' }).action).not.toBe('compose_app');
+  });
+
   it('answers directly when a certified block or metric fits confidently', () => {
     const d = decideAgentAction({
       question: 'what is our total revenue',

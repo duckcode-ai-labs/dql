@@ -1073,6 +1073,26 @@ export function governedCoverageDoubt(receipt: Pick<PipelineReceipt, 'coverage' 
   return { reasons: [...words, ...labels] };
 }
 
+/**
+ * The answer payload, durable run, and UI badge must carry one effective
+ * trust decision. Route provenance remains intact when coverage downgrades a
+ * semantic result, but no field may continue to call that result governed.
+ */
+export function effectiveAnsweredTrust(input: {
+  certified: boolean;
+  reviewRequired: boolean;
+  coverageDoubt: boolean;
+}): {
+  trustState: 'certified' | 'governed' | 'review_required';
+  certification: 'certified' | 'governed' | 'review_required';
+  reviewStatus: 'certified' | 'governed' | 'review_required';
+  stopReason: 'certified_answer_found' | 'governed_semantic_answer' | 'generated_review_required';
+} {
+  if (input.certified) return { trustState: 'certified', certification: 'certified', reviewStatus: 'certified', stopReason: 'certified_answer_found' };
+  if (input.reviewRequired || input.coverageDoubt) return { trustState: 'review_required', certification: 'review_required', reviewStatus: 'review_required', stopReason: 'generated_review_required' };
+  return { trustState: 'governed', certification: 'governed', reviewStatus: 'governed', stopReason: 'governed_semantic_answer' };
+}
+
 export function coverageEvaluations(receipt: Pick<PipelineReceipt, 'uncovered' | 'coverage'>): Array<{ id: string; label: string; passed: boolean; severity: 'warning' | 'info'; message: string }> {
   if (!receipt.uncovered?.length) return [];
   const states = new Map((receipt.coverage ?? []).map((item) => [item.word, item.state]));
@@ -3096,13 +3116,15 @@ export function toExecutorResult(runId: string, outcome: PipelineOutcome, starte
   // are shown, labelled for review, with the reason.
   const doubt = governedCoverageDoubt(receipt);
   const coverageDoubt = !certified && !reviewRequired && doubt.reasons.length > 0;
-  const trustState = certified ? 'certified' : reviewRequired || coverageDoubt ? 'review_required' : 'governed';
+  const effectiveTrust = effectiveAnsweredTrust({ certified, reviewRequired, coverageDoubt });
+  const trustState = effectiveTrust.trustState;
   const payload = {
     kind: certified ? 'certified' : 'uncertified',
     route,
     sourceTier: certified || blockAsEvidence ? 'certified_artifact' : candidate.tier === 'semantic' ? 'semantic_layer' : 'dbt_manifest',
-    certification: certified ? 'certified' : reviewRequired ? 'review_required' : 'governed',
-    reviewStatus: certified ? 'certified' : reviewRequired ? 'review_required' : 'governed',
+    trustState,
+    certification: effectiveTrust.certification,
+    reviewStatus: effectiveTrust.reviewStatus,
     text: outcome.text,
     answer: outcome.text,
     sql: candidate.sql,
@@ -3127,7 +3149,7 @@ export function toExecutorResult(runId: string, outcome: PipelineOutcome, starte
   const artifact: AgentRunArtifact ={ id: `${runId}:answer`, kind: 'answer', title: certified ? 'Certified answer' : reviewRequired ? 'AI-drafted answer' : blockAsEvidence ? 'Certified block answer' : 'Semantic answer', trustState, payload };
   return withReceipt({
     summary: outcome.text, answer: outcome.text, status: 'completed', trustState,
-    stopReason: certified ? 'certified_answer_found' : reviewRequired ? 'generated_review_required' : 'governed_semantic_answer',
+    stopReason: effectiveTrust.stopReason,
     resolvedRoute: certified ? 'certified_answer' : candidate.tier === 'semantic' ? 'semantic_answer' : 'generated_answer',
     answerTier: route.tier, result: payload.result, artifacts: [artifact],
     evaluations: [

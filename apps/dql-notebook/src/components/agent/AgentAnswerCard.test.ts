@@ -26,6 +26,20 @@ describe('AgentAnswerCard DQL artifact metadata', () => {
     expect(resolveAnswerTrustState({ kind: 'certified', certification: 'certified' })).toBe('certified');
   });
 
+  it('uses the effective host trust decision when legacy fields disagree', () => {
+    expect(resolveAnswerTrustState({
+      kind: 'uncertified',
+      certification: 'governed',
+      reviewStatus: 'governed',
+      result: { trustState: 'review_required' },
+    })).toBe('review');
+    expect(resolveAnswerTrustState({
+      kind: 'uncertified',
+      trustState: 'governed',
+      result: { trustState: 'governed' },
+    })).toBe('reviewed');
+  });
+
   it('normalizes semantic artifact metadata for the DQL tab', () => {
     const meta = resolveDqlArtifactMeta({
       kind: 'uncertified',
