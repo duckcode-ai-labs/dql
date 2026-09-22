@@ -74,6 +74,7 @@ import {
   type RuntimeSchemaTable,
 } from '@duckcodeailabs/dql-agent';
 import { buildProjectVocabulary, buildVocabularySource, embeddedManifestRelations, normalizeRelationName, warehouseFirstCatalog, type VocabularySourceInput } from './vocabulary-source.js';
+import { readValueProfile, renderColumnProfile } from '../value-profile.js';
 import { businessIdentifierLine, businessIdentifiers, modelingEntityTexts, certifiedJoinViolations, classifySqlJoins, ledgerJoins, markerTableLine, markerTables, modeledJoinPaths, modelingRelationshipEdges, sameRelation, sharedParentShortcuts, type LedgerJoin } from './join-relationships.js';
 
 /**
@@ -1971,12 +1972,23 @@ export function createAskPipelineHost(deps: AskPipelineHostDeps): AskPipelineHos
       // the budget, the drafter sees all of them, the chosen ones first, with
       // the keys the warehouse declares. Above the budget it chooses as before.
       const warehouseKeys = warehouseFirstCatalog(deps.getManifest().manifest, deps.projectRoot);
+      // What the columns hold, when the project opted in (agent.valueProfile)
+      // and the profile describes this catalog.
+      const valueProfile = warehouseKeys ? readValueProfile(deps.projectRoot, deps.getManifest().manifest?.dbtProvenance?.warehouseCatalogFingerprint) : undefined;
+      const profiled = new Map(Object.entries(valueProfile?.relations ?? {}).map(([relation, columns]) => [physicalRelationIdentity(relation), new Map(Object.entries(columns).map(([column, profile]) => [column.toLowerCase(), profile]))]));
+      const columnCard = (item: VocabularyEntry): string => {
+        const card = renderCard(item);
+        const relation = entryPhysicalRelation(item);
+        if (!profiled.size || !relation) return card;
+        const column = (item.physical?.column ?? item.name.split('.').pop() ?? '').toLowerCase();
+        return `${card}${renderColumnProfile(profiled.get(physicalRelationIdentity(relation))?.get(column))}`;
+      };
       let wholeSchema = false;
       if (warehouseKeys) {
         const described = current.entries
           .filter((item) => item.kind === 'relation' && entryPhysicalRelation(item) !== undefined && current.entries.some((column) => column.kind === 'column' && samePhysicalEntry(column, item)))
           .map((item) => entryPhysicalRelation(item)!);
-        const size = current.entries.filter((item) => item.kind === 'column').reduce((total, item) => total + renderCard(item).length + 1, 0) + described.length * 160;
+        const size = current.entries.filter((item) => item.kind === 'column').reduce((total, item) => total + columnCard(item).length + 1, 0) + described.length * 160;
         if (described.length > relations.length && size <= WHOLE_SCHEMA_CHARS) {
           for (const relation of described) if (!relations.some((known) => physicalRelationIdentity(known) === physicalRelationIdentity(relation))) relations.push(relation);
           wholeSchema = true;
@@ -2093,7 +2105,7 @@ export function createAskPipelineHost(deps: AskPipelineHostDeps): AskPipelineHos
           const declared = warehouseKeys?.get(physicalRelationIdentity(relation));
           const lines = [
             entry ? `- executable relation:${relation} [${entry.physical?.binding?.columnCompleteness ?? 'partial'} columns; logical ${entry.physical?.binding?.logicalRelation ?? entry.model ?? relation}]` : `- executable relation:${relation}`,
-            ...current.entries.filter((item) => item.kind === 'column' && samePhysicalEntry(item, entry)).map((item) => renderCard(item)),
+            ...current.entries.filter((item) => item.kind === 'column' && samePhysicalEntry(item, entry)).map((item) => columnCard(item)),
             // What one row is, and how this table points at others, as the
             // warehouse declares them (warehouse-first projects only).
             ...(declared?.primaryKey ? [`  primary key (${declared.primaryKey.join(', ')}): one row per ${declared.primaryKey.join(', ')}`] : []),
@@ -2996,8 +3008,8 @@ function relationsInSql(sql: string): string[] {
  * case-insensitively (their compilers quote every component), so only the
  * component count and the folded spelling count there.
  */
-/** The schema a warehouse-first draft may read whole: about ten thousand tokens. */
-const WHOLE_SCHEMA_CHARS = 40_000;
+/** The schema a warehouse-first draft may read whole, with its values: about fifteen thousand tokens. */
+const WHOLE_SCHEMA_CHARS = 60_000;
 
 /**
  * What a draft for an engine must know that the model gets wrong by default.

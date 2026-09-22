@@ -1372,6 +1372,9 @@ describe('a warehouse-first draft reads the whole schema with its declared keys'
       ...(table.primaryKey ? { primaryKey: table.primaryKey } : {}), ...(table.foreignKeys ? { foreignKeys: table.foreignKeys } : {}),
     }));
     writeFileSync(join(projectRoot, '.dql', 'warehouse-catalog.json'), JSON.stringify({ version: 1, driver: 'sqlite', connectionId: 'default', scopes: [{ catalogOrDatabase: 'main', schemas: ['main'] }], relations, capturedAt: '2026-09-22T00:00:00.000Z', fingerprint: 'sha256:test' }));
+    // What the columns hold, as a sync with agent.valueProfile writes it.
+    mkdirSync(join(projectRoot, '.dql', 'cache'), { recursive: true });
+    writeFileSync(join(projectRoot, '.dql', 'cache', 'value-profile.json'), JSON.stringify({ version: 1, catalogFingerprint: 'sha256:test', capturedAt: '2026-09-22T00:00:00.000Z', skippedSensitive: 0, relations: { 'main.customers': { country: { examples: ['Brazil', 'Canada'] } }, 'main.invoices': { total: { min: '0.99', max: '25.86' } } } }));
     const manifest = {
       sources: {},
       dbtProvenance: {
@@ -1417,6 +1420,9 @@ describe('a warehouse-first draft reads the whole schema with its declared keys'
     expect(prompt).toContain('primary key (invoice_id, line_no): one row per invoice_id, line_no');
     expect(prompt).toContain('foreign key (customer_id) references main.customers (customer_id)');
     expect(prompt).toContain('DIALECT NOTES (sqlite): there is no MEDIAN');
+    // The stored values and ranges, beside their columns.
+    expect(prompt).toMatch(/column:main\.customers\.country[^\n]* holds 'Brazil', 'Canada'/);
+    expect(prompt).toMatch(/column:main\.invoices\.total[^\n]* ranges 0\.99 to 25\.86/);
   });
 
   it('an engine without notes gets none, and a hybrid dbt project gets no warehouse keys', async () => {
@@ -1424,6 +1430,7 @@ describe('a warehouse-first draft reads the whole schema with its declared keys'
     const hybrid = await draftPromptFor('duckdb', true);
     expect(hybrid).not.toContain('primary key (');
     expect(hybrid).not.toContain('foreign key (');
+    expect(hybrid).not.toContain(" holds 'Brazil'");
   });
 });
 

@@ -617,6 +617,7 @@ import {
   type ConnectionMetadataScopeV1,
 } from './warehouse-metadata.js';
 import { syncWarehouseCatalog } from './warehouse-catalog-sync.js';
+import { profileWarehouseValues, resolveValueProfilePolicy, writeValueProfile } from './value-profile.js';
 import {
   discoverWarehouseModel,
   observedJoinsFromQueries,
@@ -669,6 +670,16 @@ export interface ProjectConfig {
     };
   };
   agent?: {
+    /**
+     * Example values and ranges of the warehouse's columns, shown to the SQL
+     * drafter on warehouse-first projects. Off by default: the values reach
+     * the AI provider with the prompt. Sensitive column names are never read.
+     */
+    valueProfile?: {
+      mode?: 'off' | 'sampled';
+      /** More column-name patterns (case-insensitive regular expressions) to leave out. */
+      exclude?: string[];
+    };
     runtimeValueGrounding?: {
       /** Runtime value lookup is opt-in because query literals may be sensitive. */
       mode?: 'disabled' | 'safe_automatic';
@@ -26328,6 +26339,8 @@ export interface WarehouseCatalogSummary {
   error?: string;
   /** What changed since the previous sync, and the modeled objects it touches. Absent when nothing changed. */
   drift?: WarehouseCatalogDrift & { affected: string[] };
+  /** The column value profile read with this sync (agent.valueProfile opted in). */
+  valueProfile?: { relations: number; columns: number; skippedSensitive: number } | { error: string };
 }
 
 /** The entities and relationships bound to relations that changed. */
@@ -26374,6 +26387,19 @@ async function refreshWarehouseCatalogAfterSync(
   try {
     const previous = readWarehouseCatalog(projectRoot).snapshot;
     const { snapshot, warnings } = await syncWarehouseCatalog({ projectRoot, executor, connection, scope });
+    // What the columns hold, read with the schema when the project opted in.
+    // A profile that fails leaves the catalog sync standing.
+    let valueProfile: WarehouseCatalogSummary['valueProfile'];
+    const valuePolicy = resolveValueProfilePolicy(config);
+    if (valuePolicy.mode === 'sampled') {
+      try {
+        const profile = await profileWarehouseValues({ executor, connection, snapshot, policy: valuePolicy });
+        writeValueProfile(projectRoot, profile);
+        valueProfile = { relations: Object.keys(profile.relations).length, columns: Object.values(profile.relations).reduce((total, columns) => total + Object.keys(columns).length, 0), skippedSensitive: profile.skippedSensitive };
+      } catch (error) {
+        valueProfile = { error: error instanceof Error ? error.message : String(error) };
+      }
+    }
     const drift = previous && previous.fingerprint !== snapshot.fingerprint ? diffWarehouseCatalogs(previous, snapshot) : undefined;
     const changed = drift && (drift.addedRelations.length || drift.removedRelations.length || drift.addedColumns.length || drift.removedColumns.length || drift.changedColumnTypes.length);
     return {
@@ -26384,6 +26410,7 @@ async function refreshWarehouseCatalogAfterSync(
       connectionId,
       warnings,
       ...(drift && changed ? { drift: { ...drift, affected: driftAffected(manifest, drift) } } : {}),
+      ...(valueProfile ? { valueProfile } : {}),
     };
   } catch (error) {
     return { path, error: error instanceof Error ? error.message : String(error) };
