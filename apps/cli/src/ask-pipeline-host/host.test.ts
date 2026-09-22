@@ -7,7 +7,7 @@ import type { AgentMessage, AgentProvider, AgentRunRequest } from '@duckcodeaila
 import type { ConnectionConfig } from '@duckcodeailabs/dql-connectors';
 import { buildVocabularyIndex, classifyWarehouseError, createAgentRunBudget, parseIntent, physicalRelationBinding, type AnalyticalIntentV1 } from '@duckcodeailabs/dql-agent';
 import { SemanticLayer } from '@duckcodeailabs/dql-core';
-import { preferredJoinHints, preferredJoinLine, skillsForDraft, mentionsName, joinHintUsed, hintsForQuestion, joinsAnyRelation, sharedKeyPair, relationsFromCatalogHits, missingFieldWords, relationsWithColumnWords, columnProbeBudgetMs, columnsForPhysicalEntry, connectionKey, physicalRelationName, relationColumnsProbeSql, relationDatabases, relationsFromProbeRows, relevantRelationsForQuestion, snowflakeShowColumnsRows, underAskedNames, coverageEvaluations, governedCoverageDoubt, effectiveAnsweredTrust, createAskPipelineRouteExecutor, explainOutOfScope, explainOutOfScopeWords, gapPresentation, groundIntentLiterals, knownMissingRelation, memberCandidatesSql, normalizeExecutedRow, prepareBlockForAsk, recordRelationEvidence, resetRelationEvidence, runtimeSchemaForVocabulary, tracedProbes, vocabularyViewKey } from './host.js';
+import { preferredJoinHints, preferredJoinLine, skillsForDraft, mentionsName, joinHintUsed, hintsForQuestion, joinsAnyRelation, sharedKeyPair, relationsFromCatalogHits, missingFieldWords, relationsWithColumnWords, columnProbeBudgetMs, columnsForPhysicalEntry, connectionKey, physicalRelationName, relationColumnsProbeSql, relationDatabases, relationsFromProbeRows, relevantRelationsForQuestion, snowflakeShowColumnsRows, underAskedNames, coverageEvaluations, governedCoverageDoubt, effectiveAnsweredTrust, resultShapeForReview, createAskPipelineRouteExecutor, explainOutOfScope, explainOutOfScopeWords, gapPresentation, groundIntentLiterals, knownMissingRelation, memberCandidatesSql, normalizeExecutedRow, prepareBlockForAsk, recordRelationEvidence, resetRelationEvidence, runtimeSchemaForVocabulary, tracedProbes, vocabularyViewKey } from './host.js';
 
 function scripted(replies: string[]): AgentProvider & { calls: AgentMessage[][] } {
   const calls: AgentMessage[][] = [];
@@ -100,6 +100,17 @@ describe('a ref outside the envelope is explained as out of scope, never as none
     expect(governedCoverageDoubt({ coverage: [{ word: 'revenue', state: 'uncertain', names: ['metric'] }], unmet: [{ obligation: 'coverage', message: 'this answer carries nothing for "tax"' }] }).reasons).toEqual([]);
     // A requested identity the answer could not carry: the label goes.
     expect(governedCoverageDoubt({ unmet: [{ obligation: 'display_label', message: 'the rows carry no team name' }] }).reasons).toEqual(['the rows carry no team name']);
+  });
+
+  it('a result is reviewed by its shape; its values only when the project lets values reach the provider', () => {
+    const result = { columns: ['day', 'driver_id', 'deliveries'], rowCount: 3, rows: [{ day: null, driver_id: 7, deliveries: 10 }, { day: null, driver_id: 7, deliveries: 10 }, { day: null, driver_id: 9, deliveries: 4 }] };
+    const shape = resultShapeForReview(result, false);
+    expect(shape).toContain('rows: 3');
+    expect(shape).toContain('- day: every value NULL');
+    expect(shape).toContain('- driver_id: 2 distinct');
+    expect(shape).toContain('repeated rows: 1');
+    expect(shape).not.toContain('first rows');
+    expect(resultShapeForReview(result, true)).toContain('day=NULL | driver_id=7 | deliveries=10');
   });
 
   it('downgrades every answer trust field when governed coverage is incomplete', () => {
@@ -1423,6 +1434,53 @@ describe('a warehouse-first draft reads the whole schema with its declared keys'
     // The stored values and ranges, beside their columns.
     expect(prompt).toMatch(/column:main\.customers\.country[^\n]* holds 'Brazil', 'Canada'/);
     expect(prompt).toMatch(/column:main\.invoices\.total[^\n]* ranges 0\.99 to 25\.86/);
+  });
+
+  it('the result of a warehouse-first draft gets one review of its shape; the review names a defect and the SQL is revised', async () => {
+    const { projectRoot, manifest } = setup(false);
+    const reviews: string[] = [];
+    const drafts: string[] = [];
+    const route = createAskPipelineRouteExecutor({
+      projectRoot,
+      executor: { executeQuery: vi.fn(async (sql: string) => /HAVING COUNT\(\*\) > 1/.test(sql)
+        ? { columns: [], rowCount: 0, executionTimeMs: 1, rows: [] }
+        : sql.includes('median_total')
+        ? { columns: ['median_total'], rowCount: 1, executionTimeMs: 1, rows: [{ median_total: 12 }] }
+        : { columns: ['country', 'total'], rowCount: 2, executionTimeMs: 1, rows: [{ country: 'Brazil', total: 10 }, { country: 'Canada', total: 14 }] }) } as unknown as QueryExecutor,
+      resolveConnection: async () => ({ driver: 'sqlite' } as ConnectionConfig),
+      getSemanticLayer: () => undefined,
+      getManifest: () => ({ snapshotId: 'snapshot:review', manifest: manifest as never }),
+      selectProvider: async () => ({
+        name: 'ollama', available: async () => true,
+        generate: async (messages) => {
+          const system = messages[0]!.content;
+          if (system.startsWith('You check one query result')) {
+            reviews.push(messages[1]!.content);
+            return JSON.stringify({ answers: false, problem: 'it returns one row per country; the question asks for the median of those totals' });
+          }
+          if (!system.startsWith('You write exactly ONE read-only SQL statement')) return unreadable;
+          drafts.push(messages[1]!.content);
+          return drafts.length === 1
+            ? 'SELECT c.country, SUM(i.total) AS total FROM main.invoices i JOIN main.customers c ON c.customer_id = i.customer_id GROUP BY c.country'
+            : 'WITH t AS (SELECT c.country, SUM(i.total) AS total FROM main.invoices i JOIN main.customers c ON c.customer_id = i.customer_id GROUP BY c.country) SELECT AVG(total) AS median_total FROM t';
+        },
+      }) as AgentProvider,
+      compileSemantic: async () => { throw new Error('no semantic layer'); },
+      priorIntent: () => undefined,
+    });
+    const result = await route({ runId: 'run:review', request: { question: 'The median of the invoice totals per customer country', requestedMode: 'ask' } as AgentRunRequest, route: 'generated_answer', maxRepairAttempts: 0, attempt: 0, emit: () => {} });
+    rmSync(projectRoot, { recursive: true, force: true });
+    expect(reviews).toHaveLength(1);
+    // The value profile is present in this project, so the first rows are shown too.
+    expect(reviews[0]).toContain('rows: 2');
+    expect(reviews[0]).toContain('- country: 2 distinct');
+    expect(drafts).toHaveLength(2);
+    expect(drafts[1]).toContain('PREVIOUS SQL (it ran; this is why it needs another look)');
+    expect(drafts[1]).toContain('the question asks for the median of those totals');
+    expect(result.status).toBe('completed');
+    expect(JSON.stringify(result.result)).toContain('median_total');
+    const dispatches = result.askPipelineReceipt?.dispatches ?? [];
+    expect(dispatches.filter((dispatch) => dispatch.label === 'review').map((dispatch) => dispatch.outcome)).toEqual(['revise']);
   });
 
   it('an engine without notes gets none, and a hybrid dbt project gets no warehouse keys', async () => {

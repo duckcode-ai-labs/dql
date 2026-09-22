@@ -15,7 +15,7 @@
  * (`.dql/cache/value-profile.json`), rebuilt at every schema sync, so stored
  * values never reach git.
  */
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { getDialect, type WarehouseCatalogSnapshotV1 } from '@duckcodeailabs/dql-core';
 import type { ConnectionConfig, QueryExecutor } from '@duckcodeailabs/dql-connectors';
@@ -144,6 +144,11 @@ export function writeValueProfile(projectRoot: string, profile: ValueProfileV1):
   mkdirSync(dirname(path), { recursive: true });
   writeFileSync(path, `${JSON.stringify(profile)}\n`, { mode: 0o600 });
   return path;
+}
+
+/** Remove the profile: the project switched it off, so no stored value reaches a prompt again. */
+export function removeValueProfile(projectRoot: string): void {
+  rmSync(join(projectRoot, VALUE_PROFILE_PATH), { force: true });
 }
 
 /** The profile of this catalog, or nothing: a profile of an older catalog is not evidence. */

@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import Database from 'better-sqlite3';
 import { QueryExecutor } from '@duckcodeailabs/dql-connectors';
 import type { WarehouseCatalogSnapshotV1 } from '@duckcodeailabs/dql-core';
-import { isSensitiveColumn, profileWarehouseValues, readValueProfile, renderColumnProfile, resolveValueProfilePolicy, writeValueProfile } from './value-profile.js';
+import { isSensitiveColumn, profileWarehouseValues, readValueProfile, removeValueProfile, renderColumnProfile, resolveValueProfilePolicy, writeValueProfile } from './value-profile.js';
 
 describe('the value profile', () => {
   const roots: string[] = [];
@@ -63,5 +63,8 @@ describe('the value profile', () => {
     expect(readValueProfile(root, 'sha256:catalog-b')).toBeUndefined();
     expect(renderColumnProfile(orders.status)).toBe(" holds 'delivered', 'canceled'");
     expect(renderColumnProfile(orders.amount)).toBe(' ranges 7 to 99');
+    // Switched off: the profile goes, and nothing reads it again.
+    removeValueProfile(root);
+    expect(readValueProfile(root, 'sha256:catalog-a')).toBeUndefined();
   });
 });

@@ -617,7 +617,7 @@ import {
   type ConnectionMetadataScopeV1,
 } from './warehouse-metadata.js';
 import { syncWarehouseCatalog } from './warehouse-catalog-sync.js';
-import { profileWarehouseValues, resolveValueProfilePolicy, writeValueProfile } from './value-profile.js';
+import { profileWarehouseValues, removeValueProfile, resolveValueProfilePolicy, writeValueProfile } from './value-profile.js';
 import {
   discoverWarehouseModel,
   observedJoinsFromQueries,
@@ -26391,7 +26391,10 @@ async function refreshWarehouseCatalogAfterSync(
     // A profile that fails leaves the catalog sync standing.
     let valueProfile: WarehouseCatalogSummary['valueProfile'];
     const valuePolicy = resolveValueProfilePolicy(config);
-    if (valuePolicy.mode === 'sampled') {
+    if (valuePolicy.mode !== 'sampled') {
+      // Switched off: a profile read earlier must not keep reaching prompts.
+      removeValueProfile(projectRoot);
+    } else {
       try {
         const profile = await profileWarehouseValues({ executor, connection, snapshot, policy: valuePolicy });
         writeValueProfile(projectRoot, profile);

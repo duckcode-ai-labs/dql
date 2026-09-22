@@ -68,6 +68,14 @@ export interface RunAskPipelineInput {
    * disagree about an exact Snowflake binding.
    */
   onVocabularyUpdate?: (vocabulary: VocabularyIndex) => void;
+  /**
+   * A second look at an AI-drafted result before it is answered: does what
+   * came back answer the question as asked? The host decides what the look
+   * may see (the result's shape; its values only where the project allows
+   * values to reach the provider) and returns the one defect it found, or
+   * nothing. Supplied by the host where it applies; absent, nothing changes.
+   */
+  reviewResult?: (input: { question: string; sql: string; result: { columns?: Array<string | { name: string }>; rows: Array<Record<string, unknown>>; rowCount: number } }) => Promise<{ revise: string } | undefined>;
   deadlineMs?: number;
   /** Host cancellation for the entire request; no new phase starts after it fires. */
   signal?: AbortSignal;
@@ -706,6 +714,10 @@ export async function runAskPipeline(input: RunAskPipelineInput): Promise<Pipeli
     // The first statement ran and returned nothing: kept, so a redraft that
     // fails or declines still ends in the honest empty answer.
     let firstEmpty: { candidate: PreparedCandidate; executed: ExecutedOk; runMs: number | undefined } | undefined;
+    // A first result the review sent back for revision: it stands unless the
+    // revision runs and returns rows. A second look never costs the answer.
+    let firstAnswer: { candidate: PreparedCandidate; executed: ExecutedOk; runMs: number | undefined } | undefined;
+    const keepFirst = () => answerWith(firstAnswer!.candidate, firstAnswer!.executed, firstAnswer!.runMs);
     // No rows at all (or one row of nothing but nulls) after a second look is
     // an honest "no matching data", never an empty table; a row of zeros is a
     // real count of nothing and is answered.
@@ -734,6 +746,10 @@ export async function runAskPipeline(input: RunAskPipelineInput): Promise<Pipeli
         return { kind: 'gap', gap: 'not_retrieved', message, nearest: [], text: `No matching data: ${message}.`, receipt, intent: reading, offerExploration: false };
       }
       if (firstEmpty && drafted.candidates.length === 0) return noRowsAtAll(firstEmpty.executed) ? emptyGap() : answerWith(firstEmpty.candidate, firstEmpty.executed, firstEmpty.runMs);
+      if (firstAnswer && (drafted.candidates.length === 0 || drafted.refusals.some((refusal) => refusal.code === 'exploration_check_failed' || refusal.code === 'exploration_declined'))) {
+        step('schema', 'The revision could not be drafted: kept the first result', 'missed', { ms: draftMs });
+        return keepFirst();
+      }
       const failedCheck = drafted.refusals.find((refusal) => refusal.code === 'exploration_check_failed');
       if (failedCheck) {
         step('schema', 'The drafted SQL failed a check, so it was not run', 'failed', { detail: failedCheck.message, ms: draftMs });
@@ -791,6 +807,8 @@ export async function runAskPipeline(input: RunAskPipelineInput): Promise<Pipeli
         const cells = executed.result.rows.length === 1 ? Object.values(executed.result.rows[0] ?? {}) : [];
         const nothing = (value: unknown) => value === null || value === undefined || value === 0 || value === 0n || value === '0';
         const noRows = executed.result.rowCount === 0 || (cells.length > 0 && cells.every(nothing));
+        // A revision that finds nothing is not better than a first result that found something.
+        if (firstAnswer && noRows) return keepFirst();
         if (noRows && attempt === 1 && remaining() > 15_000) {
           firstEmpty = { candidate, executed, runMs };
           step('execute', 'The AI-drafted query found nothing (no rows, or only zeros): redrafting once', 'missed', { ms: runMs });
@@ -798,8 +816,24 @@ export async function runAskPipeline(input: RunAskPipelineInput): Promise<Pipeli
           continue;
         }
         if (firstEmpty && noRowsAtAll(executed)) return emptyGap();
+        // THE SECOND LOOK. The result ran; does it answer what was asked? One
+        // review, before any retry was spent, with time left for a revision.
+        if (attempt === 1 && !firstEmpty && input.reviewResult && remaining() > 30_000) {
+          const reviewStarted = now();
+          let verdict: { revise: string } | undefined;
+          try { verdict = await input.reviewResult({ question: options.draftQuestion ?? input.question, sql: candidate.sql, result: executed.result }); } catch { verdict = undefined; }
+          mark('schema_review', reviewStarted);
+          if (verdict?.revise) {
+            firstAnswer = { candidate, executed, runMs };
+            step('execute', 'Checked the result against the question: revising the SQL once', 'missed', { detail: verdict.revise, ms: timings.schema_review });
+            previous = { sql: candidate.sql, error: `the statement ran and returned ${executed.result.rowCount} row${executed.result.rowCount === 1 ? '' : 's'}, but the result does not answer the question as asked: ${verdict.revise.replace(/[.\s]+$/, '')}. Keep everything it gets right and change only that.` };
+            continue;
+          }
+          step('execute', 'Checked the result against the question', 'done', { ms: timings.schema_review });
+        }
         return answerWith(candidate, executed, runMs);
       }
+      if (firstAnswer) return keepFirst();
       if (firstEmpty) return noRowsAtAll(firstEmpty.executed) ? emptyGap() : answerWith(firstEmpty.candidate, firstEmpty.executed, firstEmpty.runMs);
       receipt.refusals.push({ tier: candidate.tier, code: executed.code, message: executed.message, repairable: executed.code === 'execution_failed' } as unknown as PreparedRefusal);
       lastFailure = executed;
@@ -807,6 +841,7 @@ export async function runAskPipeline(input: RunAskPipelineInput): Promise<Pipeli
       if (executed.code !== 'execution_failed') break;
       previous = { sql: candidate.sql, error: executed.message };
     }
+    if (firstAnswer) return keepFirst();
     if (firstEmpty) return noRowsAtAll(firstEmpty.executed) ? emptyGap() : answerWith(firstEmpty.candidate, firstEmpty.executed, firstEmpty.runMs);
     // Two warehouse rejections: the warehouse's own words are the answer, not
     // a modeling gap the drafted SQL never had.

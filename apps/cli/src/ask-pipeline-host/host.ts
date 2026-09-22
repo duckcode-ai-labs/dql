@@ -1227,7 +1227,7 @@ type AskPipelineRunInput = Parameters<typeof runAskPipeline>[0];
 
 /** What one pipeline run keeps for its own receipt: drafting calls, checks and host steps. */
 interface AskRunState {
-  draftDispatches: Array<{ purpose: string; ms: number; reply?: string; promptChars?: number; at?: number; attempt?: number; label?: 'draft' | 'redraft' | 'fix' | 'retry_empty' | 'widen'; outcome?: 'sql' | 'declined' | 'rejected' | 'error' }>;
+  draftDispatches: Array<{ purpose: string; ms: number; reply?: string; promptChars?: number; at?: number; attempt?: number; label?: 'draft' | 'redraft' | 'fix' | 'retry_empty' | 'widen' | 'review'; outcome?: 'sql' | 'declined' | 'rejected' | 'error' | 'accepted' | 'revise' }>;
   // The checks drafted SQL was held to, recorded for the run views (the
   // notes sent back to the model are built separately and never from these).
   hostChecks: Array<{ id: 'stated_values' | 'required_filters' | 'join_fanout' | 'certified_joins' | 'catalog_columns' | 'read_only'; label: string; passed: boolean; message: string; attempt: number }>;
@@ -2117,7 +2117,7 @@ export function createAskPipelineHost(deps: AskPipelineHostDeps): AskPipelineHos
         const dialect = connection?.driver ?? 'duckdb';
         const messages: AgentMessage[] = [
           { role: 'system', content: `You write exactly ONE read-only SQL statement for ${dialect} that answers the question from the tables below. No certified block or semantic metric answers it, so you choose the tables, columns, joins and filters. Use ONLY the executable physical relations and columns listed below, spelled exactly as listed (including database and quoting where shown). Join two relations only on columns that exist in both. Apply every restriction the question states; when unsure how a text value is stored, match it case-insensitively; aggregate at the grain the question asks for; when the answer lists people or things, select and group by their id column beside the name (two can share a name); a term with a standard definition (a double-double, a win rate, a repeat customer) is computed from the listed columns that define it, and the definition is not a missing field; order and limit as it asks; never return more than 500 rows. No DDL or DML, no comments, no explanation. The CONTEXT lines are what the user and the project have said about this data (definitions, rules, where values are kept): follow them, and use a table or field the user names as named. A semantic metric listed in CONTEXT is computed exactly as it is defined there. A preferred join listed in CONTEXT is how those tables join unless the question needs another. When no column is dedicated to a restriction the question states, apply it to the text, tag, category or custom field that most plausibly holds that value, matched case-insensitively (a partial match is allowed). Reply exactly NO_SQL: followed by one sentence naming what is missing only when no listed column could hold a measure or a restriction the question asks for, and never substitute a different measure for the one asked. Otherwise return the SQL only.` },
-          { role: 'user', content: `QUESTION: ${question}\n${reason ? `WHY NO GOVERNED ANSWER: ${reason.slice(0, 600)}\n` : ''}${intent && !(warehouseKeys && process.env.DQL_ASK_DRAFT_WITHOUT_READING === '1') ? `READING: ${intent.reading}\nINTENT: ${JSON.stringify({ measures: intent.measures, groupBy: intent.groupBy, display: intent.display, filters: intent.filters, time: intent.time ?? null, ordering: intent.ordering ?? null, limit: intent.limit ?? null })}\n` : ''}${contextLines.length ? `CONTEXT:\n${contextLines.join('\n')}\n` : ''}${warehouseKeys && DIALECT_NOTES[dialect.toLowerCase()] ? `DIALECT NOTES (${dialect}): ${DIALECT_NOTES[dialect.toLowerCase()]}\n` : ''}${note ? `NOTE: ${note}\n` : ''}${previous ? `PREVIOUS SQL (the warehouse rejected it; fix it):\n${previous.sql}\nWAREHOUSE ERROR: ${previous.error.slice(0, 600)}\n` : ''}RELATIONS AND COLUMNS:\n${cards.join('\n')}` },
+          { role: 'user', content: `QUESTION: ${question}\n${reason ? `WHY NO GOVERNED ANSWER: ${reason.slice(0, 600)}\n` : ''}${intent && !(warehouseKeys && process.env.DQL_ASK_DRAFT_WITHOUT_READING === '1') ? `READING: ${intent.reading}\nINTENT: ${JSON.stringify({ measures: intent.measures, groupBy: intent.groupBy, display: intent.display, filters: intent.filters, time: intent.time ?? null, ordering: intent.ordering ?? null, limit: intent.limit ?? null })}\n` : ''}${contextLines.length ? `CONTEXT:\n${contextLines.join('\n')}\n` : ''}${warehouseKeys && DIALECT_NOTES[dialect.toLowerCase()] ? `DIALECT NOTES (${dialect}): ${DIALECT_NOTES[dialect.toLowerCase()]}\n` : ''}${note ? `NOTE: ${note}\n` : ''}${previous ? (warehouseKeys && /^the statement ran\b/.test(previous.error) ? `PREVIOUS SQL (it ran; this is why it needs another look):\n${previous.sql}\nWHAT TO CHANGE: ${previous.error.slice(0, 800)}\n` : `PREVIOUS SQL (the warehouse rejected it; fix it):\n${previous.sql}\nWAREHOUSE ERROR: ${previous.error.slice(0, 600)}\n`) : ''}RELATIONS AND COLUMNS:\n${cards.join('\n')}` },
         ];
         const draftStarted = Date.now();
         const trace = deps.dispatchOptions?.('draft', request);
@@ -2469,6 +2469,42 @@ export function createAskPipelineHost(deps: AskPipelineHostDeps): AskPipelineHos
       if (second && 'declined' in second) return { declined: `${second.declined.replace(/[.\s]+$/, '')} (searched ${relations.join(', ')})` };
       return finalize(second);
     };
+    // THE SECOND LOOK at an AI-drafted result, on warehouse-first projects:
+    // one small call that sees the question, the SQL and the result's shape
+    // (its values only where the project lets them reach the provider), and
+    // names one defect or none. dbt projects keep their recorded prompts.
+    const makeResultReview = (state: AskRunState): AskPipelineRunInput['reviewResult'] => {
+      const manifest = deps.getManifest().manifest;
+      if (!warehouseFirstCatalog(manifest, deps.projectRoot)) return undefined;
+      const includeValues = Boolean(readValueProfile(deps.projectRoot, manifest?.dbtProvenance?.warehouseCatalogFingerprint));
+      return async ({ question, sql, result }) => {
+        const messages: AgentMessage[] = [
+          { role: 'system', content: RESULT_REVIEW_SYSTEM },
+          { role: 'user', content: `QUESTION: ${question}\nSQL:\n${sql}\nRESULT:\n${resultShapeForReview(result, includeValues)}` },
+        ];
+        const started = Date.now();
+        const trace = deps.dispatchOptions?.('draft', request);
+        const dispatch: AskRunState['draftDispatches'][number] = { purpose: 'intent:review', ms: 0, attempt: state.draftDispatches.length + 1, label: 'review' };
+        try {
+          if (request.signal?.aborted) return undefined;
+          const raw = await provider.generate(messages, { temperature: 0, ...(trace?.options ?? {}), ...(request.signal ? { signal: request.signal } : {}) });
+          trace?.settle('ok');
+          dispatch.reply = raw.slice(0, 600);
+          const json = /\{[\s\S]*\}/.exec(raw);
+          const verdict = json ? JSON.parse(json[0]) as { answers?: boolean; problem?: string } : undefined;
+          const problem = verdict?.answers === false && typeof verdict.problem === 'string' && verdict.problem.trim() ? verdict.problem.trim().slice(0, 400) : undefined;
+          dispatch.outcome = problem ? 'revise' : 'accepted';
+          return problem ? { revise: problem } : undefined;
+        } catch (error) {
+          trace?.settle(request.signal?.aborted ? 'cancelled' : 'error', error);
+          dispatch.outcome = 'error';
+          return undefined;
+        } finally {
+          Object.assign(dispatch, { ms: Date.now() - started, at: Date.now(), promptChars: messages.reduce((sum, message) => sum + message.content.length, 0) });
+          state.draftDispatches.push(dispatch);
+        }
+      };
+    };
     // THE PIPELINE AS ASK RUNS IT. A caller running a settled reading (Research)
     // overrides only what differs: the reading, the lane and where steps go.
     const runPipeline = (state: AskRunState, overrides: Partial<AskPipelineRunInput> = {}) => runAskPipeline({
@@ -2478,6 +2514,7 @@ export function createAskPipelineHost(deps: AskPipelineHostDeps): AskPipelineHos
       describeRelations,
       explorationAuto: deps.autoExploration !== false,
       prepareDeps: { ...prepareDeps(connection ?? { driver: 'duckdb' } as ConnectionConfig, currentVocabulary, engine, request.signal), draftSql: makeDraftSql(state) },
+      ...(makeResultReview(state) ? { reviewResult: makeResultReview(state) } : {}),
       executeDeps: {
         maxRows: deps.maxRows ?? 500,
         ...(request.signal ? { signal: request.signal } : {}),
@@ -3027,6 +3064,37 @@ const DIALECT_NOTES: Record<string, string> = {
     'window functions (ROW_NUMBER, RANK, LAG, SUM() OVER) and WITH RECURSIVE are supported',
   ].join('; '),
 };
+
+/**
+ * WHAT A RESULT LOOKS LIKE, without what it says. Row count, each column's
+ * distinct and NULL counts, repeated rows: enough to see a date that did not
+ * parse (a column entirely NULL), four rows where one number was asked, or a
+ * name the question asked for and the result lacks. Values are included only
+ * when the project lets stored values reach the provider (agent.valueProfile).
+ */
+export function resultShapeForReview(result: { columns?: Array<string | { name: string }>; rows: Array<Record<string, unknown>>; rowCount: number }, includeValues: boolean): string {
+  const rows = result.rows.slice(0, 500);
+  const names = (result.columns ?? []).map((column) => typeof column === 'string' ? column : column.name);
+  const columns = names.length ? names : Object.keys(rows[0] ?? {});
+  const lines = [`rows: ${result.rowCount}${result.rowCount > rows.length ? ` (shape read from the first ${rows.length})` : ''}`];
+  for (const column of columns) {
+    const values = rows.map((row) => row[column]);
+    const nulls = values.filter((value) => value === null || value === undefined).length;
+    const distinct = new Set(values.filter((value) => value !== null && value !== undefined).map((value) => String(value))).size;
+    lines.push(`- ${column}: ${nulls === values.length && values.length > 0 ? 'every value NULL' : `${distinct} distinct${nulls ? `, ${nulls} NULL` : ''}`}`);
+  }
+  const seen = new Set<string>();
+  let repeated = 0;
+  for (const row of rows) { const key = JSON.stringify(row); if (seen.has(key)) repeated += 1; else seen.add(key); }
+  if (repeated) lines.push(`repeated rows: ${repeated}`);
+  if (includeValues && rows.length) {
+    const clip = (value: unknown) => { const text = value === null || value === undefined ? 'NULL' : String(value); return text.length > 40 ? `${text.slice(0, 39)}…` : text; };
+    lines.push('first rows:', ...rows.slice(0, 5).map((row) => `  ${columns.map((column) => `${column}=${clip(row[column])}`).join(' | ')}`));
+  }
+  return lines.join('\n');
+}
+
+const RESULT_REVIEW_SYSTEM = 'You check one query result against the question it should answer. You see the question, the SQL and the shape of what it returned. Reply with JSON only: {"answers": true} when the result can answer the question as asked, or {"answers": false, "problem": "<one sentence: the concrete defect and what to change>"}. Report a defect only when the shape shows it: a column that is entirely NULL (a date that did not parse, a join that matched nothing), more or fewer rows than the question asks for (one number, a top 5, one row per season), a column the question asks for that is missing (a name, a count), repeated rows, or a total at another level than asked (per invoice where the question asks per country). Never question a definition, filter or formula the question leaves open; when in doubt, it answers.';
 
 /** One rule with the validator: which engines name a table regardless of quoting and case. */
 function executionRelationIdentityFor(relation: string, driver: string | undefined): string {
