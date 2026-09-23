@@ -1,0 +1,23 @@
+{
+  "key": "668487b9babe67df9d9d72bf858bef06",
+  "operation": "generate",
+  "text": "{\"answers\": true}",
+  "providerName": "claude",
+  "recordedAt": "2026-09-23T13:40:43.238Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 2,
+    "messageRoles": [
+      "system",
+      "user"
+    ],
+    "preCanonicalHash": "668487b9babe67df9d9d72bf858bef064e5919169e3c1dc95a38bd958c62be16",
+    "postCanonicalHash": "668487b9babe67df9d9d72bf858bef064e5919169e3c1dc95a38bd958c62be16",
+    "appliedRuleClasses": []
+  }
+}

@@ -2469,14 +2469,14 @@ export function createAskPipelineHost(deps: AskPipelineHostDeps): AskPipelineHos
       if (second && 'declined' in second) return { declined: `${second.declined.replace(/[.\s]+$/, '')} (searched ${relations.join(', ')})` };
       return finalize(second);
     };
-    // THE SECOND LOOK at an AI-drafted result, on warehouse-first projects:
-    // one small call that sees the question, the SQL and the result's shape
-    // (its values only where the project lets them reach the provider), and
-    // names one defect or none. dbt projects keep their recorded prompts.
+    // THE SECOND LOOK at an AI-drafted result, on every project: one small
+    // call that sees the question, the SQL and the result's shape (its values
+    // only where the project lets stored values reach the provider), and
+    // names one defect or none. Certified and governed answers are not
+    // reviewed: their SQL was compiled from definitions, not drafted.
     const makeResultReview = (state: AskRunState): AskPipelineRunInput['reviewResult'] => {
       const manifest = deps.getManifest().manifest;
-      if (!warehouseFirstCatalog(manifest, deps.projectRoot)) return undefined;
-      const includeValues = Boolean(readValueProfile(deps.projectRoot, manifest?.dbtProvenance?.warehouseCatalogFingerprint));
+      const includeValues = Boolean(warehouseFirstCatalog(manifest, deps.projectRoot) && readValueProfile(deps.projectRoot, manifest?.dbtProvenance?.warehouseCatalogFingerprint));
       return async ({ question, sql, result }) => {
         const messages: AgentMessage[] = [
           { role: 'system', content: RESULT_REVIEW_SYSTEM },
@@ -3101,7 +3101,7 @@ export function resultShapeForReview(result: { columns?: Array<string | { name: 
   return lines.join('\n');
 }
 
-const RESULT_REVIEW_SYSTEM = 'You check one query result against the question it should answer. You see the question, the SQL and the shape of what it returned. Reply with JSON only: {"answers": true} when the result can answer the question as asked, or {"answers": false, "problem": "<one sentence: the concrete defect and what to change>"}. Report a defect only when the shape shows it: a column that is entirely NULL (a date that did not parse, a join that matched nothing), more or fewer rows than the question asks for (one number, a top 5, one row per season), a column the question asks for that is missing (a name, a count), repeated rows, or a total at another level than asked (per invoice where the question asks per country). Never question a definition, filter or formula the question leaves open; when in doubt, it answers.';
+const RESULT_REVIEW_SYSTEM = 'You check one query result against the question it should answer. You see the question, the SQL and the shape of what it returned. Reply with JSON only: {"answers": true} when the result can answer the question as asked, or {"answers": false, "problem": "<one sentence: the concrete defect and what to change>"}. Report a defect only when the shape shows it: a column that is entirely NULL (a date that did not parse, a join that matched nothing), a row count that contradicts a number the question itself states (it asks for one number, a top 5 or the single best, and the result has another count), a column the question asks for that is missing (a name, a count), repeated rows, or a total at another level than asked (per invoice where the question asks per country). You cannot see the data, so never assume how many rows it holds: a breakdown "by X" lists the X that have data, and fewer rows than you would expect is not a defect. Never question a definition, filter or formula the question leaves open; when in doubt, it answers.';
 
 /** One rule with the validator: which engines name a table regardless of quoting and case. */
 function executionRelationIdentityFor(relation: string, driver: string | undefined): string {
