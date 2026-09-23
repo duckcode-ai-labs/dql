@@ -187,7 +187,8 @@ function onClauses(sql: string): string[] {
  * all its columns (`ON s.match_id = b.match_id AND s.ball_id = b.ball_id …`)
  * reads as that key, not as its first column. CTE references are left out.
  */
-export function joinKeyPairs(sql: string): JoinKeyPair[] {
+/** A statement's CTE names, and every alias (and bare table name) of a relation it reads, mapped to the relation as written. */
+function relationAliases(sql: string): { ctes: Set<string>; aliases: Map<string, string> } {
   const ctes = new Set([...sql.matchAll(/(?:\bwith\b(?:\s+recursive\b)?|,)\s*([A-Za-z_][\w$]*)(?:\s*\([^)]*\))?\s+as\s*\(/gi)].map((match) => match[1]!.toLowerCase()));
   const aliases = new Map<string, string>();
   for (const match of sql.matchAll(new RegExp(String.raw`\b(?:from|join)\s+${RELATION_TOKEN}(?:\s+(?:as\s+)?([A-Za-z_][\w$]*))?`, 'gi'))) {
@@ -197,6 +198,11 @@ export function joinKeyPairs(sql: string): JoinKeyPair[] {
     aliases.set(tail.toLowerCase(), relation);
     if (alias) aliases.set(alias.toLowerCase(), relation);
   }
+  return { ctes, aliases };
+}
+
+export function joinKeyPairs(sql: string): JoinKeyPair[] {
+  const { ctes, aliases } = relationAliases(sql);
   const pairs: JoinKeyPair[] = [];
   for (const clause of onClauses(sql)) {
     for (const match of clause.matchAll(/("?[\w$]+"?)\.("?[\w$]+"?)\s*=\s*("?[\w$]+"?)\.("?[\w$]+"?)/g)) {
@@ -208,6 +214,60 @@ export function joinKeyPairs(sql: string): JoinKeyPair[] {
     }
   }
   return pairs;
+}
+
+export interface LiteralPredicate { relation: string; column: string; op: string; literal: string; text: string }
+
+const NOT_A_COLUMN = new Set(['and', 'or', 'not', 'when', 'then', 'else', 'case', 'end', 'on', 'where', 'having', 'select', 'as', 'is', 'in', 'null']);
+
+/**
+ * Where an empty result usually comes from: a column of a table the statement
+ * reads compared with a literal (`pa."Amount_Type_Code" ILIKE '%year%'`,
+ * `status = 'open'`). Aliases resolve to the relation; a column of a CTE, or
+ * an unqualified column when several tables are read, is left out.
+ */
+export function literalPredicates(sql: string): LiteralPredicate[] {
+  const { ctes, aliases } = relationAliases(sql);
+  const bases = [...new Set(aliases.values())].filter((relation) => !ctes.has(relation.replace(/"/g, '').toLowerCase()));
+  const out: LiteralPredicate[] = [];
+  const seen = new Set<string>();
+  const pattern = /(?:("?[A-Za-z_][\w$]*"?)\.)?("?[A-Za-z_][\w$]*"?)\s*(=|<>|!=|\bnot\s+i?like\b|\bi?like\b)\s*('(?:[^']|'')*'|-?\d+(?:\.\d+)?)(?!\s*\.)/gi;
+  const text = sql.replace(/--[^\n]*/g, ' ');
+  // An unqualified column belongs to the one table its own query reads: the
+  // innermost parenthesised SELECT around it, or the whole statement.
+  const ownTable = (index: number): string | undefined => {
+    let depth = 0;
+    for (let at = index - 1; at >= 0; at -= 1) {
+      const char = text[at]!;
+      if (char === ')') depth += 1;
+      else if (char === '(') {
+        if (depth > 0) { depth -= 1; continue; }
+        let close = index;
+        for (let level = 0; close < text.length; close += 1) {
+          if (text[close] === '(') level += 1;
+          else if (text[close] === ')') { if (level === 0) break; level -= 1; }
+        }
+        const inner = relationAliases(text.slice(at + 1, close));
+        const own = [...new Set(inner.aliases.values())].filter((relation) => !ctes.has(relation.replace(/"/g, '').toLowerCase()) && !inner.ctes.has(relation.replace(/"/g, '').toLowerCase()));
+        // A function call or an IN list is not a query: keep looking outward.
+        if (/^\s*select\b/i.test(text.slice(at + 1))) return own.length === 1 ? own[0] : undefined;
+      }
+    }
+    return bases.length === 1 ? bases[0] : undefined;
+  };
+  for (const match of text.matchAll(pattern)) {
+    const column = match[2]!;
+    if (NOT_A_COLUMN.has(column.replace(/"/g, '').toLowerCase())) continue;
+    const qualifier = match[1]?.replace(/"/g, '').toLowerCase();
+    const relation = qualifier ? aliases.get(qualifier) : ownTable(match.index!);
+    if (!relation || ctes.has(relation.replace(/"/g, '').toLowerCase())) continue;
+    const op = match[3]!.replace(/\s+/g, ' ').toUpperCase();
+    const text = `${column.replace(/"/g, '')} ${op} ${match[4]!}`;
+    if (seen.has(`${relation}|${text}`)) continue;
+    seen.add(`${relation}|${text}`);
+    out.push({ relation, column, op, literal: match[4]!, text });
+  }
+  return out;
 }
 
 export interface JoinKeyGroup {

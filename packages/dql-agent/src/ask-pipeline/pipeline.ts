@@ -95,6 +95,13 @@ export interface RunAskPipelineInput {
    */
   draftFirst?: boolean;
   reviewResult?: (input: { question: string; sql: string; result: { columns?: Array<string | { name: string }>; rows: Array<Record<string, unknown>>; rowCount: number } }) => Promise<{ revise: string } | undefined>;
+  /**
+   * Why AI-written SQL found nothing, from the warehouse: each literal
+   * restriction and each join probed on its own, naming the one that matches
+   * no row (and, where the project lets stored values reach the provider, the
+   * values the column does hold). Undefined when nothing on its own is empty.
+   */
+  diagnoseEmpty?: (sql: string) => Promise<string | undefined>;
   deadlineMs?: number;
   /** Host cancellation for the entire request; no new phase starts after it fires. */
   signal?: AbortSignal;
@@ -831,7 +838,19 @@ export async function runAskPipeline(input: RunAskPipelineInput): Promise<Pipeli
         if (noRows && attempt === 1 && remaining() > 15_000) {
           firstEmpty = { candidate, executed, runMs };
           step('execute', 'The AI-drafted query found nothing (no rows, or only zeros): redrafting once', 'missed', { ms: runMs });
-          previous = { sql: candidate.sql, error: 'the statement ran and returned no rows, or only zeros. Before concluding that nothing matches, check how each stated value is stored: compare text case-insensitively and allow a partial match, a two-digit year (26, FY26) may be stored as four digits (2026), and a status may be a flag rather than text. Change only how the restrictions are spelled, never what is measured.' };
+          // WHICH PART FOUND NOTHING. Each restriction and each join probed on
+          // its own names the one that empties the result: a guessed code
+          // ("Amount_Type_Code ILIKE '%year%'") or a join on columns that do not
+          // link the tables. The redraft may then fix that join, not only a spelling.
+          let diagnosis: string | undefined;
+          if (input.diagnoseEmpty) {
+            const diagnoseStarted = now();
+            try { diagnosis = await input.diagnoseEmpty(candidate.sql); } catch { diagnosis = undefined; }
+            mark('schema_diagnose', diagnoseStarted);
+          }
+          previous = diagnosis
+            ? { sql: candidate.sql, error: `the statement ran and returned no rows, or only zeros. Probed on its own, each part of it that matches nothing: ${diagnosis.replace(/[.\s]+$/, '')}. Fix that restriction (use how the value is actually stored) or that join (join the tables on the columns that link them, through the tables between them if needed), and keep what is measured and how it is grouped.` }
+            : { sql: candidate.sql, error: 'the statement ran and returned no rows, or only zeros. Before concluding that nothing matches, check how each stated value is stored: compare text case-insensitively and allow a partial match, a two-digit year (26, FY26) may be stored as four digits (2026), and a status may be a flag rather than text. Change only how the restrictions are spelled, never what is measured.' };
           continue;
         }
         if (firstEmpty && noRowsAtAll(executed)) return emptyGap();

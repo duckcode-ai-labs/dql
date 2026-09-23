@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { aggregatesDuplicateSensitively, aggregatesRows, appliedConditions, joinKeyGroups, joinKeyPairs, questionProper, missingRequiredFilters, missingStatedValues, requiredFilterFromText, statedValues, withRowGuard, aggregatesColumnOf } from './sql-checks.js';
+import { aggregatesDuplicateSensitively, aggregatesRows, appliedConditions, joinKeyGroups, joinKeyPairs, literalPredicates, questionProper, missingRequiredFilters, missingStatedValues, requiredFilterFromText, statedValues, withRowGuard, aggregatesColumnOf } from './sql-checks.js';
 
 describe('the checks an AI-drafted statement passes before it runs', () => {
   const office = 'Lost opportunities count ,Lost Amount by month for fiscal year FY26 and competitor involved is Splunk';
@@ -103,5 +103,22 @@ describe('the checks an AI-drafted statement passes before it runs', () => {
     expect(aggregatesColumnOf(sql, 'o')).toBe(true);
     expect(aggregatesColumnOf('SELECT COUNT(DISTINCT o.order_id) FROM dev.order_items oi JOIN dev.orders o ON oi.order_id = o.order_id', 'o')).toBe(false);
     expect(aggregatesColumnOf('SELECT SUM(oi.product_price) FROM dev.order_items oi JOIN dev.orders o ON oi.order_id = o.order_id', 'o')).toBe(false);
+  });
+});
+
+describe('the restrictions an empty result is probed for', () => {
+  it('reads a column of a table compared with a literal, alias resolved; CTE columns and ambiguous bare columns are left out', () => {
+    const sql = `WITH addr AS (SELECT "Location_Address_Identifier" FROM "acme"."main"."location_address" WHERE "Line_1_Address" ILIKE '%5315 Martin Ave%')
+SELECT SUM(pa."Policy_Amount") FROM "acme"."main"."policy_amount" pa JOIN addr a ON pa.x = a.x JOIN "acme"."main"."policy" p ON p.id = pa.pid
+WHERE pa."Amount_Type_Code" ILIKE '%year%' AND p.status = 'open' AND a.kind = 'x' AND amount > 3 AND CASE WHEN p.flag = 1 THEN 1 END = 1`;
+    expect(literalPredicates(sql).map((item) => [item.relation, item.text])).toEqual([
+      ['"acme"."main"."location_address"', `Line_1_Address ILIKE '%5315 Martin Ave%'`],
+      ['"acme"."main"."policy_amount"', `Amount_Type_Code ILIKE '%year%'`],
+      ['"acme"."main"."policy"', `status = 'open'`],
+      ['"acme"."main"."policy"', 'flag = 1'],
+    ]);
+  });
+  it('an unqualified column belongs to the one table a statement reads', () => {
+    expect(literalPredicates("SELECT COUNT(*) FROM dev.orders WHERE status = 'open'").map((item) => item.relation)).toEqual(['dev.orders']);
   });
 });

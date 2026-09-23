@@ -2963,6 +2963,21 @@ describe('two governed sources: certified blocks and authored semantics; everyth
     if (still.kind === 'gap') expect(still.gap).toBe('not_retrieved');
   });
 
+  it('an empty result names the restriction that matches nothing, and the redraft may fix a join, not only a spelling', async () => {
+    const provider: AgentProvider = { name: 'ollama', available: async () => true, generate: async () => JSON.stringify({ version: 1, kind: 'analytics', reading: 'Yearly premium.', measures: [{ ref: 'column:dev.orders.amount', aggregation: 'sum' }], groupBy: [], display: [], filters: [], unresolved: [], provenance: {}, expectedShape: 'scalar' }) };
+    const previous: Array<string | undefined> = [];
+    const probed: string[] = [];
+    const outcome = await runAskPipeline({
+      question: 'yearly premium', vocabulary, provider, clauseCoverage: false, explorationAuto: true,
+      diagnoseEmpty: async (sql) => { probed.push(sql); return "status ILIKE '%year%' matches no row of dev.orders; the column holds \"open\", \"closed\""; },
+      prepareDeps: { draftSql: async (draft) => { previous.push(draft.previous?.error); return { sql: draft.previous ? 'SELECT SUM(amount) AS amount FROM dev.orders' : "SELECT SUM(amount) AS amount FROM dev.orders WHERE status ILIKE '%year%'", relations: ['dev.orders'], proof: [] }; } },
+      executeDeps: { run: async (sql) => ({ columns: ['amount'], rows: [{ amount: sql.includes('ILIKE') ? null : 9 }], rowCount: 1, executionTimeMs: 1 }) },
+    });
+    expect(probed).toEqual(["SELECT SUM(amount) AS amount FROM dev.orders WHERE status ILIKE '%year%'"]);
+    expect(previous[1]).toMatch(/matches no row of dev\.orders; the column holds "open", "closed"\. Fix that restriction .* or that join/);
+    expect(outcome.kind).toBe('answered');
+  });
+
   describe('draft first where nothing is governed', () => {
     const reading = JSON.stringify({ version: 1, kind: 'analytics', reading: 'Amount by status.', measures: [{ ref: 'column:dev.orders.amount', aggregation: 'sum' }], groupBy: [{ ref: 'column:dev.orders.status', role: 'categorical' }], display: [], filters: [], unresolved: [], provenance: {}, expectedShape: 'grouped' });
     const run = (question: string, draft: (question: string) => { sql: string; relations: string[]; proof: string[] } | { declined: string }) => {

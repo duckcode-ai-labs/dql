@@ -58,6 +58,7 @@ import {
   appliedConditions,
   joinKeyPairs,
   joinKeyGroups,
+  literalPredicates,
   type JoinKeyGroup,
   unusedJoins,
   aggregatesColumnOf,
@@ -2522,6 +2523,44 @@ export function createAskPipelineHost(deps: AskPipelineHostDeps): AskPipelineHos
         }
       };
     };
+    // WHY AI-WRITTEN SQL FOUND NOTHING. Each literal restriction is probed
+    // alone on its table, and each join alone on its keys: the part that
+    // matches no row is named for the one redraft. The values a column does
+    // hold are shown only where the project lets stored values reach the
+    // provider (the value profile, as for the result review).
+    const makeEmptyDiagnosis = (): AskPipelineRunInput['diagnoseEmpty'] => {
+      if (!connection) return undefined;
+      const probeConnection = connection;
+      const manifest = deps.getManifest().manifest;
+      const includeValues = Boolean(warehouseFirstCatalog(manifest, deps.projectRoot) && readValueProfile(deps.projectRoot, manifest?.dbtProvenance?.warehouseCatalogFingerprint));
+      const dialect = getDialect(probeConnection.driver);
+      const quote = (column: string) => dialect.quoteIdentifier(column.replace(/^["`\[]|["`\]]$/g, ''));
+      const rows = async (sql: string, maxRows: number): Promise<Array<Record<string, unknown>>> => {
+        const options = { maxRows, ...(request.signal ? { signal: request.signal } : {}), deadlineMs: Math.min(5_000, request.runBudget?.remainingMs() ?? 5_000) };
+        const result = deps.executor.executePositional
+          ? await deps.executor.executePositional(sql, [], probeConnection, options)
+          : await deps.executor.executeQuery(sql, [], {}, probeConnection, options);
+        return result.rows ?? [];
+      };
+      return async (sql) => {
+        const notes: string[] = [];
+        for (const predicate of literalPredicates(sql).slice(0, 4)) {
+          try {
+            if ((await rows(`SELECT 1 AS hit FROM ${predicate.relation} WHERE ${quote(predicate.column)} ${predicate.op} ${predicate.literal}`, 1)).length) continue;
+            const held = includeValues ? await rows(`SELECT DISTINCT ${quote(predicate.column)} AS v FROM ${predicate.relation} WHERE ${quote(predicate.column)} IS NOT NULL LIMIT 12`, 12) : [];
+            notes.push(`${predicate.text} matches no row of ${predicate.relation}${held.length ? `; the column holds ${held.map((row) => JSON.stringify(Object.values(row)[0])).join(', ')}` : ''}`);
+          } catch { /* a probe that cannot run says nothing */ }
+        }
+        for (const group of joinKeyGroups(sql).slice(0, 3)) {
+          const on = group.left.columns.map((column, index) => `l.${quote(column)} = r.${quote(group.right.columns[index]!)}`).join(' AND ');
+          try {
+            if ((await rows(`SELECT 1 AS hit FROM ${group.left.relation} l JOIN ${group.right.relation} r ON ${on}`, 1)).length) continue;
+            notes.push(`the join of ${group.left.relation} and ${group.right.relation} on ${group.left.columns.map((column, index) => `${column} = ${group.right.columns[index]}`).join(' and ')} matches no rows: those columns do not link the two tables`);
+          } catch { /* as above */ }
+        }
+        return notes.length ? notes.join('; ') : undefined;
+      };
+    };
     // THE PIPELINE AS ASK RUNS IT. A caller running a settled reading (Research)
     // overrides only what differs: the reading, the lane and where steps go.
     const runPipeline = (state: AskRunState, overrides: Partial<AskPipelineRunInput> = {}) => runAskPipeline({
@@ -2532,6 +2571,7 @@ export function createAskPipelineHost(deps: AskPipelineHostDeps): AskPipelineHos
       explorationAuto: deps.autoExploration !== false,
       prepareDeps: { ...prepareDeps(connection ?? { driver: 'duckdb' } as ConnectionConfig, currentVocabulary, engine, request.signal), draftSql: makeDraftSql(state) },
       ...(makeResultReview(state) ? { reviewResult: makeResultReview(state) } : {}),
+      ...(makeEmptyDiagnosis() ? { diagnoseEmpty: makeEmptyDiagnosis() } : {}),
       // A warehouse with nothing governed: open points over raw columns are
       // settled by the drafter and stated, not asked (warehouse-first only).
       ...(warehouseFirstCatalog(deps.getManifest().manifest, deps.projectRoot) ? { assumeAndState: true } : {}),
