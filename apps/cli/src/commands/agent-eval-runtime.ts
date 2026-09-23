@@ -219,7 +219,7 @@ const postWithoutFetchCap: typeof fetch = (input, init) => new Promise((resolve,
     const chunks: Buffer[] = [];
     response.on('data', (chunk: Buffer) => chunks.push(chunk));
     response.on('error', reject);
-    response.on('end', () => resolve(new Response(Buffer.concat(chunks), { status: response.statusCode ?? 500, headers: response.headers as Record<string, string> })));
+    response.on('end', () => resolve(new Response(Buffer.concat(chunks).toString('utf-8'), { status: response.statusCode ?? 500, headers: response.headers as Record<string, string> })));
   });
   request.on('error', reject);
   request.end(body);
