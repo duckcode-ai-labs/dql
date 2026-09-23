@@ -2946,6 +2946,45 @@ describe('two governed sources: certified blocks and authored semantics; everyth
     if (still.kind === 'gap') expect(still.gap).toBe('not_retrieved');
   });
 
+  describe('draft first where nothing is governed', () => {
+    const reading = JSON.stringify({ version: 1, kind: 'analytics', reading: 'Amount by status.', measures: [{ ref: 'column:dev.orders.amount', aggregation: 'sum' }], groupBy: [{ ref: 'column:dev.orders.status', role: 'categorical' }], display: [], filters: [], unresolved: [], provenance: {}, expectedShape: 'grouped' });
+    const run = (question: string, draft: (question: string) => { sql: string; relations: string[]; proof: string[] } | { declined: string }) => {
+      const reads: number[] = [];
+      const drafted: string[] = [];
+      const provider: AgentProvider = { name: 'ollama', available: async () => true, generate: async () => { reads.push(1); return reading; } };
+      const outcome = runAskPipeline({
+        question, vocabulary, provider, clauseCoverage: false, explorationAuto: true, draftFirst: true,
+        prepareDeps: { draftSql: async (input) => { drafted.push(input.question); return draft(input.question); } },
+        executeDeps: { run: async () => ({ columns: ['status', 'amount'], rows: [{ status: 'open', amount: 3 }], rowCount: 1, executionTimeMs: 1 }) },
+      });
+      return { outcome, reads, drafted };
+    };
+    const ok = { sql: 'SELECT status, SUM(amount) AS amount FROM dev.orders GROUP BY status', relations: ['dev.orders'], proof: [] };
+
+    it('drafts from the question as asked, without the reading call', async () => {
+      const { outcome, reads, drafted } = run('total amount by status', () => ok);
+      const answered = await outcome;
+      expect(answered.kind).toBe('answered');
+      expect(reads).toHaveLength(0);
+      expect(drafted).toEqual(['total amount by status']);
+    });
+
+    it('a question the drafter declines is read as before', async () => {
+      let declines = 1;
+      const { outcome, reads } = run('total amount by status', () => (declines-- > 0 ? { declined: 'no column holds it' } : ok));
+      const answered = await outcome;
+      expect(reads.length).toBeGreaterThan(0);
+      expect(answered.kind).toBe('answered');
+    });
+
+    it('a forecast still goes through the reading, which refuses it', async () => {
+      const { outcome, drafted } = run('what will the amount by status be next month, likely to grow?', () => ok);
+      const refused = await outcome;
+      expect(drafted).toHaveLength(0);
+      expect(refused.kind).toBe('gap');
+    });
+  });
+
   describe('assume and state: an open point over raw columns', () => {
     const reading = JSON.stringify({ version: 1, kind: 'analytics', reading: 'Order count by status, in the order the statuses were reached.', measures: [{ ref: 'column:dev.orders.amount', aggregation: 'count' }], groupBy: [{ ref: 'column:dev.orders.status', role: 'categorical' }], display: [], filters: [], provenance: {}, expectedShape: 'grouped',
       unresolved: [{ clause: 'in the order the statuses were reached', options: ['column:dev.orders.status', 'column:dev.orders.amount'], material: true, question: 'Can the host order statuses by when each was reached?' }] });

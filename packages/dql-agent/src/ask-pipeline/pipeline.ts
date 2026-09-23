@@ -84,6 +84,16 @@ export interface RunAskPipelineInput {
    * chose between. Supplied by the host where it applies.
    */
   assumeAndState?: boolean;
+  /**
+   * Where nothing is governed, the SQL is drafted from the question itself,
+   * before (and usually instead of) the reading step. The reading turns a
+   * question into governed refs; with none to choose from it only restates
+   * the question for the drafter, and a restatement can change the question's
+   * shape ("the median of per-country totals" read as "the median per
+   * country"). A follow-up, a forecast or a question about causes still goes
+   * through the reading, and a question the drafter declines falls back to it.
+   */
+  draftFirst?: boolean;
   reviewResult?: (input: { question: string; sql: string; result: { columns?: Array<string | { name: string }>; rows: Array<Record<string, unknown>>; rowCount: number } }) => Promise<{ revise: string } | undefined>;
   deadlineMs?: number;
   /** Host cancellation for the entire request; no new phase starts after it fires. */
@@ -929,6 +939,13 @@ export async function runAskPipeline(input: RunAskPipelineInput): Promise<Pipeli
   // 1. Resolve. Only certified blocks and authored semantics are governed; a
   // reading over anything else goes to AI-written SQL when it is available.
   const aiSqlAvailable = Boolean(input.prepareDeps.draftSql && (input.explorationOptIn || input.explorationAuto));
+  // 0. DRAFT FIRST where nothing is governed: the question goes to the SQL
+  // drafter as asked, the checks and the result review stay, and only what
+  // the drafter declines is read into a reading as before.
+  if (!settled && input.draftFirst && aiSqlAvailable && !input.prior && predictiveOperatorsIn(input.question).length === 0 && causalOperatorsIn(input.question).length === 0) {
+    const drafted = await schemaLane('nothing governed covers this project, so the SQL is written from the question itself', undefined, { onDecline: 'fallthrough' });
+    if (drafted) return drafted;
+  }
   const resolveStarted = now();
   let resolution: IntentResolution = settled ? settledResolution(settled.intent, input.vocabulary) : await resolveIntent({
     question: input.question, vocabulary: input.vocabulary, provider: input.provider, prior: input.prior, priorExecuted: input.priorExecuted, priorAnswerSummary: input.priorAnswerSummary, clauseCoverage: input.clauseCoverage, budgetMs: remaining(), ...(input.selection ? { selection: input.selection } : {}),

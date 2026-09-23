@@ -2518,6 +2518,10 @@ export function createAskPipelineHost(deps: AskPipelineHostDeps): AskPipelineHos
       // A warehouse with nothing governed: open points over raw columns are
       // settled by the drafter and stated, not asked (warehouse-first only).
       ...(warehouseFirstCatalog(deps.getManifest().manifest, deps.projectRoot) ? { assumeAndState: true } : {}),
+      // Nothing governed at all (no certified block, metric or measure in
+      // scope): draft from the question itself. DQL_ASK_DRAFT_FIRST=0 keeps
+      // the reading step first, for comparison.
+      ...(process.env.DQL_ASK_DRAFT_FIRST !== '0' && warehouseFirstCatalog(deps.getManifest().manifest, deps.projectRoot) && !currentVocabulary().entries.some((entry) => entry.kind === 'block' || entry.kind === 'metric' || entry.kind === 'measure') ? { draftFirst: true } : {}),
       executeDeps: {
         maxRows: deps.maxRows ?? 500,
         ...(request.signal ? { signal: request.signal } : {}),
