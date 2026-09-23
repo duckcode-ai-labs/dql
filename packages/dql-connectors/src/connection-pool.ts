@@ -105,6 +105,7 @@ export function createConnectionConfigKey(config: ConnectionConfig): string {
     secretAccessKey: config.secretAccessKey,
     sessionToken: config.sessionToken,
     profile: config.profile,
+    sqliteQueryIsolation: config.sqliteQueryIsolation,
     moduleSearchPaths: config.moduleSearchPaths,
   };
   const payload = stableSerialize(normalized);

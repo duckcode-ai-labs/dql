@@ -122,6 +122,12 @@ export interface ConnectionConfig {
   profile?: string;
   /** Microsoft Entra tenant for SQL Server / Fabric service principals. */
   tenantId?: string;
+  /**
+   * Where a file-backed SQLite connection runs its queries: on its own thread
+   * (default), where a deadline can stop a slow one, or on the caller's
+   * (`inline`). DQL_SQLITE_QUERY_ISOLATION=inline sets the same.
+   */
+  sqliteQueryIsolation?: 'worker' | 'inline';
   moduleSearchPaths?: string[];
 }
 
