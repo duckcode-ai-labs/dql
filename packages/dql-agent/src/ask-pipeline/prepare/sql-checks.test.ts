@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { aggregatesRows, appliedConditions, joinKeyGroups, joinKeyPairs, questionProper, missingRequiredFilters, missingStatedValues, requiredFilterFromText, statedValues, withRowGuard, aggregatesColumnOf } from './sql-checks.js';
+import { aggregatesDuplicateSensitively, aggregatesRows, appliedConditions, joinKeyGroups, joinKeyPairs, questionProper, missingRequiredFilters, missingStatedValues, requiredFilterFromText, statedValues, withRowGuard, aggregatesColumnOf } from './sql-checks.js';
 
 describe('the checks an AI-drafted statement passes before it runs', () => {
   const office = 'Lost opportunities count ,Lost Amount by month for fiscal year FY26 and competitor involved is Splunk';
@@ -80,6 +80,14 @@ describe('the checks an AI-drafted statement passes before it runs', () => {
   it('a ref the reading put where a value goes is a field, not a value the SQL must spell', () => {
     const intent = { version: 1, kind: 'analytics', reading: 'x', measures: [], groupBy: [], display: [], filters: [{ ref: 'column:main.match.team_1', op: 'eq', values: ['column:main.match.match_winner'], source: 'question' }], unresolved: [], provenance: {}, expectedShape: 'grouped' } as never;
     expect(statedValues('which team won', intent)).toEqual([]);
+  });
+
+  it('a distinct count, MIN and MAX read the same over a join that repeats rows; SUM, AVG and a plain COUNT do not', () => {
+    expect(aggregatesDuplicateSensitively("SELECT COUNT(DISTINCT a.session) FROM form_log a JOIN form_log b ON a.session = b.session AND b.path = '/confirm'")).toBe(false);
+    expect(aggregatesDuplicateSensitively('SELECT a.k, MIN(b.ts), MAX(b.ts) FROM a JOIN b ON a.k = b.k GROUP BY a.k')).toBe(false);
+    expect(aggregatesDuplicateSensitively('SELECT COUNT(*) FROM a JOIN b ON a.k = b.k')).toBe(true);
+    expect(aggregatesDuplicateSensitively('SELECT SUM(b.amount) FROM a JOIN b ON a.k = b.k')).toBe(true);
+    expect(aggregatesDuplicateSensitively('SELECT AVG(b.amount), COUNT(DISTINCT a.k) FROM a JOIN b ON a.k = b.k')).toBe(true);
   });
 
   it('guards the rows a statement returns and recognises aggregation', () => {

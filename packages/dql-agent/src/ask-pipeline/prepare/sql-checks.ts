@@ -310,6 +310,18 @@ export function aggregatesRows(sql: string): boolean {
   return /\b(count|sum|avg|min|max)\s*\(|\bgroup\s+by\b/i.test(sql);
 }
 
+/**
+ * Whether a statement uses an aggregate that a repeated row changes: SUM,
+ * AVG, a COUNT that is not DISTINCT, or a string/array aggregate. COUNT
+ * (DISTINCT x), MIN and MAX read the same over a join that repeats rows, so
+ * a self-join that follows one session's path and counts distinct sessions
+ * cannot count anything twice. A GROUP BY with no such aggregate only
+ * deduplicates.
+ */
+export function aggregatesDuplicateSensitively(sql: string): boolean {
+  return /\b(sum|avg|total|group_concat|string_agg|array_agg|listagg)\s*\(|\bcount\s*\(\s*(?!distinct\b)/i.test(sql);
+}
+
 /** A statement with a top-level row limit: the one it has, or one added. */
 export function withRowGuard(sql: string, maxRows: number): string {
   const trimmed = sql.trim().replace(/;\s*$/, '');

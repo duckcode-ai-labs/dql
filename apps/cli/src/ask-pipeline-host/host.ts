@@ -54,6 +54,7 @@ import {
   renderPhysicalRelation,
   mergeDiscoveredRelations,
   aggregatesRows,
+  aggregatesDuplicateSensitively,
   appliedConditions,
   joinKeyPairs,
   joinKeyGroups,
@@ -2281,7 +2282,7 @@ export function createAskPipelineHost(deps: AskPipelineHostDeps): AskPipelineHos
         }
         state.hostJoins = ledgerJoins(joinUses);
         const certifiedUses = joinUses.filter((use) => use.relationship?.level === 'certified');
-        if (aggregatesRows(sql)) {
+        if (aggregatesRows(sql) && aggregatesDuplicateSensitively(sql)) {
           // A join repeats rows when its WHOLE key repeats: the tuple of
           // columns it matches on together, probed as one GROUP BY. A column
           // of a composite key repeats on its own by design (a ball number
