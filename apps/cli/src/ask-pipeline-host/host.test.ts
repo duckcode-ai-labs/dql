@@ -7,7 +7,7 @@ import type { AgentMessage, AgentProvider, AgentRunRequest } from '@duckcodeaila
 import type { ConnectionConfig } from '@duckcodeailabs/dql-connectors';
 import { buildVocabularyIndex, classifyWarehouseError, createAgentRunBudget, parseIntent, physicalRelationBinding, type AnalyticalIntentV1 } from '@duckcodeailabs/dql-agent';
 import { SemanticLayer } from '@duckcodeailabs/dql-core';
-import { preferredJoinHints, preferredJoinLine, skillsForDraft, mentionsName, joinHintUsed, hintsForQuestion, joinsAnyRelation, sharedKeyPair, relationsFromCatalogHits, missingFieldWords, relationsWithColumnWords, columnProbeBudgetMs, columnsForPhysicalEntry, connectionKey, physicalRelationName, relationColumnsProbeSql, relationDatabases, relationsFromProbeRows, relevantRelationsForQuestion, snowflakeShowColumnsRows, underAskedNames, coverageEvaluations, governedCoverageDoubt, effectiveAnsweredTrust, resultShapeForReview, createAskPipelineRouteExecutor, explainOutOfScope, explainOutOfScopeWords, gapPresentation, groundIntentLiterals, knownMissingRelation, memberCandidatesSql, normalizeExecutedRow, prepareBlockForAsk, recordRelationEvidence, resetRelationEvidence, runtimeSchemaForVocabulary, tracedProbes, vocabularyViewKey } from './host.js';
+import { preferredJoinHints, preferredJoinLine, skillsForDraft, mentionsName, joinHintUsed, hintsForQuestion, joinsAnyRelation, sharedKeyPair, relationsFromCatalogHits, missingFieldWords, relationsWithColumnWords, columnProbeBudgetMs, columnsForPhysicalEntry, connectionKey, physicalRelationName, relationColumnsProbeSql, relationDatabases, relationsFromProbeRows, relevantRelationsForQuestion, snowflakeShowColumnsRows, underAskedNames, coverageEvaluations, governedCoverageDoubt, namesGovernedVocabulary, effectiveAnsweredTrust, resultShapeForReview, createAskPipelineRouteExecutor, explainOutOfScope, explainOutOfScopeWords, gapPresentation, groundIntentLiterals, knownMissingRelation, memberCandidatesSql, normalizeExecutedRow, prepareBlockForAsk, recordRelationEvidence, resetRelationEvidence, runtimeSchemaForVocabulary, tracedProbes, vocabularyViewKey } from './host.js';
 
 function scripted(replies: string[]): AgentProvider & { calls: AgentMessage[][] } {
   const calls: AgentMessage[][] = [];
@@ -111,6 +111,19 @@ describe('a ref outside the envelope is explained as out of scope, never as none
     expect(shape).toContain('repeated rows: 1');
     expect(shape).not.toContain('first rows');
     expect(resultShapeForReview(result, true)).toContain('day=NULL | driver_id=7 | deliveries=10');
+  });
+
+  it('a question goes to the governed tiers first only when it names something governed', () => {
+    const entries = [
+      { kind: 'metric' as const, name: 'race_points', label: 'Race points', aliases: [] },
+      { kind: 'metric' as const, name: 'runs_off_bat', label: undefined, aliases: ['bat runs'] },
+      { kind: 'column' as const, name: 'bowling_average', label: undefined, aliases: [] },
+    ];
+    expect(namesGovernedVocabulary(entries, 'Total race points by constructor and year')).toBe(true);
+    expect(namesGovernedVocabulary(entries, 'How many bat runs did he score?')).toBe(true);
+    // Words of a metric scattered through the question are not its name.
+    expect(namesGovernedVocabulary(entries, 'Which bowler has the lowest bowling average per wicket, counting runs conceded?')).toBe(false);
+    expect(namesGovernedVocabulary(entries, 'Which race had the most points scored by a rookie?')).toBe(false);
   });
 
   it('downgrades every answer trust field when governed coverage is incomplete', () => {

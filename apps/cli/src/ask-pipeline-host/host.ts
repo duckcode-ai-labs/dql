@@ -654,6 +654,22 @@ export function joinsAnyRelation(candidate: string, anchors: string[], columnsOf
  * "loss reserve" and "loss reserves" as well as by its own spelling. Names
  * shorter than four letters are matched only as written.
  */
+/**
+ * WHETHER THE QUESTION NAMES SOMETHING GOVERNED: a certified block, metric or
+ * measure called by its name, label or an alias. Only then does a warehouse
+ * question go to the reading step and the governed tiers first. A project's
+ * governed vocabulary existing is not enough: on Spider's IPL and f1, five
+ * mechanical metrics (runs_off_bat, race_points) answered none of the
+ * questions, yet their presence sent every question through the reading,
+ * which composed a "governed" bowling average from the wrong metric and asked
+ * the user about it. Unnamed, the question is drafted from itself, and the
+ * governed tiers remain the fallback when the drafter declines.
+ */
+export function namesGovernedVocabulary(entries: ReadonlyArray<Pick<VocabularyEntry, 'kind' | 'name' | 'label' | 'aliases'>>, question: string): boolean {
+  return entries.some((entry) => (entry.kind === 'block' || entry.kind === 'metric' || entry.kind === 'measure')
+    && [entry.name, entry.label ?? '', ...entry.aliases].some((name) => name.replace(/[^a-z]/gi, '').length >= 4 && mentionsName(question, name.replace(/_/g, ' '))));
+}
+
 export function mentionsName(text: string, name: string): boolean {
   const lower = ` ${text.toLowerCase()} `;
   const plain = name.toLowerCase();
@@ -2519,10 +2535,10 @@ export function createAskPipelineHost(deps: AskPipelineHostDeps): AskPipelineHos
       // A warehouse with nothing governed: open points over raw columns are
       // settled by the drafter and stated, not asked (warehouse-first only).
       ...(warehouseFirstCatalog(deps.getManifest().manifest, deps.projectRoot) ? { assumeAndState: true } : {}),
-      // Nothing governed at all (no certified block, metric or measure in
-      // scope): draft from the question itself. DQL_ASK_DRAFT_FIRST=0 keeps
-      // the reading step first, for comparison.
-      ...(process.env.DQL_ASK_DRAFT_FIRST !== '0' && warehouseFirstCatalog(deps.getManifest().manifest, deps.projectRoot) && !currentVocabulary().entries.some((entry) => entry.kind === 'block' || entry.kind === 'metric' || entry.kind === 'measure') ? { draftFirst: true } : {}),
+      // Nothing governed that the question names (no certified block, metric
+      // or measure called by name): draft from the question itself.
+      // DQL_ASK_DRAFT_FIRST=0 keeps the reading step first, for comparison.
+      ...(process.env.DQL_ASK_DRAFT_FIRST !== '0' && warehouseFirstCatalog(deps.getManifest().manifest, deps.projectRoot) && !namesGovernedVocabulary(currentVocabulary().entries, request.question) ? { draftFirst: true } : {}),
       executeDeps: {
         maxRows: deps.maxRows ?? 500,
         ...(request.signal ? { signal: request.signal } : {}),
