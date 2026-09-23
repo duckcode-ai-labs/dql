@@ -75,6 +75,15 @@ export interface RunAskPipelineInput {
    * values to reach the provider) and returns the one defect it found, or
    * nothing. Supplied by the host where it applies; absent, nothing changes.
    */
+  /**
+   * Where nothing is governed (a warehouse read from its catalog alone), an
+   * open point in the reading whose only options are raw columns ("names or
+   * ids?", "how to count visits in order?") is settled by the SQL drafter on
+   * its most plausible reading, and the answer says which point it settled.
+   * Governed readings keep asking: there the options are meanings a person
+   * chose between. Supplied by the host where it applies.
+   */
+  assumeAndState?: boolean;
   reviewResult?: (input: { question: string; sql: string; result: { columns?: Array<string | { name: string }>; rows: Array<Record<string, unknown>>; rowCount: number } }) => Promise<{ revise: string } | undefined>;
   deadlineMs?: number;
   /** Host cancellation for the entire request; no new phase starts after it fires. */
@@ -1070,6 +1079,19 @@ export async function runAskPipeline(input: RunAskPipelineInput): Promise<Pipeli
       const message = material?.question ?? `"${clause}" is not something this project's governed data describes`;
       const gap = material?.question && /\?\s*$/.test(material.question.trim()) ? 'ambiguous' : 'not_modeled';
       return { kind: 'gap', gap, message, nearest, text: `${composeGapText(gap, message.replace(/[.\s]+$/, ''), nearest, false)}${answerable}${offered}`, receipt, intent: resolution.intent, offerExploration: false };
+    }
+    // ASSUME AND STATE. With nothing governed, a question whose options are
+    // only raw columns is about how to write the SQL, not about what the
+    // user means: the drafter settles it on the most plausible reading, and
+    // the answer names the point it settled in the question's own words.
+    if (input.assumeAndState && aiSqlAvailable && options.every((option) => option.ref.startsWith('column:'))) {
+      const open = resolution.intent.unresolved.filter((item) => item.material);
+      for (const clause of open) clause.material = false;
+      const points = open.map((item) => `"${item.clause.replace(/[.\s]+$/, '')}"`).join(' and ');
+      const drafted = await schemaLane(`the reading left open ${points || 'how to compute what the question asks'}${open.some((item) => item.question) ? ` (${open.map((item) => item.question).filter(Boolean).join(' ').slice(0, 400)})` : ''}; settle it on the most plausible reading of the question and the listed columns`, resolution.intent, {
+        caveats: [`the question left ${open.length > 1 ? 'points' : 'a point'} open (${points || 'how to compute it'}), and this answer takes the most plausible reading of ${open.length > 1 ? 'them' : 'it'}: say if you meant otherwise`],
+      });
+      if (drafted) return drafted;
     }
     return { kind: 'clarify', intent: resolution.intent, question: resolution.question, options, text: resolution.question, receipt };
   }

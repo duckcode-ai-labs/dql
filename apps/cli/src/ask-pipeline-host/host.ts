@@ -2515,6 +2515,9 @@ export function createAskPipelineHost(deps: AskPipelineHostDeps): AskPipelineHos
       explorationAuto: deps.autoExploration !== false,
       prepareDeps: { ...prepareDeps(connection ?? { driver: 'duckdb' } as ConnectionConfig, currentVocabulary, engine, request.signal), draftSql: makeDraftSql(state) },
       ...(makeResultReview(state) ? { reviewResult: makeResultReview(state) } : {}),
+      // A warehouse with nothing governed: open points over raw columns are
+      // settled by the drafter and stated, not asked (warehouse-first only).
+      ...(warehouseFirstCatalog(deps.getManifest().manifest, deps.projectRoot) ? { assumeAndState: true } : {}),
       executeDeps: {
         maxRows: deps.maxRows ?? 500,
         ...(request.signal ? { signal: request.signal } : {}),

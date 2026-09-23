@@ -2946,6 +2946,39 @@ describe('two governed sources: certified blocks and authored semantics; everyth
     if (still.kind === 'gap') expect(still.gap).toBe('not_retrieved');
   });
 
+  describe('assume and state: an open point over raw columns', () => {
+    const reading = JSON.stringify({ version: 1, kind: 'analytics', reading: 'Order count by status, in the order the statuses were reached.', measures: [{ ref: 'column:dev.orders.amount', aggregation: 'count' }], groupBy: [{ ref: 'column:dev.orders.status', role: 'categorical' }], display: [], filters: [], provenance: {}, expectedShape: 'grouped',
+      unresolved: [{ clause: 'in the order the statuses were reached', options: ['column:dev.orders.status', 'column:dev.orders.amount'], material: true, question: 'Can the host order statuses by when each was reached?' }] });
+    const provider: AgentProvider = { name: 'ollama', available: async () => true, generate: async () => reading };
+    const run = (assumeAndState: boolean) => {
+      const drafted: string[] = [];
+      const outcome = runAskPipeline({
+        question: 'how many orders reached each status, in the order the statuses were reached', vocabulary, provider, clauseCoverage: false, explorationAuto: true,
+        ...(assumeAndState ? { assumeAndState } : {}),
+        prepareDeps: { draftSql: async (draft) => { drafted.push(draft.reason ?? ''); return { sql: 'SELECT status, COUNT(*) AS orders FROM dev.orders GROUP BY status', relations: ['dev.orders'], proof: [] }; } },
+        executeDeps: { run: async () => ({ columns: ['status', 'orders'], rows: [{ status: 'open', orders: 3 }], rowCount: 1, executionTimeMs: 1 }) },
+      });
+      return { outcome, drafted };
+    };
+
+    it('on a warehouse with nothing governed, the drafter settles it and the answer says which point it settled, in the question\'s words', async () => {
+      const { outcome, drafted } = run(true);
+      const answered = await outcome;
+      expect(answered.kind).toBe('answered');
+      expect(drafted[0]).toContain('the reading left open "in the order the statuses were reached"');
+      expect(answered.text).toContain('the question left a point open ("in the order the statuses were reached"), and this answer takes the most plausible reading of it: say if you meant otherwise');
+      // The reading's internal wording is for the drafter, never the reader.
+      expect(answered.text).not.toContain('Can the host');
+    });
+
+    it('without it, the open point is still asked', async () => {
+      const { outcome, drafted } = run(false);
+      const asked = await outcome;
+      expect(drafted).toHaveLength(0);
+      expect(asked.kind).toBe('clarify');
+    });
+  });
+
   describe('the second look at an AI-drafted result', () => {
     const reading = JSON.stringify({ version: 1, kind: 'analytics', reading: 'Median of the per-status totals.', measures: [{ ref: 'column:dev.orders.amount', aggregation: 'sum' }], groupBy: [], display: [], filters: [], unresolved: [], provenance: {}, expectedShape: 'scalar' });
     const provider: AgentProvider = { name: 'ollama', available: async () => true, generate: async () => reading };
