@@ -13,6 +13,8 @@
  * `AgentRun`, so the suite exercises routing, gates, and the transport projection
  * as a real end-to-end contract.
  */
+import { request as httpRequest } from 'node:http';
+import { request as httpsRequest } from 'node:https';
 import type { AgentAnswer, AgentRun, AgentRunRoute, AgentRunStatus, AgentRunTrustState } from '@duckcodeailabs/dql-agent';
 
 /** Eval-facing view of a run, shaped like the fields the scorer already reads. */
@@ -199,9 +201,33 @@ export interface RuntimeDriverOptions {
  * transport error as a refusal would report a false-refusal spike that no code
  * change caused.
  */
+/**
+ * POST without the global fetch's five-minute cap. Node's fetch abandons any
+ * response whose headers take longer than 300 s, so `--case-timeout-ms 900000`
+ * was silently five minutes: a slow question on a large warehouse was scored
+ * as "the runtime did not answer" while the runtime was still answering.
+ * node:http waits until the case timeout's own abort.
+ */
+const postWithoutFetchCap: typeof fetch = (input, init) => new Promise((resolve, reject) => {
+  const url = new URL(String(input));
+  const body = typeof init?.body === 'string' ? init.body : '';
+  const request = (url.protocol === 'https:' ? httpsRequest : httpRequest)(url, {
+    method: init?.method ?? 'POST',
+    headers: { ...(init?.headers as Record<string, string> | undefined), 'Content-Length': String(Buffer.byteLength(body)) },
+    ...(init?.signal ? { signal: init.signal } : {}),
+  }, (response) => {
+    const chunks: Buffer[] = [];
+    response.on('data', (chunk: Buffer) => chunks.push(chunk));
+    response.on('error', reject);
+    response.on('end', () => resolve(new Response(Buffer.concat(chunks), { status: response.statusCode ?? 500, headers: response.headers as Record<string, string> })));
+  });
+  request.on('error', reject);
+  request.end(body);
+});
+
 export async function driveViaRuntime(options: RuntimeDriverOptions): Promise<AgentRun> {
   const base = options.runtimeBase.replace(/\/$/, '');
-  const fetchImpl = options.fetchImpl ?? fetch;
+  const fetchImpl = options.fetchImpl ?? postWithoutFetchCap;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), options.timeoutMs ?? 120_000);
   try {

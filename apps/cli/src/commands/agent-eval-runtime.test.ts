@@ -163,3 +163,30 @@ describe('driveViaRuntime', () => {
       .rejects.toThrow(/Runtime returned 500/);
   });
 });
+
+describe('the runtime driver waits as long as the case timeout, not the global fetch cap', () => {
+  it('posts the question, reads the run, and still stops at the case timeout', async () => {
+    const { createServer } = await import('node:http');
+    const received: string[] = [];
+    const server = createServer((request, response) => {
+      let body = '';
+      request.on('data', (chunk) => { body += chunk; });
+      request.on('end', () => {
+        received.push(body);
+        if (body.includes('never answers')) return;
+        setTimeout(() => { response.writeHead(200, { 'Content-Type': 'application/json' }); response.end(JSON.stringify({ run: { id: 'run-1', status: 'completed' } })); }, 30);
+      });
+    });
+    await new Promise<void>((done) => server.listen(0, '127.0.0.1', done));
+    const { port } = server.address() as { port: number };
+    try {
+      const run = await driveViaRuntime({ runtimeBase: `http://127.0.0.1:${port}`, question: 'how many orders', timeoutMs: 5_000 });
+      expect(run.id).toBe('run-1');
+      expect(JSON.parse(received[0]!)).toMatchObject({ question: 'how many orders', requestedMode: 'ask' });
+      await expect(driveViaRuntime({ runtimeBase: `http://127.0.0.1:${port}`, question: 'never answers', timeoutMs: 100 })).rejects.toThrow();
+    } finally {
+      server.closeAllConnections();
+      await new Promise<void>((done) => server.close(() => done()));
+    }
+  });
+});
