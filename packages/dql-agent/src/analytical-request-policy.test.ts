@@ -44,6 +44,7 @@ describe('analytical request ingress policy', () => {
     'What is Jessica Richard\'s religion?',
     'What is Jessica Richard\'s zip code?',
     'List customers with their street address',
+    'What\'s Jessica Smith\'s street address?',
     'Show each employee\'s gender',
     'What is the health insurance plan of Jessica Richard?',
   ])('blocks direct sensitive personal data: %s', (question) => {
@@ -82,6 +83,7 @@ describe('analytical request ingress policy', () => {
     'Return all insured objects by zip code',
     'Which driver won each race?',
     'List stores with their postal code',
+    'What\'s the total premium charged for each insured property, by street address, over all policy years?',
   ])('allows business questions that share words with personal data: %s', (question) => {
     expect(evaluateAnalyticalRequestPolicy(question)).toEqual({ allowed: true });
   });

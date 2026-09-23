@@ -1286,6 +1286,30 @@ export function uncoveredQuestionTerms(question: string, intent: AnalyticalInten
     if (hits.some((hit) => (hit.entry.kind === 'term' || hit.entry.kind === 'block') && definitionIdentifiers(hit.entry).some((identifier) => usedIdentifiers.has(identifier)))) continue;
     out.push(word);
   }
+  // PHRASES. A business name of two or three words ("policy holder", "loss
+  // ratio") is one name. Read a word at a time, each word matched something
+  // else the reading used ("policy" in total_policy_amount) and the name was
+  // never checked: a total over every policy was labelled governed for "the
+  // premiums a policy holder has paid".
+  const tokens = question.toLowerCase().match(/[a-z][a-z0-9]*/g) ?? [];
+  const usedSegments = new Set([...used].flatMap((ref) => ref.toLowerCase().split(/[:._]/)));
+  for (let size = 3; size >= 2; size -= 1) {
+    for (let start = 0; start + size <= tokens.length; start += 1) {
+      const phrase = tokens.slice(start, start + size).join(' ');
+      if (out.some((earlier) => earlier.includes(phrase))) continue;
+      const hits = vocabulary.lookup(phrase, { limit: 3, minScore: 0.97 }).filter((hit) => hit.matchedOn === 'name' || hit.matchedOn === 'alias');
+      if (!hits.length) continue;
+      const joined = phrase.replace(/ /g, '_');
+      // An identifier the question wrote (team_won) is one word, checked above.
+      if (question.toLowerCase().includes(joined) || out.includes(joined)) continue;
+      if (usedText.includes(phrase) || usedText.includes(joined) || usedText.includes(phrase.replace(/ /g, ''))) continue;
+      if (usedIdentifiers.has(joined) || hits.some((hit) => used.has(hit.entry.ref))) continue;
+      // A concept is carried by the entity it is bound to ("policy holder" is a party).
+      if (hits.some((hit) => (hit.entry.bindings ?? []).some((binding) => usedSegments.has(binding.entityRef.toLowerCase().split(/[:._]/).pop() ?? '')))) continue;
+      if (hits.some((hit) => (hit.entry.kind === 'term' || hit.entry.kind === 'block') && definitionIdentifiers(hit.entry).some((identifier) => usedIdentifiers.has(identifier)))) continue;
+      out.push(phrase);
+    }
+  }
   return out;
 }
 

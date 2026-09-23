@@ -95,6 +95,13 @@ function isAboutPeople(question: string): boolean {
 }
 
 /**
+ * Words that take "'s" without being anyone's name: a contraction ("What's
+ * the total premium…") or a time ("Today's claims"). Reading "What's" as a
+ * person's possessive refused an insurer's question about its properties.
+ */
+const NOT_A_NAME_RE = /^(?:what|who|where|when|why|how|which|that|there|here|it|let|today|yesterday|tomorrow|this|last|next|year|month|week|quarter|everyone)$/i;
+
+/**
  * A capitalized phrase is a person's name only when it reads as one. A
  * document heading ("Overtake related to Pit Stops") and a proper noun the
  * question also writes in lower case are not people: reading them as names
@@ -103,7 +110,7 @@ function isAboutPeople(question: string): boolean {
 function namesAPerson(question: string): boolean {
   for (const match of question.matchAll(NAMED_INDIVIDUAL_REFERENCE_RE)) {
     const phrase = match[0].replace(/^(?:for|to|of)\s+/i, '').replace(/(?:'s|’s)$/, '').trim();
-    if (!phrase) continue;
+    if (!phrase || NOT_A_NAME_RE.test(phrase)) continue;
     // The same words in lower case elsewhere make this a domain noun, not a name.
     const elsewhere = new RegExp(`(^|[^A-Za-z])${phrase.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}([^A-Za-z]|$)`);
     if (elsewhere.test(question.replace(phrase, ''))) continue;

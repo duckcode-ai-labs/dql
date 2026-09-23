@@ -732,6 +732,23 @@ describe('a question word is covered when the used measure embodies it', () => {
   });
 });
 
+describe('a business name of two words is checked as one name', () => {
+  const source: VocabularySource = {
+    metrics: [{ name: 'total_policy_amount', model: 'policy_amount', label: 'Total policy amount', aggregation: 'sum', expr: 'Policy_Amount' }],
+    dimensions: [{ name: 'has_premium', model: 'premium', dataType: 'integer' }],
+    concepts: [{ id: 'policy_holder', domain: 'insurance', name: 'Policy holder', synonyms: ['policyholder'], bindings: [{ entityRef: 'entity:insurance.party', role: 'canonical', grain: 'Party_Identifier' }] }],
+  };
+  const local = buildVocabularyIndex(source);
+  const reading = (refs: string[]) => parseIntent({ version: 1, kind: 'analytics', reading: 'x', measures: [{ ref: 'metric:policy_amount.total_policy_amount' }], groupBy: [], display: refs, filters: [{ ref: 'dimension:premium.has_premium', op: 'eq', values: [1], source: 'question' }], unresolved: [], provenance: {}, expectedShape: 'scalar' }).intent!;
+  it('"policy holder" is not covered by a total over every policy', () => {
+    expect(uncoveredQuestionTerms('What is the total amount of premiums that a policy holder has paid?', reading([]), local)).toEqual(['policy holder']);
+  });
+  it('"policy holder" is covered when the reading uses the party the concept is bound to', () => {
+    const withParty = buildVocabularyIndex({ ...source, dimensions: [...source.dimensions!, { name: 'party_identifier', model: 'party', dataType: 'integer' }] });
+    expect(uncoveredQuestionTerms('What is the total amount of premiums that a policy holder has paid?', reading(['dimension:party.party_identifier']), withParty)).toEqual([]);
+  });
+});
+
 describe('coverage is satisfied through lineage and the reading\'s own names; the rest is a restriction or a question (Codex E03/E09)', () => {
   const source: VocabularySource = {
     metrics: [
