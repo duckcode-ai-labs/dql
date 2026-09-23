@@ -74,7 +74,9 @@ export function statedValues(question: string, intent?: AnalyticalIntentV1): Sta
     // A flag value the reading chose ("has_premium is true") is not a value
     // the question stated: the statement may apply it as a join, `= 1` or
     // the bare column, none of which spells the word.
-    for (const literal of literals) if (typeof literal === 'string' && /[A-Za-z]/.test(literal) && literal.length <= 80 && !NOT_VALUES.has(literal.toLowerCase()) && !/^(true|false|yes|no|y|n|t|f)$/i.test(literal.trim())) add(literal, 'text');
+    // A ref the reading put where a value goes ("column:main.match.match_winner",
+    // comparing two columns) names a field, not a value the data holds.
+    for (const literal of literals) if (typeof literal === 'string' && /[A-Za-z]/.test(literal) && literal.length <= 80 && !NOT_VALUES.has(literal.toLowerCase()) && !/^(true|false|yes|no|y|n|t|f)$/i.test(literal.trim()) && !/^(column|dimension|metric|measure|entity|relation|block|concept|term):\S+$/i.test(literal.trim())) add(literal, 'text');
     for (const clause of intent.unresolved) for (const word of properNouns(`x ${clause.clause}`)) add(word, 'text');
   }
   return values;
