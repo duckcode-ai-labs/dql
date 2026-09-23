@@ -128,11 +128,13 @@ export function classifySqlJoins(pairs: SqlJoinPair[], edges: ModelingRelationsh
 }
 
 function sameKeys(declared: Array<{ from: string; to: string }>, used: Array<{ from: string; to: string }>): boolean {
-  const wanted = new Set(declared.map(pairKey));
-  // A statement's parser reads the first equality of each ON clause, so a
-  // multi-key join can show fewer pairs than it has: every pair read must be
-  // declared, and at least one must be read.
-  return used.length > 0 && used.every((key) => wanted.has(pairKey(key)));
+  // A statement uses a relationship when it joins on EVERY key the
+  // relationship declares. It may join on more: an extra equality only
+  // narrows which rows match (the same policy as well as the same coverage
+  // detail), and a narrower match can never repeat a row the certified join
+  // would not. Fewer keys is a different, wider join.
+  const joined = new Set(used.map(pairKey));
+  return declared.length > 0 && declared.every((key) => joined.has(pairKey(key)));
 }
 
 /** Whether the statement text joins on a key pair, in either order and with any qualifiers. */
@@ -154,7 +156,7 @@ export function certifiedJoinViolations(sql: string, uses: SqlJoinUse[]): string
     if (complete) return [];
     const [left, right] = use.relations;
     const show = (keys: Array<{ from: string; to: string }>) => keys.map((key) => `${left}.${key.from} = ${right}.${key.to}`).join(' AND ');
-    return [`it joins ${left} and ${right} on ${show(use.keys)}, but the certified relationship ${use.relationship.name} joins them on ${show(use.relationshipKeys)}; join on exactly those keys`];
+    return [`it joins ${left} and ${right} on ${show(use.keys)}, but the certified relationship ${use.relationship.name} joins them on ${show(use.relationshipKeys)}; join on every one of those keys`];
   });
 }
 

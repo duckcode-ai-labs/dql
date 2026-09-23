@@ -33,7 +33,7 @@ describe('AI-written joins against Modeling relationships', () => {
     const sql = 'SELECT COUNT(*) FROM dev.orders o JOIN dev.customers c ON o.order_id = c.customer_id';
     const joined = uses(sql);
     const violations = certifiedJoinViolations(sql, joined);
-    expect(violations).toEqual(['it joins dev.orders and dev.customers on dev.orders.order_id = dev.customers.customer_id, but the certified relationship orders_to_customers joins them on dev.orders.customer_id = dev.customers.customer_id; join on exactly those keys']);
+    expect(violations).toEqual(['it joins dev.orders and dev.customers on dev.orders.order_id = dev.customers.customer_id, but the certified relationship orders_to_customers joins them on dev.orders.customer_id = dev.customers.customer_id; join on every one of those keys']);
     expect(ledgerJoins(joined)[0]).toMatchObject({ source: 'ai_sql', authority: 'none', name: 'orders_to_customers' });
   });
 
@@ -43,6 +43,13 @@ describe('AI-written joins against Modeling relationships', () => {
     expect(certifiedJoinViolations(partial, uses(partial, [edge]))).toHaveLength(1);
     const full = 'SELECT 1 FROM dev.orders o JOIN dev.customers c ON o.customer_id = c.customer_id AND o.region = c.region';
     expect(certifiedJoinViolations(full, uses(full, [edge]))).toEqual([]);
+    // Every certified key and one more: the extra equality only narrows the
+    // match, so the statement still uses the certified relationship.
+    const narrower = 'SELECT SUM(o.order_total) FROM dev.orders o JOIN dev.customers c ON o.customer_id = c.customer_id AND o.region = c.region AND o.store_id = c.home_store_id';
+    const used = uses(narrower, [edge]);
+    expect(used[0]).toMatchObject({ matchesRelationship: true, relationship: { name: 'orders_to_customers' } });
+    expect(certifiedJoinViolations(narrower, used)).toEqual([]);
+    expect(sharedParentShortcuts(used, [edge])).toEqual([]);
   });
 
   it('reaches the one side of validated and certified relationships only', () => {
