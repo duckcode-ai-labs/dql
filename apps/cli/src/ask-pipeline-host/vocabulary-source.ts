@@ -191,6 +191,13 @@ export interface DeclaredRelationKeys {
  */
 export function warehouseFirstCatalog(manifest: DQLManifest | undefined, projectRoot: string | undefined): Map<string, DeclaredRelationKeys> | undefined {
   const provenance = manifest?.dbtProvenance;
+  // DRAFT PARITY (experiment). The drafting a warehouse-first project gets —
+  // the whole schema when it fits, draft-first where nothing governed is
+  // named, open points stated rather than asked — for a dbt project too.
+  // Off by default so dbt prompts stay as they are; DQL_ASK_DRAFT_PARITY=1
+  // measures whether dbt projects should get it. No keys are declared: a dbt
+  // project's warehouse catalog does not carry them.
+  if (process.env.DQL_ASK_DRAFT_PARITY === '1' && provenance?.manifestPath && projectRoot) return new Map();
   if (!provenance?.warehouseCatalogPath || provenance.manifestPath || !projectRoot) return undefined;
   const snapshot = warehouseCatalogSnapshot(join(projectRoot, provenance.warehouseCatalogPath));
   if (!snapshot) return undefined;
