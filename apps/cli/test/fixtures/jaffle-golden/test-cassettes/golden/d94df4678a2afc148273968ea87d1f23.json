@@ -1,0 +1,23 @@
+{
+  "key": "d94df4678a2afc148273968ea87d1f23",
+  "operation": "generate",
+  "text": "WITH july AS (\n  SELECT SUM(order_items.product_price) AS revenue_jul\n  FROM \"jaffle_shop\".\"dev\".\"order_items\" AS order_items\n  WHERE order_items.ordered_at >= '2025-07-01' AND order_items.ordered_at < '2025-08-01'\n),\naugust AS (\n  SELECT SUM(order_items.product_price) AS revenue_aug\n  FROM \"jaffle_shop\".\"dev\".\"order_items\" AS order_items\n  WHERE order_items.ordered_at >= '2025-08-01' AND order_items.ordered_at < '2025-09-01'\n)\nSELECT\n  july.revenue_jul AS revenue_jul_2025,\n  august.revenue_aug AS revenue_aug_2025,\n  (august.revenue_aug - july.revenue_jul) * 100.0 / july.revenue_jul AS revenue_change_pct\nFROM july, august;",
+  "providerName": "claude",
+  "recordedAt": "2026-09-24T01:33:17.307Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 2,
+    "messageRoles": [
+      "system",
+      "user"
+    ],
+    "preCanonicalHash": "d94df4678a2afc148273968ea87d1f231c0b477a42daaf392d85f186e3ece593",
+    "postCanonicalHash": "d94df4678a2afc148273968ea87d1f231c0b477a42daaf392d85f186e3ece593",
+    "appliedRuleClasses": []
+  }
+}

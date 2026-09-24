@@ -1,0 +1,23 @@
+{
+  "key": "fd41c44db30b277cb4519f8abe9d37a0",
+  "operation": "generate",
+  "text": "SELECT products.product_id, products.product_name, SUM(order_items.product_price) AS revenue\nFROM dev.order_items AS order_items\nJOIN dev.products AS products ON order_items.product_id = products.product_id\nGROUP BY products.product_id, products.product_name\nORDER BY revenue DESC\nLIMIT 10",
+  "providerName": "claude",
+  "recordedAt": "2026-09-24T01:31:06.822Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 2,
+    "messageRoles": [
+      "system",
+      "user"
+    ],
+    "preCanonicalHash": "fd41c44db30b277cb4519f8abe9d37a0172122cf7ff6dbca6f02c475586a5dc9",
+    "postCanonicalHash": "fd41c44db30b277cb4519f8abe9d37a0172122cf7ff6dbca6f02c475586a5dc9",
+    "appliedRuleClasses": []
+  }
+}

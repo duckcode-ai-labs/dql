@@ -1,0 +1,23 @@
+{
+  "key": "4242296d7e453af0c5d15dea448ff914",
+  "operation": "generate",
+  "text": "SELECT player_id, player_name, COUNT(*) AS double_doubles\nFROM (\n  SELECT player_id, player_name,\n    (CASE WHEN pts >= 10 THEN 1 ELSE 0 END +\n     CASE WHEN reb >= 10 THEN 1 ELSE 0 END +\n     CASE WHEN ast >= 10 THEN 1 ELSE 0 END +\n     CASE WHEN stl >= 10 THEN 1 ELSE 0 END +\n     CASE WHEN blk >= 10 THEN 1 ELSE 0 END) AS cat_count\n  FROM \"nba_golden\".\"dev\".\"player_game_stats\"\n  WHERE played = 1\n    AND CAST(strftime('%Y', game_date) AS INTEGER) = 2017\n) t\nWHERE cat_count >= 2\nGROUP BY player_id, player_name\nORDER BY double_doubles DESC, player_name ASC\nLIMIT 500",
+  "providerName": "claude",
+  "recordedAt": "2026-09-24T01:34:44.143Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 2,
+    "messageRoles": [
+      "system",
+      "user"
+    ],
+    "preCanonicalHash": "4242296d7e453af0c5d15dea448ff914f21e93931d6af959641e74820eb5ebcc",
+    "postCanonicalHash": "4242296d7e453af0c5d15dea448ff914f21e93931d6af959641e74820eb5ebcc",
+    "appliedRuleClasses": []
+  }
+}

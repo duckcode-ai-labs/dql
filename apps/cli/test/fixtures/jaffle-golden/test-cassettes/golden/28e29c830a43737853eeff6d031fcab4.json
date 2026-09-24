@@ -1,0 +1,23 @@
+{
+  "key": "28e29c830a43737853eeff6d031fcab4",
+  "operation": "generate",
+  "text": "SELECT customers.customer_id AS customer_id, customers.customer_name AS customer_name, COUNT(DISTINCT orders.order_id) AS order_count FROM dev.orders AS orders JOIN dev.customers AS customers ON orders.customer_id = customers.customer_id GROUP BY customers.customer_id, customers.customer_name ORDER BY order_count DESC",
+  "providerName": "claude",
+  "recordedAt": "2026-09-24T01:30:40.828Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 2,
+    "messageRoles": [
+      "system",
+      "user"
+    ],
+    "preCanonicalHash": "28e29c830a43737853eeff6d031fcab44c9b2ddaffde7c704f40402b11183ef4",
+    "postCanonicalHash": "28e29c830a43737853eeff6d031fcab44c9b2ddaffde7c704f40402b11183ef4",
+    "appliedRuleClasses": []
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "key": "0841991656bd49afd6c0abff125d110d",
+  "operation": "generate",
+  "text": "```sql\nSELECT player_id, player_name, SUM(pts) AS total_points\nFROM dev.player_game_stats\nWHERE CAST(strftime('%Y', game_date) AS INTEGER) = 2017\n  AND player_name IS NOT NULL\nGROUP BY player_id, player_name\nORDER BY total_points DESC, player_name ASC\nLIMIT 1\n```",
+  "providerName": "claude",
+  "recordedAt": "2026-09-24T01:34:00.927Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 2,
+    "messageRoles": [
+      "system",
+      "user"
+    ],
+    "preCanonicalHash": "0841991656bd49afd6c0abff125d110da99669ec26ae9b51ae3340e2505a8d6a",
+    "postCanonicalHash": "0841991656bd49afd6c0abff125d110da99669ec26ae9b51ae3340e2505a8d6a",
+    "appliedRuleClasses": []
+  }
+}

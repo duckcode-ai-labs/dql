@@ -1,0 +1,23 @@
+{
+  "key": "de5e39d7924262a21b2c55bb420112fa",
+  "operation": "generate",
+  "text": "```sql\nSELECT player_id, player_name,\n       SUM(pts) * 1.0 / COUNT(DISTINCT CASE WHEN played = 1 THEN game_id END) AS points_per_game,\n       SUM(reb) * 1.0 / COUNT(DISTINCT CASE WHEN played = 1 THEN game_id END) AS rebounds_per_game,\n       SUM(ast) * 1.0 / COUNT(DISTINCT CASE WHEN played = 1 THEN game_id END) AS assists_per_game,\n       COUNT(DISTINCT CASE WHEN played = 1 THEN game_id END) AS games_played\nFROM \"nba_golden\".\"dev\".\"player_game_stats\"\nWHERE CAST(strftime('%Y', game_date) AS INTEGER) = 2017\n  AND player_name IS NOT NULL\nGROUP BY player_id, player_name\nHAVING COUNT(DISTINCT CASE WHEN played = 1 THEN game_id END) >= 20\nORDER BY points_per_game DESC, player_name ASC\nLIMIT 10\n```",
+  "providerName": "claude",
+  "recordedAt": "2026-09-24T01:38:09.372Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 2,
+    "messageRoles": [
+      "system",
+      "user"
+    ],
+    "preCanonicalHash": "de5e39d7924262a21b2c55bb420112faf4947467558893912a613440f742f1e6",
+    "postCanonicalHash": "de5e39d7924262a21b2c55bb420112faf4947467558893912a613440f742f1e6",
+    "appliedRuleClasses": []
+  }
+}

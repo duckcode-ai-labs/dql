@@ -1,0 +1,23 @@
+{
+  "key": "979f49a37b38bc439388094523291a0e",
+  "operation": "generate",
+  "text": "SELECT customer_id, customer_name, lifetime_spend\nFROM dev.customers\nWHERE LOWER(customer_name) = LOWER('Jordan Lee')",
+  "providerName": "claude",
+  "recordedAt": "2026-09-24T01:32:45.497Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 2,
+    "messageRoles": [
+      "system",
+      "user"
+    ],
+    "preCanonicalHash": "979f49a37b38bc439388094523291a0e9beae11ddb9c1383a27b8ab3358d0e57",
+    "postCanonicalHash": "979f49a37b38bc439388094523291a0e9beae11ddb9c1383a27b8ab3358d0e57",
+    "appliedRuleClasses": []
+  }
+}

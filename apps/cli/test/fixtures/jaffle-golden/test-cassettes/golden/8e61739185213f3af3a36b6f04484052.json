@@ -1,0 +1,23 @@
+{
+  "key": "8e61739185213f3af3a36b6f04484052",
+  "operation": "generate",
+  "text": "```sql\nWITH rev AS (\n  SELECT SUM(product_price) AS revenue\n  FROM \"jaffle_shop\".\"dev\".\"order_items\"\n  WHERE ordered_at >= '2025-01-01' AND ordered_at < '2026-01-01'\n),\ncost AS (\n  SELECT SUM(order_cost) AS cost\n  FROM (\n    SELECT DISTINCT order_id, order_cost\n    FROM \"jaffle_shop\".\"dev\".\"orders\"\n    WHERE ordered_at >= '2025-01-01' AND ordered_at < '2026-01-01'\n  )\n)\nSELECT\n  rev.revenue - cost.cost AS gross_profit_2025,\n  (rev.revenue - cost.cost) / rev.revenue AS gross_margin_pct_2025\nFROM rev, cost;\n```",
+  "providerName": "claude",
+  "recordedAt": "2026-09-24T01:33:05.713Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 2,
+    "messageRoles": [
+      "system",
+      "user"
+    ],
+    "preCanonicalHash": "8e61739185213f3af3a36b6f044840527a35f524e586b88b03b46ff59d3202b1",
+    "postCanonicalHash": "8e61739185213f3af3a36b6f044840527a35f524e586b88b03b46ff59d3202b1",
+    "appliedRuleClasses": []
+  }
+}

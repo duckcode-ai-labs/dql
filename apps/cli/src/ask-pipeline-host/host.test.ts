@@ -7,7 +7,7 @@ import type { AgentMessage, AgentProvider, AgentRunRequest } from '@duckcodeaila
 import type { ConnectionConfig } from '@duckcodeailabs/dql-connectors';
 import { buildVocabularyIndex, classifyWarehouseError, createAgentRunBudget, parseIntent, physicalRelationBinding, type AnalyticalIntentV1 } from '@duckcodeailabs/dql-agent';
 import { SemanticLayer } from '@duckcodeailabs/dql-core';
-import { preferredJoinHints, preferredJoinLine, skillsForDraft, mentionsName, joinHintUsed, hintsForQuestion, joinsAnyRelation, sharedKeyPair, relationsFromCatalogHits, missingFieldWords, relationsWithColumnWords, columnProbeBudgetMs, columnsForPhysicalEntry, connectionKey, physicalRelationName, relationColumnsProbeSql, relationDatabases, relationsFromProbeRows, relevantRelationsForQuestion, snowflakeShowColumnsRows, underAskedNames, coverageEvaluations, governedCoverageDoubt, namesGovernedVocabulary, effectiveAnsweredTrust, resultShapeForReview, createAskPipelineRouteExecutor, explainOutOfScope, explainOutOfScopeWords, gapPresentation, groundIntentLiterals, knownMissingRelation, memberCandidatesSql, normalizeExecutedRow, prepareBlockForAsk, recordRelationEvidence, resetRelationEvidence, runtimeSchemaForVocabulary, tracedProbes, vocabularyViewKey } from './host.js';
+import { preferredJoinHints, preferredJoinLine, skillsForDraft, certifiedBlocksForDraft, mentionsName, joinHintUsed, hintsForQuestion, joinsAnyRelation, sharedKeyPair, relationsFromCatalogHits, missingFieldWords, relationsWithColumnWords, columnProbeBudgetMs, columnsForPhysicalEntry, connectionKey, physicalRelationName, relationColumnsProbeSql, relationDatabases, relationsFromProbeRows, relevantRelationsForQuestion, snowflakeShowColumnsRows, underAskedNames, coverageEvaluations, governedCoverageDoubt, namesGovernedVocabulary, effectiveAnsweredTrust, resultShapeForReview, createAskPipelineRouteExecutor, explainOutOfScope, explainOutOfScopeWords, gapPresentation, groundIntentLiterals, knownMissingRelation, memberCandidatesSql, normalizeExecutedRow, prepareBlockForAsk, recordRelationEvidence, resetRelationEvidence, runtimeSchemaForVocabulary, tracedProbes, vocabularyViewKey } from './host.js';
 
 function scripted(replies: string[]): AgentProvider & { calls: AgentMessage[][] } {
   const calls: AgentMessage[][] = [];
@@ -1790,6 +1790,21 @@ describe('the skills an AI-written statement reads', () => {
     expect(skillsForDraft(entries, 'total premiums by policy "main"."policy_amount"').map((entry) => entry.name)).toEqual(['premiums', 'claims']);
     expect(skillsForDraft(entries, 'loss payment amount by claim, with premium').map((entry) => entry.name)).toEqual(['claims', 'premiums']);
     expect(skillsForDraft(entries, 'how many orders')).toEqual([]);
+  });
+});
+
+describe('the certified blocks an AI-written statement reads', () => {
+  const block = (name: string, description: string, sql: string, certified = true) => ({ kind: 'block', ref: `block:${name}`, name, aliases: [], roles: [], description, sql, certified, contract: { outputs: [], measures: [], staticScope: [], acceptedFilters: [] } }) as unknown as Parameters<typeof certifiedBlocksForDraft>[0][number];
+  const entries = [
+    block('loss_ratio_by_policy', 'Loss ratio per policy: losses paid over written premium.', 'SELECT p.policy_number, SUM(lp.amount) / SUM(pa.amount) FROM main.policy p JOIN main.policy_amount pa ON pa.policy_id = p.policy_id JOIN main.loss_payment lp ON lp.policy_id = p.policy_id GROUP BY 1'),
+    block('claims_register', 'Every claim with its open and close dates.', 'SELECT * FROM main.claim'),
+    block('draft_premium', 'Premium by agent.', 'SELECT 1 FROM main.policy_amount', false),
+  ];
+  it('keeps certified blocks that share words with the question and read a chosen table, best first; a draft block is never shown', () => {
+    expect(certifiedBlocksForDraft(entries, 'loss ratio for each policy holder', ['"acme"."main"."policy"']).map((entry) => entry.name)).toEqual(['loss_ratio_by_policy']);
+    // The draft "premium by agent" block is not shown; the certified block that computes premium is.
+    expect(certifiedBlocksForDraft(entries, 'premium by agent', ['main.policy_amount']).map((entry) => entry.name)).toEqual(['loss_ratio_by_policy']);
+    expect(certifiedBlocksForDraft(entries, 'how many orders', ['main.orders'])).toEqual([]);
   });
 });
 

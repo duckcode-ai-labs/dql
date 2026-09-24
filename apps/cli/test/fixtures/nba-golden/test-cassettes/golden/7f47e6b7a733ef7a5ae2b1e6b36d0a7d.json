@@ -1,0 +1,23 @@
+{
+  "key": "7f47e6b7a733ef7a5ae2b1e6b36d0a7d",
+  "operation": "generate",
+  "text": "NO_SQL: No column in these tables (including \"nba_golden\".\"dev\".\"teams\", which has only abbreviation, city, nickname, team_id, team_name) stores a calendar year or date, and the underlying game/player data only covers 2016-2017, so calendar year 2030 cannot be represented.",
+  "providerName": "claude",
+  "recordedAt": "2026-09-24T01:35:13.778Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 2,
+    "messageRoles": [
+      "system",
+      "user"
+    ],
+    "preCanonicalHash": "7f47e6b7a733ef7a5ae2b1e6b36d0a7df5b17edece3133f7ec79d25e94c47e65",
+    "postCanonicalHash": "7f47e6b7a733ef7a5ae2b1e6b36d0a7df5b17edece3133f7ec79d25e94c47e65",
+    "appliedRuleClasses": []
+  }
+}

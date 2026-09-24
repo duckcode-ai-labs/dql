@@ -1,0 +1,23 @@
+{
+  "key": "ff5f4a8710aeff8559b91bb55fa4f0b5",
+  "operation": "generate",
+  "text": "```sql\nSELECT strftime('%Y-%m', game_date) AS month, SUM(pts) AS total_points\nFROM dev.player_game_stats\nWHERE game_date >= '2017-01-01' AND game_date < '2018-01-01'\nGROUP BY month\nORDER BY month\n```",
+  "providerName": "claude",
+  "recordedAt": "2026-09-24T01:34:25.738Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 2,
+    "messageRoles": [
+      "system",
+      "user"
+    ],
+    "preCanonicalHash": "ff5f4a8710aeff8559b91bb55fa4f0b5cac40ca0b4e726d81aa1a6a5715b3efc",
+    "postCanonicalHash": "ff5f4a8710aeff8559b91bb55fa4f0b5cac40ca0b4e726d81aa1a6a5715b3efc",
+    "appliedRuleClasses": []
+  }
+}

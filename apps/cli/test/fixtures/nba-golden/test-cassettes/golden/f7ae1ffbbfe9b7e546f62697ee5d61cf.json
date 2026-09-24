@@ -1,0 +1,23 @@
+{
+  "key": "f7ae1ffbbfe9b7e546f62697ee5d61cf",
+  "operation": "generate",
+  "text": "```sql\nSELECT\n  player_id,\n  player_name,\n  SUM(fg3m) AS total_fg3m,\n  SUM(fg3a) AS total_fg3a,\n  CASE WHEN SUM(fg3a) > 0 THEN CAST(SUM(fg3m) AS REAL) / SUM(fg3a) ELSE NULL END AS fg3_pct\nFROM dev.player_game_stats\nWHERE CAST(strftime('%Y', game_date) AS INTEGER) = 2017\nGROUP BY player_id, player_name\nORDER BY total_fg3m DESC\nLIMIT 1\n```",
+  "providerName": "claude",
+  "recordedAt": "2026-09-24T01:36:02.732Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 2,
+    "messageRoles": [
+      "system",
+      "user"
+    ],
+    "preCanonicalHash": "f7ae1ffbbfe9b7e546f62697ee5d61cf68ebec69df8f0aa4faf5c86105840a39",
+    "postCanonicalHash": "f7ae1ffbbfe9b7e546f62697ee5d61cf68ebec69df8f0aa4faf5c86105840a39",
+    "appliedRuleClasses": []
+  }
+}

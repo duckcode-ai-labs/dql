@@ -1,0 +1,23 @@
+{
+  "key": "d14c4aadc47b3f5b3ac22740a5b2a0bd",
+  "operation": "generate",
+  "text": "```sql\nSELECT player_id, player_name,\n       SUM(pts) * 1.0 / COUNT(DISTINCT CASE WHEN played = 1 THEN game_id END) AS points_per_game,\n       COUNT(DISTINCT CASE WHEN played = 1 THEN game_id END) AS games_played\nFROM \"nba_golden\".\"dev\".\"player_game_stats\"\nWHERE CAST(strftime('%Y', game_date) AS INTEGER) = 2017\n  AND player_name IS NOT NULL\nGROUP BY player_id, player_name\nHAVING COUNT(DISTINCT CASE WHEN played = 1 THEN game_id END) >= 20\nORDER BY points_per_game DESC, player_name ASC\nLIMIT 10\n```",
+  "providerName": "claude",
+  "recordedAt": "2026-09-24T01:37:32.683Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 2,
+    "messageRoles": [
+      "system",
+      "user"
+    ],
+    "preCanonicalHash": "d14c4aadc47b3f5b3ac22740a5b2a0bdce839c3a4f4d811a09363aea4aa68527",
+    "postCanonicalHash": "d14c4aadc47b3f5b3ac22740a5b2a0bdce839c3a4f4d811a09363aea4aa68527",
+    "appliedRuleClasses": []
+  }
+}

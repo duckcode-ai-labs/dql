@@ -1,0 +1,23 @@
+{
+  "key": "b055f151754f8f9ba7803d50983ab337",
+  "operation": "generate",
+  "text": "NO_SQL: This project contains only NBA game and player statistics—no ticket sales or revenue data is available.",
+  "providerName": "claude",
+  "recordedAt": "2026-09-24T01:35:33.174Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 2,
+    "messageRoles": [
+      "system",
+      "user"
+    ],
+    "preCanonicalHash": "b055f151754f8f9ba7803d50983ab3373f7204167d02c4021c622abf0a3ce63a",
+    "postCanonicalHash": "b055f151754f8f9ba7803d50983ab3373f7204167d02c4021c622abf0a3ce63a",
+    "appliedRuleClasses": []
+  }
+}

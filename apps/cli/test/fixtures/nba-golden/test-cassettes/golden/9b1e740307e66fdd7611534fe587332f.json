@@ -1,0 +1,23 @@
+{
+  "key": "9b1e740307e66fdd7611534fe587332f",
+  "operation": "generate",
+  "text": "```sql\nSELECT player_id, player_name,\n       SUM(ast) * 1.0 / SUM(turnover) AS ast_to_turnover_ratio,\n       COUNT(*) AS games_played\nFROM \"nba_golden\".\"dev\".\"player_game_stats\"\nWHERE played = 1\n  AND CAST(strftime('%Y', game_date) AS INTEGER) = 2017\nGROUP BY player_id, player_name\nHAVING COUNT(*) >= 20 AND SUM(turnover) > 0\nORDER BY ast_to_turnover_ratio DESC\nLIMIT 1\n```",
+  "providerName": "claude",
+  "recordedAt": "2026-09-24T01:36:21.992Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 2,
+    "messageRoles": [
+      "system",
+      "user"
+    ],
+    "preCanonicalHash": "9b1e740307e66fdd7611534fe587332f032d3ba90ea275550e45edb29fd97293",
+    "postCanonicalHash": "9b1e740307e66fdd7611534fe587332f032d3ba90ea275550e45edb29fd97293",
+    "appliedRuleClasses": []
+  }
+}

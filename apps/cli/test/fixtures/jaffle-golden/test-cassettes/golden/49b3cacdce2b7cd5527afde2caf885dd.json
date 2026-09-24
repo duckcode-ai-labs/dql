@@ -1,0 +1,23 @@
+{
+  "key": "49b3cacdce2b7cd5527afde2caf885dd",
+  "operation": "generate",
+  "text": "{\"answers\": false, \"problem\": \"Only one location row is returned despite grouping by location_id/location_name, suggesting the join to locations is only matching a single location; verify the join condition/data so all locations appear in the breakdown.\"}",
+  "providerName": "claude",
+  "recordedAt": "2026-09-24T01:32:09.726Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 2,
+    "messageRoles": [
+      "system",
+      "user"
+    ],
+    "preCanonicalHash": "49b3cacdce2b7cd5527afde2caf885dd60645fff48060d883bb2413e7d76ce11",
+    "postCanonicalHash": "49b3cacdce2b7cd5527afde2caf885dd60645fff48060d883bb2413e7d76ce11",
+    "appliedRuleClasses": []
+  }
+}
