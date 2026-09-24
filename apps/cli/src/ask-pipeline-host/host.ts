@@ -1274,7 +1274,7 @@ type AskPipelineRunInput = Parameters<typeof runAskPipeline>[0];
 
 /** What one pipeline run keeps for its own receipt: drafting calls, checks and host steps. */
 interface AskRunState {
-  draftDispatches: Array<{ purpose: string; ms: number; reply?: string; promptChars?: number; at?: number; attempt?: number; label?: 'draft' | 'redraft' | 'fix' | 'retry_empty' | 'widen' | 'review'; outcome?: 'sql' | 'declined' | 'rejected' | 'error' | 'accepted' | 'revise' }>;
+  draftDispatches: Array<{ purpose: string; ms: number; reply?: string; promptChars?: number; at?: number; attempt?: number; /** Certified blocks the drafter was given as the team's approved computations. */ blocks?: string[]; label?: 'draft' | 'redraft' | 'fix' | 'retry_empty' | 'widen' | 'review'; outcome?: 'sql' | 'declined' | 'rejected' | 'error' | 'accepted' | 'revise' }>;
   // The checks drafted SQL was held to, recorded for the run views (the
   // notes sent back to the model are built separately and never from these).
   hostChecks: Array<{ id: 'stated_values' | 'required_filters' | 'join_fanout' | 'certified_joins' | 'catalog_columns' | 'read_only'; label: string; passed: boolean; message: string; attempt: number }>;
@@ -2118,7 +2118,8 @@ export function createAskPipelineHost(deps: AskPipelineHostDeps): AskPipelineHos
       // long enough to carry a definition (the reading step sees a short card).
       // THE TEAM'S CERTIFIED REPORTS NEAR THE QUESTION: their SQL is how the
       // team joins and defines these tables, reused where the question overlaps.
-      const blockLines = certifiedBlocksForDraft(current.entries, `${question} ${intent?.reading ?? ''}`, relations)
+      const draftBlocks = certifiedBlocksForDraft(current.entries, `${question} ${intent?.reading ?? ''}`, relations);
+      const blockLines = draftBlocks
         .map((entry) => `- certified block ${entry.label ?? entry.name} (how the team joins these tables and defines its measures, for a report near this question: reuse its joins and definitions where the question overlaps it; which rows to keep, the grouping and the output come from the question, not the block; write the SQL for ${connection?.driver ?? 'duckdb'} even where the block's syntax differs)${entry.description ? `: ${entry.description.replace(/\s+/g, ' ').slice(0, 300)}` : ''}. Its certified SQL: ${entry.sql!.replace(/\s+/g, ' ').slice(0, 1500)}`);
       const skillLines = skillsForDraft(current.entries, `${question} ${intent?.reading ?? ''} ${relations.join(' ')}`)
         .map((entry) => `- project skill ${entry.label ?? entry.name}: ${(entry.skill?.guidance ?? entry.description ?? '').replace(/\s+/g, ' ').slice(0, 1500)}`);
@@ -2176,6 +2177,7 @@ export function createAskPipelineHost(deps: AskPipelineHostDeps): AskPipelineHos
         // What this call was for and what it returned, kept for the run views.
         const dispatch: AskRunState['draftDispatches'][number] = {
           purpose: 'intent:draft', ms: 0, attempt: state.draftDispatches.length + 1,
+          ...(draftBlocks.length ? { blocks: draftBlocks.map((entry) => entry.ref) } : {}),
           label: label ?? (note ? 'fix' : undefined) ?? (previous ?(/^the statement ran and returned no rows/.test(previous.error) ? 'retry_empty' : 'redraft') : 'draft'),
         };
         let raw: string;
