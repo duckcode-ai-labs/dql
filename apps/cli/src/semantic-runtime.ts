@@ -914,8 +914,16 @@ export function qualifyForMetricFlow(
     } else {
       const exact = semanticLayer.resolveDimension(authoringReference, request.metrics);
       const compatibleBinding = qualifiedByReference.get(authoringReference.toLowerCase());
+      // AN ENTITY IS GROUPED BY ITS OWN NAME. "By claim" reads as the claim
+      // entity of a semantic model (`claim_amounts.claim`); MetricFlow groups
+      // by an entity as `claim` and rejects the model-scoped spelling, so the
+      // governed metric was never compiled and the AI drafted SQL instead.
+      const entity = !exact && !compatibleBinding && authoringReference.includes('.')
+        ? semanticLayer.getEntity(authoringReference)
+        : undefined;
       const baseRuntimeReference = compatibleBinding?.runtimeReference
         ?? exact?.qualifiedName
+        ?? entity?.name
         ?? authoringReference;
       if (selection.entityPath?.length) {
         const prefix = `${selection.entityPath.join('__')}__`;

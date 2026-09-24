@@ -537,6 +537,17 @@ describe('qualifyForMetricFlow (Phase 3 boundary)', () => {
     ]));
   });
 
+  it('groups by an entity under its own name, not its semantic model\'s', async () => {
+    const { qualifyForMetricFlow } = await import('./semantic-runtime.js');
+    const layer = new SemanticLayer({
+      metrics: [{ name: 'losses_paid', label: 'Losses paid', description: '', domain: 'insurance', sql: 'SUM(amount)', type: 'sum', table: 'claim_amount', cube: 'claim_amounts', objectKind: 'metric' }],
+      dimensions: [],
+      entities: [{ name: 'claim', label: 'Claim', description: '', type: 'foreign', table: 'claim_amount', cube: 'claim_amounts' }],
+    });
+    const { request } = qualifyForMetricFlow({ metrics: ['losses_paid'], dimensions: ['claim_amounts.claim'] }, layer);
+    expect(request.dimensions).toEqual(['claim']);
+  });
+
   it('passes through unresolvable names and metric_time untouched', async () => {
     const { qualifyForMetricFlow } = await import('./semantic-runtime.js');
     const { request } = qualifyForMetricFlow({
