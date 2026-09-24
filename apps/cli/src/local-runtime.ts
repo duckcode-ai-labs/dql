@@ -31902,11 +31902,26 @@ function extractSqlTablesLight(sql: string): string[] {
   return Array.from(tables);
 }
 
-function setBlockStudioStatusInSource(source: string, newStatus: string): string {
-  if (/status\s*=\s*"[^"]*"/.test(source)) {
-    return source.replace(/status\s*=\s*"[^"]*"/, `status = "${newStatus}"`);
+/**
+ * CERTIFYING IS THE REVIEW. A block drafted with a `review-required` tag kept
+ * it after certification, and Ask reads "certified" beside "review required"
+ * as a contradiction and never serves the block: a person certified nine
+ * blocks and Ask saw none. Certifying clears that tag.
+ */
+export function withoutReviewRequiredTag(source: string): string {
+  return source.replace(/(tags\s*=\s*\[)([^\]]*)(\])/, (_match, open: string, list: string, close: string) => {
+    const items = list.split(',').map((item) => item.trim()).filter(Boolean);
+    const kept = items.filter((item) => !/^["']\s*review[\s_-]*required\s*["']$/i.test(item));
+    return kept.length === items.length ? `${open}${list}${close}` : `${open}${kept.join(', ')}${close}`;
+  });
+}
+
+export function setBlockStudioStatusInSource(source: string, newStatus: string): string {
+  const cleared = newStatus === 'certified' ? withoutReviewRequiredTag(source) : source;
+  if (/status\s*=\s*"[^"]*"/.test(cleared)) {
+    return cleared.replace(/status\s*=\s*"[^"]*"/, `status = "${newStatus}"`);
   }
-  return source.replace(/block\s+"[^"]*"\s*\{/, (match) => `${match}\n  status = "${newStatus}"`);
+  return cleared.replace(/block\s+"[^"]*"\s*\{/, (match) => `${match}\n  status = "${newStatus}"`);
 }
 
 export function setBlockStudioStatus(projectRoot: string, blockPath: string, newStatus: string): void {

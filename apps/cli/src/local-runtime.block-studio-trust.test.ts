@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import type { Server } from 'node:http';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { QueryExecutor } from '@duckcodeailabs/dql-connectors';
-import { startLocalServer } from './local-runtime.js';
+import { setBlockStudioStatusInSource, startLocalServer } from './local-runtime.js';
 
 const roots: string[] = [];
 
@@ -166,5 +166,22 @@ describe('Block Studio library, validation and block body', () => {
       expect(response.status).toBe(200);
       expect(existsSync(join(projectRoot, 'pwned'))).toBe(false);
     });
+  });
+});
+
+describe('certifying is the review', () => {
+  it('certifying a block clears its review-required tag; any other status keeps it', () => {
+    const source = [
+      'block "Loss Ratio Summary" {',
+      '  domain = "insurance"',
+      '  status = "draft"',
+      '  tags = ["insurance", "standard-report", "ai-authored", "review-required"]',
+      '  query = "SELECT 1"',
+      '}',
+    ].join('\n');
+    const certified = setBlockStudioStatusInSource(source, 'certified');
+    expect(certified).toContain('status = "certified"');
+    expect(certified).toContain('tags = ["insurance", "standard-report", "ai-authored"]');
+    expect(setBlockStudioStatusInSource(source, 'review')).toContain('"review-required"');
   });
 });

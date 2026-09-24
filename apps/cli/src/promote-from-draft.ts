@@ -161,8 +161,13 @@ function renderPromoted(
 ): string {
   let out = source;
 
-  // Flip status.
+  // Flip status; certifying is the review, so a review-required tag goes.
   out = out.replace(/status\s*=\s*"draft"/, 'status = "certified"');
+  out = out.replace(/(tags\s*=\s*\[)([^\]]*)(\])/, (_match, open: string, list: string, close: string) => {
+    const items = list.split(',').map((item) => item.trim()).filter(Boolean);
+    const kept = items.filter((item) => !/^["']\s*review[\s_-]*required\s*["']$/i.test(item));
+    return kept.length === items.length ? `${open}${list}${close}` : `${open}${kept.join(', ')}${close}`;
+  });
 
   // Set domain (overwrite the existing one).
   out = out.replace(/(domain\s*=\s*)"[^"]*"/, `$1"${fields.domain}"`);
