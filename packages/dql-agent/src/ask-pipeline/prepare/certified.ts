@@ -160,7 +160,28 @@ export interface CertifiedPreparation {
   fallbacks: PreparedCandidate[];
 }
 
-export function prepareCertified(intent: AnalyticalIntentV1, vocabulary: VocabularyIndex, deps: PrepareDeps): CertifiedPreparation {
+/**
+ * Whether the question itself asks for this report: its name, label or an
+ * alias appears, or it restates one of the block's declared example questions.
+ */
+export function questionNamesBlock(question: string, block: VocabularyEntry): boolean {
+  const text = ` ${question.toLowerCase().replace(/[^a-z0-9]+/g, ' ')} `;
+  const phrase = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+  for (const name of [block.name, block.label ?? '', ...block.aliases].map(phrase)) {
+    if (name.replace(/ /g, '').length >= 4 && text.includes(` ${name} `)) return true;
+  }
+  const words = (value: string) => new Set(phrase(value).split(' ').filter((word) => word.length > 2));
+  const asked = words(question);
+  return (block.examples ?? []).some((example) => {
+    const wanted = words(example);
+    if (wanted.size === 0) return false;
+    let shared = 0;
+    for (const word of wanted) if (asked.has(word)) shared += 1;
+    return shared / wanted.size >= 0.8 && shared / Math.max(1, asked.size) >= 0.6;
+  });
+}
+
+export function prepareCertified(intent: AnalyticalIntentV1, vocabulary: VocabularyIndex, deps: PrepareDeps, question?: string): CertifiedPreparation {
   const blocks = vocabulary.entries.filter((entry) => entry.kind === 'block' && entry.certified);
   if (blocks.length === 0) return { candidates: [], refusals: [{ tier: 'certified', code: 'no_certified_block', message: 'the project has no certified block', repairable: false }], fallbacks: [] };
   const candidates: PreparedCandidate[] = [];
@@ -221,7 +242,20 @@ export function prepareCertified(intent: AnalyticalIntentV1, vocabulary: Vocabul
         ...(prepared && 'source' in prepared && prepared.source ? { artifact: { kind: 'certified_block', name: block.name, source: prepared.source, ...(prepared.sourcePath ? { sourcePath: prepared.sourcePath } : {}), persistence: 'saved', trustState: 'certified', compiledSql: sql } } : {}),
         proof: [`${block.ref} entails the intent: ${block.contract?.measures.map((m) => m.output).join(', ') || 'declared outputs'}${block.contract?.staticScope.length ? ` with scope ${block.contract.staticScope.map((s) => `${s.column} ${s.op}`).join(', ')}` : ''}${applied.length ? `; ${applied.length} declared filter${applied.length > 1 ? 's' : ''} applied over its output` : ''}`, ...(prepared?.parameters.length ? [`parameters bound: ${prepared.parameters.map((parameter) => `${parameter.name} = ${JSON.stringify(parameter.value)} (${parameter.source})`).join(', ')}`] : []), ...verdict.caveats],
       };
-      if (identityOnly) {
+      // A REPORT THE AI CHOSE IS NOT A CERTIFIED ANSWER. When the reading
+      // names a block the question never asked for, the block matched only
+      // because its declarations cover a reading the AI collapsed onto it (a
+      // report per policy served for "each premium paid"). It is a near fit:
+      // the governed tiers and the drafter (who sees it as the team's
+      // computation) answer first, and it is served only as a last resort,
+      // for review.
+      const chosenByReading = question !== undefined && named.includes(block.ref) && !questionNamesBlock(question, block);
+      if (chosenByReading) {
+        candidate.trust = 'review_required';
+        candidate.proof.push(`${block.ref} is a near fit the AI chose; the question does not name this certified report, so it is not proof the report answers exactly what was asked`);
+        fallbacks.push(candidate);
+        refusals.push({ tier: 'certified', code: 'block_not_applicable', message: `${block.ref}: chosen by the reading, not named by the question; a near fit, not a certified answer`, repairable: false });
+      } else if (identityOnly) {
         candidate.proof.push(`${verdict.identityNote!.split(';')[0]}; the certified block is served as published because no keyed governed answer could be composed`);
         fallbacks.push(candidate);
         refusals.push({ tier: 'certified', code: 'block_not_applicable', message: `${block.ref}: ${verdict.identityNote}`, repairable: named.includes(block.ref), detail: verdict });

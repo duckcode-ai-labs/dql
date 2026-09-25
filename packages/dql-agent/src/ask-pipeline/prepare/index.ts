@@ -34,7 +34,7 @@ export async function prepare(input: PrepareInput): Promise<PrepareResult> {
   let certifiedFallbacks: PreparedCandidate[] = [];
   if (excluded.has('certified')) attempts.push({ tier: 'certified', outcome: 'skipped', detail: 'failed an execution proof' });
   else {
-    const certified = prepareCertified(input.intent, input.vocabulary, input.deps);
+    const certified = prepareCertified(input.intent, input.vocabulary, input.deps, input.question);
     record('certified', certified);
     certifiedFallbacks = certified.fallbacks;
   }

@@ -782,3 +782,28 @@ describe('the composer writes physical names as the warehouse reads them and ali
     expect(composed.refusal).toMatchObject({ code: 'join_path_required' });
   });
 });
+
+describe('a report the AI chose is not a certified answer', () => {
+  const keyedIntent = () => intent({ measures: [{ ref: 'block:commerce.beverage_by_customer_id' }], expectedShape: 'ranking' });
+  it('a block the question names is certified', () => {
+    const prepared = prepareCertified(keyedIntent(), vocabulary, deps, 'Show the beverage by customer id report');
+    expect(prepared.candidates).toHaveLength(1);
+    expect(prepared.candidates[0]!.trust).toBe('certified');
+  });
+  it('a block the reading chose for a question that never names it is a reviewed fallback, not the answer', () => {
+    const prepared = prepareCertified(keyedIntent(), vocabulary, deps, 'Which customers spend the most on drinks?');
+    expect(prepared.candidates).toEqual([]);
+    expect(prepared.fallbacks).toHaveLength(1);
+    expect(prepared.fallbacks[0]!.trust).toBe('review_required');
+    expect(prepared.fallbacks[0]!.proof.join(' ')).toMatch(/near fit the AI chose/);
+    expect(prepared.refusals.some((refusal) => /not named by the question/.test(refusal.message))).toBe(true);
+  });
+  it('a question restating a declared example names the block', () => {
+    const withExample = buildVocabularyIndex({ ...source, blocks: source.blocks!.map((block) => (block.name === 'beverage_by_customer_id' ? { ...block, examples: ['Top ten customers by beverage revenue'] } : block)) });
+    const prepared = prepareCertified(keyedIntent(), withExample, { ...deps, blockSql: (ref) => withExample.get(ref)?.sql }, 'Who are the top ten customers by beverage revenue?');
+    expect(prepared.candidates[0]?.trust).toBe('certified');
+  });
+  it('without a question (a caller that does not pass one) the rule is unchanged', () => {
+    expect(prepareCertified(keyedIntent(), vocabulary, deps).candidates[0]?.trust).toBe('certified');
+  });
+});
