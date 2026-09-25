@@ -230,6 +230,38 @@ export function executionRelationIdentity(relation: string, dialect?: string): s
     .join('.');
 }
 
+/**
+ * Engines whose connection opens one database and name tables
+ * database.schema.table: an omitted database part can only mean that one.
+ * (SQLite is not one: its first name part is an attached database.)
+ */
+const SINGLE_DATABASE_ENGINES = new Set(['duckdb']);
+
+/**
+ * THE DEFAULT DATABASE MAY BE LEFT OUT where a connection holds one database.
+ * A certified block written as `main.claim` names the same table DQL inspected
+ * as `acme_insurance.main.claim`, and a drafter shown that block copies its
+ * spelling; exact mode refused it. On DuckDB a shorter name is
+ * accepted when every inspected relation lives in one database and exactly
+ * one of them has that schema and table. Anywhere a connection spans
+ * databases (Snowflake, BigQuery, …) exact mode stays exact.
+ */
+function defaultDatabaseMatch(relation: string, runtimeSchema: Array<{ relation: string }>, dialect?: string): boolean {
+  if (!SINGLE_DATABASE_ENGINES.has(dialect?.trim().toLowerCase() ?? '')) return false;
+  try { return defaultDatabaseMatchUnsafe(relation, runtimeSchema); } catch { return false; }
+}
+
+function defaultDatabaseMatchUnsafe(relation: string, runtimeSchema: Array<{ relation: string }>): boolean {
+  const lower = (parts: Array<{ value: string }>) => parts.map((part) => part.value.toLocaleLowerCase('en-US'));
+  const referenced = lower(parsePhysicalIdentifier(relation));
+  if (referenced.length === 0 || referenced.length >= 3) return false;
+  const inspected = runtimeSchema.map((table) => lower(parsePhysicalIdentifier(table.relation))).filter((parts) => parts.length >= referenced.length);
+  const databases = new Set(inspected.filter((parts) => parts.length === 3).map((parts) => parts[0]));
+  if (databases.size > 1) return false;
+  const tail = referenced.join('.');
+  return inspected.filter((parts) => parts.slice(parts.length - referenced.length).join('.') === tail).length === 1;
+}
+
 export function validateSqlAgainstLocalContext(
   sql: string,
   contextPack: LocalContextPack | undefined,
@@ -338,7 +370,7 @@ export function validateSqlAgainstLocalContext(
     // database through one of them. In particular, DB.PUBLIC.EVENTS is not an
     // inspected "Db"."Public"."Events" merely because the parser can
     // normalize either spelling or their schema/table tail happens to match.
-    const mismatch = referencedRelations.find((relation) => !exact.has(executionRelationIdentity(relation, options.dialect)));
+    const mismatch = referencedRelations.find((relation) => !exact.has(executionRelationIdentity(relation, options.dialect)) && !defaultDatabaseMatch(relation, options.runtimeSchema ?? [], options.dialect));
     if (mismatch) {
       const expected = (options.runtimeSchema ?? []).map((table) => table.relation).join(', ');
       return {

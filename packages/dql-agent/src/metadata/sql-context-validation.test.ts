@@ -997,3 +997,17 @@ describe('physical execution bindings', () => {
     if (!result.ok) expect(result.error).toContain('different execution target');
   });
 });
+
+describe('the default database may be left out where a connection holds one database', () => {
+  const table = (relation: string) => ({ relation, columns: [{ name: 'claim_id', type: 'BIGINT' }], source: 'warehouse probe', columnCompleteness: 'complete' as const });
+  const validate = (sql: string, relations: string[], dialect: string) => validateSqlAgainstLocalContext(sql, undefined, { dialect, runtimeSchema: relations.map(table), runtimeSchemaExact: true, enforceGenerationReadiness: false });
+  it('accepts main.claim for the inspected acme_insurance.main.claim on DuckDB', () => {
+    expect(validate('SELECT claim_id FROM main.claim', ['acme_insurance.main.claim', 'acme_insurance.main.policy'], 'duckdb').ok).toBe(true);
+  });
+  it('stays exact on an engine whose connection spans databases, when the tail is ambiguous, or when it names another database', () => {
+    expect(validate('SELECT claim_id FROM main.claim', ['acme_insurance.main.claim'], 'snowflake').ok).toBe(false);
+    expect(validate('SELECT claim_id FROM main.claim', ['acme_insurance.main.claim'], 'sqlite').ok).toBe(false);
+    expect(validate('SELECT claim_id FROM main.claim', ['db_a.main.claim', 'db_b.main.claim'], 'duckdb').ok).toBe(false);
+    expect(validate('SELECT claim_id FROM other_db.main.claim', ['acme_insurance.main.claim'], 'duckdb').ok).toBe(false);
+  });
+});
