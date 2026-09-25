@@ -1327,7 +1327,7 @@ export async function runAskPipeline(input: RunAskPipelineInput): Promise<Pipeli
     }
     if (attempted.has(cacheKey)) break; // never repeat an unchanged failed attempt
     attempted.add(cacheKey);
-    prepared = await prepare({ intent, vocabulary: input.vocabulary, deps: input.prepareDeps, explorationOptIn: false, explorationAuto: false, question: input.question });
+    prepared = await prepare({ intent, vocabulary: input.vocabulary, deps: input.prepareDeps, explorationOptIn: false, explorationAuto: false, question: input.question, ...(input.prior ? { prior: input.prior } : {}) });
     if (round === 0) { firstPrepared = prepared; firstIntent = intent; }
     mark(round === 0 ? 'prepare' : 'prepare_repair', prepareStarted);
     for (const item of prepared.candidates) receipt.candidates.push({ tier: item.tier, trust: item.trust, proof: item.proof, sqlFingerprint: fingerprintSql(item.sql), ...(item.engine ? { engine: item.engine } : {}) });
@@ -1396,15 +1396,21 @@ export async function runAskPipeline(input: RunAskPipelineInput): Promise<Pipeli
     // never instead of a governed answer one re-ask away. A policy denial or a
     // domain-contract refusal never reaches it.
     const denied = receipt.refusals.some((refusal) => refusal.code === 'policy_filter_unbindable' || refusal.code === 'policy_conflict');
-    if (!fallback && !denied && (input.explorationOptIn || input.explorationAuto)) {
+    // A NEAR FIT IS NOT A LAST RESORT BEFORE THE DRAFTER. A certified report the
+    // AI chose for a question that never names it (review required) does not
+    // stop the drafter, who reads it as the team's computation; it is served
+    // only when no statement could be drafted, and stays review required.
+    const nearFit = fallback?.trust === 'review_required';
+    if ((!fallback || nearFit) && !denied && (input.explorationOptIn || input.explorationAuto)) {
       const drafted = await schemaLane(gapFromRefusals(receipt.refusals, intent, input.vocabulary).message, intent);
       if (drafted) return drafted;
     }
     if (candidate) { /* drafted: falls through to execution below */ }
     else if (fallback) {
       // Served from the certified block, but not certified FOR this question:
-      // the badge is governed, the source stays the block.
-      candidate = { ...fallback, trust: 'governed' };
+      // the badge is governed (review required for a near fit), the source
+      // stays the block.
+      candidate = { ...fallback, trust: nearFit ? 'review_required' : 'governed' };
       if (firstPrepared && fallback === firstPrepared.fallbacks[0]) intent = firstIntent ?? intent;
       receipt.intent = intent;
       for (let index = receipt.refusals.length - 1; index >= 0; index -= 1) {
@@ -1435,7 +1441,7 @@ export async function runAskPipeline(input: RunAskPipelineInput): Promise<Pipeli
     receipt.refusals.push({ tier: candidate.tier, code: executed.code, message: executed.message, repairable: false } as unknown as PreparedRefusal);
     receipt.tiers.push({ round: 9, tier: candidate.tier, outcome: 'refused', detail: `${executed.code}: ${executed.message.slice(0, 160)}` });
     excluded.push(candidate.tier);
-    const again = await prepare({ intent, vocabulary: input.vocabulary, deps: input.prepareDeps, explorationOptIn: false, explorationAuto: false, question: input.question, excludeTiers: excluded });
+    const again = await prepare({ intent, vocabulary: input.vocabulary, deps: input.prepareDeps, explorationOptIn: false, explorationAuto: false, question: input.question, ...(input.prior ? { prior: input.prior } : {}), excludeTiers: excluded });
     for (const item of again.candidates) receipt.candidates.push({ tier: item.tier, trust: item.trust, proof: item.proof, sqlFingerprint: fingerprintSql(item.sql), ...(item.engine ? { engine: item.engine } : {}) });
     receipt.refusals.push(...again.refusals.filter((refusal) => !excluded.includes(refusal.tier)));
     receipt.tiers.push(...again.attempts.map((attempt) => ({ round: 9, ...attempt })));
@@ -1513,7 +1519,7 @@ export async function runAskPipeline(input: RunAskPipelineInput): Promise<Pipeli
       const merged = proveSubjectMatchesPopulation(widened, input.vocabulary);
       if (!merged) {
         receipt.grounding = [...(receipt.grounding ?? []), ...notes];
-        const again = await prepare({ intent: widened, vocabulary: input.vocabulary, deps: input.prepareDeps, explorationOptIn: false, explorationAuto: false, question: input.question });
+        const again = await prepare({ intent: widened, vocabulary: input.vocabulary, deps: input.prepareDeps, explorationOptIn: false, explorationAuto: false, question: input.question, ...(input.prior ? { prior: input.prior } : {}) });
         if (again.chosen) {
           const retried = await countedExecute(again.chosen, widened, input.executeDeps);
           if (retried.ok) { candidate = again.chosen; executed = retried; intent = widened; receipt.intent = widened; }
@@ -1542,7 +1548,7 @@ export async function runAskPipeline(input: RunAskPipelineInput): Promise<Pipeli
         filters: intent.filters.map(widenYear),
         measures: intent.measures.map((measure) => (measure.scope?.length ? { ...measure, scope: measure.scope.map(widenYear) } : measure)),
       };
-      const again = await prepare({ intent: reread, vocabulary: input.vocabulary, deps: input.prepareDeps, explorationOptIn: false, explorationAuto: false, question: input.question });
+      const again = await prepare({ intent: reread, vocabulary: input.vocabulary, deps: input.prepareDeps, explorationOptIn: false, explorationAuto: false, question: input.question, ...(input.prior ? { prior: input.prior } : {}) });
       if (again.chosen) {
         const retried = await countedExecute(again.chosen, reread, input.executeDeps);
         if (retried.ok) {

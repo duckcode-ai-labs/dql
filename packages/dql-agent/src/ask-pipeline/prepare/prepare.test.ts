@@ -7,7 +7,7 @@ import { buildVocabularyIndex, type VocabularySource } from '../vocabulary.js';
 import { bindSemanticRequest, composeRelational, entails, prepare } from './index.js';
 import { scopeFormulaAggregates } from './relational.js';
 import { resolveTie } from '../execute.js';
-import { prepareCertified } from './certified.js';
+import { prepareCertified, questionNamesBlock } from './certified.js';
 import { inlineSqlParams } from './dql-artifacts.js';
 import type { PrepareDeps } from './types.js';
 
@@ -802,6 +802,19 @@ describe('a report the AI chose is not a certified answer', () => {
     const withExample = buildVocabularyIndex({ ...source, blocks: source.blocks!.map((block) => (block.name === 'beverage_by_customer_id' ? { ...block, examples: ['Top ten customers by beverage revenue'] } : block)) });
     const prepared = prepareCertified(keyedIntent(), withExample, { ...deps, blockSql: (ref) => withExample.get(ref)?.sql }, 'Who are the top ten customers by beverage revenue?');
     expect(prepared.candidates[0]?.trust).toBe('certified');
+  });
+  it('a question with every word of the report name (in any simple form) names it; a partial overlap does not', () => {
+    const block = { kind: 'block', ref: 'block:commerce.monthly_revenue', name: 'monthly_revenue', aliases: ['monthly revenue', 'revenue'], roles: [] } as unknown as Parameters<typeof questionNamesBlock>[1];
+    expect(questionNamesBlock('revenue by month', block)).toBe(true);
+    const book = { kind: 'block', ref: 'block:insurance.book', name: 'Book of Business by Agent and Policy Holder', aliases: ['agent', 'premium'], roles: [] } as unknown as Parameters<typeof questionNamesBlock>[1];
+    expect(questionNamesBlock('What are all the premiums that have been paid by policy holders?', book)).toBe(false);
+    expect(questionNamesBlock('What is the loss ratio of each policy and agent who sold it?', book)).toBe(false);
+    expect(questionNamesBlock('Show the book of business by agent and policy holder', book)).toBe(true);
+  });
+  it('a follow-up to a turn that used the report keeps it certified', () => {
+    const prior = keyedIntent();
+    expect(prepareCertified(keyedIntent(), vocabulary, deps, 'and just the drinks category?', prior).candidates[0]?.trust).toBe('certified');
+    expect(prepareCertified(keyedIntent(), vocabulary, deps, 'and just the drinks category?').candidates).toEqual([]);
   });
   it('without a question (a caller that does not pass one) the rule is unchanged', () => {
     expect(prepareCertified(keyedIntent(), vocabulary, deps).candidates[0]?.trust).toBe('certified');

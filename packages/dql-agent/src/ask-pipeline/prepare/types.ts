@@ -270,6 +270,8 @@ export interface PrepareInput {
   excludeTiers?: PrepareTier[];
   /** The question as asked, for the drafting tier. */
   question?: string;
+  /** The previous turn's reading, when this question follows up on it: a report it used or named is named here too. */
+  prior?: AnalyticalIntentV1;
   /** Run the review-required SQL tier automatically when nothing governed prepares (the default); false keeps it opt-in. */
   explorationAuto?: boolean;
 }

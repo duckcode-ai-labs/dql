@@ -1378,6 +1378,34 @@ describe('a label-only certified block is the answer of last resort, after the r
   });
 });
 
+describe('a certified report the AI chose is a near fit: the drafter answers first', () => {
+  const KEYED_SQL = 'SELECT customer_id, SUM(product_price) AS beverage_revenue FROM dev.order_items WHERE is_drink_item = true GROUP BY customer_id';
+  const vocabulary = buildVocabularyIndex({ ...jaffle, blocks: [...(jaffle.blocks ?? []), { name: 'beverage_by_customer', domain: 'commerce', certified: true, tags: ['drinks', 'customers'], sql: KEYED_SQL, contract: extractBlockContract({ name: 'beverage_by_customer', sql: KEYED_SQL }) }] });
+  const reading = JSON.stringify({ version: 1, kind: 'analytics', reading: 'Drink spend per customer', measures: [{ ref: 'block:commerce.beverage_by_customer' }], groupBy: [], display: [], filters: [], expectedShape: 'lookup', unresolved: [], provenance: {} });
+  const executed = { columns: ['customer_id', 'beverage_revenue'], rows: [{ customer_id: 1, beverage_revenue: 2 }], rowCount: 1, executionTimeMs: 1 };
+  const blockSql = (ref: string) => (ref === 'block:commerce.beverage_by_customer' ? KEYED_SQL : undefined);
+  it('a tag is not a name: "drinks" in the question does not certify the report, and the drafter answers', async () => {
+    let drafted = 0;
+    const outcome = await runAskPipeline({ question: 'list every drinks purchase line for each customer', vocabulary, provider: scripted([reading, reading]), explorationAuto: true, prepareDeps: { blockSql, draftSql: async () => { drafted += 1; return { sql: 'SELECT customer_id, product_price FROM dev.order_items', relations: ['dev.order_items'], proof: [] }; } }, executeDeps: { run: async () => executed } });
+    expect(drafted).toBe(1);
+    expect(outcome.kind).toBe('answered');
+    if (outcome.kind === 'answered') { expect(outcome.candidate.tier).toBe('exploratory'); expect(outcome.candidate.trust).toBe('review_required'); }
+  });
+  it('when nothing can be drafted the near-fit report is served, labelled review required, never governed', async () => {
+    const outcome = await runAskPipeline({ question: 'list every drinks purchase line for each customer', vocabulary, provider: scripted([reading, reading]), explorationAuto: true, prepareDeps: { blockSql, draftSql: async () => ({ error: 'the model did not answer' }) }, executeDeps: { run: async () => executed } });
+    expect(outcome.kind).toBe('answered');
+    if (outcome.kind !== 'answered') return;
+    expect(outcome.candidate.tier).toBe('certified');
+    expect(outcome.candidate.trust).toBe('review_required');
+    expect(outcome.candidate.proof.join(' ')).toMatch(/near fit the AI chose/);
+  });
+  it('a question that names the report still gets the certified answer', async () => {
+    const outcome = await runAskPipeline({ question: 'show the beverage by customer report', vocabulary, provider: scripted([reading, reading]), explorationAuto: true, prepareDeps: { blockSql, draftSql: async () => { throw new Error('must not draft'); } }, executeDeps: { run: async () => executed } });
+    expect(outcome.kind).toBe('answered');
+    if (outcome.kind === 'answered') expect(outcome.candidate.trust).toBe('certified');
+  });
+});
+
 describe('the original question is preserved through every repair (the obligation ledger)', () => {
   const vocabulary = buildVocabularyIndex(jaffle);
   const base = { version: 1, kind: 'analytics', groupBy: [], display: [], filters: [], unresolved: [], provenance: {}, expectedShape: 'ranking' };

@@ -161,14 +161,23 @@ export interface CertifiedPreparation {
 }
 
 /**
- * Whether the question itself asks for this report: its name, label or an
- * alias appears, or it restates one of the block's declared example questions.
+ * Whether the question itself asks for this report: its name or label
+ * appears, or it restates one of the block's declared example questions. A
+ * block's tags are search aids, not names ("agent" names no report).
  */
 export function questionNamesBlock(question: string, block: VocabularyEntry): boolean {
   const text = ` ${question.toLowerCase().replace(/[^a-z0-9]+/g, ' ')} `;
   const phrase = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
-  for (const name of [block.name, block.label ?? '', ...block.aliases].map(phrase)) {
+  // Every content word of the report's name, in any simple form ("revenue
+  // by month" names Monthly Revenue; "premiums paid by policy holders" does
+  // not name Book of Business by Agent and Policy Holder).
+  const stem = (word: string) => word.replace(/(ly|ies|es|s)$/, '');
+  const NAME_STOPWORDS = new Set(['by', 'and', 'of', 'the', 'for', 'per', 'a', 'an', 'in', 'on', 'to', 'with']);
+  const askedStems = new Set(text.trim().split(' ').filter(Boolean).map(stem));
+  for (const name of [block.name, block.label ?? ''].map(phrase)) {
     if (name.replace(/ /g, '').length >= 4 && text.includes(` ${name} `)) return true;
+    const words = name.split(' ').filter((word) => word && !NAME_STOPWORDS.has(word));
+    if (words.length >= 2 && words.every((word) => askedStems.has(stem(word)))) return true;
   }
   const words = (value: string) => new Set(phrase(value).split(' ').filter((word) => word.length > 2));
   const asked = words(question);
@@ -181,7 +190,7 @@ export function questionNamesBlock(question: string, block: VocabularyEntry): bo
   });
 }
 
-export function prepareCertified(intent: AnalyticalIntentV1, vocabulary: VocabularyIndex, deps: PrepareDeps, question?: string): CertifiedPreparation {
+export function prepareCertified(intent: AnalyticalIntentV1, vocabulary: VocabularyIndex, deps: PrepareDeps, question?: string, prior?: AnalyticalIntentV1): CertifiedPreparation {
   const blocks = vocabulary.entries.filter((entry) => entry.kind === 'block' && entry.certified);
   if (blocks.length === 0) return { candidates: [], refusals: [{ tier: 'certified', code: 'no_certified_block', message: 'the project has no certified block', repairable: false }], fallbacks: [] };
   const candidates: PreparedCandidate[] = [];
@@ -249,7 +258,9 @@ export function prepareCertified(intent: AnalyticalIntentV1, vocabulary: Vocabul
       // the governed tiers and the drafter (who sees it as the team's
       // computation) answer first, and it is served only as a last resort,
       // for review.
-      const chosenByReading = question !== undefined && named.includes(block.ref) && !questionNamesBlock(question, block);
+      // A follow-up continues the previous turn: a report that turn used or named is named here too.
+      const priorNamed = Boolean(prior && (prior.measures.some((measure) => measure.ref === block.ref) || questionNamesBlock(prior.reading, block)));
+      const chosenByReading = question !== undefined && named.includes(block.ref) && !questionNamesBlock(question, block) && !priorNamed;
       if (chosenByReading) {
         candidate.trust = 'review_required';
         candidate.proof.push(`${block.ref} is a near fit the AI chose; the question does not name this certified report, so it is not proof the report answers exactly what was asked`);
