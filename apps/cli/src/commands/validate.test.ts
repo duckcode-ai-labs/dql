@@ -47,6 +47,20 @@ describe('runValidate', () => {
     expect(process.exitCode).toBeUndefined();
   });
 
+  it('validates blocks under domains/<id>/ when checking the whole project', async () => {
+    const root = tempProject();
+    mkdirSync(join(root, 'domains', 'finance', 'blocks'), { recursive: true });
+    writeValidBlock(join(root, 'domains', 'finance', 'blocks', 'monthly_revenue.dql'));
+    writeFileSync(join(root, 'domains', 'finance', 'blocks', 'broken.dql'), 'block "Broken" {');
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+    await runValidate(root, { format: 'json' } as any);
+
+    const report = JSON.parse(String(log.mock.calls.at(-1)?.[0]));
+    expect(report.files).toBe(2);
+    expect(report.diagnostics.some((diag: { file: string; severity: string }) => diag.file === 'domains/finance/blocks/broken.dql' && diag.severity === 'error')).toBe(true);
+  });
+
   it('validates a nested single file while loading project-level context', async () => {
     const root = tempProject();
     mkdirSync(join(root, 'blocks', 'finance'), { recursive: true });

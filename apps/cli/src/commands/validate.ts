@@ -82,7 +82,8 @@ function collectValidationFiles(targetPath: string | null): { projectRoot: strin
     }
   }
 
-  const dirs = ['blocks', 'terms', 'business-views', 'dashboards', 'workbooks'];
+  // Domain-owned blocks and terms live under domains/<id>/ (e.g. domains/claims/blocks).
+  const dirs = ['blocks', 'terms', 'business-views', 'dashboards', 'workbooks', 'domains'];
   return {
     projectRoot,
     files: dirs.flatMap((dir) => collectDqlFilesFromDir(join(projectRoot, dir), projectRoot)),
