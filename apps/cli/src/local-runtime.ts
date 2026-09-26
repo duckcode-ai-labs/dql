@@ -13339,7 +13339,10 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
       const prefs = readUserPrefs(userPrefsPath);
       const acknowledgedVersion = prefs.setup?.acknowledgedVersion ?? null;
       const dbtAppliedVersion = prefs.setup?.dbtAppliedVersion ?? null;
-      const shouldOpen = acknowledgedVersion !== runtimeVersion;
+      // With a host (RFC 0010 HH-9) the host sets up the project; the
+      // installer's first-run review never opens for the people it signs in.
+      const hostManaged = Boolean(hostIdentity);
+      const shouldOpen = !hostManaged && acknowledgedVersion !== runtimeVersion;
       const dbtConfigured = dbtProjectConfigured(projectRoot, projectConfig);
       const requiresDbtReapply = Boolean(
         shouldOpen
@@ -13356,6 +13359,7 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
         requiresDbtReapply,
         shouldOpen,
         reason: shouldOpen ? (acknowledgedVersion ? 'version_upgrade' : 'first_install') : null,
+        ...(hostManaged ? { hostManaged: true } : {}),
       }));
       return;
     }

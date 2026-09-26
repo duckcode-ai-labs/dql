@@ -122,6 +122,8 @@ describe('what the app shows around its screens (HH-9)', () => {
     });
     expect(priyaUi.body.capabilities).toMatchObject({ ask: true, 'dataset.author': false, 'dataset.certify': false, 'settings.manage': false });
     expect((await call('dan', 'GET', '/api/host/ui')).body.capabilities).toMatchObject({ 'dataset.author': true, 'settings.manage': true });
+    // The host sets up the project: nobody it signs in gets the first-run review.
+    expect((await call('priya', 'GET', '/api/onboarding/launch')).body).toMatchObject({ shouldOpen: false, reason: null, hostManaged: true });
   });
 
   it('says there is no host when there is none', async () => {
@@ -130,5 +132,7 @@ describe('what the app shows around its screens (HH-9)', () => {
     writeFileSync(join(projectRoot, 'dql.config.json'), JSON.stringify({ project: 'no_host' }));
     const port = await startLocalServer({ rootDir: projectRoot, projectRoot, executor: {} as QueryExecutor, preferredPort: 0, captureServer: (created) => { servers.push(created); } });
     expect(await (await fetch(`http://127.0.0.1:${port}/api/host/ui`)).json()).toEqual({ host: false });
+    const launch = await (await fetch(`http://127.0.0.1:${port}/api/onboarding/launch`)).json() as Record<string, unknown>;
+    expect(launch.hostManaged).toBeUndefined();
   });
 });

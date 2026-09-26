@@ -296,6 +296,8 @@ A host serves every role with DQL's app. It does not rebuild Ask, Apps or notebo
   - A host `nav` link opens the host's page inside DQL's main area, with `embed=1` added so the page leaves out its own frame.
   - An answer that needs review offers the host's answer actions, which POST `{ runId, question, trustState }` to the host's path.
 - **Sign-in:** a host's 401 may carry `X-DQL-Sign-In: <same-origin path>`. The app then goes there once, with `returnTo` set to the current page, instead of asking for an access link.
+- **Readers read:** without `app.author`, the App library hides Build new App, Edit and Delete, and the App opens without the View/Edit switch, personas or the local handoff.
+- **No first-run review:** the host sets up the project, so `/api/onboarding/launch` never opens the installer's setup review for the people it signs in (`hostManaged: true`).
 
 Without a host nothing changes. Tests: `per-person.test.ts` (route), `host-ui.test.tsx` (app).
 

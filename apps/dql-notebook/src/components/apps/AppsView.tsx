@@ -56,6 +56,7 @@ import {
   type AppStudioBuildDraft,
 } from '../../api/client';
 import { isViewerLink } from '../../api/server-auth';
+import { hostAllows, useHostUi } from '../../host/host-ui';
 import type { AppSummary, AppWorkspaceExperience, AppWorkspaceSection } from '../../store/types';
 import { themes, type ThemeMode } from '../../themes/notebook-theme';
 import { AiSidePanel, AI_SIDE_PANEL_EXPANDED_WIDTH } from '../agent/AiSidePanel';
@@ -1331,10 +1332,12 @@ function AppLibrarySurface({
     ].join(' ').toLowerCase().includes(needle))
     : [];
   const hasResults = visibleDrafts.length > 0 || apps.length > 0;
+  // Under a host (RFC 0010 HH-9), people who may not author Apps read them.
+  const canAuthor = hostAllows(useHostUi(), 'app.author');
   return (
     <main className="dql-apps-wrap">
-      <div id="app-studio-launcher" hidden={!launchExpanded}>
-        {launchExpanded ? (
+      <div id="app-studio-launcher" hidden={!launchExpanded || !canAuthor}>
+        {launchExpanded && canAuthor ? (
           <AppStudioLaunchSurface
             config={launchConfig}
             onChange={(patch) => setLaunchConfig((current) => ({ ...current, ...patch }))}
@@ -1350,16 +1353,18 @@ function AppLibrarySurface({
           <p>Local drafts and Project-published Apps live together here, with their visibility and trust state always clear.</p>
         </div>
         <div className="dql-apps-library-summary" aria-label="App library summary">
-          <button
-            type="button"
-            className="dql-app-card-act primary"
-            aria-controls="app-studio-launcher"
-            aria-expanded={launchExpanded}
-            onClick={() => setLaunchPreference(launchExpanded ? 'collapsed' : 'expanded')}
-          >
-            {launchExpanded ? <ChevronDown size={13} aria-hidden="true" /> : <Plus size={13} aria-hidden="true" />}
-            {launchExpanded ? 'Hide new App form' : 'Build new App'}
-          </button>
+          {canAuthor ? (
+            <button
+              type="button"
+              className="dql-app-card-act primary"
+              aria-controls="app-studio-launcher"
+              aria-expanded={launchExpanded}
+              onClick={() => setLaunchPreference(launchExpanded ? 'collapsed' : 'expanded')}
+            >
+              {launchExpanded ? <ChevronDown size={13} aria-hidden="true" /> : <Plus size={13} aria-hidden="true" />}
+              {launchExpanded ? 'Hide new App form' : 'Build new App'}
+            </button>
+          ) : null}
           <span><strong>{localDrafts.length}</strong> local draft{localDrafts.length === 1 ? '' : 's'}</span>
           <span><strong>{counts.private}</strong> private</span>
           <span><strong>{counts.shared}</strong> shared</span>
@@ -1396,8 +1401,8 @@ function AppLibrarySurface({
               favorite={favorites.has(app.id)}
               onToggleFavorite={() => onToggleFavorite(app.id)}
               onOpen={() => onOpenApp(app, 'view')}
-              onEdit={() => onOpenApp(app, 'build')}
-              onDelete={() => onDeleteApp(app)}
+              onEdit={canAuthor ? () => onOpenApp(app, 'build') : undefined}
+              onDelete={canAuthor ? () => onDeleteApp(app) : undefined}
             />
           ))}
         </div>
@@ -1449,8 +1454,9 @@ function AppCard({
   favorite: boolean;
   onToggleFavorite: () => void;
   onOpen: () => void;
-  onEdit: () => void;
-  onDelete: () => void;
+  /** Absent for someone who only reads Apps. */
+  onEdit?: () => void;
+  onDelete?: () => void;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const certified = app.certification === 'certified' || app.lifecycle === 'certified';
@@ -1500,10 +1506,12 @@ function AppCard({
         <button type="button" className="dql-app-card-act" onClick={onOpen} title="View app">
           <Eye size={12} /> View
         </button>
-        <button type="button" className="dql-app-card-act" onClick={onEdit} title="Edit app">
-          <Pencil size={12} /> Edit
-        </button>
-        <div className="dql-app-card-menu">
+        {onEdit ? (
+          <button type="button" className="dql-app-card-act" onClick={onEdit} title="Edit app">
+            <Pencil size={12} /> Edit
+          </button>
+        ) : null}
+        {onDelete ? <div className="dql-app-card-menu">
           <button type="button" className="dql-app-card-act" onClick={(event) => { event.stopPropagation(); setMenuOpen((open) => !open); }} title="More App actions" aria-expanded={menuOpen}>
             <MoreHorizontal size={14} />
           </button>
@@ -1514,7 +1522,7 @@ function AppCard({
               </button>
             </div>
           ) : null}
-        </div>
+        </div> : null}
       </div>
     </article>
   );
@@ -2169,13 +2177,14 @@ function AppWorkspaceSurface({
   onOpenLineageNode: (nodeId: string) => void;
 }) {
   const readOnlyLink = isViewerLink();
+  const readerOnly = readOnlyLink || !hostAllows(useHostUi(), 'app.author');
   const dispatch = useDispatch();
   const workspaceAppId = metadataApp?.id ?? app?.id ?? null;
   const workspaceAppName = metadataApp?.name ?? app?.name ?? null;
   // Dashboard metadata establishes what can be shown. Mutations still require
   // a same-App library record with its local write identity.
   const canWriteApp = Boolean(app && metadataApp && app.id === metadataApp.id);
-  const isEditable = experience === 'build' && canWriteApp;
+  const isEditable = experience === 'build' && canWriteApp && !readerOnly;
   const draftCount = appDoc?.drafts?.length ?? 0;
   const certification = appCertificationRollup(dashboardDoc?.dashboard.layout.items, draftCount);
   const certifiedCount = certification.certified;
@@ -2472,9 +2481,9 @@ function AppWorkspaceSurface({
         </StatusSeal>
         {draftCount > 0 ? <StatusSeal tone="draft">{draftCount} draft</StatusSeal> : null}
 
-        {readOnlyLink ? null : <span className="dql-app-topbar-divider" aria-hidden="true" />}
+        {readerOnly ? null : <span className="dql-app-topbar-divider" aria-hidden="true" />}
 
-        {readOnlyLink ? null : <div className="dql-app-modeseg" role="group" aria-label="App mode">
+        {readerOnly ? null : <div className="dql-app-modeseg" role="group" aria-label="App mode">
           <button
             type="button"
             className={!isEditable ? 'on' : ''}
@@ -2495,7 +2504,7 @@ function AppWorkspaceSurface({
         </div>}
 
         <div className="dql-app-view-actions">
-          {readOnlyLink ? null : <PersonaSwitcher app={metadataApp} />}
+          {readerOnly ? null : <PersonaSwitcher app={metadataApp} />}
           {isEditable ? (
             semanticTileIds.length > 0 ? (
               <button
@@ -2518,7 +2527,7 @@ function AppWorkspaceSurface({
               <ShieldCheck size={14} /> {promoteStatus === 'running' ? 'Checking' : 'Publish to Project'}
             </button>
           ) : null}
-          {readOnlyLink ? null : (
+          {readerOnly ? null : (
             <button type="button" className="dql-apps-btn dql-apps-btn-line dql-apps-btn-icon" title={shareStatus === 'copied' ? 'Copied handoff' : 'Share local app handoff'} onClick={() => void copyShareLink()}>
               {shareStatus === 'copied' ? <Check size={15} /> : <Share2 size={15} />}
             </button>
