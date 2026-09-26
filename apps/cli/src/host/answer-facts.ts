@@ -19,6 +19,9 @@ export interface DqlAnswerFacts {
   tables: string[];
   traceId?: string;
   source?: { kind: string; name: string };
+  /** The same identifiers the answer's audit event carries, so a host can find others who got this answer. */
+  sqlSha256: string[];
+  sources: string[];
 }
 
 type AnyRecord = Record<string, unknown>;
@@ -67,6 +70,24 @@ function unquote(part: string): string {
   return part.replace(/^["`[]|["`\]]$/g, '');
 }
 
+/** SQL hashes and source ids of a run, computed exactly as its audit event does (observability.ts). */
+export function answerIdentities(run: { artifacts?: unknown[] }): { sqlSha256: string[]; sources: string[] } {
+  const sql = new Set<string>();
+  const sources = new Set<string>();
+  for (const artifact of run.artifacts ?? []) {
+    const item = record(artifact) ?? {};
+    const payload = record(item.payload) ?? {};
+    for (const key of ['sql', 'executedSql', 'proposedSql']) {
+      const value = payload[key];
+      if (typeof value === 'string' && value.trim()) sql.add(createHash('sha256').update(value).digest('hex'));
+    }
+    for (const value of [item.sourceId, payload.sourceId, payload.blockId, payload.datasetId]) {
+      if (typeof value === 'string' && value) sources.add(value);
+    }
+  }
+  return { sqlSha256: [...sql].sort(), sources: [...sources].sort() };
+}
+
 export function answerFactsFromRun(run: AnyRecord): DqlAnswerFacts {
   const sql = answerSql(run as { artifacts?: unknown[] });
   const receipt = record(run.diagnosticReceiptV9);
@@ -88,5 +109,6 @@ export function answerFactsFromRun(run: AnyRecord): DqlAnswerFacts {
     tables: sql ? tablesRead(sql.sql) : [],
     ...(text(trace?.traceId) ? { traceId: text(trace?.traceId)! } : {}),
     ...(sourceName ? { source: { kind: String(selected?.kind ?? 'object'), name: sourceName } } : {}),
+    ...answerIdentities(run as { artifacts?: unknown[] }),
   };
 }

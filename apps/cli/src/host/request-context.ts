@@ -179,10 +179,11 @@ export interface DqlHostUi {
    */
   /**
    * Buttons on an answer. `on` says which answers get it: `review` (an AI
-   * answer no certified source backs; the default) and/or `unanswered` (DQL
-   * could not answer at all) — e.g. "Make this a certified answer" fits both.
+   * answer no certified source backs; the default), `unanswered` (DQL could
+   * not answer at all) and/or `answered` (a certified or governed answer —
+   * e.g. "This looks wrong", shown quietly).
    */
-  answerActions?: Array<{ id: string; label: string; url: string; description?: string; on?: Array<'review' | 'unanswered'> }>;
+  answerActions?: Array<{ id: string; label: string; url: string; description?: string; on?: Array<'review' | 'unanswered' | 'answered'> }>;
   /** A name for the environment, e.g. "Claims · Production". */
   environment?: string;
 }

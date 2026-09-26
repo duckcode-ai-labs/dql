@@ -29,7 +29,7 @@ export interface HostAnswerStatus {
   href?: string;
 }
 
-export interface HostAnswerAction { id: string; label: string; url: string; description?: string; on?: Array<'review' | 'unanswered'> }
+export interface HostAnswerAction { id: string; label: string; url: string; description?: string; on?: Array<'review' | 'unanswered' | 'answered'> }
 
 export type HostUiState = HostUi | { host: false };
 

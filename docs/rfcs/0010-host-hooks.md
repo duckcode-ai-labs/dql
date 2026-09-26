@@ -307,6 +307,7 @@ Without a host nothing changes. Tests: `per-person.test.ts` (route), `host-ui.te
 - **`answerStatus(principal, runIds)`** tells the app where the host's review of each answer stands (`requested`, `in_progress`, `checked`, `certified`, `declined`, with a label, detail and a same-origin page). `POST /api/host/answer-status` asks only about the caller's own runs. The answer shows the status in place of the host's answer actions, with Open for the page.
 - **Rail links** may carry a `badge` count and one of DQL's icons (`inbox`, `requests`, `review`, `work`, `health`, `admin`, `people`, `git`, `link`).
 - **Which answers get an action:** each answer action says where it applies with `on`: `review` (an AI answer no certified source backs; the default) and/or `unanswered` (DQL could not answer). Both Ask views (the Ask screen and the side panel) show them.
+- **"This looks wrong" on trusted answers:** `on` also takes `answered` (a completed certified or governed answer); those actions show as a quiet link. A host's answer facts carry `sqlSha256` and `sources`, computed exactly as the answer's audit event does, so a host can find others who got the same answer.
 - **Authoring stays with authors:** without `app.author` an answer has no Add to app; without `dataset.author`, no Save as block.
 - **Counts stay current:** the app reloads the host's links when a same-origin host page inside it posts `{ type: 'dql-host:changed' }`, when the tab regains focus, and once a minute.
 

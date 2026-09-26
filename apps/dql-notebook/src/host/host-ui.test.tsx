@@ -93,6 +93,20 @@ describe('host UI (RFC 0010 HH-9)', () => {
     expect(html).toContain('could not answer this');
     expect(render(hosted(), <HostAnswerActions run={blocked} t={t} />)).toBe('');
   });
+
+  it('offers "This looks wrong" quietly on an answer DQL trusts, and nothing else there', () => {
+    const withWrong = hosted({ answerActions: [
+      { id: 'check', label: 'Ask an analyst to check this', url: '/x' },
+      { id: 'wrong', label: 'This looks wrong', url: '/z', on: ['answered', 'review'] },
+    ] });
+    const certified = run({ status: 'completed', trustState: 'certified' } as Partial<AgentRun>);
+    const html = render(withWrong, <HostAnswerActions run={certified} t={t} />);
+    expect(html).toContain('data-testid="host-quiet-actions"');
+    expect(html).toContain('This looks wrong');
+    expect(html).not.toContain('Ask an analyst to check this');
+    // On a review answer it sits with the other actions.
+    expect(render(withWrong, <HostAnswerActions run={run()} t={t} />)).toContain('This looks wrong');
+  });
 });
 
 describe('the host\'s review of an answer (HH-10)', () => {

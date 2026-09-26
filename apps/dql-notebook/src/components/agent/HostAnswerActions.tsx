@@ -10,8 +10,9 @@ export function answerNeedsReview(run: Pick<AgentRun, 'status' | 'trustState'>):
 }
 
 /** Which of the host's answer actions fit this answer: review ones, and those for questions DQL could not answer. */
-export function actionsForAnswer(run: Pick<AgentRun, 'status' | 'trustState'>, actions: HostAnswerAction[]): { kind: 'review' | 'unanswered'; actions: HostAnswerAction[] } | null {
-  const kind = answerNeedsReview(run) ? 'review' : run.status === 'blocked' ? 'unanswered' : null;
+export function actionsForAnswer(run: Pick<AgentRun, 'status' | 'trustState'>, actions: HostAnswerAction[]): { kind: 'review' | 'unanswered' | 'answered'; actions: HostAnswerAction[] } | null {
+  const answered = run.status === 'completed' && (run.trustState === 'certified' || run.trustState === 'governed' || run.trustState === 'grounded');
+  const kind = answerNeedsReview(run) ? 'review' : run.status === 'blocked' ? 'unanswered' : answered ? 'answered' : null;
   if (!kind) return null;
   const fitting = actions.filter((action) => (action.on ?? ['review']).includes(kind));
   return fitting.length ? { kind, actions: fitting } : null;
@@ -38,6 +39,7 @@ export function HostAnswerActions({ run, t }: { run: AgentRun; t: Theme }) {
   if (status) return <HostAnswerStatusView status={status} t={t} />;
   const fitting = actionsForAnswer(run, hostUi.answerActions);
   if (!fitting) return null;
+  if (fitting.kind === 'answered') return <HostQuietActions run={run} actions={fitting.actions} onSent={refresh} t={t} />;
   return <HostAnswerActionButtons run={run} kind={fitting.kind} actions={fitting.actions} onSent={refresh} t={t} />;
 }
 
@@ -70,6 +72,39 @@ export function HostAnswerStatusView({ status, t }: { status: HostAnswerStatus; 
           Open
         </button>
       ) : null}
+    </div>
+  );
+}
+
+/** On an answer DQL trusts, the host's actions stay out of the way: a small link, e.g. "This looks wrong". */
+function HostQuietActions({ run, actions, onSent, t }: { run: AgentRun; actions: HostAnswerAction[]; onSent: () => void; t: Theme }) {
+  const [message, setMessage] = useState<{ text: string; failed: boolean } | null>(null);
+  const [sending, setSending] = useState(false);
+  return (
+    <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }} data-testid="host-quiet-actions">
+      {actions.map((action) => (
+        <button
+          key={action.id}
+          type="button"
+          disabled={sending}
+          title={action.description}
+          onClick={async () => {
+            setSending(true);
+            try {
+              setMessage({ text: await runHostAnswerAction(action, { runId: run.id, question: run.question, ...(run.trustState ? { trustState: run.trustState } : {}) }), failed: false });
+              onSent();
+            } catch (error) {
+              setMessage({ text: error instanceof Error ? error.message : 'The report was not sent.', failed: true });
+            } finally {
+              setSending(false);
+            }
+          }}
+          style={{ padding: 0, border: 0, background: 'transparent', color: t.textSecondary, fontSize: 11.5, fontFamily: t.font, textDecoration: 'underline', textUnderlineOffset: 2, cursor: 'pointer' }}
+        >
+          {action.label}
+        </button>
+      ))}
+      {message ? <span role="status" style={{ fontSize: 11.5, color: message.failed ? t.error : t.textSecondary }}>{message.text}</span> : null}
     </div>
   );
 }

@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import { answerFactsFromRun, tablesRead } from './answer-facts.js';
 import { withRunOwnership } from './run-ownership.js';
@@ -24,8 +25,13 @@ describe('what a host may keep about an answer (HH-10)', () => {
       runId: 'run-1', question: 'Claims paid last week', status: 'needs_review', trustState: 'review_required', route: 'ask', askedAt: '2026-09-26T10:00:00Z',
       sql: 'SELECT SUM(amount) FROM claims.payments', sqlOrigin: 'executed', sqlFingerprint: 'sha256:abc', tables: ['claims.payments'], traceId: 'trace-9',
       source: { kind: 'app', name: 'Claims Weekly' },
+      sqlSha256: [], sources: [],
     });
     expect(JSON.stringify(facts)).not.toContain('4.21');
+    // The identifiers match what the answer's audit event carries.
+    const withIds = answerFactsFromRun({ id: 'r', question: 'q', artifacts: [{ sourceId: 'block:claims_paid', payload: { sql: 'SELECT 1', datasetId: 'ds:claims' } }] });
+    expect(withIds.sources).toEqual(['block:claims_paid', 'ds:claims']);
+    expect(withIds.sqlSha256).toEqual([createHash('sha256').update('SELECT 1').digest('hex')]);
   });
 });
 

@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { answerIdentities } from './answer-facts.js';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { createAskTracePortableBundleV1, toOtlpOpenInferenceJsonV1 } from '@duckcodeailabs/dql-agent';
 import type { DqlPrincipal } from './request-context.js';
@@ -114,18 +114,8 @@ type AuditableRun = {
 /** The answer event for a finished run: no question text, no SQL, no values. */
 export function answerAuditEvent(run: AuditableRun, who: { principal: DqlPrincipal | null; actor: string | null }): DqlAuditEvent | null {
   if (typeof run.id !== 'string' || typeof run.status !== 'string' || !TERMINAL.has(run.status)) return null;
-  const sql = new Set<string>();
-  const sources = new Set<string>();
-  for (const artifact of run.artifacts ?? []) {
-    const payload = artifact.payload ?? {};
-    for (const key of ['sql', 'executedSql', 'proposedSql']) {
-      const value = payload[key];
-      if (typeof value === 'string' && value.trim()) sql.add(createHash('sha256').update(value).digest('hex'));
-    }
-    for (const value of [artifact.sourceId, payload.sourceId, payload.blockId, payload.datasetId]) {
-      if (typeof value === 'string' && value) sources.add(value);
-    }
-  }
+  // The same identifiers a host gets with the answer's facts (answer-facts.ts).
+  const { sqlSha256, sources } = answerIdentities(run as { artifacts?: unknown[] });
   return {
     kind: 'answer',
     at: new Date().toISOString(),
@@ -134,8 +124,8 @@ export function answerAuditEvent(run: AuditableRun, who: { principal: DqlPrincip
     principalId: who.principal?.id ?? null,
     status: run.status,
     trustState: typeof run.trustState === 'string' ? run.trustState : 'unknown',
-    sqlSha256: [...sql].sort(),
-    sources: [...sources].sort(),
+    sqlSha256,
+    sources,
   };
 }
 

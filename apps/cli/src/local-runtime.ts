@@ -16354,7 +16354,7 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
             .map((link) => ({ id: String(link.id), label: link.label.slice(0, 60), href: link.href, placement: link.placement === 'nav' ? 'nav' : 'menu', ...(Number.isInteger(link.badge) && link.badge! > 0 ? { badge: Math.min(link.badge!, 999) } : {}), ...(link.icon && HOST_ICONS.has(link.icon) ? { icon: link.icon } : {}) })),
           answerActions: (extras.answerActions ?? []).filter((action) => sameOrigin(action.url) && typeof action.label === 'string').slice(0, 4)
             .map((action) => {
-              const on = Array.isArray(action.on) ? action.on.filter((kind) => kind === 'review' || kind === 'unanswered') : [];
+              const on = Array.isArray(action.on) ? action.on.filter((kind) => kind === 'review' || kind === 'unanswered' || kind === 'answered') : [];
               return { id: String(action.id), label: action.label.slice(0, 60), url: action.url, ...(action.description ? { description: String(action.description).slice(0, 200) } : {}), on: on.length ? [...new Set(on)] : ['review'] };
             }),
         }));
