@@ -56,7 +56,7 @@ import {
   type AppStudioBuildDraft,
 } from '../../api/client';
 import { isViewerLink } from '../../api/server-auth';
-import { hostAllows, useHostUi } from '../../host/host-ui';
+import { hostAllows, useHostPage, useHostUi } from '../../host/host-ui';
 import type { AppSummary, AppWorkspaceExperience, AppWorkspaceSection } from '../../store/types';
 import { themes, type ThemeMode } from '../../themes/notebook-theme';
 import { AiSidePanel, AI_SIDE_PANEL_EXPANDED_WIDTH } from '../agent/AiSidePanel';
@@ -264,6 +264,8 @@ export function AppsView(): JSX.Element {
   const [dashboardDoc, setDashboardDoc] = useState<DashboardDocumentResponse | null>(null);
   const [appLoading, setAppLoading] = useState(false);
   const [dashboardLoadError, setDashboardLoadError] = useState<string | null>(null);
+  /** Set when the host refused this person the App (HH-12), with where to ask. */
+  const [dashboardRefusal, setDashboardRefusal] = useState<{ next?: { label: string; href: string } } | null>(null);
   const [workspaceLoadAttempt, setWorkspaceLoadAttempt] = useState(0);
   const [builderMode, setBuilderMode] = useState<BuilderMode>('ai');
   const [builderExploreGaps, setBuilderExploreGaps] = useState(false);
@@ -469,17 +471,20 @@ export function AppsView(): JSX.Element {
       setAppDoc(null);
       setDashboardDoc(null);
       setDashboardLoadError(null);
+      setDashboardRefusal(null);
       setAppLoading(false);
       return;
     }
     if (!state.activeDashboardId) {
       setDashboardDoc(null);
       setDashboardLoadError(null);
+      setDashboardRefusal(null);
       setAppLoading(false);
       return;
     }
     setAppLoading(true);
     setDashboardLoadError(null);
+    setDashboardRefusal(null);
     setDashboardDoc(null);
     setAppDoc((current) => current?.app.id === state.activeAppId ? current : null);
     return beginPersistedAppWorkspaceLoad({
@@ -492,9 +497,10 @@ export function AppsView(): JSX.Element {
         setDashboardDoc(document);
         setAppLoading(false);
       },
-      onDashboardError: (message) => {
+      onDashboardError: (message, refusal) => {
         setDashboardDoc(null);
         setDashboardLoadError(message);
+        setDashboardRefusal(refusal ?? null);
         setAppLoading(false);
       },
     });
@@ -1163,6 +1169,7 @@ export function AppsView(): JSX.Element {
           dashboardDoc={dashboardDoc}
           loading={appLoading}
           dashboardLoadError={dashboardLoadError}
+          dashboardRefusal={dashboardRefusal}
           experience={experience}
           section={section}
           explainOpen={explainOpen}
@@ -2106,6 +2113,7 @@ function AppWorkspaceSurface({
   dashboardDoc,
   loading,
   dashboardLoadError,
+  dashboardRefusal,
   experience,
   section,
   explainOpen,
@@ -2143,6 +2151,7 @@ function AppWorkspaceSurface({
   dashboardDoc: DashboardDocumentResponse | null;
   loading: boolean;
   dashboardLoadError: string | null;
+  dashboardRefusal: { next?: { label: string; href: string } } | null;
   experience: AppExperience;
   section: AppSection;
   explainOpen: boolean;
@@ -2179,6 +2188,7 @@ function AppWorkspaceSurface({
   const readOnlyLink = isViewerLink();
   const readerOnly = readOnlyLink || !hostAllows(useHostUi(), 'app.author');
   const dispatch = useDispatch();
+  const hostPage = useHostPage();
   const workspaceAppId = metadataApp?.id ?? app?.id ?? null;
   const workspaceAppName = metadataApp?.name ?? app?.name ?? null;
   // Dashboard metadata establishes what can be shown. Mutations still require
@@ -2707,6 +2717,19 @@ function AppWorkspaceSurface({
             ) : null}
             {loading ? (
               <EmptyPanel title="Loading app..." detail="Reading dashboard files and running local blocks." />
+            ) : section === 'dashboards' && dashboardLoadError && dashboardRefusal ? (
+              <div role="alert" style={{ display: 'grid', justifyItems: 'start', gap: 10 }}>
+                <EmptyPanel title="You don't have access to this App" detail={dashboardLoadError} />
+                {dashboardRefusal.next ? (
+                  <button
+                    type="button"
+                    className="dql-apps-btn dql-apps-btn-primary"
+                    onClick={() => { hostPage.openPage({ id: `refusal-${dashboardRefusal.next!.href}`, label: dashboardRefusal.next!.label, href: dashboardRefusal.next!.href }); dispatch({ type: 'SET_MAIN_VIEW', view: 'host_page' }); }}
+                  >
+                    {dashboardRefusal.next.label}
+                  </button>
+                ) : null}
+              </div>
             ) : section === 'dashboards' && dashboardLoadError ? (
               <div role="alert" style={{ display: 'grid', justifyItems: 'start', gap: 10 }}>
                 <EmptyPanel title="Dashboard could not be loaded" detail={dashboardLoadError} />

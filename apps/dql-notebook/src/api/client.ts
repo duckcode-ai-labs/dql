@@ -3890,6 +3890,8 @@ export class DqlApiError extends Error {
   readonly snapshotId?: string;
   /** The run an idempotency conflict or unknown-outcome response refers to. */
   readonly runId?: string;
+  /** HH-12: where a host sends someone it refused, e.g. to ask for access (a same-origin path). */
+  readonly next?: { label: string; href: string };
 
   constructor(input: {
     message: string;
@@ -3901,6 +3903,7 @@ export class DqlApiError extends Error {
     requestId?: string;
     snapshotId?: string;
     runId?: string;
+    next?: { label: string; href: string };
   }) {
     super(input.message);
     this.name = 'DqlApiError';
@@ -3912,6 +3915,7 @@ export class DqlApiError extends Error {
     this.nextActions = input.nextActions;
     this.requestId = input.requestId;
     this.snapshotId = input.snapshotId;
+    if (input.next) this.next = input.next;
   }
 }
 
@@ -3949,6 +3953,9 @@ function formatRequestError(res: Response, text: string): DqlApiError {
       requestId: typeof payload?.requestId === 'string' ? payload.requestId : undefined,
       snapshotId: typeof payload?.snapshotId === 'string' ? payload.snapshotId : undefined,
       ...(typeof payload?.runId === 'string' && payload.runId ? { runId: payload.runId } : {}),
+      ...(typeof payload?.next?.label === 'string' && typeof payload?.next?.href === 'string' && payload.next.href.startsWith('/') && !payload.next.href.startsWith('//')
+        ? { next: { label: payload.next.label, href: payload.next.href } }
+        : {}),
     });
   } catch {
     return new DqlApiError({ message: fallback, status: res.status });
@@ -7925,7 +7932,9 @@ export const api = {
   async getApp(id: string): Promise<AppDocumentSummary | null> {
     try {
       return await request<AppDocumentSummary>(`/api/apps/${encodeURIComponent(id)}`);
-    } catch {
+    } catch (error) {
+      // A refusal says why and where to ask (HH-12); anything else reads as missing.
+      if (error instanceof DqlApiError && error.status === 403) throw error;
       return null;
     }
   },
@@ -8167,7 +8176,8 @@ export const api = {
       return await request<DashboardDocumentResponse>(
         `/api/apps/${encodeURIComponent(appId)}/dashboards/${encodeURIComponent(dashboardId)}`,
       );
-    } catch {
+    } catch (error) {
+      if (error instanceof DqlApiError && error.status === 403) throw error;
       return null;
     }
   },

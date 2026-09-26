@@ -272,3 +272,22 @@ describe('persisted App workspace loader', () => {
     expect(mismatched.writableLibraryApp).toBeNull();
   });
 });
+
+describe('a refused App (RFC 0010 HH-12)', () => {
+  it('passes the host\'s reason and where to ask to the reader, not a generic load failure', async () => {
+    const refused = Object.assign(new Error('You don\'t have access to Claims.'), { status: 403, code: 'PERMISSION_DENIED', next: { label: 'Ask for access', href: '/e/apps/claims/access' } });
+    const errors: Array<{ message: string; refusal?: unknown }> = [];
+    beginPersistedAppWorkspaceLoad({
+      appId: 'claims',
+      dashboardId: 'overview',
+      loadApp: async () => null,
+      loadDashboard: async () => { throw refused; },
+      onApp: () => undefined,
+      onDashboard: () => undefined,
+      onDashboardError: (message, refusal) => { errors.push({ message, refusal }); },
+    });
+    await settle();
+    await settle();
+    expect(errors).toEqual([{ message: 'You don\'t have access to Claims.', refusal: { next: { label: 'Ask for access', href: '/e/apps/claims/access' } } }]);
+  });
+});

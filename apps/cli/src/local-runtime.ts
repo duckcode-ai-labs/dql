@@ -734,7 +734,7 @@ import {
 } from "./notebook-datasets.js";
 import { prepareBlockInvocation } from './block-invocation.js';
 import { redactConnections, resolveSecretReferences, storeConnectionSecrets } from './connection-secrets.js';
-import { authorizeHostRequest, currentHostGitHooks, currentPrincipal, hostActor, hostGitAuthor, hostModelProvider, installHostPersonaSlots, resolveHostPrincipal, resultValuesMayReachModel, setHostGitHooks, setHostModelHooks, withRequestContext, type DqlHostHooks } from './host/request-context.js';
+import { authorizeHostRequest, currentHostGitHooks, currentPrincipal, hostActor, hostGitAuthor, hostModelProvider, installHostPersonaSlots, resolveHostPrincipal, resultValuesMayReachModel, safeNextLink, setHostGitHooks, setHostModelHooks, withRequestContext, type DqlHostHooks } from './host/request-context.js';
 import { isRunPass, issueRunPass, redeemRunPass, revokeRunPass } from './host/schedule-runs.js';
 import { setDeliverySink } from './schedule/notifiers/index.js';
 import { routeAction, type DqlAction } from './host/route-actions.js';
@@ -13244,11 +13244,13 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
       const decision = await authorizeHostRequest(hostHooks!, requestPrincipal, route);
       if (!decision.allow) {
         res.writeHead(403, { 'Content-Type': 'application/json; charset=utf-8' });
+        const next = safeNextLink(decision.next);
         res.end(serializeJSON({
           error: decision.reason ?? 'You do not have permission to do this.',
           code: 'PERMISSION_DENIED',
           action: route.action,
           resource: route.resource,
+          ...(next ? { next } : {}),
         }));
         return;
       }
@@ -33626,6 +33628,21 @@ export async function syncProjectWarehouse(projectRoot: string, options: {
   const warehouseCatalog = await refreshWarehouseCatalogAfterSync(projectRoot, loadProjectConfig(projectRoot), options.executor, selectedConnection, connectionId, synced.scope, modelBeforeSync);
   const metadataRelations = warehouseMetadataStatus(projectRoot, synced.scope.scopeFingerprint, connectionId).relationCount;
   return { connectionId, scope: synced.scope, metadataRelations, ...(warehouseCatalog ? { warehouseCatalog } : {}) };
+}
+
+/**
+ * RFC 0010: refresh DQL's schema snapshot for a hosted runtime's own
+ * connection, through its own executor (never a second connection, so a
+ * DuckDB file is opened once). Metadata only: the snapshot records table and
+ * column names, never values, and writes no project files.
+ */
+export async function syncRuntimeSchema(projectRoot: string, executor: QueryExecutor, connection: ConnectionConfig): Promise<{ relations: number; columns: number }> {
+  const cfg = loadProjectConfig(projectRoot);
+  const connectionId = warehouseCatalogConnectionId(cfg);
+  const scope = normalizeConnectionMetadataScope(connectionId, connection, configuredMetadataScopeInput(cfg, connectionId), metadataScopeDbtDefaults(projectRoot, cfg));
+  const synced = await syncWarehouseMetadata({ projectRoot, executor, connection, scope });
+  const status = warehouseMetadataStatus(projectRoot, synced.scope.scopeFingerprint, connectionId);
+  return { relations: status.relationCount, columns: status.columnCount };
 }
 
 /**

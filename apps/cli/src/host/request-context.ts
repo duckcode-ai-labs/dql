@@ -25,6 +25,12 @@ export interface DqlPrincipal {
   /** Values row rules can read later (RFC 0010 HH-3), e.g. region. */
   attributes?: Record<string, string | number | boolean | string[]>;
   /**
+   * HH-11: Apps the host gave this person beyond each App's own policies
+   * (e.g. an approved request for one App), by App id. 'execute' runs its
+   * tiles; 'read' only opens it. Absent: the App's policies decide alone.
+   */
+  appGrants?: Record<string, 'read' | 'execute'>;
+  /**
    * 'host' when a hook supplied it; 'link' for a read-only page link, which
    * sees its one App as the owner publishes it; 'local' for the local owner.
    */
@@ -41,6 +47,18 @@ export interface DqlDecision {
   allow: boolean;
   /** Shown to the person when refused. */
   reason?: string;
+  /**
+   * HH-12: where to go from a refusal, e.g. a page to ask for access. Only a
+   * same-origin path (`/…`) is passed on; DQL opens it as a host page.
+   */
+  next?: { label: string; href: string };
+}
+
+/** A refusal's `next` link as DQL passes it on: a same-origin path only. */
+export function safeNextLink(next: DqlDecision['next']): { label: string; href: string } | undefined {
+  if (!next || typeof next.label !== 'string' || typeof next.href !== 'string') return undefined;
+  if (!next.href.startsWith('/') || next.href.startsWith('//') || next.href.includes('\\')) return undefined;
+  return { label: next.label.slice(0, 80), href: next.href };
 }
 
 export interface DqlHostHooks {
@@ -293,6 +311,9 @@ export function normalizeHostPrincipal(value: unknown): DqlPrincipal | null {
     : undefined;
   const email = text(raw.email);
   const displayName = text(raw.displayName);
+  const appGrants = raw.appGrants && typeof raw.appGrants === 'object' && !Array.isArray(raw.appGrants)
+    ? Object.fromEntries(Object.entries(raw.appGrants as Record<string, unknown>).filter((entry): entry is [string, 'read' | 'execute'] => entry[1] === 'read' || entry[1] === 'execute'))
+    : undefined;
   return {
     id,
     kind,
@@ -300,6 +321,7 @@ export function normalizeHostPrincipal(value: unknown): DqlPrincipal | null {
     ...(email ? { email } : {}),
     ...(groups?.length ? { groups } : {}),
     ...(attributes ? { attributes } : {}),
+    ...(appGrants && Object.keys(appGrants).length ? { appGrants } : {}),
     source: 'host',
   };
 }
@@ -321,7 +343,8 @@ export async function authorizeHostRequest(hooks: DqlHostHooks, principal: DqlPr
     const decision = await hooks.authorize(principal, route.action, route.resource);
     if (decision && decision.allow === true) return { allow: true };
     const reason = decision && typeof decision.reason === 'string' && decision.reason.trim() ? decision.reason.trim() : undefined;
-    return { allow: false, ...(reason ? { reason } : {}) };
+    const next = decision ? safeNextLink(decision.next) : undefined;
+    return { allow: false, ...(reason ? { reason } : {}), ...(next ? { next } : {}) };
   } catch {
     return { allow: false };
   }

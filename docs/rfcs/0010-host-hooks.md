@@ -313,6 +313,19 @@ Without a host nothing changes. Tests: `per-person.test.ts` (route), `host-ui.te
 
 Tests: `per-person.test.ts`, `answer-facts.test.ts`, `host-ui.test.tsx`.
 
+### HH-11 — a host's grant opens one App
+A host may add `appGrants` to the principal it resolves: App id → `read` (open it) or `execute` (also run its tiles). `assertAppAccess` honours a grant before the App's own policies, so a person the host gave one App (for example after an approved access request) can use it without joining its groups. Only host principals carry grants; absent, the App's policies decide alone, as before.
+
+Tests: `governance-runtime.test.ts`, `host-hooks.test.ts`.
+
+### HH-12 — a refusal can say where to go
+`authorize` may return `next: { label, href }` with a refusal. DQL passes it on in the 403 body only when `href` is a same-origin path (`/…`, not `//…`); the App reader shows the reason with that link, opened as a host page inside DQL, instead of "Dashboard could not be loaded". Without `next`, a refusal reads as before.
+
+Tests: `host-hooks.test.ts`, `app-workspace-loader.test.ts`.
+
+### Schema refresh for hosts
+`startProjectRuntime` returns `syncSchema()`: it refreshes DQL's schema snapshot (table and column names, no values) through the runtime's own connection, so a DuckDB file is never opened twice. A host that applies column policies in `rowPolicy` uses it to know every protected table's columns. No project files change.
+
 ### Entry point
 `@duckcodeailabs/dql-cli/host` also exports `startProjectRuntime`: the full server with its UI for one project, as `dql notebook` runs it, taking `hostHooks`, `allowedOrigins` and a host-managed `connection`. The first host (DQL Enterprise) starts every workspace this way; its end-to-end test drives this branch's server through sign-in, roles, row rules and DuckDB for five people.
 

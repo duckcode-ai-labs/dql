@@ -55,6 +55,7 @@ describe('host principal (RFC 0010 HH-1)', () => {
     expect(normalizeHostPrincipal({ id: '  ' })).toBeNull();
     expect(normalizeHostPrincipal({ id: 'x', kind: 'robot' })).toBeNull();
     expect(normalizeHostPrincipal({ id: 'x', source: 'local', groups: ['a', 3, ''] })).toEqual({ id: 'x', kind: 'person', groups: ['a'], source: 'host' });
+    expect(normalizeHostPrincipal({ id: 'x', appGrants: { claims: 'execute', finance: 'read', ops: 'owner', bad: 1 } })).toEqual({ id: 'x', kind: 'person', appGrants: { claims: 'execute', finance: 'read' }, source: 'host' });
   });
 
   it('names the acting person by email, then display name, then id — and only for a host principal', () => {
@@ -142,6 +143,8 @@ describe('what a signed-in person may do (RFC 0010 HH-2)', () => {
         asked.push({ person: principal.id, action, resource });
         if (action === 'settings.manage') throw new Error('policy store down');
         if (principal.id === 'u-dev' && action === 'connection.manage') return { allow: false, reason: 'Only admins change connections.' };
+        if (action === 'app.view') return { allow: false, reason: 'You don\'t have access to Claims.', next: { label: 'Ask for access', href: '/e/apps/claims/access' } };
+        if (action === 'app.author') return { allow: false, reason: 'No.', next: { label: 'Elsewhere', href: 'https://evil.example/phish' } };
         return { allow: true };
       },
     });
@@ -156,7 +159,12 @@ describe('what a signed-in person may do (RFC 0010 HH-2)', () => {
     expect(await broken.json()).toMatchObject({ error: 'You do not have permission to do this.', action: 'settings.manage' });
 
     expect((await fetch(`${base}/api/identity`, { headers: asDev })).status).toBe(200);
-    await fetch(`${base}/api/apps/claims`, { headers: asDev });
+    // HH-12: a refusal can say where to go, a same-origin page only.
+    const app = await fetch(`${base}/api/apps/claims`, { headers: asDev });
+    expect(await app.json()).toMatchObject({ code: 'PERMISSION_DENIED', next: { label: 'Ask for access', href: '/e/apps/claims/access' } });
+    const offsite = await fetch(`${base}/api/apps/claims`, { method: 'PUT', headers: asDev, body: '{}' });
+    expect(offsite.status).toBe(403);
+    expect(await offsite.json()).not.toHaveProperty('next');
     expect(asked).toContainEqual({ person: 'u-dev', action: 'app.view', resource: { type: 'app', id: 'claims' } });
     expect((await fetch(`${base}/api/health`)).status).toBe(200);
     expect(asked.some((entry) => entry.action === 'project.read' && entry.person === 'u-dev')).toBe(true);

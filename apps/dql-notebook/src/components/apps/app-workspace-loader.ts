@@ -1,5 +1,14 @@
 import type { AppDocumentSummary, DashboardDocumentResponse } from '../../api/client';
 
+/** A host's refusal as the API client raises it (`DqlApiError` with status 403), read by shape so this stays DOM-free. */
+function refusalOf(error: unknown): { message: string; next?: { label: string; href: string } } | null {
+  if (!(error instanceof Error) || (error as { status?: unknown }).status !== 403) return null;
+  const next = (error as { next?: { label?: unknown; href?: unknown } }).next;
+  return typeof next?.label === 'string' && typeof next.href === 'string'
+    ? { message: error.message, next: { label: next.label, href: next.href } }
+    : { message: error.message };
+}
+
 export type WorkspaceDashboardSummary = {
   id: string;
   title: string;
@@ -20,7 +29,8 @@ type PersistedAppWorkspaceLoad = {
   loadDashboard: (appId: string, dashboardId: string) => Promise<DashboardDocumentResponse | null>;
   onApp: (document: AppDocumentSummary | null) => void;
   onDashboard: (document: DashboardDocumentResponse) => void;
-  onDashboardError: (message: string) => void;
+  /** `refused` when the host refused this person; `next` is where it sends them (HH-12). */
+  onDashboardError: (message: string, refusal?: { next?: { label: string; href: string } }) => void;
 };
 
 /**
@@ -57,8 +67,14 @@ export function beginPersistedAppWorkspaceLoad(input: PersistedAppWorkspaceLoad)
       }
       input.onDashboard(document);
     })
-    .catch(() => {
-      if (current) input.onDashboardError('This dashboard page could not be read from the local project. Check that the server is running, then retry.');
+    .catch((error: unknown) => {
+      if (!current) return;
+      const refusal = refusalOf(error);
+      if (refusal) {
+        input.onDashboardError(refusal.message, refusal.next ? { next: refusal.next } : {});
+        return;
+      }
+      input.onDashboardError('This dashboard page could not be read from the local project. Check that the server is running, then retry.');
     });
   return () => { current = false; };
 }

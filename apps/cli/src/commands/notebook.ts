@@ -14,6 +14,7 @@ import {
   normalizeProjectConnection,
   resolveAskAgentRuntimeMode,
   startLocalServer,
+  syncRuntimeSchema,
 } from '../local-runtime.js';
 import { maybeOpenBrowser } from '../open-browser.js';
 import { createRuntimePageRunner } from '../schedule/app-page-run.js';
@@ -38,6 +39,11 @@ export interface ProjectRuntimeHandle {
   askTraceCapability: string;
   /** Random per start; `/api/health` echoes it (see `schedule/notebook-runtime.ts`). */
   instanceId: string;
+  /**
+   * RFC 0010: refresh the schema snapshot (table and column names) from the
+   * runtime's own connection, e.g. for a host that applies column policies.
+   */
+  syncSchema: () => Promise<{ relations: number; columns: number }>;
   /**
    * Stop the HTTP listener and disconnect the warehouse, so the process can
    * exit and a DuckDB file is free for the next process (no-op if closed).
@@ -92,6 +98,10 @@ export async function startProjectRuntime(
     url: `http://${printHost}:${port}`,
     askTraceCapability,
     instanceId,
+    syncSchema: async () => {
+      if (!connection) throw new Error('This project has no connection, so there is no schema to read.');
+      return syncRuntimeSchema(projectRoot, executor, connection);
+    },
     close: () => (closed ??= new Promise<void>((resolveClose) => {
       if (!server) return resolveClose();
       server.close(() => resolveClose());

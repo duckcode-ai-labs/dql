@@ -11,7 +11,7 @@ import {
   defaultPersonaRegistry,
   mergePersonaVariables,
 } from '@duckcodeailabs/dql-project';
-import { hostPrincipalPolicyIdentity, hostPrincipalVariables, hostUserContext } from './host/request-context.js';
+import { currentPrincipal, hostPrincipalPolicyIdentity, hostPrincipalVariables, hostUserContext } from './host/request-context.js';
 
 export class DQLAccessDeniedError extends Error {
   constructor(message: string) {
@@ -73,6 +73,10 @@ export function assertAppAccess(opts: {
 }): void {
   const app = opts.app;
   if (!app) return;
+  // HH-11: a host's grant for this App opens it (read) or also runs it (execute).
+  const principal = currentPrincipal();
+  const grant = principal?.source === 'host' ? principal.appGrants?.[app.id] : undefined;
+  if (grant === 'execute' || (grant === 'read' && opts.level === 'read')) return;
   const user = defaultPersonaRegistry.toUserContext(hostUserContext() ?? OWNER_DEFAULT);
   const engine = new PolicyEngine(app.policies.map(toAccessPolicy));
   const result = engine.checkAccess(
