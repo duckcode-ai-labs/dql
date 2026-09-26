@@ -80,6 +80,19 @@ describe('host UI (RFC 0010 HH-9)', () => {
     expect(html).toContain('Ask an analyst to check this');
     expect(html).toContain('Add a note');
   });
+
+  it('offers only the actions meant for questions DQL could not answer on a blocked answer', () => {
+    const withUnanswered = hosted({ answerActions: [
+      { id: 'check', label: 'Ask an analyst to check this', url: '/x' },
+      { id: 'certify', label: 'Make this a certified answer', url: '/y', on: ['review', 'unanswered'] },
+    ] });
+    const blocked = run({ status: 'blocked', trustState: 'blocked' } as Partial<AgentRun>);
+    const html = render(withUnanswered, <HostAnswerActions run={blocked} t={t} />);
+    expect(html).toContain('Make this a certified answer');
+    expect(html).not.toContain('Ask an analyst to check this');
+    expect(html).toContain('could not answer this');
+    expect(render(hosted(), <HostAnswerActions run={blocked} t={t} />)).toBe('');
+  });
 });
 
 describe('the host\'s review of an answer (HH-10)', () => {

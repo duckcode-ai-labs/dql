@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { HostAnswerActions } from './HostAnswerActions';
+import { hostAllows, useHostUi } from '../../host/host-ui';
 import { createPortal } from 'react-dom';
 import { normalizeDqlArtifactReference } from '@duckcodeailabs/dql-core/artifacts';
 import {
@@ -2316,6 +2317,7 @@ function RunCard({
   onNextAction: (action: AgentRun['nextActions'][number]) => void;
 }) {
   const { dispatch } = useNotebook();
+  const hostUiState = useHostUi();
   // A conversational reply renders as a plain assistant bubble — no route label,
   // trust badge, checks, or evidence. Just the answer + optional suggestion chips.
   if (run.route === 'conversation') {
@@ -2358,12 +2360,14 @@ function RunCard({
   const trustNote = trustExplainer(run);
   // A result worth saving: a real answer or research artifact (not blocked/clarify).
   const pinnable = isAgentRunPinnable(run);
+  // Saving an answer as a block is authoring; under a host, only for people who may (HH-9).
+  const mayAuthorBlocks = hostAllows(hostUiState, 'dataset.author');
   // Offer a one-click deepening on quick answers (unless the agent already routed deep).
   const isAnswer = run.route === 'certified_answer' || run.route === 'generated_answer';
   const hasResearchAction = run.nextActions.some((a) => a.route === 'research');
   const showResearchDeeper = isAnswer && pinnable && !hasResearchAction;
   const sourceArtifact = answerDqlArtifactFromRun(run);
-  const canSaveBlock = pinnable && !sourceArtifact?.sourcePath && Boolean(sourceArtifact?.source ?? answerSqlFromRun(run));
+  const canSaveBlock = mayAuthorBlocks && pinnable && !sourceArtifact?.sourcePath && Boolean(sourceArtifact?.source ?? answerSqlFromRun(run));
   const startedAtMs = Date.parse(run.startedAt);
   const completedAtMs = Date.parse(run.completedAt);
   const elapsedSeconds = Number.isFinite(startedAtMs) && Number.isFinite(completedAtMs)
@@ -3011,6 +3015,7 @@ function AskRunCard(props: AskRunCardProps) {
   onRepairedRun,
   } = props;
   const { dispatch } = useNotebook();
+  const hostUiState = useHostUi();
   const [copied, setCopied] = useState(false);
   const openArtifact = onOpenArtifact ?? (() => dispatch({ type: 'OPEN_AGENT_LOG', run }));
 
@@ -3078,11 +3083,13 @@ function AskRunCard(props: AskRunCardProps) {
 
   // Reuse RunCard's action gating so the quiet row offers the same real actions.
   const pinnable = isAgentRunPinnable(run);
+  // Saving an answer as a block is authoring; under a host, only for people who may (HH-9).
+  const mayAuthorBlocks = hostAllows(hostUiState, 'dataset.author');
   const isAnswer = run.route === 'certified_answer' || run.route === 'semantic_answer' || run.route === 'generated_answer';
   const hasResearchAction = run.nextActions.some((a) => a.route === 'research');
   const showResearchDeeper = isAnswer && pinnable && !hasResearchAction;
   const sourceArtifact = answerDqlArtifactFromRun(run);
-  const canSaveBlock = pinnable && !sourceArtifact?.sourcePath && Boolean(sourceArtifact?.source ?? answerSqlFromRun(run));
+  const canSaveBlock = mayAuthorBlocks && pinnable && !sourceArtifact?.sourcePath && Boolean(sourceArtifact?.source ?? answerSqlFromRun(run));
   const insertionPayload = (insertDqlActionLabel && onInsertDql) || (replaceDqlActionLabel && onReplaceDql)
     ? artifactReadyPayloadFromRun(run)
     : undefined;
@@ -3214,6 +3221,9 @@ function AskRunCard(props: AskRunCardProps) {
 
       {/* What the run did, kept with the answer and replayable after a reload */}
       <AskRunStory receipt={run.diagnosticReceiptV9} t={t} />
+
+      {/* RFC 0010 HH-9/HH-10: the host's review of this answer, or its actions for getting one. */}
+      <HostAnswerActions run={run} t={t} />
 
       {/* Quiet action row */}
       {(presentationAnswer || failureMessage || insertionPayload || pinnable || canSaveBlock || showResearchDeeper || primaryArtifact) ? (
@@ -4852,6 +4862,7 @@ function AskInspector({
   onInsertSql?: (sql: string, title?: string, meta?: SqlNotebookDraftMeta) => void;
   onInsertDql?: (payload: InsertDqlPayload) => void;
 }) {
+  const hostUiState = useHostUi();
   const payload = payloadOf(artifact);
   const dqlArtifact = answerDqlArtifactFromRun(run) ?? resolveArtifactDqlView(payload);
   const sqlEvidence = answerSqlEvidenceFromRun(run) ?? (typeof payload.sql === 'string' && payload.sql.trim() ? { sql: payload.sql, origin: 'compiled' as const } : undefined);
@@ -4865,6 +4876,8 @@ function AskInspector({
   const cancelled = run.status === 'cancelled' || run.stopReason === 'cancelled' || run.route === 'cancelled';
   const blocked = !cancelled && (run.status === 'blocked' || artifact.trustState === 'blocked');
   const pinnable = isAgentRunPinnable(run);
+  // Saving an answer as a block is authoring; under a host, only for people who may (HH-9).
+  const mayAuthorBlocks = hostAllows(hostUiState, 'dataset.author');
   // V8 is persisted at the run boundary. An older answer artifact may not
   // duplicate it, but it still deserves the compact authoritative story.
   const analytical = analyticalInspectorContract(payload)
@@ -4917,7 +4930,7 @@ function AskInspector({
       {/* Action row */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 16px', borderBottom: '1px solid var(--border-subtle)' }}>
         {pinnable ? <AddToAppButton run={run} t={t} appContext={appContext} onOpenApp={onOpenApp} /> : null}
-        {pinnable ? (
+        {pinnable && mayAuthorBlocks ? (
           <button type="button" className="dql-hover" onClick={onSaveBlock} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '7px 13px', borderRadius: 8, border: '1px solid var(--border-default)', background: 'var(--bg-2)', color: t.textSecondary, fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: t.font }}>
             <Blocks size={13} /> Save as block
           </button>
@@ -5217,7 +5230,12 @@ export function askAppDestinations(apps: AppSummary[], drafts: AppStudioBuildDra
  * editable in Studio; certified answers keep their block identity and all
  * other answers are materialized as review-required local evidence.
  */
-function AddToAppButton({
+/** Adding an answer to an App is authoring it; under a host, only for people who may (HH-9). */
+function AddToAppButton(props: Parameters<typeof AddToAppMenu>[0]) {
+  return hostAllows(useHostUi(), 'app.author') ? <AddToAppMenu {...props} /> : null;
+}
+
+function AddToAppMenu({
   run,
   t,
   appContext,

@@ -1,12 +1,20 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { AgentRun } from '../../api/client';
-import { fetchHostAnswerStatuses, runHostAnswerAction, useHostPage, useHostUi, type HostAnswerStatus } from '../../host/host-ui';
+import { fetchHostAnswerStatuses, runHostAnswerAction, useHostPage, useHostUi, type HostAnswerAction, type HostAnswerStatus } from '../../host/host-ui';
 import { useDispatch } from '../../store/NotebookStore';
 import type { Theme } from '../../themes/notebook-theme';
 
 /** Whether an answer needs a person's review before anyone relies on it. */
 export function answerNeedsReview(run: Pick<AgentRun, 'status' | 'trustState'>): boolean {
   return run.status === 'needs_review' || run.trustState === 'review_required';
+}
+
+/** Which of the host's answer actions fit this answer: review ones, and those for questions DQL could not answer. */
+export function actionsForAnswer(run: Pick<AgentRun, 'status' | 'trustState'>, actions: HostAnswerAction[]): { kind: 'review' | 'unanswered'; actions: HostAnswerAction[] } | null {
+  const kind = answerNeedsReview(run) ? 'review' : run.status === 'blocked' ? 'unanswered' : null;
+  if (!kind) return null;
+  const fitting = actions.filter((action) => (action.on ?? ['review']).includes(kind));
+  return fitting.length ? { kind, actions: fitting } : null;
 }
 
 /**
@@ -28,8 +36,9 @@ export function HostAnswerActions({ run, t }: { run: AgentRun; t: Theme }) {
 
   if (!hostUi.host) return null;
   if (status) return <HostAnswerStatusView status={status} t={t} />;
-  if (!hostUi.answerActions.length || !answerNeedsReview(run)) return null;
-  return <HostAnswerActionButtons run={run} actions={hostUi.answerActions} onSent={refresh} t={t} />;
+  const fitting = actionsForAnswer(run, hostUi.answerActions);
+  if (!fitting) return null;
+  return <HostAnswerActionButtons run={run} kind={fitting.kind} actions={fitting.actions} onSent={refresh} t={t} />;
 }
 
 const STATUS_TONE: Record<HostAnswerStatus['state'], 'accent' | 'warning' | 'muted'> = {
@@ -65,9 +74,10 @@ export function HostAnswerStatusView({ status, t }: { status: HostAnswerStatus; 
   );
 }
 
-function HostAnswerActionButtons({ run, actions, onSent, t }: {
+function HostAnswerActionButtons({ run, kind, actions, onSent, t }: {
   run: AgentRun;
-  actions: Array<{ id: string; label: string; url: string; description?: string }>;
+  kind: 'review' | 'unanswered';
+  actions: HostAnswerAction[];
   onSent: () => void;
   t: Theme;
 }) {
@@ -75,7 +85,7 @@ function HostAnswerActionButtons({ run, actions, onSent, t }: {
   const [message, setMessage] = useState<{ text: string; failed: boolean } | null>(null);
   return (
     <div style={{ display: 'grid', gap: 6, padding: '8px 10px', border: `1px solid ${t.cellBorder}`, borderRadius: 8, background: t.cellBg }} data-testid="host-answer-actions">
-      <span style={{ fontSize: 11.5, color: t.textSecondary }}>No certified source answers this yet.</span>
+      <span style={{ fontSize: 11.5, color: t.textSecondary }}>{kind === 'review' ? 'No certified source answers this yet.' : 'DQL could not answer this from your certified and governed sources.'}</span>
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
         {actions.map((action, index) => (
           <button

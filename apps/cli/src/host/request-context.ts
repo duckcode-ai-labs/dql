@@ -177,7 +177,12 @@ export interface DqlHostUi {
    * `{ runId, question, threadId?, trustState }` to `url` (same origin) and
    * shows the `message` the host answers with.
    */
-  answerActions?: Array<{ id: string; label: string; url: string; description?: string }>;
+  /**
+   * Buttons on an answer. `on` says which answers get it: `review` (an AI
+   * answer no certified source backs; the default) and/or `unanswered` (DQL
+   * could not answer at all) — e.g. "Make this a certified answer" fits both.
+   */
+  answerActions?: Array<{ id: string; label: string; url: string; description?: string; on?: Array<'review' | 'unanswered'> }>;
   /** A name for the environment, e.g. "Claims · Production". */
   environment?: string;
 }

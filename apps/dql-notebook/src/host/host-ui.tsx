@@ -15,7 +15,7 @@ export interface HostUi {
   signOutUrl?: string;
   environment?: string;
   links: HostLink[];
-  answerActions: Array<{ id: string; label: string; url: string; description?: string }>;
+  answerActions: HostAnswerAction[];
 }
 
 export type HostIcon = 'inbox' | 'requests' | 'review' | 'work' | 'health' | 'admin' | 'people' | 'git' | 'link';
@@ -28,6 +28,8 @@ export interface HostAnswerStatus {
   detail?: string;
   href?: string;
 }
+
+export interface HostAnswerAction { id: string; label: string; url: string; description?: string; on?: Array<'review' | 'unanswered'> }
 
 export type HostUiState = HostUi | { host: false };
 
@@ -57,17 +59,38 @@ export function HostUiProvider({ children, initial }: { children: ReactNode; ini
   useEffect(() => {
     if (initial) return;
     let cancelled = false;
-    authorizedFetch('/api/host/ui', { credentials: 'same-origin' })
+    const load = () => authorizedFetch('/api/host/ui', { credentials: 'same-origin' })
       .then((response) => (response.ok ? response.json() : { host: false }))
       .then((value: HostUiState) => { if (!cancelled && value && typeof value === 'object') setState(value.host === true ? value : { host: false }); })
       .catch(() => undefined);
-    return () => { cancelled = true; };
+    void load();
+    // Counts on the host's links change as work moves: reload when a host page
+    // says something changed, when the tab comes back, and once a minute.
+    const onMessage = (event: MessageEvent) => {
+      if (event.origin === window.location.origin && isHostChange(event.data)) void load();
+    };
+    const onFocus = () => void load();
+    window.addEventListener('message', onMessage);
+    window.addEventListener('focus', onFocus);
+    const timer = window.setInterval(load, 60_000);
+    return () => {
+      cancelled = true;
+      window.removeEventListener('message', onMessage);
+      window.removeEventListener('focus', onFocus);
+      window.clearInterval(timer);
+    };
   }, [initial]);
   return (
     <HostUiContext.Provider value={state}>
       <HostPageContext.Provider value={{ page, openPage: setPage }}>{children}</HostPageContext.Provider>
     </HostUiContext.Provider>
   );
+}
+
+/** The message a host page inside DQL posts after changing something (HH-10). */
+export const HOST_CHANGED_MESSAGE = 'dql-host:changed';
+export function isHostChange(data: unknown): boolean {
+  return !!data && typeof data === 'object' && (data as { type?: unknown }).type === HOST_CHANGED_MESSAGE;
 }
 
 export function useHostPage() {
