@@ -301,6 +301,14 @@ A host serves every role with DQL's app. It does not rebuild Ask, Apps or notebo
 
 Without a host nothing changes. Tests: `per-person.test.ts` (route), `host-ui.test.tsx` (app).
 
+### HH-10 — answers belong to who asked, and the host can follow them
+- **Ownership:** with a host, every run records the signed-in person as `ownerId`. Someone else's run reads as not found wherever DQL reads runs (the run routes, traces, repair, follow-ups, Research), and the run list and count are that person's own. Runs from before the host have no owner and are hidden from host people. The SQLite store filters by owner in SQL.
+- **`GET /api/host/answers/:runId`** gives the host one of the caller's own answers as it may keep it: question, status, trust, the SQL and where it came from, its fingerprint, the tables it read, the trace id and the object the person had open. Never the written answer, rows or result values (`answerFactsFromRun`).
+- **`answerStatus(principal, runIds)`** tells the app where the host's review of each answer stands (`requested`, `in_progress`, `checked`, `certified`, `declined`, with a label, detail and a same-origin page). `POST /api/host/answer-status` asks only about the caller's own runs. The answer shows the status in place of the host's answer actions, with Open for the page.
+- **Rail links** may carry a `badge` count and one of DQL's icons (`inbox`, `requests`, `review`, `work`, `health`, `admin`, `people`, `git`, `link`).
+
+Tests: `per-person.test.ts`, `answer-facts.test.ts`, `host-ui.test.tsx`.
+
 ### Entry point
 `@duckcodeailabs/dql-cli/host` also exports `startProjectRuntime`: the full server with its UI for one project, as `dql notebook` runs it, taking `hostHooks`, `allowedOrigins` and a host-managed `connection`. The first host (DQL Enterprise) starts every workspace this way; its end-to-end test drives this branch's server through sign-in, roles, row rules and DuckDB for five people.
 

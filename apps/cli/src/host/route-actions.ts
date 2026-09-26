@@ -112,6 +112,9 @@ function actionFor(method: string, path: string): DqlAction {
     return read ? 'project.read' : 'app.author';
   }
 
+  // What the app shows around its screens and one's own answers' facts (HH-9, HH-10): reading.
+  if (under(path, '/api/host')) return 'project.read';
+
   // Asking and investigating. Asking for certification is part of asking:
   // the requester is whoever is signed in.
   if (!read && (under(path, '/api/agent-runs') || under(path, '/api/ask') || path === '/api/semantic-query'

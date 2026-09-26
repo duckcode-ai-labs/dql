@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
-import { Activity, Boxes, ExternalLink, MessageCircle, Settings } from 'lucide-react';
+import { Activity, Boxes, ClipboardList, ExternalLink, GitPullRequest, Hammer, Inbox, MessageCircle, Settings, ShieldCheck, Users } from 'lucide-react';
 import { navItemAllowed, useHostPage, useHostUi } from '../../host/host-ui';
 import { Tooltip } from '@duckcodeailabs/dql-ui';
 import {
@@ -47,13 +47,28 @@ interface RailItemProps {
   expanded: boolean;
   onClick: () => void;
   t: Theme;
+  /** A count waiting behind this item, e.g. reviews (from a host, HH-10). */
+  badge?: number;
 }
 
-function RailItem({ title, icon, active, expanded, onClick, t }: RailItemProps) {
+/** DQL's icons for a host's pages (HH-10); a host names one, never supplies its own. */
+const HOST_LINK_ICONS: Record<string, typeof ExternalLink> = {
+  inbox: Inbox,
+  requests: ClipboardList,
+  review: ShieldCheck,
+  work: Hammer,
+  health: Activity,
+  admin: Settings,
+  people: Users,
+  git: GitPullRequest,
+  link: ExternalLink,
+};
+
+function RailItem({ title, icon, active, expanded, onClick, t, badge }: RailItemProps) {
   const [hovered, setHovered] = useState(false);
   const button = (
     <button
-      aria-label={title}
+      aria-label={badge ? `${title} (${badge})` : title}
       onClick={onClick}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
@@ -93,15 +108,24 @@ function RailItem({ title, icon, active, expanded, onClick, t }: RailItemProps) 
           flexShrink: 0,
           width: 18,
           height: 18,
+          position: 'relative',
         }}
       >
         {icon}
+        {badge && !expanded ? (
+          <span aria-hidden="true" style={{ position: 'absolute', top: -5, right: -7, minWidth: 14, height: 14, padding: '0 3px', borderRadius: 999, background: t.accent, color: '#fff', font: `600 9px/14px ${t.font}`, textAlign: 'center' }}>
+            {badge > 99 ? '99+' : badge}
+          </span>
+        ) : null}
       </span>
       {expanded && (
         <span style={{ flex: 1, textOverflow: 'ellipsis', overflow: 'hidden' }}>
           {title}
         </span>
       )}
+      {expanded && badge ? (
+        <span aria-hidden="true" style={{ fontSize: 11, fontWeight: 600, color: t.accent, fontVariantNumeric: 'tabular-nums' }}>{badge}</span>
+      ) : null}
     </button>
   );
   // In collapsed mode the label is absent, so keep the tooltip.
@@ -301,7 +325,8 @@ export function ActivityBar() {
             <RailItem
               key={`host-${link.id}`}
               title={link.label}
-              icon={<ExternalLink size={16} strokeWidth={1.75} />}
+              icon={(() => { const Icon = HOST_LINK_ICONS[link.icon ?? 'link'] ?? ExternalLink; return <Icon size={16} strokeWidth={1.75} />; })()}
+              badge={link.badge}
               active={state.mainView === 'host_page' && hostPage.page?.id === link.id}
               expanded={expanded}
               onClick={() => { hostPage.openPage(link); dispatch({ type: 'SET_MAIN_VIEW', view: 'host_page' }); }}

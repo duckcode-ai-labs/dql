@@ -12,6 +12,8 @@ export {
   type DqlModelProvider,
   type DqlHostHooks,
   type DqlHostUi,
+  type DqlAnswerStatus,
+  type DqlHostIcon,
   type DqlPrincipal,
   type DqlRequestContext,
   type DqlRunStore,
@@ -32,3 +34,5 @@ export {
   type DqlRowPolicy,
   type DqlRowPolicyResult,
 } from './row-policy.js';
+
+export { answerFactsFromRun, answerSql, tablesRead, type DqlAnswerFacts } from './answer-facts.js';

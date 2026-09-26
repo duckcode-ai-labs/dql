@@ -131,6 +131,12 @@ export interface DqlHostHooks {
    * answer"). The app's screens stay DQL's; the host only adds to them.
    */
   ui?(principal: DqlPrincipal): Promise<DqlHostUi> | DqlHostUi;
+  /**
+   * Where the host's review of each answer stands, for answers this person
+   * asked (HH-10): e.g. "Request R-142 · assigned to Sam" or "Checked by
+   * Dan Kim". Shown beside the answer; the answer's own trust label stays.
+   */
+  answerStatus?(principal: DqlPrincipal, runIds: string[]): Promise<Record<string, DqlAnswerStatus>> | Record<string, DqlAnswerStatus>;
   /** Each finished Ask trace, strictly redacted, as a bundle and as OTLP (HH-6). */
   traces?: DqlTraceSink;
   /**
@@ -150,11 +156,22 @@ export interface DqlHostHooks {
 }
 
 /** The host's additions to the DQL app for one person (HH-9). */
+export type DqlHostIcon = 'inbox' | 'requests' | 'review' | 'work' | 'health' | 'admin' | 'people' | 'git' | 'link';
+
+export interface DqlAnswerStatus {
+  state: 'requested' | 'in_progress' | 'checked' | 'certified' | 'declined';
+  label: string;
+  detail?: string;
+  /** A same-origin page with the whole story, opened inside the app. */
+  href?: string;
+}
+
 export interface DqlHostUi {
   /** Where "Sign out" goes. */
   signOutUrl?: string;
   /** Links to the host's own pages, in the person menu or the navigation. */
-  links?: Array<{ id: string; label: string; href: string; placement: 'menu' | 'nav' }>;
+  /** `badge` is a count shown beside the link, e.g. reviews waiting; `icon` is one of DQL's. */
+  links?: Array<{ id: string; label: string; href: string; placement: 'menu' | 'nav'; badge?: number; icon?: DqlHostIcon }>;
   /**
    * Offered on an answer that needs review. DQL posts
    * `{ runId, question, threadId?, trustState }` to `url` (same origin) and

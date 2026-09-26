@@ -1,0 +1,92 @@
+import { createHash } from 'node:crypto';
+
+/**
+ * What a host may keep about one answer when someone asks for it to be
+ * checked or certified (RFC 0010 HH-10): the question, the SQL that answered
+ * it, the tables it read and the fingerprints and trace that identify it.
+ * Never result values, the written answer or rows.
+ */
+export interface DqlAnswerFacts {
+  runId: string;
+  question: string;
+  status: string;
+  trustState: string;
+  route: string;
+  askedAt: string;
+  sql?: string;
+  sqlOrigin?: 'executed' | 'failed' | 'proposed' | 'compiled';
+  sqlFingerprint?: string;
+  tables: string[];
+  traceId?: string;
+  source?: { kind: string; name: string };
+}
+
+type AnyRecord = Record<string, unknown>;
+const record = (value: unknown): AnyRecord | undefined =>
+  value && typeof value === 'object' && !Array.isArray(value) ? value as AnyRecord : undefined;
+const text = (value: unknown): string | undefined => (typeof value === 'string' && value.trim() ? value : undefined);
+
+/** The SQL behind an answer, in the order the Ask screen shows it. */
+export function answerSql(run: { artifacts?: unknown[] }): { sql: string; origin: NonNullable<DqlAnswerFacts['sqlOrigin']> } | undefined {
+  for (const artifact of run.artifacts ?? []) {
+    const payload = record(record(artifact)?.payload) ?? {};
+    const result = record(payload.result);
+    const researchRun = record(payload.researchRun);
+    const dqlArtifact = record(payload.dqlArtifact);
+    const executed = text(result?.sql);
+    if (executed) return { sql: executed, origin: 'executed' };
+    const failed = text(payload.executionError) ? text(payload.sql) : undefined;
+    if (failed) return { sql: failed, origin: 'failed' };
+    const proposed = text(payload.proposedSql) ?? text(researchRun?.generatedSql) ?? text(researchRun?.reviewedSql);
+    if (proposed) return { sql: proposed, origin: 'proposed' };
+    const compiled = text(payload.sql) ?? text(payload.sqlPreview) ?? text(dqlArtifact?.compiledSql);
+    if (compiled) return { sql: compiled, origin: 'compiled' };
+  }
+  return undefined;
+}
+
+const IDENTIFIER = String.raw`(?:"[^"]+"|\`[^\`]+\`|\[[^\]]+\]|[A-Za-z_][\w$]*)`;
+const RELATION = new RegExp(String.raw`\b(?:from|join)\s+(${IDENTIFIER}(?:\s*\.\s*${IDENTIFIER}){0,2})`, 'gi');
+
+/** Tables a statement reads, best effort, without the names of its own CTEs. */
+export function tablesRead(sql: string): string[] {
+  const withoutComments = sql.replace(/--[^\n]*/g, ' ').replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/'(?:[^']|'')*'/g, "''");
+  const ctes = new Set<string>();
+  for (const match of withoutComments.matchAll(new RegExp(String.raw`(?:with|,)\s*(?:recursive\s+)?(${IDENTIFIER})\s*(?:\([^)]*\)\s*)?as\s*\(`, 'gi'))) {
+    ctes.add(unquote(match[1]).toLowerCase());
+  }
+  const tables = new Set<string>();
+  for (const match of withoutComments.matchAll(RELATION)) {
+    const name = match[1].split(/\s*\.\s*/).map(unquote).join('.');
+    if (!ctes.has(name.toLowerCase()) && !/^(select|lateral|unnest)$/i.test(name)) tables.add(name);
+  }
+  return [...tables].sort();
+}
+
+function unquote(part: string): string {
+  return part.replace(/^["`[]|["`\]]$/g, '');
+}
+
+export function answerFactsFromRun(run: AnyRecord): DqlAnswerFacts {
+  const sql = answerSql(run as { artifacts?: unknown[] });
+  const receipt = record(run.diagnosticReceiptV9);
+  const executed = record(receipt?.executed);
+  const trace = record(run.traceReference);
+  const selected = record(run.selectedObject);
+  const sourceName = text(selected?.title) ?? text(selected?.id) ?? text(selected?.path);
+  return {
+    runId: String(run.id),
+    question: String(run.question ?? ''),
+    status: String(run.status ?? ''),
+    trustState: String(run.trustState ?? ''),
+    route: String(run.route ?? ''),
+    askedAt: String(run.startedAt ?? ''),
+    ...(sql ? { sql: sql.sql, sqlOrigin: sql.origin } : {}),
+    ...(text(executed?.sqlFingerprint)
+      ? { sqlFingerprint: text(executed?.sqlFingerprint)! }
+      : sql ? { sqlFingerprint: `sha256:${createHash('sha256').update(sql.sql).digest('hex')}` } : {}),
+    tables: sql ? tablesRead(sql.sql) : [],
+    ...(text(trace?.traceId) ? { traceId: text(trace?.traceId)! } : {}),
+    ...(sourceName ? { source: { kind: String(selected?.kind ?? 'object'), name: sourceName } } : {}),
+  };
+}

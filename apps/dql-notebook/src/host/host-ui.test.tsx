@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import type { AgentRun } from '../api/client';
-import { HostAnswerActions, answerNeedsReview } from '../components/agent/HostAnswerActions';
+import { HostAnswerActions, HostAnswerStatusView, answerNeedsReview } from '../components/agent/HostAnswerActions';
 import { HostPersonMenu } from '../components/shell/HostPersonMenu';
 import { themes } from '../themes/notebook-theme';
 import { HostUiProvider, hostAllows, hostPageSrc, navItemAllowed, type HostUi, type HostUiState } from './host-ui';
@@ -79,6 +79,17 @@ describe('host UI (RFC 0010 HH-9)', () => {
     expect(html).toContain('data-testid="host-answer-actions"');
     expect(html).toContain('Ask an analyst to check this');
     expect(html).toContain('Add a note');
+  });
+});
+
+describe('the host\'s review of an answer (HH-10)', () => {
+  it('shows where it stands, with the page that tells the whole story', () => {
+    const html = render(hosted(), <HostAnswerStatusView status={{ state: 'checked', label: 'Checked by Dan Kim', detail: 'Matches the claims ledger.', href: '/e/requests/R-142' }} t={t} />);
+    expect(html).toContain('data-state="checked"');
+    expect(html).toContain('Checked by Dan Kim');
+    expect(html).toContain('Matches the claims ledger.');
+    expect(html).toContain('>Open<');
+    expect(render(hosted(), <HostAnswerStatusView status={{ state: 'requested', label: 'Request R-142 · waiting for a steward' }} t={t} />)).not.toContain('>Open<');
   });
 });
 

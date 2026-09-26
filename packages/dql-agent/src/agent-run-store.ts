@@ -458,18 +458,24 @@ export class SqliteAgentRunStore implements AgentRunStore {
    * index, and hydrating every page's payloads is the memory the limit
    * exists to avoid. `get(id)` hydrates.
    */
-  list(limit?: number): AgentRun[] {
+  list(limit?: number, options: { ownerId?: string } = {}): AgentRun[] {
+    // One person's runs only, when a host signs people in (RFC 0010).
+    const owned = options.ownerId !== undefined;
+    const where = owned ? "WHERE json_extract(payload_json, '$.ownerId') = ?" : '';
+    const args: unknown[] = owned ? [options.ownerId] : [];
     const rows = (Number.isFinite(limit) && (limit as number) > 0
-      ? this.db.prepare('SELECT payload_json FROM agent_runs ORDER BY started_at DESC LIMIT ?').all(Math.floor(limit as number))
-      : this.db.prepare('SELECT payload_json FROM agent_runs ORDER BY started_at DESC').all()) as Array<{ payload_json: string }>;
+      ? this.db.prepare(`SELECT payload_json FROM agent_runs ${where} ORDER BY started_at DESC LIMIT ?`).all(...args, Math.floor(limit as number))
+      : this.db.prepare(`SELECT payload_json FROM agent_runs ${where} ORDER BY started_at DESC`).all(...args)) as Array<{ payload_json: string }>;
     return rows.flatMap((row) => {
       const run = this.readRun(row.payload_json, 'task_steps');
       return run ? [run] : [];
     });
   }
 
-  count(): number {
-    const row = this.db.prepare('SELECT COUNT(*) AS total FROM agent_runs').get() as { total: number } | undefined;
+  count(options: { ownerId?: string } = {}): number {
+    const row = (options.ownerId !== undefined
+      ? this.db.prepare("SELECT COUNT(*) AS total FROM agent_runs WHERE json_extract(payload_json, '$.ownerId') = ?").get(options.ownerId)
+      : this.db.prepare('SELECT COUNT(*) AS total FROM agent_runs').get()) as { total: number } | undefined;
     return row?.total ?? 0;
   }
 

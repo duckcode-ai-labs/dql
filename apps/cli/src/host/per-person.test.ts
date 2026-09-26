@@ -136,3 +136,40 @@ describe('what the app shows around its screens (HH-9)', () => {
     expect(launch.hostManaged).toBeUndefined();
   });
 });
+
+describe('answers belong to the person who asked (HH-10)', () => {
+  it('lists and opens only your own runs, and gives a host your answer\'s facts and review status', async () => {
+    const statusCalls: Array<{ person: string; runIds: string[] }> = [];
+    const call = await start({
+      answerStatus: (principal, runIds) => {
+        statusCalls.push({ person: principal.id, runIds });
+        return Object.fromEntries(runIds.map((id) => [id, { state: 'checked' as const, label: 'Checked by Dan Kim', detail: 'Matches the claims ledger.', href: '/e/requests/R-1' }]));
+      },
+    });
+    const asked = await call('priya', 'POST', '/api/agent-runs', { question: 'Claims paid last week' });
+    const runId: string = asked.body?.run?.id ?? asked.body?.id;
+    expect(runId, JSON.stringify(asked.body).slice(0, 300)).toBeTruthy();
+    await call('dan', 'POST', '/api/agent-runs', { question: 'Subrogation recoveries' });
+
+    const priyaRuns = await call('priya', 'GET', '/api/agent-runs');
+    expect(priyaRuns.body.runs.map((run: { question: string }) => run.question)).toEqual(['Claims paid last week']);
+    expect(priyaRuns.body.total).toBe(1);
+    expect((await call('dan', 'GET', '/api/agent-runs')).body.runs.map((run: { question: string }) => run.question)).toEqual(['Subrogation recoveries']);
+
+    // Someone else's answer does not exist for you, wherever you look.
+    expect((await call('dan', 'GET', `/api/agent-runs/${runId}`)).status).toBe(404);
+    expect((await call('dan', 'GET', `/api/host/answers/${runId}`)).status).toBe(404);
+    expect((await call('priya', 'GET', `/api/agent-runs/${runId}`)).status).toBe(200);
+
+    const facts = await call('priya', 'GET', `/api/host/answers/${runId}`);
+    expect(facts.status).toBe(200);
+    expect(facts.body).toMatchObject({ runId, question: 'Claims paid last week', tables: expect.any(Array) });
+    expect(JSON.stringify(facts.body)).not.toMatch(/"answer"|"rows"|"summary"/);
+
+    const priyaStatus = await call('priya', 'POST', '/api/host/answer-status', { runIds: [runId, 'no-such-run'] });
+    expect(priyaStatus.body.statuses).toEqual({ [runId]: { state: 'checked', label: 'Checked by Dan Kim', detail: 'Matches the claims ledger.', href: '/e/requests/R-1' } });
+    // Dan asking about Priya's answer learns nothing, and the host is not even asked.
+    expect((await call('dan', 'POST', '/api/host/answer-status', { runIds: [runId] })).body.statuses).toEqual({});
+    expect(statusCalls).toEqual([{ person: 'u-priya', runIds: [runId] }]);
+  });
+});

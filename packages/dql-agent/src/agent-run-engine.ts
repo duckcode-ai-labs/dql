@@ -736,6 +736,8 @@ export interface AgentRun {
   analyticalTaskOutcomeSummary?: AnalyticalTaskOutcomeSummaryV1;
   /** Additive local trace reference; detailed evidence stays in ask-observability.sqlite. */
   traceReference?: AgentRunTraceReferenceV1;
+  /** Who asked, when a host signs people in (RFC 0010); local runs omit it. */
+  ownerId?: string;
 }
 
 /**
@@ -767,6 +769,8 @@ export interface AgentRunProgressV1 {
   askAnalystState?: AskAnalystState;
   /** Allows restart finalization/UI to find the local trace without shipping spans. */
   traceReference?: AgentRunTraceReferenceV1;
+  /** Who asked, when a host signs people in (RFC 0010); local runs omit it. */
+  ownerId?: string;
 }
 
 export interface AgentRouteExecutionContext {

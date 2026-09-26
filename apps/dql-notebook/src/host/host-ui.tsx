@@ -14,8 +14,19 @@ export interface HostUi {
   capabilities: Record<string, boolean>;
   signOutUrl?: string;
   environment?: string;
-  links: Array<{ id: string; label: string; href: string; placement: 'menu' | 'nav' }>;
+  links: HostLink[];
   answerActions: Array<{ id: string; label: string; url: string; description?: string }>;
+}
+
+export type HostIcon = 'inbox' | 'requests' | 'review' | 'work' | 'health' | 'admin' | 'people' | 'git' | 'link';
+export interface HostLink { id: string; label: string; href: string; placement: 'menu' | 'nav'; badge?: number; icon?: HostIcon }
+
+/** Where the host's review of one answer stands (HH-10), e.g. "Checked by Dan Kim". */
+export interface HostAnswerStatus {
+  state: 'requested' | 'in_progress' | 'checked' | 'certified' | 'declined';
+  label: string;
+  detail?: string;
+  href?: string;
 }
 
 export type HostUiState = HostUi | { host: false };
@@ -24,6 +35,20 @@ const HostUiContext = createContext<HostUiState>({ host: false });
 
 /** The host page open in DQL's main area, if any. */
 export interface HostPage { id: string; label: string; href: string }
+
+/** Ask the host where each answer's review stands; answers it doesn't know are absent. */
+export async function fetchHostAnswerStatuses(runIds: string[]): Promise<Record<string, HostAnswerStatus>> {
+  if (!runIds.length) return {};
+  const response = await authorizedFetch('/api/host/answer-status', {
+    method: 'POST',
+    credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ runIds }),
+  });
+  if (!response.ok) return {};
+  const body = await response.json().catch(() => ({})) as { statuses?: Record<string, HostAnswerStatus> };
+  return body.statuses ?? {};
+}
 const HostPageContext = createContext<{ page: HostPage | null; openPage: (page: HostPage) => void }>({ page: null, openPage: () => undefined });
 
 export function HostUiProvider({ children, initial }: { children: ReactNode; initial?: HostUiState }) {

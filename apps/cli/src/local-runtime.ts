@@ -740,6 +740,9 @@ import { setDeliverySink } from './schedule/notifiers/index.js';
 import { routeAction, type DqlAction } from './host/route-actions.js';
 import { withHostQueryHooks } from './host/row-policy.js';
 import { auditActor, auditRequest, otlpHeadersFromEnv, withAnswerAudit, withTraceExport } from './host/observability.js';
+import { withRunOwnership } from './host/run-ownership.js';
+import { answerFactsFromRun } from './host/answer-facts.js';
+const HOST_ICONS = new Set(['inbox', 'requests', 'review', 'work', 'health', 'admin', 'people', 'git', 'link']);
 import { isViewerToken, mintViewerToken, readViewerToken, viewerDecision, viewerLinkBlockedReason, viewerPrincipal } from './host/viewer-links.js';
 import { boundAgentSchemaColumns, mergeAgentSchemaCompleteness } from './ask-schema-context.js';
 
@@ -8737,10 +8740,12 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
   // existing history is imported once and the JSON renamed to *.migrated.
   // RFC 0010 HH-6: a host may keep runs elsewhere and hear of each finished answer.
   const openMemoryStore = (): MemoryStore => (hostHooks?.stores?.memory?.(projectRoot) ?? new MemoryStore(defaultMemoryPath(projectRoot))) as MemoryStore;
-  const baseAgentRunStore = hostHooks?.stores?.runs ?? new SqliteAgentRunStore({
+  const storedAgentRuns = hostHooks?.stores?.runs ?? new SqliteAgentRunStore({
     path: defaultAgentRunSqlitePath(projectRoot),
     legacyJsonPath: defaultAgentRunStorePath(projectRoot),
   });
+  // With a host, each answer belongs to the person who asked; others' runs read as not found.
+  const baseAgentRunStore = hostIdentity ? withRunOwnership(storedAgentRuns, currentPrincipal) : storedAgentRuns;
   const agentRunStore = hostHooks?.audit
     ? withAnswerAudit(baseAgentRunStore, hostHooks.audit, () => ({ principal: currentPrincipal() ?? null, actor: auditActor(currentPrincipal()) }))
     : baseAgentRunStore;
@@ -16346,7 +16351,7 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
           ...(sameOrigin(extras.signOutUrl) ? { signOutUrl: extras.signOutUrl } : {}),
           ...(typeof extras.environment === 'string' ? { environment: extras.environment.slice(0, 80) } : {}),
           links: (extras.links ?? []).filter((link) => sameOrigin(link.href) && typeof link.label === 'string').slice(0, 12)
-            .map((link) => ({ id: String(link.id), label: link.label.slice(0, 60), href: link.href, placement: link.placement === 'nav' ? 'nav' : 'menu' })),
+            .map((link) => ({ id: String(link.id), label: link.label.slice(0, 60), href: link.href, placement: link.placement === 'nav' ? 'nav' : 'menu', ...(Number.isInteger(link.badge) && link.badge! > 0 ? { badge: Math.min(link.badge!, 999) } : {}), ...(link.icon && HOST_ICONS.has(link.icon) ? { icon: link.icon } : {}) })),
           answerActions: (extras.answerActions ?? []).filter((action) => sameOrigin(action.url) && typeof action.label === 'string').slice(0, 4)
             .map((action) => ({ id: String(action.id), label: action.label.slice(0, 60), url: action.url, ...(action.description ? { description: String(action.description).slice(0, 200) } : {}) })),
         }));
@@ -16354,6 +16359,55 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
         res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(serializeJSON({ error: error instanceof Error ? error.message : String(error) }));
       }
+      return;
+    }
+
+    // RFC 0010 HH-10: one of your own answers, as a host may keep it when you
+    // ask for it to be checked or certified — never result values.
+    const hostAnswerMatch = /^\/api\/host\/answers\/([^/]+)$/.exec(path);
+    if (req.method === 'GET' && hostAnswerMatch) {
+      const principal = currentPrincipal();
+      const run = hostIdentity && principal?.source === 'host' ? await agentRunStore.get(decodeURIComponent(hostAnswerMatch[1])) : undefined;
+      if (!run) {
+        res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
+        res.end(serializeJSON({ error: 'Answer not found.' }));
+        return;
+      }
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
+      res.end(serializeJSON(answerFactsFromRun(run as unknown as Record<string, unknown>)));
+      return;
+    }
+
+    // HH-10: where the host's review of each of your answers stands.
+    if (req.method === 'POST' && path === '/api/host/answer-status') {
+      const principal = currentPrincipal();
+      const body = await readJSON(req).catch(() => null) as { runIds?: unknown } | null;
+      const requested = Array.isArray(body?.runIds) ? [...new Set(body!.runIds.filter((id): id is string => typeof id === 'string' && id.length <= 200))].slice(0, 50) : [];
+      const statuses: Record<string, import('./host/request-context.js').DqlAnswerStatus> = {};
+      if (hostIdentity && principal?.source === 'host' && hostHooks?.answerStatus && requested.length) {
+        const visible: string[] = [];
+        for (const id of requested) if (await agentRunStore.get(id)) visible.push(id);
+        let answered: Record<string, import('./host/request-context.js').DqlAnswerStatus> = {};
+        try {
+          answered = visible.length ? (await hostHooks.answerStatus(principal, visible)) ?? {} : {};
+        } catch {
+          answered = {};
+        }
+        const states = new Set(['requested', 'in_progress', 'checked', 'certified', 'declined']);
+        for (const id of visible) {
+          const status = answered[id];
+          if (!status || !states.has(status.state) || typeof status.label !== 'string') continue;
+          const href = typeof status.href === 'string' && status.href.startsWith('/') && !status.href.startsWith('//') ? status.href : undefined;
+          statuses[id] = {
+            state: status.state,
+            label: status.label.slice(0, 80),
+            ...(typeof status.detail === 'string' ? { detail: status.detail.slice(0, 280) } : {}),
+            ...(href ? { href } : {}),
+          };
+        }
+      }
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
+      res.end(serializeJSON({ statuses }));
       return;
     }
 
