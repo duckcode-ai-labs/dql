@@ -1032,9 +1032,20 @@ export function bindExactNames(intent: AnalyticalIntentV1, normalizedQuestion: s
     .find((predicate) => vocabulary.get(predicate.ref)?.roles.includes('time'));
   const timeRelation = (intent.time?.window && intent.time.ref ? vocabulary.get(intent.time.ref)?.physical?.relation : undefined)
     ?? (datePredicate ? vocabulary.get(datePredicate.ref)?.physical?.relation : undefined);
+  // The name wins only over the words it names. A measure the interpreter tied
+  // to another phrase ("expense reserve amount of all claims" read as
+  // expense_reserves) keeps it: the metric's name ("claims") sits elsewhere in
+  // the question, naming the population, not the measure.
+  const targetNames = namesOf(target).flatMap((name) => [name, name.endsWith('s') ? name.slice(0, -1) : `${name}s`]);
+  const tiedElsewhere = (ref: string) => {
+    const cited = intent.provenance[ref];
+    if (!cited?.startsWith('q:')) return false;
+    const phrase = ` ${normalizeVocabularyText(cited.slice(2))} `;
+    return !targetNames.some((name) => phrase.includes(` ${name} `));
+  };
   const rebind = (ref: string): string => {
     const entry = vocabulary.get(ref);
-    if (!entry || (entry.kind !== 'metric' && entry.kind !== 'measure') || namedByQuestion(entry) || absorbs(entry)) return ref;
+    if (!entry || (entry.kind !== 'metric' && entry.kind !== 'measure') || namedByQuestion(entry) || absorbs(entry) || tiedElsewhere(ref)) return ref;
     // ... unless the named metric carries a date of its own: then the period
     // follows it there (an order line's revenue has the order line's date), and
     // only a metric with no time axis at all would strand the window.

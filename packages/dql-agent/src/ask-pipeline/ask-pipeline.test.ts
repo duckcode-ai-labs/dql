@@ -1124,6 +1124,21 @@ describe('the name wins: a question word that exactly names a metric binds to it
     expect(intent.measures.map((measure) => measure.ref)).toEqual(['metric:order_item.revenue', 'metric:order_item.revenue']);
     expect(intent.measures[0]!.scope?.[0]?.values).toEqual(['new']);
   });
+  it('a measure the interpreter tied to another phrase keeps it; the metric name there names the population', () => {
+    // "the expense reserve amount of all claims": "claims" is who is measured, not the measure.
+    const insurance = buildVocabularyIndex({ metrics: [
+      { name: 'claims', model: 'insurance_claims', label: 'Claims', aggregation: 'count_distinct' },
+      { name: 'expense_reserves', model: 'claim_amounts', label: 'Expense Reserves', aggregation: 'sum' },
+    ] });
+    const tied = make({ measures: [{ ref: 'metric:claim_amounts.expense_reserves' }], provenance: { 'metric:claim_amounts.expense_reserves': 'q:expense reserve amount' } });
+    bindExactNames(tied, ' what are the expense reserve amount of all claims by claim number ', new Set(), insurance);
+    expect(tied.measures[0]!.ref).toBe('metric:claim_amounts.expense_reserves');
+    expect(tied.reading).toBe('x');
+    // The phrase that carries the name still rebinds.
+    const named = make({ measures: [{ ref: 'metric:orders.order_total' }], provenance: { 'metric:orders.order_total': 'q:the revenue' } });
+    bindExactNames(named, ' what is the revenue ', new Set(), vocabulary);
+    expect(named.measures[0]!.ref).toBe('metric:order_item.revenue');
+  });
   it('a ratio or derived metric the question names never rebinds the parts of a composed ratio', () => {
     const withAov = buildVocabularyIndex({ ...jaffle, metrics: [...jaffle.metrics!, { name: 'average_order_value', model: 'customers', label: 'Average Order Value', type: 'ratio', expr: 'lifetime_spend_pretax / count_lifetime_orders', aggregation: 'sum' }] });
     const ratio = make({ measures: [{ derived: { kind: 'ratio', numerator: 'metric:order_item.revenue', denominator: 'metric:orders.orders' }, alias: 'average_order_value' }] });
