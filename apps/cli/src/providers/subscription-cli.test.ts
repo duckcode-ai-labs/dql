@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   ClaudeCodeCliProvider,
   CodexCliProvider,
+  codexReasoningEffort,
   ProviderExitError,
   ProviderTimeoutError,
   parseClaudeResult,
@@ -322,6 +323,21 @@ describe('subscription CLI dispatch accounting', () => {
       expect.objectContaining({ settlement: 'process', outcome: 'ok' }),
       expect.objectContaining({ settlement: 'result', outcome: 'error' }),
     ]);
+  });
+
+  it('passes the call\'s reasoning effort to Codex, and an operator pin overrides it', async () => {
+    const calls: string[][] = [];
+    const provider = new CodexCliProvider({
+      command: 'fixture-codex',
+      runProcess: async (_command, args) => { calls.push(args); return { code: 0, stdout: '', stderr: '' }; },
+    });
+    await provider.generate([{ role: 'user', content: 'hi' }], { reasoningEffort: 'high' }).catch(() => undefined);
+    expect(calls[0]).toEqual(expect.arrayContaining(['-c', 'model_reasoning_effort="high"']));
+    await provider.generate([{ role: 'user', content: 'hi' }]).catch(() => undefined);
+    expect(calls[1]!.join(' ')).not.toMatch(/model_reasoning_effort/);
+    expect(codexReasoningEffort('medium', { DQL_CODEX_REASONING_EFFORT: 'max' })).toBe('max');
+    expect(codexReasoningEffort('medium', { DQL_CODEX_REASONING_EFFORT: 'max"; rm' })).toBe('medium');
+    expect(codexReasoningEffort(undefined, {})).toBeUndefined();
   });
 
   it('records cancellation at actual child-process settlement rather than a parser failure', async () => {

@@ -562,6 +562,20 @@ export function parseClaudeResult(stdout: string): ParsedClaudeResult | undefine
 // Codex (ChatGPT Plus / Pro / Team subscription)
 // ─────────────────────────────────────────────────────────────────────────────
 
+/**
+ * The reasoning effort a Codex call runs at. Without one, Codex reads its
+ * default from the user's own `~/.codex/config.toml`, so a run configured for
+ * deep reasoning quietly got whatever the user's Codex app was last set to.
+ * DQL passes its per-call effort (low, medium, high). An operator may pin
+ * every Codex call to one of Codex's own levels, including those DQL has no
+ * name for (xhigh, max): DQL_CODEX_REASONING_EFFORT=max.
+ */
+export function codexReasoningEffort(requested: string | undefined, env: NodeJS.ProcessEnv = process.env): string | undefined {
+  const pinned = env.DQL_CODEX_REASONING_EFFORT?.trim().toLowerCase();
+  if (pinned && /^[a-z]+$/.test(pinned)) return pinned;
+  return requested && /^[a-z]+$/.test(requested) ? requested : undefined;
+}
+
 export class CodexCliProvider implements AgentProvider {
   readonly name: ProviderName = 'openai';
   private readonly command: string;
@@ -621,6 +635,7 @@ export class CodexCliProvider implements AgentProvider {
     const fullPrompt = system ? `${system}\n\n---\n\n${prompt}` : prompt;
     const cwd = mkdtempSync(join(tmpdir(), 'dql-codex-'));
     const outFile = join(cwd, 'last-message.txt');
+    const effort = codexReasoningEffort(options.reasoningEffort);
     const args = [
       'exec',
       '-',                              // read the prompt from stdin
@@ -630,6 +645,7 @@ export class CodexCliProvider implements AgentProvider {
       '--ephemeral',                    // do not persist a session
       '--output-last-message', outFile, // write just the final assistant text
       ...(model ? ['--model', model] : []),
+      ...(effort ? ['-c', `model_reasoning_effort="${effort}"`] : []),
     ];
     let processSettled = false;
     let processSucceeded = false;
