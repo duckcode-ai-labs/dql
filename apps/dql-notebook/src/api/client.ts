@@ -1788,6 +1788,14 @@ export interface AskTraceListResponseV1 {
   total?: number;
 }
 
+export interface AgentRunKnowledge {
+  version: 1;
+  note?: string;
+  citations: Array<{ sourceId: string; sourceLabel: string; docId: string; title: string; url?: string }>;
+  contextOnly: true;
+  figuresRemoved?: number;
+}
+
 export interface AgentRun {
   id: string;
   question: string;
@@ -1806,6 +1814,8 @@ export interface AgentRun {
   summary: string;
   answer?: string;
   answerKind?: AgentRunAnswerKind;
+  /** Team documents the answer read (knowledge sources): cited context, never a figure source or part of trust. */
+  knowledge?: AgentRunKnowledge;
   artifacts: AgentRunArtifact[];
   evaluations: AgentRunEvaluation[];
   events: AgentRunEvent[];

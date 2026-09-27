@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { HostAnswerActions } from './HostAnswerActions';
+import { CitedDocuments, appliedListStyle, appliedTagStyle } from './CitedDocuments';
 import { hostAllows, useHostUi } from '../../host/host-ui';
 import { createPortal } from 'react-dom';
 import { normalizeDqlArtifactReference } from '@duckcodeailabs/dql-core/artifacts';
@@ -2461,6 +2462,8 @@ function RunCard({
         <VerificationChecks evaluations={run.evaluations} t={t} />
       )}
 
+      <CitedDocuments run={run} t={t} />
+
       <AskRunStory receipt={run.diagnosticReceiptV9} t={t} />
 
       {run.events.length > 0 || run.traceReference ? (
@@ -3235,6 +3238,9 @@ function AskRunCard(props: AskRunCardProps) {
           ))}
         </div>
       ) : null}
+
+      {/* RFC 0010 HH-15: team documents the answer read — cited context only */}
+      <CitedDocuments run={run} t={t} />
 
       {/* What the run did, kept with the answer and replayable after a reload */}
       <AskRunStory receipt={run.diagnosticReceiptV9} t={t} />
@@ -7042,32 +7048,7 @@ function appliedChipStyle(t: Theme): React.CSSProperties {
   };
 }
 
-function appliedListStyle(t: Theme): React.CSSProperties {
-  return {
-    display: 'grid',
-    gap: 8,
-    padding: 10,
-    borderRadius: 8,
-    background: t.cellBg,
-    border: `1px solid ${t.headerBorder}`,
-  };
-}
 
-function appliedTagStyle(t: Theme, kind: 'memory' | 'hint'): React.CSSProperties {
-  const accent = kind === 'hint';
-  return {
-    flex: '0 0 auto',
-    fontSize: 9,
-    fontWeight: 700,
-    textTransform: 'uppercase',
-    letterSpacing: '0.04em',
-    padding: '2px 6px',
-    borderRadius: 4,
-    marginTop: 1,
-    background: accent ? `${t.accent}1f` : `${t.textMuted}1f`,
-    color: accent ? t.accent : t.textMuted,
-  };
-}
 
 function appliedStopStyle(t: Theme): React.CSSProperties {
   return {
