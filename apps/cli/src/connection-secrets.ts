@@ -257,3 +257,31 @@ export function resolveSecretReferences<T extends object>(connection: T, project
   }
   return out as T;
 }
+
+
+/**
+ * A person's own connections for this project, outside git:
+ * `.dql/local/private/connections.json` = `{ defaultConnection?, connections }`.
+ * Each named connection replaces a shared one of the same name, and its
+ * `defaultConnection` wins. A host's command line (DQL Enterprise's `dqle`)
+ * writes the development copy an admin named here, so a laptop never needs
+ * Production's credentials; without the file nothing changes.
+ */
+export function privateConnectionsPath(projectRoot: string): string {
+  return join(projectRoot, '.dql', 'local', 'private', 'connections.json');
+}
+
+export function readPrivateConnections(projectRoot: string): { defaultConnection?: string; connections: Record<string, Record<string, unknown>> } | undefined {
+  const path = privateConnectionsPath(projectRoot);
+  if (!existsSync(path)) return undefined;
+  try {
+    const parsed = JSON.parse(readFileSync(path, 'utf-8')) as { defaultConnection?: unknown; connections?: unknown };
+    const connections = parsed.connections && typeof parsed.connections === 'object' && !Array.isArray(parsed.connections)
+      ? Object.fromEntries(Object.entries(parsed.connections as Record<string, unknown>).filter((entry): entry is [string, Record<string, unknown>] => !!entry[1] && typeof entry[1] === 'object' && !Array.isArray(entry[1])))
+      : {};
+    const defaultConnection = typeof parsed.defaultConnection === 'string' && parsed.defaultConnection.trim() ? parsed.defaultConnection.trim() : undefined;
+    return { ...(defaultConnection ? { defaultConnection } : {}), connections };
+  } catch {
+    return undefined;
+  }
+}

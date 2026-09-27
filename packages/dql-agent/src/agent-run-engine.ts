@@ -960,6 +960,11 @@ export interface AgentRunEngineOptions {
   /** Injectable for deterministic deadline tests; production uses AbortSignal.timeout. */
   routeTimeoutSignal?: (durationMs: number) => AbortSignal;
   /**
+   * How the ingress policy screens personal data (analytical-request-policy.ts):
+   * by wording (default) or, when a host refuses by column, `columns`.
+   */
+  sensitiveQuestions?: 'wording' | 'columns';
+  /**
    * Runtime-owned trace factory. It is additive and must return a no-op observer
    * on any local store fault; the engine never waits for a network exporter.
    */
@@ -1516,8 +1521,10 @@ export class AgentRunEngine {
   private readonly maxSteps: number;
   private readonly routeTimeoutSignal: (durationMs: number) => AbortSignal;
   private readonly traceObserverFactory?: AgentRunEngineOptions['traceObserverFactory'];
+  private readonly sensitiveQuestions: 'wording' | 'columns';
 
   constructor(options: AgentRunEngineOptions = {}) {
+    this.sensitiveQuestions = options.sensitiveQuestions === 'columns' ? 'columns' : 'wording';
     this.executors = options.executors ?? {};
     this.gates = options.gates ?? {};
     this.planner = options.planner ?? createDeterministicAgentRunPlanner();
@@ -1803,7 +1810,7 @@ export class AgentRunEngine {
     // This check is intentionally before route selection.  A restricted direct
     // disclosure must not be embedded, retrieved, sent to a provider, value
     // probed, or compiled merely to explain why it cannot be answered.
-    const ingressPolicy = evaluateAnalyticalRequestPolicy(submittedQuestion);
+    const ingressPolicy = evaluateAnalyticalRequestPolicy(submittedQuestion, { sensitiveData: this.sensitiveQuestions });
     if (!ingressPolicy.allowed) {
       const routeDecision: IntentDecision = {
         action: 'answer',

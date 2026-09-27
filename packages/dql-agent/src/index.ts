@@ -104,7 +104,7 @@ export {
   summarizeTaskOutcomes,
   validateSelectedResultBinding,
 } from './analytical-orchestration.js';
-export { evaluateAnalyticalRequestPolicy } from './analytical-request-policy.js';
+export { evaluateAnalyticalRequestPolicy, type AnalyticalRequestPolicyOptions } from './analytical-request-policy.js';
 export type { AnalyticalRequestPolicyDecision } from './analytical-request-policy.js';
 /** V2 retrieval-first, LLM-controlled bounded Ask runtime. */
 export type {

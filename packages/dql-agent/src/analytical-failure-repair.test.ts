@@ -48,6 +48,8 @@ describe('stable analytical diagnostics (API-007 / SEC-004)', () => {
     [new Error('schema drift against snapshot'), 'SNAPSHOT_DRIFT'],
     [new Error('query timeout'), 'TIMEOUT'],
     [new Error('missing output revenue_delta'), 'RESULT_CONTRACT_MISMATCH'],
+    // A host's row policy refused the statement (RFC 0010): nothing a repair can change.
+    [Object.assign(new Error('This question would list health data for individual people.'), { code: 'ROW_POLICY_REFUSED' }), 'POLICY_DENIED'],
   ])('classifies supported connector/compiler failures without changing their stable code', (error, code) => {
     expect(classifyAnalyticalFailure(error)).toBe(code);
   });

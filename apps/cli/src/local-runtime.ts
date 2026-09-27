@@ -740,12 +740,13 @@ import {
   type DatasetSource,
 } from "./notebook-datasets.js";
 import { prepareBlockInvocation } from './block-invocation.js';
-import { redactConnections, resolveSecretReferences, storeConnectionSecrets } from './connection-secrets.js';
-import { authorizeHostRequest, currentHostGitHooks, currentPrincipal, currentRequestContext, hostActor, hostAllowedSources, hostGitAuthor, hostModelProvider, installHostPersonaSlots, resolveHostPrincipal, resultValuesMayReachModel, safeHomeCards, safeHostBanner, safeNextLink, setHostGitHooks, setHostModelHooks, withRequestContext, type DqlFollow, type DqlHostHooks } from './host/request-context.js';
+import { readPrivateConnections, redactConnections, resolveSecretReferences, storeConnectionSecrets } from './connection-secrets.js';
+import { authorizeHostRequest, currentHostGitHooks, currentPrincipal, currentRequestContext, destinationForRequest, hostActor, hostAllowedSources, hostGitAuthor, hostModelProvider, installHostPersonaSlots, resolveHostPrincipal, resultValuesMayReachModel, safeHomeCards, safeHostBanner, safeNextLink, setHostGitHooks, setHostModelHooks, withRequestContext, type DqlFollow, type DqlHostHooks } from './host/request-context.js';
 import { isRunPass, issueRunPass, redeemRunPass, revokeRunPass } from './host/schedule-runs.js';
 import { setDeliverySink } from './schedule/notifiers/index.js';
 import { routeAction, type DqlAction } from './host/route-actions.js';
 import { relationsOfStatements, withHostQueryHooks } from './host/row-policy.js';
+import { exportFile, exportFormat, type ExportFile } from './export/result-file.js';
 import { auditActor, auditModelUsage, auditRequest, otlpHeadersFromEnv, withAnswerAudit, withTraceExport } from './host/observability.js';
 import { shouldWithhold, withholdRunFigures } from './host/answer-figures.js';
 import { PersonScopedMap } from './host/person-scoped-map.js';
@@ -8957,6 +8958,8 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
   };
   const agentRunEngine = new AgentRunEngine({
     store: agentRunStore,
+    // HH-17: a host that refuses sensitive questions by column replaces the wording check.
+    ...(hostHooks?.sensitiveQuestions === 'columns' ? { sensitiveQuestions: 'columns' as const } : {}),
     executors: {
       ...agentRunExecutors,
       ...(opts.agentRunExecutors ?? {}),
@@ -13493,7 +13496,17 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
     }
     const requestId = randomUUID();
     if (requestPrincipal) Object.assign(auditWho, { principal: requestPrincipal, actor: auditActor(requestPrincipal), requestId });
-    return withRequestContext(requestPrincipal ? { principal: requestPrincipal, requestId, ...(hostHooks ? { hooks: hostHooks } : {}) } : undefined, async () => {
+    // HH-17: statements carry the route's action, and where their results go
+    // (a scheduled run's pass: its delivery).
+    const requestAction = path.startsWith('/api/') ? routeAction(req.method, path).action : undefined;
+    const requestDestination = runPass ? 'delivery' as const : destinationForRequest(requestAction, path);
+    return withRequestContext(requestPrincipal ? {
+      principal: requestPrincipal,
+      requestId,
+      ...(requestAction ? { action: requestAction } : {}),
+      ...(requestDestination ? { destination: requestDestination } : {}),
+      ...(hostHooks ? { hooks: hostHooks } : {}),
+    } : undefined, async () => {
 
     // Existing `dql notebook` runtimes cannot hand their in-memory capability
     // to a later CLI process. A short-lived challenge is therefore issued only
@@ -19012,7 +19025,10 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
       return;
     }
 
-    const appDashRun = path.match(/^\/api\/(apps|app-builds)\/([^/]+)\/dashboards\/([^/]+)\/run$/);
+    // A page run, or one tile of a published page run for a file (HH-17 exports:
+    // `destination: 'export'`, so a host's export rules apply to what the file holds).
+    const appDashExport = path.match(/^\/api\/(apps)\/([^/]+)\/dashboards\/([^/]+)\/export$/);
+    const appDashRun = path.match(/^\/api\/(apps|app-builds)\/([^/]+)\/dashboards\/([^/]+)\/run$/) ?? appDashExport;
     const datasetFieldValuesRun = req.method === 'POST' && path === '/api/app-datasets/field-values';
     const mcpDatasetRun = (req.method === 'POST' && path === '/api/app-datasets/run') || datasetFieldValuesRun;
     if (req.method === 'POST' && (appDashRun || mcpDatasetRun)) {
@@ -19031,6 +19047,15 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
         const appId = mcpRequest ? mcpRequest.app.id : decodeURIComponent(appDashRun![2]);
         const dashboardId = mcpRequest ? mcpRequest.dashboard.id : decodeURIComponent(appDashRun![3]);
         const body = mcpRequest ? mcpRequest.body : await readJSON(req).catch(() => ({}));
+        const tileExport = appDashExport ? exportFormat((body as Record<string, unknown> | undefined)?.format) : null;
+        if (appDashExport) {
+          const requested = body && typeof body === 'object' ? body as Record<string, unknown> : {};
+          if (!tileExport) throw new DashboardRunRequestError('Choose a file format: csv, json or xlsx.');
+          if (typeof requested.tileId !== 'string' || !requested.tileId) throw new DashboardRunRequestError('Name the tile to export (tileId).');
+          if (requested.driverProbe !== undefined || requested.exploreProbe !== undefined || requested.fullRun || requested.visibleTileIds || requested.affectedTileIds) {
+            throw new DashboardRunRequestError('An export runs one tile on its own.');
+          }
+        }
         const loaded = mcpRequest
           ? mcpRequest
           : runSurface === 'app-builds'
@@ -21806,6 +21831,21 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
                   receipt,
                 }),
           }));
+          return;
+        }
+        if (tileExport) {
+          const tile = tilesWithFilters.find((candidate) => candidate.tileId === (body as Record<string, unknown>).tileId);
+          const result = tile?.status === 'ok' && !staleRun ? tile.result as { columns?: unknown; rows?: unknown } | undefined : undefined;
+          if (!result || !Array.isArray(result.rows)) {
+            res.writeHead(422, { 'Content-Type': 'application/json; charset=utf-8' });
+            res.end(serializeJSON({ error: tile?.error ?? (staleRun ? 'The page changed while it ran. Export again.' : 'This tile has no result to export.'), code: 'EXPORT_FAILED' }));
+            return;
+          }
+          const rows = result.rows as Array<Record<string, unknown>>;
+          const columns = Array.isArray(result.columns)
+            ? (result.columns as unknown[]).map((column) => (typeof column === 'string' ? column : String((column as { name?: unknown })?.name ?? ''))).filter(Boolean)
+            : Object.keys(rows[0] ?? {});
+          sendExportFile(res, exportFile({ columns, rows }, tileExport, typeof tile?.title === 'string' ? tile.title : dashboardId));
           return;
         }
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
@@ -27331,6 +27371,65 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
       return;
     }
 
+    // A statement's result as a file (RFC 0010 HH-17): run again for the export
+    // itself, so a host's export rules apply to exactly what the file holds.
+    if (req.method === 'POST' && path === '/api/query/export') {
+      try {
+        const body = await readJSON(req) as Record<string, unknown>;
+        const format = exportFormat(body.format);
+        if (!format) {
+          res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+          res.end(serializeJSON({ error: 'Choose a file format: csv, json or xlsx.' }));
+          return;
+        }
+        if (typeof body.sql !== 'string' || !body.sql.trim()) {
+          res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+          res.end(serializeJSON({ error: 'Missing SQL in request body.' }));
+          return;
+        }
+        // Exporting a statement also runs it: with a host, the person must be allowed both.
+        const principal = currentPrincipal();
+        if (hostIdentity && principal) {
+          const decision = await authorizeHostRequest(hostHooks!, principal, { action: 'query.run', resource: { type: 'project' } });
+          if (!decision.allow) {
+            res.writeHead(403, { 'Content-Type': 'application/json; charset=utf-8' });
+            res.end(serializeJSON({ error: decision.reason ?? 'You do not have permission to run this query.', code: 'PERMISSION_DENIED', action: 'query.run' }));
+            return;
+          }
+        }
+        const executionConnection = await resolveExecutionConnection(body);
+        const tableMapping = hasStandaloneSemanticRef(body.sql)
+          ? await resolveSemanticTableMapping(executor, executionConnection, semanticLayer, projectRoot)
+          : undefined;
+        const semantic = prepareSemanticSql(body.sql, semanticLayer, { tableMapping });
+        if (semantic.unresolvedRefs.length > 0) {
+          res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+          res.end(serializeJSON({ error: `Unknown semantic reference${semantic.unresolvedRefs.length > 1 ? 's' : ''}: ${semantic.unresolvedRefs.join(', ')}` }));
+          return;
+        }
+        const app = loadRuntimeApp(projectRoot, typeof body.appId === 'string' ? body.appId : activePersonaAppId());
+        assertAppAccess({ app, domain: typeof body.domain === 'string' ? body.domain : app?.domain, level: 'execute' });
+        const execution = await analyticalExecutionService.execute({
+          sql: semantic.sql,
+          subject: 'Export',
+          connection: executionConnection,
+          sqlParams: Array.isArray(body.sqlParams) ? body.sqlParams : [],
+          variables: body.variables && typeof body.variables === 'object' ? body.variables as Record<string, unknown> : {},
+          semanticRefs: semantic.semanticRefs,
+        });
+        sendExportFile(res, exportFile(execution.result, format, typeof body.title === 'string' ? body.title : undefined));
+      } catch (error) {
+        if (res.headersSent || res.writableEnded) {
+          res.end();
+          return;
+        }
+        const refused = error instanceof DQLAccessDeniedError || isPolicyRefusal(error);
+        res.writeHead(refused ? 403 : 500, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(serializeJSON({ error: error instanceof Error ? error.message : String(error), ...(refused ? { code: 'EXPORT_REFUSED' } : {}) }));
+      }
+      return;
+    }
+
     if (req.method === 'POST' && path === '/api/query') {
       let body: any;
       let execContext: NotebookExecutionContextInput | null = null;
@@ -32808,6 +32907,12 @@ export function loadProjectConfig(projectRoot: string): ProjectConfig {
   }
 
   const raw = JSON.parse(readFileSync(configPath, 'utf-8')) as Record<string, unknown>;
+  // This person's own connections (`.dql/local/private/connections.json`, never in git) replace shared ones.
+  const own = readPrivateConnections(projectRoot);
+  if (own) {
+    raw.connections = { ...getStoredConnections(raw), ...own.connections };
+    if (own.defaultConnection) raw.defaultConnectionName = own.defaultConnection;
+  }
   const config = raw as unknown as ProjectConfig;
 
   const connections = getStoredConnections(raw);
@@ -47689,4 +47794,28 @@ function isMemoryScope(value: unknown): value is 'thread' | 'notebook' | 'projec
     || value === 'project'
     || value === 'user'
     || value === 'artifact';
+}
+
+
+/** Send a result file (HH-17 exports); the name is never a path. */
+function sendExportFile(res: ServerResponse, file: ExportFile): void {
+  res.writeHead(200, {
+    'Content-Type': file.contentType,
+    'Content-Disposition': `attachment; filename="${file.fileName}"`,
+    'Content-Length': String(file.body.length),
+    'Cache-Control': 'no-store',
+    'X-Content-Type-Options': 'nosniff',
+  });
+  res.end(file.body);
+}
+
+/** A host's refusal (row policy or credentials), however deep it was wrapped. */
+function isPolicyRefusal(error: unknown): boolean {
+  let current: unknown = error;
+  for (let depth = 0; depth < 5 && current && typeof current === 'object'; depth += 1) {
+    const code = (current as { code?: unknown }).code;
+    if (code === 'ROW_POLICY_REFUSED' || code === 'CREDENTIALS_REQUIRED') return true;
+    current = (current as { cause?: unknown }).cause;
+  }
+  return false;
 }

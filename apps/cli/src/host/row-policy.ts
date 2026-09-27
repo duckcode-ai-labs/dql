@@ -6,7 +6,8 @@ import type {
   QueryPurpose,
 } from '@duckcodeailabs/dql-connectors';
 import { analyzeSqlReferences, extractTablesFromSql } from '@duckcodeailabs/dql-core';
-import { currentPrincipal, type DqlPrincipal } from './request-context.js';
+import { currentDestination, currentPrincipal, currentRequestContext, type DqlDestination, type DqlPrincipal } from './request-context.js';
+import type { DqlAction } from './route-actions.js';
 
 /**
  * ONE QUERY PATH (RFC 0010, slice HH-3). Every statement DQL sends to a
@@ -21,9 +22,9 @@ import { currentPrincipal, type DqlPrincipal } from './request-context.js';
  * Rewrites must keep the placeholder style of the SQL they receive.
  *
  * Cached and proven results are keyed by the signed-in person (HH-2), so a
- * policy must depend only on the person and the statement. A policy that
- * changes for other reasons should carry a version in the person's
- * attributes.
+ * policy must depend only on the person, the statement and its destination
+ * (an export's results are keyed apart, HH-17). A policy that changes for
+ * other reasons should carry a version in the person's attributes.
  */
 export interface DqlQueryContext {
   principal: DqlPrincipal | null;
@@ -33,6 +34,14 @@ export interface DqlQueryContext {
   relations: string[];
   connection: { driver: string; name?: string };
   purpose: QueryPurpose;
+  /**
+   * HH-17: where the result goes — `person`, `model` (Ask, Research: a
+   * question's answer), `delivery` (a scheduled run) or `export` (a CSV,
+   * JSON or Excel file). Absent for work nobody asked for (a startup sync).
+   */
+  destination?: DqlDestination;
+  /** HH-17: the route action of the request the statement serves (HH-2), e.g. `ask`, `export`, `app.view`. */
+  action?: DqlAction;
 }
 
 export type DqlRowPolicyResult = { sql: string; params?: unknown[] } | { refuse: string };
@@ -138,6 +147,8 @@ export async function applyRowPolicy(
   purpose: QueryPurpose = 'data',
 ): Promise<{ sql: string; params: unknown[] }> {
   let answer: DqlRowPolicyResult;
+  const destination = currentDestination();
+  const action = currentRequestContext()?.action;
   try {
     answer = await policy({
       principal: currentPrincipal() ?? null,
@@ -146,6 +157,8 @@ export async function applyRowPolicy(
       relations: relationsOf(sql, connection.driver),
       connection: { driver: connection.driver, ...(connection.name ? { name: connection.name } : {}) },
       purpose,
+      ...(destination ? { destination } : {}),
+      ...(action ? { action } : {}),
     });
   } catch {
     throw new RowPolicyRefusedError('DQL could not check what you may see, so it did not run this query.');

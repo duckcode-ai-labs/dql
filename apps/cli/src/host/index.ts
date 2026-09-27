@@ -22,6 +22,7 @@ export {
   type DqlConversationStore,
   type DqlSourceRef,
   type DqlKnowledgeServer,
+  type DqlDestination,
   type DqlHomeCard,
   type DqlFollow,
   type DqlFollowStore,
