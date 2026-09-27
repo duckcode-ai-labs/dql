@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { QueryExecutor, type ConnectionConfig, type DatabaseConnector, type QueryResult } from '@duckcodeailabs/dql-connectors';
 import { startLocalServer } from '../local-runtime.js';
-import { withRequestContext, type DqlHostHooks, type DqlPrincipal } from './request-context.js';
+import { withRequestContext, type DqlHostHooks, type DqlModelProvider, type DqlPrincipal } from './request-context.js';
 import { CredentialsRefusedError, RowPolicyRefusedError, withHostQueryHooks, withRowPolicy, type DqlCredentialsHook, type DqlQueryContext, type DqlRowPolicy } from './row-policy.js';
 
 /**
@@ -255,6 +255,51 @@ describe('two people, the same questions, different rows (RFC 0010 HH-3)', () =>
       const refusedSql = await call('none', '/api/query', sql);
       expect(refusedSql.text).toContain('Your profile has no region');
       expect(refusedSql.text).not.toMatch(/"n":\s*\d/);
+    } finally {
+      await new Promise<void>((done) => (server ? server.close(() => done()) : done()));
+      await executor.disconnect();
+      rmSync(projectRoot, { recursive: true, force: true });
+    }
+  }, 120_000);
+});
+
+describe('where a chart\'s values came from (RFC 0010 HH-5)', () => {
+  duckDbIt('names the tables an App chart read when a question about it may reach the host\'s model', async () => {
+    const projectRoot = mkdtempSync(join(tmpdir(), 'dql-boundary-'));
+    const databasePath = join(projectRoot, 'app-datasets-pilot.duckdb');
+    const connection: ConnectionConfig = { driver: 'duckdb', filepath: databasePath, moduleSearchPaths: [connectorRoot!] };
+    const executor = new QueryExecutor();
+    let server: Server | undefined;
+    const analyst: DqlPrincipal = { id: 'u-analyst', kind: 'person', email: 'analyst@example.test', appGrants: { 'commerce-pilot': 'execute' }, source: 'host' };
+    const boundary: Array<string[] | undefined> = [];
+    const model = { name: 'claude', available: async () => true, generate: async () => 'Answered from the chart.' } as unknown as DqlModelProvider;
+    const hostHooks: DqlHostHooks = {
+      resolvePrincipal: () => analyst,
+      rowPolicy: ({ sql }) => ({ sql }),
+      modelProvider: () => ({ id: 'anthropic', provider: model }),
+      isInBoundary: (_model, context) => { boundary.push(context?.relations); return true; },
+    };
+    try {
+      cpSync(fixtureRoot, projectRoot, { recursive: true });
+      mkdirSync(join(projectRoot, '.dql', 'connectors'), { recursive: true });
+      symlinkSync(join(connectorRoot!, 'node_modules'), join(projectRoot, '.dql', 'connectors', 'node_modules'), 'dir');
+      execFileSync(process.execPath, [seedWarehouse, '--seed', join(projectRoot, 'seeds', 'seed.json'), '--connector-root', connectorRoot!, '--out', databasePath], { stdio: 'pipe' });
+      const port = await startLocalServer({ rootDir: projectRoot, projectRoot, executor, connection, preferredPort: 0, hostHooks, captureServer: (created) => { server = created; } });
+      const base = `http://127.0.0.1:${port}`;
+      const post = async (path: string, body: unknown) => {
+        const response = await fetch(`${base}${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+        const text = await response.text();
+        return { status: response.status, body: text ? JSON.parse(text) : undefined, text };
+      };
+      const run = await post('/api/apps/commerce-pilot/dashboards/overview/run', {});
+      expect(run.status, run.text).toBe(200);
+      const tile = (run.body.tiles as Array<{ tileId: string; status: string; tileType?: string; error?: string }>)
+        .find((candidate) => candidate.status === 'ok' && candidate.tileType === 'dataset');
+      expect(tile, JSON.stringify(run.body.tiles.map((t: { tileId: string; status: string; error?: string }) => [t.tileId, t.status, t.error]))).toBeTruthy();
+      const asked = await post('/api/apps/commerce-pilot/ask', { question: 'What stands out?', dashboardId: 'overview', tileId: tile!.tileId, runId: run.body.runId });
+      expect(asked.status, asked.text).toBe(200);
+      // The boundary rule heard exactly which tables the chart's values came from.
+      expect(boundary.at(-1)).toEqual(['order_lines']);
     } finally {
       await new Promise<void>((done) => (server ? server.close(() => done()) : done()));
       await executor.disconnect();

@@ -109,7 +109,7 @@ export interface DqlHostHooks {
   modelProvider?(input: { route: DqlModelRoute; principal: DqlPrincipal }): AgentProvider | undefined;
 
   /** Whether result values may reach this provider (the privacy boundary). */
-  isInBoundary?(provider: DqlProviderDescriptor): boolean;
+  isInBoundary?(provider: DqlProviderDescriptor, context?: { relations?: string[] }): boolean;
 
   /** Where state lives. Each store has a local SQLite/file default. */
   stores?: {
@@ -280,6 +280,7 @@ Not built: moving the `dql notebook` block scheduler onto this route. Tests: `de
 
 ### Fixes from the first host's review
 - **Certifying is a certification:** `/api/block-studio/certifications` (the route the UI uses), `/api/blocks/save-from-cell` (which certifies what it saves) and `approve-semantic` now map to `dataset.certify`; they had fallen through to `dataset.author`, so a person allowed only to author could certify. Creating a Dataset from a table and saving a cell apply the host's enterprise gates.
+- **The boundary hears where values came from:** when DQL hands a model values from a run that already happened (a story drafted from a page run, a question about a chart on screen), `isInBoundary` gets `context.relations`, every table those values came from, scanned from the SQL DQL sent for each tile. When one tile's tables cannot be listed (no SQL kept, or SQL the scan cannot read), `relations` is absent and the host decides as if the values could have come from anywhere. A host that keeps some columns from the model can then refuse only the values that drew on them.
 - **Chart questions respect the privacy boundary:** asking about an App chart sends its displayed rows to a model only when `isInBoundary` (or, without a host, a model on this machine) allows it; otherwise the answer is the deterministic summary, written without a model.
 - **Who and for whom:** a certification request records the signed-in person, not a name in the body; Apps published or created with a host are owned by the signed-in person; the new `audience` hook decides whether answers are written for a stakeholder or an analyst (the body's `audience` is ignored); Research requested through Ask needs the `research` action.
 - **Conversations belong to a person:** with a host, threads record their owner and each person lists, searches, opens and continues only their own; someone else's thread answers 404. The local notebook is unchanged.

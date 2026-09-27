@@ -739,7 +739,7 @@ import { authorizeHostRequest, currentHostGitHooks, currentPrincipal, currentReq
 import { isRunPass, issueRunPass, redeemRunPass, revokeRunPass } from './host/schedule-runs.js';
 import { setDeliverySink } from './schedule/notifiers/index.js';
 import { routeAction, type DqlAction } from './host/route-actions.js';
-import { withHostQueryHooks } from './host/row-policy.js';
+import { relationsOfStatements, withHostQueryHooks } from './host/row-policy.js';
 import { auditActor, auditModelUsage, auditRequest, otlpHeadersFromEnv, withAnswerAudit, withTraceExport } from './host/observability.js';
 import { shouldWithhold, withholdRunFigures } from './host/answer-figures.js';
 import { PersonScopedMap } from './host/person-scoped-map.js';
@@ -5023,6 +5023,8 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
     pageFilters?: Array<{ id: string; label: string; value: string }>;
     /** The reader trust state of each tile in this run (step 10). */
     tileTrust?: Record<string, ReaderTrustState | null>;
+    /** The tables each finished tile read (null: DQL cannot list them), for the model boundary (HH-5). */
+    tileRelations?: Record<string, string[] | null>;
     appId: string;
     dashboardId: string;
     snapshotId: string;
@@ -5112,6 +5114,8 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
     runScopeGeneration?: number;
     chartContexts: AppAnalyticalContextV1[];
     failedTileContexts: DatasetChartFailedTileEvidence[];
+    /** The tables each finished tile read (null: DQL cannot list them), for the model boundary (HH-5). */
+    tileRelations?: Record<string, string[] | null>;
     expiresAt: number;
   };
   /**
@@ -18173,6 +18177,7 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
           ? resultValuesMayReachModel(
             { id: selected.id, name: selected.provider.name, ...(providerConfig?.model ? { model: providerConfig.model } : {}), ...(providerConfig?.baseUrl ? { baseUrl: providerConfig.baseUrl } : {}) },
             () => selected.id === 'ollama' && isLoopbackUrl(providerConfig?.baseUrl ?? 'http://127.0.0.1:11434'),
+            storyValueRelations(evidence.storyBindings, evidence.tileRelations),
           )
           : false;
         const model = providerConfig?.model;
@@ -21174,10 +21179,19 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
             boundParameters: datasetBoundParameters.get(tile.tileId) ?? [],
           }];
         });
+        // Where each tile's values came from, from the SQL DQL sent: a host's
+        // boundary rule can then say whether they may reach a model (HH-5).
+        const tileRelations: Record<string, string[] | null> = Object.fromEntries(settledTiles
+          .filter((tile) => tile.status === 'ok')
+          .map((tile) => {
+            const sql = (tile as { artifact?: { sql?: unknown } }).artifact?.sql;
+            return [tile.tileId, typeof sql === 'string' && sql.length < 40_000 ? relationsOfStatements([sql], runDialect) ?? null : null];
+          }));
         const runEvidence = {
           appId,
           dashboardId,
           snapshotId: runSnapshot.snapshotId,
+          tileRelations,
           filterFingerprint,
           resultFingerprint,
           personaFingerprint,
@@ -21248,6 +21262,7 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
             ...(chartRunScopeKey ? { runScopeKey: chartRunScopeKey, runScopeGeneration: chartRunScopeGeneration } : {}),
             chartContexts,
             failedTileContexts,
+            tileRelations,
             expiresAt: Date.now() + 15 * 60_000,
           });
         }
@@ -21548,9 +21563,11 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
                 const providerConfig = getEffectiveProviderConfig(projectRoot, selected.id);
                 // The chart context carries its displayed rows: they reach the
                 // model only inside the privacy boundary (HH-5), as for App stories.
+                const relations = run.tileRelations?.[tileId];
                 const valuesMayReachProvider = resultValuesMayReachModel(
                   { id: selected.id, name: selected.provider.name, ...(providerConfig?.model ? { model: providerConfig.model } : {}), ...(providerConfig?.baseUrl ? { baseUrl: providerConfig.baseUrl } : {}) },
                   () => selected.id === 'ollama' && isLoopbackUrl(providerConfig?.baseUrl ?? 'http://127.0.0.1:11434'),
+                  relations ? { relations } : undefined,
                 );
                 return { provider: selected.provider, valuesMayReachProvider };
               },
@@ -38853,6 +38870,24 @@ function readBlockCompanionFile(projectRoot: string, relativePath: string) {
  * when the source has no invariants or cannot be parsed — invariant evaluation
  * is best-effort and must never break a run.
  */
+/**
+ * The tables a story's values came from: every tile its binding catalog
+ * draws on. Undefined when one of those tiles' tables is unknown (HH-5).
+ */
+export function storyValueRelations(
+  catalog: StoryBindingCatalog | undefined,
+  tileRelations: Record<string, string[] | null> | undefined,
+): { relations: string[] } | undefined {
+  if (!catalog || !tileRelations) return undefined;
+  const all = new Set<string>();
+  for (const binding of Object.values(catalog)) {
+    const relations = tileRelations[binding.tileId];
+    if (!relations) return undefined;
+    for (const relation of relations) all.add(relation);
+  }
+  return { relations: [...all].sort() };
+}
+
 export function extractBlockInvariants(source: string): string[] {
   // Only DQL block sources declare invariants. Never hand a non-DQL cell source
   // (e.g. a raw SQL notebook cell like "SELECT 1") to the DQL parser: it can loop

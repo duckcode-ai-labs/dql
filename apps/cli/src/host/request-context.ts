@@ -53,6 +53,12 @@ export function currentHostHooks(): DqlHostHooks | undefined {
   return requestContext.getStore()?.hooks;
 }
 
+/** What DQL knows about the values it is about to send a model (`isInBoundary`). */
+export interface DqlBoundaryContext {
+  /** Every table the values came from, as DQL's SQL scan saw each statement; absent when it cannot list them all. */
+  relations?: string[];
+}
+
 /** A certified source a person could read, as the host's `sourceAccess` sees it. */
 export interface DqlSourceRef {
   id: string;
@@ -138,8 +144,13 @@ export interface DqlHostHooks {
    * The commercial host's approved rule: the model runs in the customer's
    * own cloud account, in a region their admin approved, with data
    * retention off.
+   *
+   * `context.relations` names every table the values DQL is about to send
+   * came from, when it knows them all (a story drafted from a page run, a
+   * question about a chart on screen). It is absent when DQL cannot list
+   * them — decide as if the values could have come from anywhere.
    */
-  isInBoundary?(model: { id: string; name: string; model?: string; baseUrl?: string }): boolean;
+  isInBoundary?(model: { id: string; name: string; model?: string; baseUrl?: string }, context?: DqlBoundaryContext): boolean;
   /**
    * Audit (RFC 0010 HH-6): one event per API request that changed something
    * or was refused, and one per finished answer. No result values. Without
@@ -313,11 +324,11 @@ export function hostModelProvider(): { id: string; provider: DqlModelProvider } 
  * a boundary rule (an error means no); otherwise only a model on this
  * machine qualifies.
  */
-export function resultValuesMayReachModel(model: { id: string; name: string; model?: string; baseUrl?: string }, isLocal: () => boolean): boolean {
+export function resultValuesMayReachModel(model: { id: string; name: string; model?: string; baseUrl?: string }, isLocal: () => boolean, context?: DqlBoundaryContext): boolean {
   const hooks = modelHooks();
   if (hooks.isInBoundary) {
     try {
-      return hooks.isInBoundary(model) === true;
+      return hooks.isInBoundary(model, context?.relations ? { relations: [...context.relations] } : {}) === true;
     } catch {
       return false;
     }

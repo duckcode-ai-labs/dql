@@ -228,6 +228,37 @@ describe('the model and the privacy boundary (RFC 0010 HH-5)', () => {
     setHostModelHooks({ isInBoundary: () => { throw new Error('boom'); } });
     expect(resultValuesMayReachModel(bedrock, () => true)).toBe(false);
   });
+
+  it('tells the boundary rule which tables the values came from, when DQL knows them all', () => {
+    const bedrock = { id: 'anthropic', name: 'claude', model: 'eu.anthropic.claude-sonnet-5-v1:0' };
+    const seen: Array<string[] | undefined> = [];
+    setHostModelHooks({ isInBoundary: (_model, context) => { seen.push(context?.relations); return !context?.relations?.includes('claims.patients'); } });
+    expect(resultValuesMayReachModel(bedrock, () => false, { relations: ['claims.payments'] })).toBe(true);
+    expect(resultValuesMayReachModel(bedrock, () => false, { relations: ['claims.patients', 'claims.payments'] })).toBe(false);
+    expect(resultValuesMayReachModel(bedrock, () => false)).toBe(true);
+    expect(seen).toEqual([['claims.payments'], ['claims.patients', 'claims.payments'], undefined]);
+  });
+});
+
+describe('where a run\'s values came from (HH-5)', () => {
+  it('lists every table a run read, or nothing when one statement cannot be read', async () => {
+    const { relationsOfStatements } = await import('./row-policy.js');
+    expect(relationsOfStatements(['SELECT region, SUM(paid) FROM claims.payments GROUP BY 1', 'SELECT * FROM claims.patients p JOIN claims.payments x ON p.id = x.patient_id'], 'duckdb'))
+      .toEqual(['claims.patients', 'claims.payments']);
+    expect(relationsOfStatements(['SELECT 1'], 'duckdb')).toBeUndefined();
+    expect(relationsOfStatements([undefined], 'duckdb')).toBeUndefined();
+    expect(relationsOfStatements([], 'duckdb')).toEqual([]);
+  });
+
+  it('draws a story\'s tables from every tile it binds to', async () => {
+    const { storyValueRelations } = await import('../local-runtime.js');
+    const catalog = { paid: { tileId: 'paid' }, count: { tileId: 'count' } } as never;
+    expect(storyValueRelations(catalog, { paid: ['claims.payments'], count: ['claims.claims', 'claims.payments'] }))
+      .toEqual({ relations: ['claims.claims', 'claims.payments'] });
+    expect(storyValueRelations(catalog, { paid: ['claims.payments'], count: null })).toBeUndefined();
+    expect(storyValueRelations(catalog, { paid: ['claims.payments'] })).toBeUndefined();
+    expect(storyValueRelations(catalog, undefined)).toBeUndefined();
+  });
 });
 
 describe('one place every tool runs (RFC 0010 HH-7)', () => {

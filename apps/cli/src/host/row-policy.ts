@@ -112,6 +112,23 @@ export function relationsOf(sql: string, dialect: string): string[] {
   }
 }
 
+/**
+ * Every table a run's values came from, from each statement's SQL as DQL
+ * wrote it (before any host rewrite), or undefined when one statement is
+ * missing or names no table DQL can see — then nobody can say where all the
+ * values came from.
+ */
+export function relationsOfStatements(statements: Array<string | undefined>, dialect: string): string[] | undefined {
+  const all = new Set<string>();
+  for (const sql of statements) {
+    if (typeof sql !== 'string' || !sql.trim()) return undefined;
+    const relations = relationsOf(sql, dialect);
+    if (!relations.length) return undefined;
+    for (const relation of relations) all.add(relation);
+  }
+  return [...all].sort();
+}
+
 /** Ask the policy about one statement; refuse on a refusal, an error, or an unusable answer. */
 export async function applyRowPolicy(
   policy: DqlRowPolicy,
