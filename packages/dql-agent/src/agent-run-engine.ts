@@ -686,6 +686,11 @@ export interface AgentRun {
   steps: AgentRunStep[];
   summary: string;
   answer?: string;
+  /**
+   * The host keeps this answer's figures from this person until someone
+   * checks it (RFC 0010 HH-14): the run holds what it is built on, never a value.
+   */
+  figuresWithheld?: boolean;
   /** How to read `answer` for trust; defaults to "governed". */
   answerKind?: AgentRunAnswerKind;
   artifacts: AgentRunArtifact[];

@@ -197,6 +197,13 @@ export interface DqlHostHooks {
    * An error allows none. Without it, every certified source is usable.
    */
   sourceAccess?(principal: DqlPrincipal, sources: DqlSourceRef[]): Promise<Iterable<string>> | Iterable<string>;
+  /**
+   * HH-14: whether this person sees the figures of an Ask answer that needs
+   * review. `withhold_review` gives them — and stores for them — the answer
+   * without any value (what it is built on, its SQL and trust), until someone
+   * checks it; certified and governed answers are unchanged. An error withholds.
+   */
+  answerFigures?(principal: DqlPrincipal): 'show' | 'withhold_review' | Promise<'show' | 'withhold_review'>;
   /** Each finished Ask trace, strictly redacted, as a bundle and as OTLP (HH-6). */
   traces?: DqlTraceSink;
   /**

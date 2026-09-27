@@ -741,6 +741,7 @@ import { setDeliverySink } from './schedule/notifiers/index.js';
 import { routeAction, type DqlAction } from './host/route-actions.js';
 import { withHostQueryHooks } from './host/row-policy.js';
 import { auditActor, auditModelUsage, auditRequest, otlpHeadersFromEnv, withAnswerAudit, withTraceExport } from './host/observability.js';
+import { shouldWithhold, withholdRunFigures } from './host/answer-figures.js';
 import { withRunOwnership } from './host/run-ownership.js';
 import { answerFactsFromRun } from './host/answer-facts.js';
 const HOST_ICONS = new Set(['inbox', 'requests', 'review', 'work', 'health', 'admin', 'people', 'git', 'link']);
@@ -15825,6 +15826,12 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
           cancellable: true,
         });
         if (wantsStream) writeStream('agent-run-accepted', { runId, operationId: operation?.id });
+        // HH-14: a host may keep a needs-review answer's figures from this person. Until the
+        // run's trust is known nothing that could quote a figure streams to them.
+        const figuresRule = hostIdentity && hostHooks?.answerFigures
+          ? await Promise.resolve().then(() => hostHooks.answerFigures!(currentPrincipal()!)).catch(() => 'withhold_review' as const)
+          : 'show';
+        const guarded = figuresRule === 'withhold_review';
         let completedRun: AgentRun | undefined;
         let runError: unknown;
         try {
@@ -15859,10 +15866,10 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
                 runProviderEvidence,
                 () => agentRunEngine.run(parsed.request!, (event) => {
                   runProviderEvidence.setRoute(event.route);
-                  if (wantsStream) writeStream('agent-run-event', event);
-                  report?.({ phase: event.type, progress: 45, message: event.message });
+                  if (wantsStream) writeStream('agent-run-event', guarded ? { ...event, message: '' } : event);
+                  report?.({ phase: event.type, progress: 45, message: guarded ? '' : event.message });
                 }, (delta) => {
-                  if (wantsStream) writeStream('agent-run-answer-delta', { runId: parsed.request!.runId, delta });
+                  if (wantsStream && !guarded) writeStream('agent-run-answer-delta', { runId: parsed.request!.runId, delta });
                 }),
               );
               const rawRun = mergeRunScopedProviderDispatchEvidence(
@@ -15885,7 +15892,9 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
                 // Missing target-generation evidence keeps automatic repair
                 // ineligible; the failed run itself remains fully inspectable.
               }
-              const run = attachAnalyticalRepairCapability(rawRun, resolvedTargetFingerprint);
+              const capable = attachAnalyticalRepairCapability(rawRun, resolvedTargetFingerprint);
+              // HH-14: withheld figures are never stored for this person either.
+              const run = shouldWithhold(figuresRule, capable) ? withholdRunFigures(capable) : capable;
               // The engine persists before the host can validate the DQL wrapper;
               // replace that row with the server-owned capability atomically.
               await agentRunStore.save(run);

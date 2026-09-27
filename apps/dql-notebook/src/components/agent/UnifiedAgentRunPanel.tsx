@@ -3068,7 +3068,9 @@ function AskRunCard(props: AskRunCardProps) {
   const failureMessage = cancelled ? (run.summary || 'Stopped by user.') : blocked ? askFailureDetail(run) : undefined;
   const captureWarning = askRunCaptureWarning(run);
   const evidence = evidenceFromRun(run);
-  const displayArtifacts = cancelled ? [] : run.artifacts;
+  // A host kept this answer's figures from this person until someone checks it (RFC 0010 HH-14).
+  const figuresWithheld = (run as { figuresWithheld?: boolean }).figuresWithheld === true;
+  const displayArtifacts = cancelled || figuresWithheld ? [] : run.artifacts;
   const inlineResultArtifacts = displayArtifacts.filter((artifact) => {
     const payload = payloadOf(artifact);
     return !isRichAskArtifact(artifact, payload) && Boolean(extractResult(payload));
@@ -3160,6 +3162,11 @@ function AskRunCard(props: AskRunCardProps) {
       <ClarificationChoiceList run={run} t={t} onSelect={onSelectClarification} />
 
       {/* Executed results live in the transcript; the inspector owns DQL/SQL/lineage/trust. */}
+      {figuresWithheld ? (
+        <div role="note" data-testid="ask-figures-withheld" style={{ padding: '10px 12px', border: `1px solid ${t.cellBorder}`, borderLeft: `3px solid ${t.warning}`, borderRadius: 8, background: t.cellBg, fontSize: 12.5, color: t.textSecondary }}>
+          The figures stay hidden until an analyst checks this answer. What it would be built on is kept for the check.
+        </div>
+      ) : null}
       {inlineResultArtifacts.map((artifact) => (
         <InlineAskResultCard
           key={artifact.id}
