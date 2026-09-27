@@ -12365,6 +12365,73 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
     };
   };
 
+  /**
+   * Key proofs for certified content (`POST /api/keys/prove`): DQL's own
+   * grain proof for each certified block Dataset that declares keys, and its
+   * own relationship validation for each certified join with keys, run as
+   * the caller (row policy and credentials apply). Only counts and outcomes
+   * leave: never a row or a key value.
+   */
+  const proveDeclaredKeys = async (body: Record<string, unknown>) => {
+    const narrowTo = (value: unknown): Set<string> | null => (Array.isArray(value)
+      ? new Set(value.filter((item): item is string => typeof item === 'string' && item.trim() !== '').map((item) => item.trim()))
+      : null);
+    const blockFilter = narrowTo(body.blocks);
+    const relationshipFilter = narrowTo(body.relationships);
+    const snapshot = projectSnapshot();
+    const manifest = snapshot.manifest;
+    const datasets: Array<Record<string, unknown>> = [];
+    for (const block of Object.values(manifest.blocks ?? {})) {
+      const keys = block.datasetGrain?.keys ?? [];
+      if (block.status !== 'certified' || !keys.length || !block.filePath) continue;
+      if (blockFilter && !blockFilter.has(block.name) && !blockFilter.has(block.filePath)) continue;
+      const sourceId = `app:block:${block.domain || 'global'}:${createHash('sha256').update(`${block.filePath}\u0000${block.name}`).digest('hex').slice(0, 20)}`;
+      const base = { kind: 'dataset', name: block.name, filePath: block.filePath, sourceId, keys };
+      try {
+        const validation = await validateDatasetSourceGrain({ sourceId, ...(body.connection ? { connection: body.connection } : {}) });
+        datasets.push({ ...base, keys: validation.evidence.keyFields, status: validation.evidence.status, uniqueness: validation.evidence.uniqueness });
+      } catch (error) {
+        datasets.push({ ...base, status: 'error', message: error instanceof Error ? error.message : String(error) });
+      }
+    }
+    const relationships: Array<Record<string, unknown>> = [];
+    for (const relationship of Object.values(manifest.modeling?.relationships ?? {})) {
+      if (relationship.status !== 'certified' || !relationship.keys?.length) continue;
+      if (relationshipFilter && !relationshipFilter.has(relationship.id) && !relationshipFilter.has(relationship.qualifiedId) && !relationshipFilter.has(relationship.sourcePath)) continue;
+      const base = { kind: 'relationship', id: relationship.qualifiedId || relationship.id, from: relationship.from, to: relationship.to, keys: relationship.keys, cardinality: relationship.cardinality, sourcePath: relationship.sourcePath };
+      try {
+        const connection = await resolveExecutionConnection(body);
+        const evidence = await validateModelingRelationship(
+          { id: relationship.id, domain: relationship.ownerDomain ?? '', from: relationship.from, to: relationship.to, keys: relationship.keys, cardinality: relationship.cardinality, fanout: relationship.fanout },
+          manifest,
+          (sql) => executor.executeQuery(sql, [], {}, connection),
+          (identifier) => getDialect(connection.driver).quoteIdentifier(identifier),
+          projectRoot,
+          connection.driver,
+        );
+        relationships.push({
+          ...base,
+          status: evidence.status,
+          counts: {
+            fromRows: evidence.fromRows, toRows: evidence.toRows, joinedRows: evidence.joinedRows, fromNullKeys: evidence.fromNullKeys,
+            toNullKeys: evidence.toNullKeys, unmatchedFrom: evidence.unmatchedFrom, maxFromPerKey: evidence.maxFromPerKey, maxToPerKey: evidence.maxToPerKey,
+          },
+          ...(evidence.message ? { message: evidence.message } : {}),
+        });
+      } catch (error) {
+        relationships.push({ ...base, status: 'error', message: error instanceof Error ? error.message : String(error) });
+      }
+    }
+    const all = [...datasets, ...relationships];
+    return {
+      snapshotId: snapshot.snapshotId,
+      ok: all.every((item) => item.status === 'passed'),
+      proved: all.filter((item) => item.status === 'passed').length,
+      datasets,
+      relationships,
+    };
+  };
+
   const writeAgentRunSse = (
     response: ServerResponse,
     event: string,
@@ -24121,6 +24188,24 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
         const conflict = message.startsWith('DATASET_SOURCE_DRIFT') || message.startsWith('DATASET_SOURCE_CATALOG_STALE');
         res.writeHead(conflict ? 409 : 400, { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(serializeJSON({ ok: false, error: message }));
+      }
+      return;
+    }
+
+    // RFC 0010 (key proofs): prove the keys certified content declares, as the
+    // person asking — each certified block Dataset's declared grain through
+    // DQL's own grain proof, each certified join with keys through DQL's own
+    // relationship validation. A host runs it on a change before approving;
+    // anyone can run it on their own project. Counts and outcomes only, never
+    // a row. `blocks` (names or file paths) and `relationships` (ids) narrow it.
+    if (req.method === 'POST' && path === '/api/keys/prove') {
+      try {
+        const body = await readJSON(req).catch(() => ({})) as Record<string, unknown>;
+        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(serializeJSON(await proveDeclaredKeys(body)));
+      } catch (error) {
+        res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(serializeJSON({ error: error instanceof Error ? error.message : String(error) }));
       }
       return;
     }
