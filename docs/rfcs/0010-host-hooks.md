@@ -348,6 +348,7 @@ Tests: `server-auth.test.ts`, `ask-trace-navigation.test.ts`, `app-page-run.test
 - **Metadata through the runtime's own connection:** `startProjectRuntime` also returns `metadataQuery(sql)` — one read-only statement (SELECT, WITH, SHOW, DESCRIBE) as metadata, e.g. a host reading warehouse tags without opening a second connection.
 - **Idle connectors close:** the connection pool disconnects network connectors unused for 30 minutes and keeps at most 64 (least recently used first), since per-person sign-in makes one per person per token; local embedded databases are never evicted.
 - **Governed answers are headed "Governed answer"**, not "AI-generated answer".
+- **Run evidence belongs to who ran it:** the page and chart runs DQL keeps for snapshots, story drafts, chart questions and App Autopilot are found only by the person and App persona who ran them (`activePersonaPolicyFingerprint`); a run id alone reads as not current.
 
 ### One process, several servers
 Each request carries its own server's hooks in its request context, so a host that runs Production and pull request previews in one process never has one server's git, delivery, model, tool-gate or usage hooks replaced by another's; the process-wide values are only a fallback for work outside a request. A runtime's `close()` also ends open event streams (a browser tab with DQL open used to hold it forever), a host's own model id (`bedrock`, `vertex`) no longer fails the local provider settings, and `dql app ls` / `GET /api/apps` (without a host) name App files that don't load and why.

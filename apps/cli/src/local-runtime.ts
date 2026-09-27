@@ -742,6 +742,7 @@ import { routeAction, type DqlAction } from './host/route-actions.js';
 import { withHostQueryHooks } from './host/row-policy.js';
 import { auditActor, auditModelUsage, auditRequest, otlpHeadersFromEnv, withAnswerAudit, withTraceExport } from './host/observability.js';
 import { shouldWithhold, withholdRunFigures } from './host/answer-figures.js';
+import { PersonScopedMap } from './host/person-scoped-map.js';
 import { withRunOwnership } from './host/run-ownership.js';
 import { answerFactsFromRun, answerValuesFromRun } from './host/answer-facts.js';
 const HOST_ICONS = new Set(['inbox', 'requests', 'review', 'work', 'health', 'admin', 'people', 'git', 'link']);
@@ -5013,7 +5014,9 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
   // artifact executor uses this to preserve the selected adapter and target
   // rather than treating compiled semantic SQL as unrelated generic SQL.
   const compiledSemanticQueries = new Map<string, SemanticRuntimeCompileResult>();
-  const dashboardRunEvidence = new Map<string, {
+  // RFC 0010: a run's evidence is found only by the person (and App persona) who ran it —
+  // a run id alone must never let someone sign, draft from or ask about another person's figures.
+  const dashboardRunEvidence = new PersonScopedMap<string, {
     /** Values a story may bind to, from this run (RFC 0008 step 8). */
     storyBindings?: StoryBindingCatalog;
     /** Page filters as applied to this run, for snapshots (RFC 0008 step 10). */
@@ -5074,7 +5077,7 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
     facts: ReturnType<typeof buildDeterministicDashboardStory>['facts'];
     story: ReturnType<typeof buildDeterministicDashboardStory>['story'];
     expiresAt: number;
-  }>();
+  }>(activePersonaPolicyFingerprint);
   /**
    * A failed Dataset tile can be described to App Autopilot only from this
    * server-held run record. The browser names a tile/run pair; it never sends
@@ -5117,7 +5120,7 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
    * registry separate from dashboardRunEvidence preserves the publication gate
    * and means a process restart always requires a fresh preview.
    */
-  const datasetChartRunEvidence = new Map<string, DatasetChartRunEvidence>();
+  const datasetChartRunEvidence = new PersonScopedMap<string, DatasetChartRunEvidence>(activePersonaPolicyFingerprint);
   /**
    * A settled run no longer occupies `activeDashboardRuns`, but its chart
    * context must still become stale when this same mounted viewer starts a
@@ -21270,8 +21273,8 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
             receiptStorage.close();
           }
         }
-        for (const [id, evidence] of dashboardRunEvidence) if (evidence.expiresAt < Date.now()) dashboardRunEvidence.delete(id);
-        for (const [id, evidence] of datasetChartRunEvidence) if (evidence.expiresAt < Date.now()) datasetChartRunEvidence.delete(id);
+        dashboardRunEvidence.sweep((evidence) => evidence.expiresAt < Date.now());
+        datasetChartRunEvidence.sweep((evidence) => evidence.expiresAt < Date.now());
         const liveChartScopeKeys = new Set(Array.from(datasetChartRunEvidence.values())
           .map((evidence) => evidence.runScopeKey)
           .filter((scopeKey): scopeKey is string => Boolean(scopeKey)));
