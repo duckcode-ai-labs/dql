@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { LocalContextPack } from './catalog.js';
-import { validateSqlAgainstLocalContext } from './sql-context-validation.js';
+import { inspectedRelationMatches, validateSqlAgainstLocalContext } from './sql-context-validation.js';
 
 describe('validateSqlAgainstLocalContext', () => {
   it('rejects unresolved internal graph relation identities before warehouse execution', () => {
@@ -1009,5 +1009,20 @@ describe('the default database may be left out where a connection holds one data
     expect(validate('SELECT claim_id FROM main.claim', ['acme_insurance.main.claim'], 'sqlite').ok).toBe(false);
     expect(validate('SELECT claim_id FROM main.claim', ['db_a.main.claim', 'db_b.main.claim'], 'duckdb').ok).toBe(false);
     expect(validate('SELECT claim_id FROM other_db.main.claim', ['acme_insurance.main.claim'], 'duckdb').ok).toBe(false);
+  });
+});
+
+describe('the frozen-SQL check and the drafted-SQL check read inspected relations the same way', () => {
+  const schema = (...relations: string[]) => relations.map((relation) => ({ relation }));
+  it('accepts main.claim for an inspected acme_insurance.main.claim on DuckDB, quoted or not', () => {
+    expect(inspectedRelationMatches('main.claim', schema('acme_insurance.main.claim', 'acme_insurance.main.policy'), 'duckdb')).toBe(true);
+    expect(inspectedRelationMatches('main.claim', schema('"acme_insurance"."main"."claim"', '"acme_insurance"."main"."policy"'), 'duckdb')).toBe(true);
+    expect(inspectedRelationMatches('"acme_insurance"."main"."claim"', schema('acme_insurance.main.claim'), 'duckdb')).toBe(true);
+  });
+  it('stays exact elsewhere: another engine, an ambiguous tail, another database, a table never inspected', () => {
+    expect(inspectedRelationMatches('main.claim', schema('acme_insurance.main.claim'), 'snowflake')).toBe(false);
+    expect(inspectedRelationMatches('main.claim', schema('db_a.main.claim', 'db_b.main.claim'), 'duckdb')).toBe(false);
+    expect(inspectedRelationMatches('other_db.main.claim', schema('acme_insurance.main.claim'), 'duckdb')).toBe(false);
+    expect(inspectedRelationMatches('main.expense_reserve', schema('acme_insurance.main.claim'), 'duckdb')).toBe(false);
   });
 });

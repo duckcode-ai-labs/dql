@@ -72,6 +72,7 @@ import {
   renderCard,
   validateSqlAgainstLocalContext,
   executionRelationIdentity,
+  inspectedRelationMatches,
   type AgentMessage,
   type RuntimeSchemaTable,
 } from '@duckcodeailabs/dql-agent';
@@ -2636,10 +2637,13 @@ export function createAskPipelineHost(deps: AskPipelineHostDeps): AskPipelineHos
           // the warehouse's identifier rule. That proof needs no SQL parser; a
           // third-party parser that cannot read a dialect (three-part names on
           // SQLite, a window clause) must never veto a governed statement.
+          // A DuckDB statement may leave the default database out
+          // (`main.claim` for the inspected `acme_insurance.main.claim`),
+          // exactly as the drafted-SQL check accepts it.
           const inspected = new Set(runtimeSchema.map((table) => executionRelationIdentityFor(table.relation, connection.driver)));
           const foreign = relationsInSql(candidate.sql)
             .filter((relation) => parsePhysicalIdentifier(relation).length >= 2)
-            .find((relation) => !inspected.has(executionRelationIdentityFor(relation, connection.driver)));
+            .find((relation) => !inspected.has(executionRelationIdentityFor(relation, connection.driver)) && !inspectedRelationMatches(relation, runtimeSchema, connection.driver));
           if (foreign) throw new Error(`the frozen SQL reads ${foreign}, which this request did not inspect (it inspected ${runtimeSchema.map((table) => table.relation).join(', ')}). Use the exact bound physical relation.`);
           if (candidate.tier !== 'exploratory') return;
           // Drafted SQL was parsed and validated when it was drafted; the same

@@ -246,6 +246,19 @@ const SINGLE_DATABASE_ENGINES = new Set(['duckdb']);
  * one of them has that schema and table. Anywhere a connection spans
  * databases (Snowflake, BigQuery, …) exact mode stays exact.
  */
+/**
+ * Whether a relation a statement reads is one this request inspected: the
+ * same identity by the warehouse's identifier rule, or (on a single-database
+ * engine) the same schema and table with the default database left out.
+ * Every check that compares a statement's relations with the inspected ones
+ * uses this, so the drafted-SQL check and the frozen-SQL check agree.
+ */
+export function inspectedRelationMatches(relation: string, runtimeSchema: Array<{ relation: string }>, dialect?: string): boolean {
+  const identity = executionRelationIdentity(relation, dialect);
+  return runtimeSchema.some((table) => executionRelationIdentity(table.relation, dialect) === identity)
+    || defaultDatabaseMatch(relation, runtimeSchema, dialect);
+}
+
 function defaultDatabaseMatch(relation: string, runtimeSchema: Array<{ relation: string }>, dialect?: string): boolean {
   if (!SINGLE_DATABASE_ENGINES.has(dialect?.trim().toLowerCase() ?? '')) return false;
   try { return defaultDatabaseMatchUnsafe(relation, runtimeSchema); } catch { return false; }
@@ -370,7 +383,7 @@ export function validateSqlAgainstLocalContext(
     // database through one of them. In particular, DB.PUBLIC.EVENTS is not an
     // inspected "Db"."Public"."Events" merely because the parser can
     // normalize either spelling or their schema/table tail happens to match.
-    const mismatch = referencedRelations.find((relation) => !exact.has(executionRelationIdentity(relation, options.dialect)) && !defaultDatabaseMatch(relation, options.runtimeSchema ?? [], options.dialect));
+    const mismatch = referencedRelations.find((relation) => !exact.has(executionRelationIdentity(relation, options.dialect)) && !inspectedRelationMatches(relation, options.runtimeSchema ?? [], options.dialect));
     if (mismatch) {
       const expected = (options.runtimeSchema ?? []).map((table) => table.relation).join(', ');
       return {
