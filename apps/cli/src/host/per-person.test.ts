@@ -109,6 +109,11 @@ describe('what the app shows around its screens (HH-9)', () => {
           { id: 'proto', label: 'Protocol-relative', href: '//evil.example', placement: 'menu' },
         ],
         answerActions: [{ id: 'certify', label: 'Make this a certified answer', url: '/enterprise/api/requests' }, { id: 'bad', label: 'x', url: 'https://evil.example' }],
+        banner: {
+          text: '  Draft space —\n changes go to review, not Production  ',
+          tone: 'caution',
+          links: [{ label: 'Back to Production', href: '/enterprise/env/production' }, { label: 'Elsewhere', href: 'https://evil.example' }, { label: 'Protocol-relative', href: '//evil.example' }],
+        },
       }),
     });
     const priyaUi = await call('priya', 'GET', '/api/host/ui');
@@ -119,6 +124,8 @@ describe('what the app shows around its screens (HH-9)', () => {
       environment: 'Claims · Production',
       links: [{ id: 'requests', label: 'My requests', href: '/e/requests', placement: 'nav' }],
       answerActions: [{ id: 'certify', label: 'Make this a certified answer', url: '/enterprise/api/requests' }],
+      // The banner is plain text with same-origin links only.
+      banner: { text: 'Draft space — changes go to review, not Production', tone: 'caution', links: [{ label: 'Back to Production', href: '/enterprise/env/production' }] },
     });
     expect(priyaUi.body.capabilities).toMatchObject({ ask: true, 'dataset.author': false, 'dataset.certify': false, 'settings.manage': false });
     expect((await call('dan', 'GET', '/api/host/ui')).body.capabilities).toMatchObject({ 'dataset.author': true, 'settings.manage': true });

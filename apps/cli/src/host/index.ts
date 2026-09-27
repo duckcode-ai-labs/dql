@@ -12,6 +12,7 @@ export {
   type DqlModelProvider,
   type DqlHostHooks,
   type DqlHostUi,
+  type DqlHostBanner,
   type DqlAnswerStatus,
   type DqlHostIcon,
   type DqlPrincipal,

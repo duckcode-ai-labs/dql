@@ -16,7 +16,11 @@ export interface HostUi {
   environment?: string;
   links: HostLink[];
   answerActions: HostAnswerAction[];
+  /** A strip above every screen, e.g. "Draft space — changes go to review, not Production". */
+  banner?: HostBanner;
 }
+
+export interface HostBanner { text: string; tone?: 'info' | 'caution'; links?: Array<{ label: string; href: string }> }
 
 export type HostIcon = 'inbox' | 'requests' | 'review' | 'work' | 'health' | 'admin' | 'people' | 'git' | 'link';
 export interface HostLink { id: string; label: string; href: string; placement: 'menu' | 'nav'; badge?: number; icon?: HostIcon }

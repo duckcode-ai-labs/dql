@@ -738,7 +738,7 @@ import {
 } from "./notebook-datasets.js";
 import { prepareBlockInvocation } from './block-invocation.js';
 import { redactConnections, resolveSecretReferences, storeConnectionSecrets } from './connection-secrets.js';
-import { authorizeHostRequest, currentHostGitHooks, currentPrincipal, currentRequestContext, hostActor, hostAllowedSources, hostGitAuthor, hostModelProvider, installHostPersonaSlots, resolveHostPrincipal, resultValuesMayReachModel, safeNextLink, setHostGitHooks, setHostModelHooks, withRequestContext, type DqlHostHooks } from './host/request-context.js';
+import { authorizeHostRequest, currentHostGitHooks, currentPrincipal, currentRequestContext, hostActor, hostAllowedSources, hostGitAuthor, hostModelProvider, installHostPersonaSlots, resolveHostPrincipal, resultValuesMayReachModel, safeHostBanner, safeNextLink, setHostGitHooks, setHostModelHooks, withRequestContext, type DqlHostHooks } from './host/request-context.js';
 import { isRunPass, issueRunPass, redeemRunPass, revokeRunPass } from './host/schedule-runs.js';
 import { setDeliverySink } from './schedule/notifiers/index.js';
 import { routeAction, type DqlAction } from './host/route-actions.js';
@@ -16496,6 +16496,7 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
           capabilities,
           ...(sameOrigin(extras.signOutUrl) ? { signOutUrl: extras.signOutUrl } : {}),
           ...(typeof extras.environment === 'string' ? { environment: extras.environment.slice(0, 80) } : {}),
+          ...(safeHostBanner(extras.banner) ? { banner: safeHostBanner(extras.banner) } : {}),
           links: (extras.links ?? []).filter((link) => sameOrigin(link.href) && typeof link.label === 'string').slice(0, 12)
             .map((link) => ({ id: String(link.id), label: link.label.slice(0, 60), href: link.href, placement: link.placement === 'nav' ? 'nav' : 'menu', ...(Number.isInteger(link.badge) && link.badge! > 0 ? { badge: Math.min(link.badge!, 999) } : {}), ...(link.icon && HOST_ICONS.has(link.icon) ? { icon: link.icon } : {}) })),
           answerActions: (extras.answerActions ?? []).filter((action) => sameOrigin(action.url) && typeof action.label === 'string').slice(0, 4)

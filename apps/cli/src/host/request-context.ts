@@ -299,6 +299,34 @@ export interface DqlHostUi {
   answerActions?: Array<{ id: string; label: string; url: string; description?: string; on?: Array<'review' | 'unanswered' | 'answered'> }>;
   /** A name for the environment, e.g. "Claims · Production". */
   environment?: string;
+  /**
+   * A strip above DQL's screens, for something the person must keep in mind
+   * everywhere here — e.g. "Draft space — changes go to review, not
+   * Production" — with up to three same-origin links (e.g. back to
+   * Production). `caution` draws it in the warning colour.
+   */
+  banner?: DqlHostBanner;
+}
+
+/** The host's strip above DQL's screens (HH-9). */
+export interface DqlHostBanner {
+  text: string;
+  tone?: 'info' | 'caution';
+  links?: Array<{ label: string; href: string }>;
+}
+
+/** A host banner as DQL passes it to the app: plain text, a known tone, same-origin links only. */
+export function safeHostBanner(banner: unknown): DqlHostBanner | undefined {
+  if (!banner || typeof banner !== 'object') return undefined;
+  const raw = banner as Record<string, unknown>;
+  const text = typeof raw.text === 'string' ? raw.text.replace(/\s+/g, ' ').trim().slice(0, 200) : '';
+  if (!text) return undefined;
+  const links = (Array.isArray(raw.links) ? raw.links : [])
+    .map((link) => safeNextLink(link as DqlDecision['next']))
+    .filter((link): link is { label: string; href: string } => !!link)
+    .slice(0, 3)
+    .map((link) => ({ label: link.label.slice(0, 40), href: link.href }));
+  return { text, tone: raw.tone === 'caution' ? 'caution' : 'info', ...(links.length ? { links } : {}) };
 }
 
 /** The run store surface the server uses (dql-agent's SQLite store satisfies it). */

@@ -10,6 +10,7 @@ import { themes } from '../../themes/notebook-theme';
 import { ActivityBar } from './ActivityBar';
 import { Sidebar } from './Sidebar';
 import { Header } from './Header';
+import { HostBanner } from './HostBanner';
 import { DevPanel } from './DevPanel';
 import { api, type SetupLaunchResponse } from '../../api/client';
 import { parseNotebookFile } from '../../utils/parse-workbook';
@@ -288,6 +289,8 @@ export function AppShell() {
         overflow: 'hidden',
       }}
     >
+      {/* The host's strip (HH-9), e.g. "Draft space — changes go to review" */}
+      <HostBanner />
       {/* Header spans full width */}
       <Header />
 

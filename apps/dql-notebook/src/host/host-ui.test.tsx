@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import type { AgentRun } from '../api/client';
 import { HostAnswerActions, HostAnswerStatusView, answerNeedsReview } from '../components/agent/HostAnswerActions';
 import { HostPersonMenu } from '../components/shell/HostPersonMenu';
+import { HostBanner } from '../components/shell/HostBanner';
 import { themes } from '../themes/notebook-theme';
 import { HostUiProvider, hostAllows, hostPageSrc, navItemAllowed, type HostUi, type HostUiState } from './host-ui';
 
@@ -52,6 +53,16 @@ describe('host UI (RFC 0010 HH-9)', () => {
     expect(navItemAllowed(priya, 'apps')).toBe(true);
     // Settings opens for either settings or connection managers.
     expect(navItemAllowed(hosted({ capabilities: { 'connection.manage': true } }), 'settings')).toBe(true);
+  });
+
+  it('shows the host banner above every screen, with its links at the top level', () => {
+    expect(render(NO_HOST, <HostBanner />)).toBe('');
+    expect(render(hosted(), <HostBanner />)).toBe('');
+    const html = render(hosted({ banner: { text: 'Draft space — changes go to review, not Production', tone: 'caution', links: [{ label: 'Back to Production', href: '/enterprise/env/production' }] } }), <HostBanner />);
+    expect(html).toContain('Draft space — changes go to review, not Production');
+    expect(html).toContain('href="/enterprise/env/production"');
+    expect(html).toContain('target="_top"');
+    expect(html).toContain('role="status"');
   });
 
   it('opens host pages embedded', () => {
