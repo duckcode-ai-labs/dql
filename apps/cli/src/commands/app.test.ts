@@ -134,7 +134,7 @@ describe('dql app check', () => {
       expect(tiles.length).toBeGreaterThan(0);
       for (const tile of tiles) {
         expect(['block', 'semantic', 'dataset', 'exploratory', 'content']).toContain(tile.source);
-        expect(tile.trust === 'needs_review').toBe(tile.problems.length > 0);
+        expect(tile.check === 'fails').toBe(tile.problems.length > 0);
       }
       expect(result.ready).toBe(result.blockers.length === 0);
     } finally {

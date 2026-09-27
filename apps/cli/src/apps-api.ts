@@ -5881,7 +5881,7 @@ export interface AppPublicationCheck {
   pages: Array<{
     id: string;
     title: string;
-    tiles: Array<{ id: string; title: string | null; source: 'block' | 'semantic' | 'dataset' | 'exploratory' | 'content'; trust: 'certified' | 'needs_review' | 'none'; problems: string[] }>;
+    tiles: Array<{ id: string; title: string | null; source: 'block' | 'semantic' | 'dataset' | 'exploratory' | 'content'; check: 'passes' | 'fails' | 'none'; problems: string[] }>;
   }>;
   blockers: AppPublicationReadiness['blockers'];
 }
@@ -5910,7 +5910,7 @@ export function checkAppPublication(projectRoot: string, appId: string): AppPubl
           id: item.i,
           title: typeof item.title === 'string' ? item.title : null,
           source,
-          trust: source === 'content' ? 'none' : problems.length ? 'needs_review' : 'certified',
+          check: source === 'content' ? 'none' : problems.length ? 'fails' : 'passes',
           problems,
         } as AppPublicationCheck['pages'][number]['tiles'][number];
       }),

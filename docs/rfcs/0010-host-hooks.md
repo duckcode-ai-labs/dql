@@ -332,7 +332,7 @@ Tests: `host-hooks.test.ts`, `app-workspace-loader.test.ts`.
 - **Model usage:** with an audit sink, every model call's provider, model, operation and token counts (including a streamed Claude reply's) is a `model_usage` audit event for the person whose request made it — never prompt or reply text. `setProviderUsageListener` in `@duckcodeailabs/dql-agent` is the underlying listener.
 - **The Apps list follows `app.view`:** with a host that authorizes, `GET /api/apps` lists only the Apps the person may open.
 - **Reading a published page is `read`:** an App's `read` policy (the scaffolded `viewer` role) runs a published page's tiles; ad-hoc SQL, investigations and notebooks still need `execute`.
-- **`dql app check <id> [--format json]`:** each tile's source and trust as publication checks them, and what would stop it publishing; exits 1 when not ready.
+- **`dql app check <id> [--format json]`:** each tile's source and whether it passes the checks publication runs (a certified block, an approved semantic result with its preflight receipt, a matching Dataset binding, preflighted filters), with what would stop it publishing; exits 1 when not ready.
 
 Tests: `server-auth.test.ts`, `ask-trace-navigation.test.ts`, `app-page-run.test.ts`, `usage-ledger.test.ts`, `observability.test.ts`, `host-hooks.test.ts`, `app.test.ts`.
 

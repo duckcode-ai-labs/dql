@@ -480,14 +480,14 @@ async function runAppCheck(rest: string[], flags: CLIFlags): Promise<void> {
   if (flags.format === "json") {
     console.log(JSON.stringify(result, null, 2));
   } else {
-    const tiles = result.pages.flatMap((page) => page.tiles).filter((tile) => tile.trust !== "none");
-    const certified = tiles.filter((tile) => tile.trust === "certified").length;
-    const lines = [`${result.ready ? "Ready to publish" : "Not ready to publish"}: ${result.app.title} (${certified} of ${tiles.length} tiles certified)`];
+    const tiles = result.pages.flatMap((page) => page.tiles).filter((tile) => tile.check !== "none");
+    const passing = tiles.filter((tile) => tile.check === "passes").length;
+    const lines = [`${result.ready ? "Ready to publish" : "Not ready to publish"}: ${result.app.title} (${passing} of ${tiles.length} tiles pass)`];
     for (const page of result.pages) {
       lines.push("", `  ${page.title}`);
       for (const tile of page.tiles) {
-        if (tile.trust === "none") continue;
-        lines.push(`    ${tile.trust === "certified" ? "ok  " : "FAIL"}  ${tile.title ?? tile.id} (${tile.source})`);
+        if (tile.check === "none") continue;
+        lines.push(`    ${tile.check === "passes" ? "ok  " : "FAIL"}  ${tile.title ?? tile.id} (${tile.source})`);
         for (const problem of tile.problems) lines.push(`          ${problem}`);
       }
     }
