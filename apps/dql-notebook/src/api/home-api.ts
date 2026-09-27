@@ -92,3 +92,10 @@ export async function saveAppAudience(appId: string, input: { groups: string[]; 
   const result = await json<{ audienceGroups: string[]; audience: string | null; path: string }>(`/api/apps/${encodeURIComponent(appId)}/audience`, { method: 'PUT', body: JSON.stringify(input) });
   return result.ok ? { ok: true, ...result.body } : { ok: false, refusal: result.refusal };
 }
+
+/** Who a published App is for, as its file says; null when the App is not published (or not yours to read). */
+export async function fetchAppAudience(appId: string): Promise<{ audience?: string; audienceGroups: string[] } | null> {
+  const result = await json<{ app?: { audience?: string; audienceGroups?: string[] } }>(`/api/apps/${encodeURIComponent(appId)}`);
+  if (!result.ok || !result.body.app) return null;
+  return { ...(result.body.app.audience ? { audience: result.body.app.audience } : {}), audienceGroups: result.body.app.audienceGroups ?? [] };
+}

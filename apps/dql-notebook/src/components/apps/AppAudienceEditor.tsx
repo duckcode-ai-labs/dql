@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Users } from 'lucide-react';
-import { fetchDirectoryGroups, saveAppAudience, type ApiRefusal, type DirectoryGroups } from '../../api/home-api';
+import { fetchAppAudience, fetchDirectoryGroups, saveAppAudience, type ApiRefusal, type DirectoryGroups } from '../../api/home-api';
+import { useHostPage } from '../../host/host-ui';
+import { useDispatch } from '../../store/NotebookStore';
 
 /**
  * WHO THIS APP IS FOR (RFC 0010, HH-16). The author names identity-provider
@@ -12,12 +14,29 @@ import { fetchDirectoryGroups, saveAppAudience, type ApiRefusal, type DirectoryG
  * Where the host keeps Production to reviewed changes, saving here is refused
  * with a link to where the change can be made (e.g. a draft space).
  */
+/** The editor for a published App whose audience is read from its file first (App Studio). */
+export function PublishedAppAudience({ appId, onOpenLink }: { appId: string; onOpenLink?: (label: string, href: string) => void }): JSX.Element | null {
+  const [current, setCurrent] = useState<{ audience?: string; audienceGroups: string[] } | null | undefined>(undefined);
+  useEffect(() => {
+    let cancelled = false;
+    void fetchAppAudience(appId).then((value) => { if (!cancelled) setCurrent(value); });
+    return () => { cancelled = true; };
+  }, [appId]);
+  // Not published yet: its audience is set once it is an App.
+  if (!current) return null;
+  return <AppAudienceEditor appId={appId} audience={current.audience} groups={current.audienceGroups} {...(onOpenLink ? { onOpenLink } : {})} />;
+}
+
 export function AppAudienceEditor({ appId, audience, groups, onOpenLink }: {
   appId: string;
   audience?: string;
   groups: string[];
   onOpenLink?: (label: string, href: string) => void;
 }): JSX.Element {
+  const hostPage = useHostPage();
+  const dispatch = useDispatch();
+  // A refusal's link (e.g. "Open my draft space") opens as a host page inside DQL.
+  const openLink = onOpenLink ?? ((label: string, href: string) => { hostPage.openPage({ id: `app-audience-${href}`, label, href }); dispatch({ type: 'SET_MAIN_VIEW', view: 'host_page' }); });
   const [directory, setDirectory] = useState<DirectoryGroups | null>(null);
   const [selected, setSelected] = useState<string[]>(groups);
   const [typed, setTyped] = useState(groups.join(', '));
@@ -79,8 +98,8 @@ export function AppAudienceEditor({ appId, audience, groups, onOpenLink }: {
       {state.kind === 'refused' ? (
         <div role="alert" style={{ display: 'grid', gap: 6, fontSize: 12 }}>
           <span>{state.refusal.error}</span>
-          {state.refusal.next && onOpenLink ? (
-            <button type="button" className="dql-apps-btn dql-apps-btn-line" onClick={() => onOpenLink(state.refusal.next!.label, state.refusal.next!.href)}>{state.refusal.next.label}</button>
+          {state.refusal.next ? (
+            <button type="button" className="dql-apps-btn dql-apps-btn-line" onClick={() => openLink(state.refusal.next!.label, state.refusal.next!.href)}>{state.refusal.next.label}</button>
           ) : null}
         </div>
       ) : null}

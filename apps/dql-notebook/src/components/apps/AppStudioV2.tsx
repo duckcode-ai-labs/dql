@@ -174,6 +174,7 @@ import {
   settleStudioPreviewRun,
   withoutPagePreviewReceipt,
 } from './app-studio-preview-settlement';
+import { PublishedAppAudience } from './AppAudienceEditor';
 
 // Moved to builder/; re-exported for existing callers and tests.
 export { DatasetSourceAuthoringDialog, DatasetSourceRebindReviewDialog, DatasetTileBuilder };
@@ -3283,7 +3284,11 @@ export function AppStudioV2({
             onDelete={() => void mutate([{ type: 'remove_tile', pageId: activePage.id, tileId: selectedTile.i }]).then(() => setSelectedTileId(null))}
           />
         ) : (
-          <BuildFrameInspector draft={draft} prompt={prompt} previewRun={previewRun} onPrompt={setPrompt} onAskAi={() => { setAiScope('page'); setCopilotOpen(true); }} onSourcePolicy={(nextPolicy) => void mutate([{ type: 'set_source_policy', sourcePolicy: nextPolicy }])} onResolveTask={(task) => void resolveReviewTask(task)} onApproveSemantic={() => void approveSemanticPreview()} />
+          <>
+            <BuildFrameInspector draft={draft} prompt={prompt} previewRun={previewRun} onPrompt={setPrompt} onAskAi={() => { setAiScope('page'); setCopilotOpen(true); }} onSourcePolicy={(nextPolicy) => void mutate([{ type: 'set_source_policy', sourcePolicy: nextPolicy }])} onResolveTask={(task) => void resolveReviewTask(task)} onApproveSemantic={() => void approveSemanticPreview()} />
+            {/* Who the published App is for (RFC 0010 HH-16). */}
+            {draft.appId ? <div className="inspector-body"><PublishedAppAudience key={draft.appId} appId={draft.appId} /></div> : null}
+          </>
         )}
       </aside> : null}
 
