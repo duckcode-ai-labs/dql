@@ -220,7 +220,7 @@ identical.
 | HH-3 | One query path plus `rowPolicy`; cache keys by access | Call-site allowlist test; two principals, same question, different rows, from both a certified Dataset and AI-written SQL; a `rowPolicy` refusal stops the query |
 | HH-4 | `credentials` and a connector factory registry (the documented plugin seam) | Pool keyed by credential id; a refusal gives "reconnect", never a service-account retry |
 | HH-5 | `modelProvider`, `isInBoundary`; Bedrock and Vertex providers (OSS features in their own right) | Values egress follows `isInBoundary`; a Bedrock provider passes the provider contract tests |
-| HH-6 | Store interfaces and injection (runs, memory, conversations, traces, audit); OTLP trace export | Stores swapped for in-memory fakes in tests; a principal id on every record |
+| HH-6 | Store interfaces and injection (runs, memory, conversations, traces, audit); OTLP trace export; asynchronous stores; statement metrics | Stores swapped for Promise-returning fakes in tests; two copies share one set; a principal id on every record |
 | HH-7 | `tools` gateway around MCP and native tool calls; MCP HTTP transport with a host authenticator | A gateway that refuses `tool.run_sql` blocks it in both paths |
 | HH-8 | `schedules`, `delivery`, `signing`, `git` | A schedule runs as its owner's principal; a delivery sink receives the digest |
 
@@ -278,9 +278,10 @@ Not built: choosing Bedrock or Vertex in the Settings page. Tests: `claude-cloud
 `observability.ts`.
 - **Audit:** `audit` receives one event per request that changed something or was refused (who, action, resource, status, outcome). It also receives one per finished answer: trust label, SQL fingerprints and sources, with no question, SQL or values.
 - **Traces:** each finished Ask trace, as the strict redacted bundle, goes to `traces` and/or as OTLP/JSON to `OTEL_EXPORTER_OTLP_(TRACES_)ENDPOINT` (**needs a live check** with a collector). Export never slows or fails an answer.
-- **Stores:** `stores.runs|memory|conversations` replace the project's SQLite files.
+- **Stores:** `stores.runs|memory|conversations` replace the project's SQLite files. Every store method returns a Promise and DQL awaits each call, so a host can keep them in a shared database and run several copies of DQL for one project (update, E4). DQL's own SQLite stores answer synchronously and are used exactly as before. The ownership rules do not change: with a host, runs carry `ownerId` and read as not found for anyone else; threads carry their owner and list, search, open and continue only for them; a run interrupted because its copy of DQL stopped is closed for the person who asked. `dql-agent` exports the records the SQLite stores keep, so a host store keeps the same ones: `agentRunForStorage` / `agentRunFromStorage`, the progress pair, `interruptedAgentRun`, `newConversationThread`, `conversationTurnForStorage`, `conversationTurnSearchTags`, `memoryRecordForStorage` and `ftsTokens`. `loadConversationSnapshot` and `advanceThreadStateAsync` read and fold a thread held in any such store. Two copies sharing one set of stores continue each other's threads (`async-stores.test.ts`). What stays in one copy's memory is listed for hosts: a run's evidence for stories, snapshots and chart questions (`PersonScopedMap`), cancelling a run that copy is running, a streamed answer, and Ask traces (the project's trace file). A host sends each person's requests to one copy, or accepts that these start again after a move ("run the page again").
+- **Statements:** `statements` hears of every warehouse statement DQL ran — the engine, whether it read data or schema, the outcome (`ok`, `error`, or `refused` by the row policy or the person's connection) and how long it took — for a host's metrics. It never sees the SQL, parameters, rows or who asked; its errors are ignored.
 
-Not built: a person column on stored runs, threads and memory, and a hint-store factory. Tests: `observability.test.ts`.
+Not built: a hint-store factory. Tests: `observability.test.ts`, `async-stores.test.ts`, `row-policy.test.ts`, `dql-agent/src/conversation/async-store.test.ts`.
 
 ### HH-7 — one place every tool runs
 `packages/dql-agent/src/agentic/tool-gate.ts`.

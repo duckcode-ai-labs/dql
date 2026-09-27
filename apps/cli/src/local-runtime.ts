@@ -274,9 +274,11 @@ import {
   composeBusinessExplanation,
   ClaudeProvider,
   ConversationStore,
-  advanceThreadState,
-  buildConversationSnapshot,
+  advanceThreadStateAsync,
+  loadConversationSnapshot,
   recallRelevantTurns,
+  type ConversationStoreLike,
+  type MemoryStoreLike,
   renderConversationEnvelopeForPrompt,
   GeminiProvider,
   MemoryStore,
@@ -741,7 +743,7 @@ import {
 } from "./notebook-datasets.js";
 import { prepareBlockInvocation } from './block-invocation.js';
 import { readPrivateConnections, redactConnections, resolveSecretReferences, storeConnectionSecrets } from './connection-secrets.js';
-import { authorizeHostRequest, currentHostGitHooks, currentPrincipal, currentRequestContext, destinationForRequest, hostActor, hostAllowedSources, hostGitAuthor, hostModelProvider, installHostPersonaSlots, resolveHostPrincipal, resultValuesMayReachModel, safeHomeCards, safeHostBanner, safeNextLink, setHostGitHooks, setHostModelHooks, withRequestContext, type DqlFollow, type DqlHostHooks } from './host/request-context.js';
+import { authorizeHostRequest, currentHostGitHooks, currentPrincipal, currentRequestContext, destinationForRequest, hostActor, hostAllowedSources, hostGitAuthor, hostModelProvider, installHostPersonaSlots, resolveHostPrincipal, resultValuesMayReachModel, safeHomeCards, safeHostBanner, safeNextLink, setHostGitHooks, setHostModelHooks, withRequestContext, type DqlFollow, type DqlHostHooks, type DqlRunStoreLike } from './host/request-context.js';
 import { isRunPass, issueRunPass, redeemRunPass, revokeRunPass } from './host/schedule-runs.js';
 import { setDeliverySink } from './schedule/notifiers/index.js';
 import { routeAction, type DqlAction } from './host/route-actions.js';
@@ -2700,7 +2702,7 @@ function businessNarrativeGaps(warnings: string[] | undefined): string[] | undef
 // the fallback for embedders that never send a threadId.
 
 async function conversationContextFromThread(
-  store: ConversationStore,
+  store: ConversationStoreLike,
   threadId: string,
   question?: string,
   preservePendingClarification = false,
@@ -2710,7 +2712,7 @@ async function conversationContextFromThread(
   // carrying more raw prose mostly slows every provider call on follow-ups.
   const clampTurnText = (value: string | undefined): string | undefined =>
     value && value.length > 1_200 ? `${value.slice(0, 1_200)}…` : value;
-  const turns = store.recentTurns(threadId, 6).map((turn) => {
+  const turns = (await store.recentTurns(threadId, 6)).map((turn) => {
     const contract = turn.contract ?? {};
     const topN = contract.topN;
     const topNValue = typeof topN === 'number'
@@ -2753,10 +2755,10 @@ async function conversationContextFromThread(
         : undefined,
     });
   }).filter((turn): turn is Record<string, unknown> => Boolean(turn));
-  const thread = store.getThread(threadId);
+  const thread = await store.getThread(threadId);
   // Bounded structured snapshot (working state + rolling summary + topic relation)
   // for the answer loop's conversation-state prompt section.
-  const serverSnapshot = buildConversationSnapshot(store, threadId, {
+  const serverSnapshot = await loadConversationSnapshot(store, threadId, {
     question,
     preservePendingClarification,
   });
@@ -2895,17 +2897,17 @@ function seedWithPriorResultMemberBinding(
  * stable IDs/fingerprints; result values are accepted only after this host
  * checks the persisted canonical result and artifact trust state.
  */
-export function hydratePersistedSelectedResultBinding(
+export async function hydratePersistedSelectedResultBinding(
   request: AgentRunRequest,
-  store: Pick<SqliteAgentRunStore, 'get'>,
-): void {
+  store: { get(id: string): AgentRun | undefined | Promise<AgentRun | undefined> },
+): Promise<void> {
   const binding = request.selectedResultBinding;
   if (!binding || request.askAnalystTaskChild || request.researchBranch) return;
   const fail = (code: string, message: string) => {
     delete request.selectedResultBinding;
     request.selectedResultBindingGap = { code, message };
   };
-  const sourceRun = store.get(binding.sourceRunId);
+  const sourceRun = await store.get(binding.sourceRunId);
   if (!sourceRun) {
     fail('PRIOR_RESULT_BINDING_UNAVAILABLE', 'The selected prior result is not available in this local run history.');
     return;
@@ -3214,10 +3216,10 @@ function conversationVisibleToCaller(thread: { ownerId?: string } | null | undef
 }
 
 /** Best-effort: persist a completed run as a conversation turn (never throws). */
-function recordConversationTurn(store: ConversationStore | null, threadId: string | undefined, run: AgentRun): void {
+async function recordConversationTurn(store: ConversationStoreLike | null, threadId: string | undefined, run: AgentRun): Promise<void> {
   if (!store || !threadId) return;
   try {
-    const existing = store.getThread(threadId);
+    const existing = await store.getThread(threadId);
     if (existing && !conversationVisibleToCaller(existing)) return;
     if (!existing) {
       // Open the named thread rather than discarding the turn. `dql agent ask
@@ -3226,10 +3228,10 @@ function recordConversationTurn(store: ConversationStore | null, threadId: strin
       // so a follow-up reached the analyst with no prior plan, no prior
       // measures, and no binding, and answered a different question.
       const ownerId = conversationOwnerId();
-      store.createThread({ id: threadId, surface: 'cli', ...(ownerId ? { ownerId } : {}) });
-      if (!store.getThread(threadId)) return;
+      await store.createThread({ id: threadId, surface: 'cli', ...(ownerId ? { ownerId } : {}) });
+      if (!await store.getThread(threadId)) return;
     }
-    const turn = store.appendTurn(threadId, conversationTurnInputFromRun(run));
+    const turn = await store.appendTurn(threadId, conversationTurnInputFromRun(run));
     // Fold the turn into the thread's working state + rolling summary — but
     // ONLY for turns that produced a real answer. A failed/blocked/no-answer
     // turn folding its (possibly misparsed) filters and measures into working
@@ -3240,7 +3242,7 @@ function recordConversationTurn(store: ConversationStore | null, threadId: strin
     // grounding-gap refusal and a perfectly good uncertified answer are BOTH
     // `needs_review`, so the guard admitted exactly the failures its comment
     // was written to exclude. Trust is now derived from answer state.
-    if (isTrustedConversationTurn(turn)) advanceThreadState(store, threadId, turn);
+    if (isTrustedConversationTurn(turn)) await advanceThreadStateAsync(store, threadId, turn);
   } catch {
     // Conversation persistence is additive; a failed write must not fail the run.
   }
@@ -4880,7 +4882,7 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
   // RFC 0010 HH-3/HH-4: with host query hooks, every statement the server
   // sends to a warehouse runs as the person's connection and passes the row
   // policy first — this one executor is the only path.
-  const executor = withHostQueryHooks(rawExecutor, { rowPolicy: opts.hostHooks?.rowPolicy, credentials: opts.hostHooks?.credentials });
+  const executor = withHostQueryHooks(rawExecutor, { rowPolicy: opts.hostHooks?.rowPolicy, credentials: opts.hostHooks?.credentials, statements: opts.hostHooks?.statements });
   // Validate before creating listeners, project state, or a connection.  A
   // malformed embedding/CLI option must fail safely rather than silently
   // starting an ambiguous rollout mode.
@@ -7057,10 +7059,10 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
       };
     },
     dispatchOptions: askDispatchOptions,
-    priorIntent: (request) => {
+    priorIntent: async (request) => {
       const store = getConversationStore();
       if (!store || !request.threadId) return undefined;
-      const turns = store.recentTurns(request.threadId, 6).sort((a, b) => b.seq - a.seq);
+      const turns = (await store.recentTurns(request.threadId, 6)).sort((a, b) => b.seq - a.seq);
       // A blocked turn produced no rows, but its typed reading is still the
       // question the user asked. It carries forward as an UNEXECUTED plan:
       // the next turn may keep its restrictions, ranking and period, and may
@@ -7134,10 +7136,10 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
       }).then((pack) => (projectSnapshot().snapshotId === snapshot.snapshotId ? pack : undefined));
     },
     // The thread's compacted memory: what earlier turns settled.
-    conversation: (request) => {
+    conversation: async (request) => {
       const store = getConversationStore();
       if (!store || !request.threadId) return undefined;
-      const thread = store.getThread(request.threadId);
+      const thread = await store.getThread(request.threadId);
       return thread?.rollingSummary ? { summary: thread.rollingSummary } : undefined;
     },
     // Exact literal probes stay behind the operator allowlist
@@ -8888,8 +8890,9 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
   // store rewrote the entire file (123 MB observed) twice per answered question;
   // existing history is imported once and the JSON renamed to *.migrated.
   // RFC 0010 HH-6: a host may keep runs elsewhere and hear of each finished answer.
-  const openMemoryStore = (): MemoryStore => (hostHooks?.stores?.memory?.(projectRoot) ?? new MemoryStore(defaultMemoryPath(projectRoot))) as MemoryStore;
-  const storedAgentRuns = hostHooks?.stores?.runs ?? new SqliteAgentRunStore({
+  // HH-6: a host's stores answer with Promises; every call below is awaited.
+  const openMemoryStore = (): MemoryStoreLike => hostHooks?.stores?.memory?.(projectRoot) ?? new MemoryStore(defaultMemoryPath(projectRoot));
+  const storedAgentRuns: DqlRunStoreLike = hostHooks?.stores?.runs ?? new SqliteAgentRunStore({
     path: defaultAgentRunSqlitePath(projectRoot),
     legacyJsonPath: defaultAgentRunStorePath(projectRoot),
   });
@@ -8923,12 +8926,12 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
   // A run may outlive its streaming browser connection, so cancellation is
   // server-owned and keyed by run id rather than relying on fetch abort alone.
   const activeAgentRunControllers = new Map<string, AbortController>();
-  const cancelActiveAgentRun = (id: string): boolean => {
+  const cancelActiveAgentRun = async (id: string): Promise<boolean> => {
     const controller = activeAgentRunControllers.get(id);
     if (!controller) return false;
-    const progress = agentRunStore.getProgress(id);
+    const progress = await agentRunStore.getProgress(id);
     if (progress) {
-      agentRunStore.saveProgress({
+      await agentRunStore.saveProgress({
         ...progress,
         lifecycle: {
           ...progress.lifecycle,
@@ -8946,11 +8949,11 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
   // Server-side conversation threads: persisted multi-turn state (survives refresh).
   // Lazy so a failed native-sqlite load never blocks the runtime; conversation
   // persistence degrades to the per-request context instead.
-  let conversationStoreInstance: ConversationStore | null | undefined;
-  const getConversationStore = (): ConversationStore | null => {
+  let conversationStoreInstance: ConversationStoreLike | null | undefined;
+  const getConversationStore = (): ConversationStoreLike | null => {
     if (conversationStoreInstance !== undefined) return conversationStoreInstance;
     try {
-      conversationStoreInstance = (hostHooks?.stores?.conversations?.(conversationStorePath) ?? new ConversationStore(conversationStorePath)) as ConversationStore;
+      conversationStoreInstance = hostHooks?.stores?.conversations?.(conversationStorePath) ?? new ConversationStore(conversationStorePath);
     } catch {
       conversationStoreInstance = null;
     }
@@ -13582,7 +13585,7 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
       const operationId = decodeURIComponent(operationMatch[1]);
       const existingOperation = operationCoordinator.get(operationId);
       if (existingOperation?.type === 'agent_run' && existingOperation.scope.startsWith('agent-run:')) {
-        cancelActiveAgentRun(existingOperation.scope.slice('agent-run:'.length));
+        await cancelActiveAgentRun(existingOperation.scope.slice('agent-run:'.length));
       }
       const operation = operationCoordinator.cancel(operationId);
       res.writeHead(operation ? 200 : 404, { 'Content-Type': 'application/json; charset=utf-8' });
@@ -14888,11 +14891,11 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
       // heap on a project with 300 runs of history (1.2 GB of JSON). The store
       // reads only the page, newest first.
       // `GET /api/agent-runs/:id` still serves the complete immutable record.
-      const runs = agentRunStore.list(limit)
+      const runs = (await agentRunStore.list(limit))
         .sort((a: AgentRun, b: AgentRun) => b.startedAt.localeCompare(a.startedAt))
         .map(agentRunListEntryForTransport);
       res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-      res.end(serializeJSON({ runs, total: agentRunStore.count(), limit }));
+      res.end(serializeJSON({ runs, total: await agentRunStore.count(), limit }));
       return;
     }
 
@@ -15702,7 +15705,7 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
       });
       if (repairTraceReference) derivedRun.traceReference = repairTraceReference;
       await agentRunStore.save(derivedRun);
-      recordConversationTurn(threadId ? getConversationStore() : null, threadId, derivedRun);
+      await recordConversationTurn(threadId ? getConversationStore() : null, threadId, derivedRun);
       res.writeHead(201, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(serializeJSON({ run: derivedRun }));
       return;
@@ -15831,7 +15834,7 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
     if (req.method === 'POST' && /^\/api\/agent-runs\/[^/]+\/cancel$/.test(path)) {
       const match = path.match(/^\/api\/agent-runs\/([^/]+)\/cancel$/);
       const id = decodeURIComponent(match?.[1] ?? '');
-      if (!cancelActiveAgentRun(id)) {
+      if (!await cancelActiveAgentRun(id)) {
         res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(serializeJSON({ ok: false, error: 'This run is no longer active.' }));
         return;
@@ -15889,7 +15892,7 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
         // Thread-scoped runs: the persisted thread supplies prior turns (server
         // state wins; the client-built context stays the no-threadId fallback).
         const conversationStore = parsed.request.threadId ? getConversationStore() : null;
-        const requestedThread = conversationStore && parsed.request.threadId ? conversationStore.getThread(parsed.request.threadId) : null;
+        const requestedThread = conversationStore && parsed.request.threadId ? await conversationStore.getThread(parsed.request.threadId) : null;
         if (requestedThread && !conversationVisibleToCaller(requestedThread)) {
           res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' });
           res.end(serializeJSON({ error: 'Unknown thread id.' }));
@@ -15916,7 +15919,7 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
         // rebind it directly from durable run storage after any thread
         // hydration, so it remains stable across reloads and cannot be
         // overwritten by a best-effort text follow-up classifier.
-        hydratePersistedSelectedResultBinding(parsed.request, agentRunStore);
+        await hydratePersistedSelectedResultBinding(parsed.request, agentRunStore);
         // Threadless/public continuation JSON is deliberately non-authoritative.
         // If a plural deictic Ask cannot be rebound from a persisted member set,
         // fail closed before retrieval or planning rather than turning "those
@@ -15962,7 +15965,7 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
             executionTarget: parsed.request.executionTarget ?? null,
           })).digest('hex')
           : '';
-        const priorClaim = idempotencyKey ? agentRunStore.requestClaim(idempotencyKey) : undefined;
+        const priorClaim = idempotencyKey ? await agentRunStore.requestClaim(idempotencyKey) : undefined;
         if (priorClaim) {
           if (priorClaim.fingerprint !== requestFingerprint) {
             res.writeHead(409, { 'Content-Type': 'application/json; charset=utf-8' });
@@ -15970,7 +15973,9 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
             return;
           }
           const priorRun = await agentRunStore.get(priorClaim.runId);
-          const inFlight = activeAgentRunControllers.has(priorClaim.runId);
+          // HH-6: with a shared store the original may be running in another copy of DQL; its progress says so.
+          const inFlightElsewhere = !priorRun && !activeAgentRunControllers.has(priorClaim.runId) && Boolean(await agentRunStore.getProgress(priorClaim.runId));
+          const inFlight = activeAgentRunControllers.has(priorClaim.runId) || inFlightElsewhere;
           if (priorRun && !inFlight) {
             if (wantsStream) {
               res.writeHead(200, { 'Content-Type': 'text/event-stream; charset=utf-8', 'Cache-Control': 'no-cache', 'Connection': 'keep-alive', 'X-Accel-Buffering': 'no' });
@@ -15993,6 +15998,7 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
                 await new Promise((resolve) => setTimeout(resolve, 500));
                 if (activeAgentRunControllers.has(priorClaim.runId)) continue;
                 const settled = await agentRunStore.get(priorClaim.runId);
+                if (!settled && inFlightElsewhere && await agentRunStore.getProgress(priorClaim.runId)) continue;
                 if (settled) writeAgentRunSse(res as unknown as ServerResponse, 'agent-run-complete', slimAgentRunForTransport(settled));
                 else writeAgentRunSse(res as unknown as ServerResponse, 'agent-run-error', { error: 'The original submission ended without a stored run; check the run list before asking again.' });
                 break;
@@ -16013,7 +16019,7 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
         // so no client-provided string can bind a SQL capability or operation.
         const runId = randomUUID();
         parsed.request.runId = runId;
-        if (idempotencyKey) agentRunStore.claimRequest(idempotencyKey, runId, requestFingerprint);
+        if (idempotencyKey) await agentRunStore.claimRequest(idempotencyKey, runId, requestFingerprint);
         // This is host-selected rollout state, never user ingress. In
         // particular, it lets `AgentRunEngine` route explicit Research through
         // the authoritative V2 kernel once while retaining legacy/shadow
@@ -16119,7 +16125,7 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
               // replace that row with the server-owned capability atomically.
               await agentRunStore.save(run);
               completedRun = run;
-              recordConversationTurn(conversationStore, parsed.request!.threadId, run);
+              await recordConversationTurn(conversationStore, parsed.request!.threadId, run);
               return { runId: run.id, threadId: parsed.request!.threadId, status: run.status };
             } catch (error) {
               runError = error;
@@ -16218,8 +16224,8 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
     if (req.method === 'GET' && agentRunThreadMatch) {
       const id = decodeURIComponent(agentRunThreadMatch[1]);
       const store = getConversationStore();
-      const threadId = (await agentRunStore.get(id)) && store ? store.threadIdForRun(id) : null;
-      const thread = threadId && store ? store.getThread(threadId) : null;
+      const threadId = (await agentRunStore.get(id)) && store ? await store.threadIdForRun(id) : null;
+      const thread = threadId && store ? await store.getThread(threadId) : null;
       if (!thread || !conversationVisibleToCaller(thread)) {
         res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(serializeJSON({ error: 'That answer was not found among your conversations.' }));
@@ -16234,7 +16240,7 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
     if (req.method === 'GET' && agentRunMatch) {
       const id = decodeURIComponent(agentRunMatch[1]);
       const run = await agentRunStore.get(id);
-      const progress = run ? undefined : agentRunStore.getProgress(id);
+      const progress = run ? undefined : await agentRunStore.getProgress(id);
       if (!run && !progress) {
         res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(serializeJSON({ error: 'Agent run not found.' }));
@@ -16257,7 +16263,7 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
         const limitParam = Number(url.searchParams.get('limit'));
         const limit = Number.isFinite(limitParam) && limitParam > 0 ? limitParam : undefined;
         const distribution = store
-          ? store.tierDistribution({ ...(limit ? { limit } : {}) })
+          ? await store.tierDistribution({ ...(limit ? { limit } : {}) })
           : { total: 0, byRouteTier: {}, byTerminalLane: {} };
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(JSON.stringify(distribution));
@@ -17841,7 +17847,7 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
           const includeArchived = url.searchParams.get('archived') === '1';
           res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
           res.end(serializeJSON({
-            threads: store.listThreads({ limit: Number.isFinite(limit) ? limit : 50, includeArchived, ...(conversationOwnerId() ? { ownerId: conversationOwnerId() } : {}) }),
+            threads: await store.listThreads({ limit: Number.isFinite(limit) ? limit : 50, includeArchived, ...(conversationOwnerId() ? { ownerId: conversationOwnerId() } : {}) }),
             // Browser cache identity only. It is an opaque one-way fingerprint
             // and intentionally does not become conversation/trace evidence.
             projectIdentity: conversationProjectIdentity,
@@ -17852,7 +17858,7 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
           const body = await readJSON(req).catch(() => null);
           const record = agentRunRecord(body) ?? {};
           const ownerId = conversationOwnerId();
-          const thread = store.createThread({
+          const thread = await store.createThread({
             surface: agentRunString(record.surface),
             title: agentRunString(record.title),
             notebookPath: agentRunString(record.notebookPath),
@@ -17869,7 +17875,7 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
           res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
           res.end(serializeJSON({
             turns: query.trim()
-              ? store.searchTurns({ query, limit: Number.isFinite(limit) ? limit : 10, ...(conversationOwnerId() ? { ownerId: conversationOwnerId() } : {}) })
+              ? await store.searchTurns({ query, limit: Number.isFinite(limit) ? limit : 10, ...(conversationOwnerId() ? { ownerId: conversationOwnerId() } : {}) })
               : [],
           }));
           return;
@@ -17878,7 +17884,7 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
         if (threadMatch) {
           const threadId = decodeURIComponent(threadMatch[1]);
           const action = threadMatch[2];
-          const thread = store.getThread(threadId);
+          const thread = await store.getThread(threadId);
           // Someone else's conversation is indistinguishable from none.
           if (!thread || !conversationVisibleToCaller(thread)) {
             res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' });
@@ -17886,7 +17892,7 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
             return;
           }
           if (req.method === 'POST' && action === 'archive') {
-            store.archiveThread(threadId);
+            await store.archiveThread(threadId);
             res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
             res.end(serializeJSON({ ok: true }));
             return;
@@ -17903,14 +17909,15 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
               res.end(serializeJSON({ error: 'Provide a title or a favorite flag.' }));
               return;
             }
-            if (title !== undefined) store.renameThread(threadId, title);
-            if (favorite !== undefined) store.setThreadFavorite(threadId, favorite);
+            if (title !== undefined) await store.renameThread(threadId, title);
+            if (favorite !== undefined) await store.setThreadFavorite(threadId, favorite);
+            const updated = await store.getThread(threadId);
             res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-            res.end(serializeJSON({ thread: store.getThread(threadId) }));
+            res.end(serializeJSON({ thread: updated }));
             return;
           }
           if (req.method === 'DELETE' && !action) {
-            store.deleteThread(threadId);
+            await store.deleteThread(threadId);
             res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
             res.end(serializeJSON({ ok: true }));
             return;
@@ -17922,7 +17929,7 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
             const record = agentRunRecord(body) ?? {};
             const turnId = agentRunString(record.turnId);
             const turn = turnId
-              ? store.recentTurns(threadId, 200).find((candidate) => candidate.id === turnId)
+              ? (await store.recentTurns(threadId, 200)).find((candidate) => candidate.id === turnId)
               : undefined;
             if (!turn) {
               res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
@@ -17933,7 +17940,7 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
             const scope = scopeRaw === 'notebook' || scopeRaw === 'project' || scopeRaw === 'user' ? scopeRaw : 'project';
             const memory = openMemoryStore();
             try {
-              const saved = memory.upsert({
+              const saved = await memory.upsert({
                 scope,
                 title: agentRunString(record.title) ?? turn.question.slice(0, 120),
                 content: `Q: ${turn.question}\nA: ${turn.answerSummary ?? turn.answerText ?? '(no answer summary)'}`,
@@ -17946,16 +17953,17 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
               res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
               res.end(serializeJSON({ ok: true, memory: saved }));
             } finally {
-              memory.close();
+              await memory.close?.();
             }
             return;
           }
           if (req.method === 'GET' && !action) {
             const limit = Number(url.searchParams.get('limit') ?? '50');
-            const turns = store.recentTurns(threadId, Number.isFinite(limit) ? limit : 50);
-            const runs = turns.flatMap((turn) => {
+            const turns = await store.recentTurns(threadId, Number.isFinite(limit) ? limit : 50);
+            const storedRuns = await Promise.all(turns.map((turn) => (turn.agentRunId ? agentRunStore.get(turn.agentRunId) : undefined)));
+            const runs = turns.flatMap((turn, index) => {
               if (!turn.agentRunId) return [];
-              const run = agentRunStore.get(turn.agentRunId);
+              const run = storedRuns[index];
               // Thread history is a PRESENTATION payload. A stored run averages
               // ~700 KB and can exceed 2 MB, almost none of it renderable, so
               // fetching 50 of them meant tens of megabytes to read, parse,
@@ -17987,9 +17995,9 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
       try {
         const scope = url.searchParams.get('scope') ?? undefined;
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-        res.end(serializeJSON({ memories: memory.list(isMemoryScope(scope) ? scope : undefined) }));
+        res.end(serializeJSON({ memories: await memory.list(isMemoryScope(scope) ? scope : undefined) }));
       } finally {
-        memory.close();
+        await memory.close?.();
       }
       return;
     }
@@ -18003,7 +18011,7 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
       }
       const memory = openMemoryStore();
       try {
-        const saved = memory.upsert({
+        const saved = await memory.upsert({
           id: typeof body.id === 'string' ? body.id : undefined,
           scope: body.scope,
           scopeId: typeof body.scopeId === 'string' ? body.scopeId : undefined,
@@ -18021,7 +18029,7 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(serializeJSON({ ok: true, memory: saved }));
       } finally {
-        memory.close();
+        await memory.close?.();
       }
       return;
     }
@@ -18035,11 +18043,11 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
       }
       const memory = openMemoryStore();
       try {
-        memory.delete(id);
+        await memory.delete(id);
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(serializeJSON({ ok: true }));
       } finally {
-        memory.close();
+        await memory.close?.();
       }
       return;
     }
@@ -24167,7 +24175,7 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
               : [];
             if (certifiedMetadata.name) {
               const memory = openMemoryStore();
-              memory.upsert({
+              await memory.upsert({
                 id: `mem_certify_${certifiedMetadata.name}`,
                 scope: 'project',
                 title: `Certified block: ${certifiedMetadata.name}`,
@@ -24332,7 +24340,7 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
               ? learned.outputs.filter((o): o is string => typeof o === 'string')
               : [];
             const memory = openMemoryStore();
-            memory.upsert({
+            await memory.upsert({
               id: `mem_certify_${learned.name}`,
               scope: 'project',
               title: `Certified block: ${learned.name}`,
@@ -28754,7 +28762,7 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
     // Closing it with the HTTP server is required for a genuine local restart
     // to reopen the persisted thread cleanly (and avoids retaining a stale
     // WAL handle after the Notebook process has stopped).
-    conversationStoreInstance?.close();
+    void Promise.resolve(conversationStoreInstance?.close?.()).catch(() => undefined);
     conversationStoreInstance = undefined;
     for (const client of operationSseClients) {
       try { client.end(); } catch { /* connection already closed */ }

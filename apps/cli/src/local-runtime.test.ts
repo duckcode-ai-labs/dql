@@ -3569,7 +3569,7 @@ describe('agent run runtime API', () => {
     expect(parsed.request?.runId).toBeUndefined();
   });
 
-  it('AGT-027 rehydrates a browser-shaped selected result binding from persisted local history after reload', () => {
+  it('AGT-027 rehydrates a browser-shaped selected result binding from persisted local history after reload', async () => {
     const projectRoot = mkdtempSync(join(tmpdir(), 'dql-selected-result-binding-'));
     tempDirs.push(projectRoot);
     const result = normalizeCanonicalQueryResult({
@@ -3629,7 +3629,7 @@ describe('agent run runtime API', () => {
 
     const reloaded = new SqliteAgentRunStore({ path: defaultAgentRunSqlitePath(projectRoot) });
     try {
-      hydratePersistedSelectedResultBinding(parsed.request!, reloaded);
+      await hydratePersistedSelectedResultBinding(parsed.request!, reloaded);
     } finally {
       reloaded.close();
     }

@@ -20,6 +20,7 @@ import type { CascadeAnswerResult } from '../cascade/cascade.js';
 import type { KnowledgeLens } from '../domain-context.js';
 import type { ConversationSummaryV1 } from './rolling-summary.js';
 import type { NarrationIntegrityReceiptV1 } from '../agent-run-engine.js';
+import type { Awaitable, AwaitableMethods } from '../store-types.js';
 
 const require = createRequire(import.meta.url);
 let databaseCtor: typeof Database | null = null;
@@ -299,37 +300,14 @@ export class ConversationStore {
   }
 
   createThread(input: { id?: string; surface?: string; title?: string; notebookPath?: string; ownerId?: string } = {}): ConversationThread {
-    const now = new Date().toISOString();
-    // A caller may NAME a thread. `dql agent ask --thread my-session` is
-    // documented as continuing a conversation, but nothing ever created the
-    // thread, so every turn was dropped on the floor and each follow-up
-    // started from zero. Naming is not new authority: an id that can be
-    // supplied to read and append to a thread can equally open one.
-    const named = typeof input.id === 'string' && /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$/.test(input.id.trim())
-      ? input.id.trim()
-      : undefined;
-    const id = named ?? `thr_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
-    const thread: ConversationThread = {
-      id,
-      surface: input.surface?.trim() || 'notebook',
-      title: input.title?.trim() || undefined,
-      notebookPath: input.notebookPath?.trim() || undefined,
-      workingState: {},
-      rollingSummary: undefined,
-      structuredSummary: undefined,
-      summaryTurnSeq: 0,
-      archived: false,
-      favorite: false,
-      ...(input.ownerId ? { ownerId: input.ownerId } : {}),
-      createdAt: now,
-      updatedAt: now,
-    };
+    const thread = newConversationThread(input);
+    const now = thread.createdAt;
     this.db.prepare(`
       INSERT INTO conversation_threads (
         id, surface, title, notebook_path, working_state_json, rolling_summary, summary_json,
         summary_turn_seq, archived, owner_id, created_at, updated_at
       ) VALUES (?, ?, ?, ?, '{}', NULL, '{}', 0, 0, ?, ?, ?)
-    `).run(thread.id, thread.surface, thread.title ?? null, thread.notebookPath ?? null, input.ownerId ?? null, now, now);
+    `).run(thread.id, thread.surface, thread.title ?? null, thread.notebookPath ?? null, thread.ownerId ?? null, now, now);
     return thread;
   }
 
@@ -409,21 +387,8 @@ export class ConversationStore {
    * bumps the thread, and sets the thread title from the first question).
    */
   appendTurn(threadId: string, input: ConversationTurnInput): ConversationTurn {
-    const now = new Date().toISOString();
-    const id = `trn_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
-    const result = capTurnResult(input.result);
-    const dqlArtifact = capDqlArtifact(input.dqlArtifact);
-    const turn: ConversationTurn = {
-      ...input,
-      answerText: input.answerText?.slice(0, MAX_ANSWER_TEXT),
-      answerSummary: input.answerSummary?.slice(0, MAX_SUMMARY),
-      dqlArtifact,
-      result,
-      id,
-      threadId,
-      seq: 0,
-      createdAt: now,
-    };
+    const turn = conversationTurnForStorage(threadId, input);
+    const now = turn.createdAt;
     const txn = this.db.transaction(() => {
       const seqRow = this.db.prepare(
         'SELECT COALESCE(MAX(seq), 0) + 1 AS next FROM conversation_turns WHERE thread_id = ?'
@@ -463,18 +428,7 @@ export class ConversationStore {
         JSON.stringify(turn.contract ?? {}),
         now,
       );
-      const tags = [
-        turn.sourceCertifiedBlock ?? '',
-        turn.route ?? '',
-        turn.cascade?.terminalLane ?? '',
-        turn.cascade?.routeTier ?? '',
-        turn.dqlArtifact?.name ?? '',
-        turn.dqlArtifact?.kind ?? '',
-        ...(turn.dqlArtifact?.metrics ?? []),
-        ...(turn.dqlArtifact?.dimensions ?? []),
-        ...(turn.result?.columns ?? []),
-        ...Object.keys(turn.result?.dimensionValues ?? {}),
-      ].filter(Boolean).join(' ');
+      const tags = conversationTurnSearchTags(turn);
       this.db.prepare(`
         INSERT INTO conversation_turns_fts (id, thread_id, question, answer_summary, tags)
         VALUES (?, ?, ?, ?, ?)
@@ -611,6 +565,93 @@ export class ConversationStore {
   close(): void {
     this.db.close();
   }
+}
+
+/** The conversation store surface DQL calls (RFC 0010 HH-6). */
+export type ConversationStoreMethods = Pick<ConversationStore,
+  | 'createThread' | 'threadIdForRun' | 'getThread' | 'listThreads' | 'archiveThread' | 'renameThread'
+  | 'setThreadFavorite' | 'deleteThread' | 'appendTurn' | 'recentTurns' | 'tierDistribution'
+  | 'turnsForCompaction' | 'updateThreadState' | 'searchTurns'>;
+
+/**
+ * A conversation store as DQL uses it: this SQLite store, or a host's own
+ * (RFC 0010 HH-6) whose methods return Promises. DQL awaits every call.
+ */
+export type ConversationStoreLike = AwaitableMethods<ConversationStoreMethods> & {
+  pruneThreads?(olderThanDays: number): Awaitable<number>;
+  close?(): Awaitable<void>;
+};
+
+/**
+ * A new thread, exactly as `createThread` records it: a caller-named id when
+ * it is a safe one, otherwise a fresh id. For a host's own store (HH-6).
+ */
+export function newConversationThread(input: { id?: string; surface?: string; title?: string; notebookPath?: string; ownerId?: string } = {}): ConversationThread {
+  const now = new Date().toISOString();
+  // A caller may NAME a thread. `dql agent ask --thread my-session` is
+  // documented as continuing a conversation, but nothing ever created the
+  // thread, so every turn was dropped on the floor and each follow-up
+  // started from zero. Naming is not new authority: an id that can be
+  // supplied to read and append to a thread can equally open one.
+  const named = typeof input.id === 'string' && /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$/.test(input.id.trim())
+    ? input.id.trim()
+    : undefined;
+  const id = named ?? `thr_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+  return {
+    id,
+    surface: input.surface?.trim() || 'notebook',
+    title: input.title?.trim() || undefined,
+    notebookPath: input.notebookPath?.trim() || undefined,
+    workingState: {},
+    rollingSummary: undefined,
+    structuredSummary: undefined,
+    summaryTurnSeq: 0,
+    archived: false,
+    favorite: false,
+    ...(input.ownerId ? { ownerId: input.ownerId } : {}),
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
+/**
+ * A turn as `appendTurn` stores it: a fresh id, bounded text, result sample
+ * and DQL artifact. `seq` is 0 until the store assigns the thread's next one.
+ * For a host's own store (HH-6), so both keep the same bounds.
+ */
+export function conversationTurnForStorage(threadId: string, input: ConversationTurnInput): ConversationTurn {
+  return {
+    ...input,
+    answerText: input.answerText?.slice(0, MAX_ANSWER_TEXT),
+    answerSummary: input.answerSummary?.slice(0, MAX_SUMMARY),
+    dqlArtifact: capDqlArtifact(input.dqlArtifact),
+    result: capTurnResult(input.result),
+    id: `trn_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`,
+    threadId,
+    seq: 0,
+    createdAt: new Date().toISOString(),
+  };
+}
+
+/** The words a turn is found by besides its question and summary (the FTS `tags` column). */
+export function conversationTurnSearchTags(turn: ConversationTurn): string {
+  return [
+    turn.sourceCertifiedBlock ?? '',
+    turn.route ?? '',
+    turn.cascade?.terminalLane ?? '',
+    turn.cascade?.routeTier ?? '',
+    turn.dqlArtifact?.name ?? '',
+    turn.dqlArtifact?.kind ?? '',
+    ...(turn.dqlArtifact?.metrics ?? []),
+    ...(turn.dqlArtifact?.dimensions ?? []),
+    ...(turn.result?.columns ?? []),
+    ...Object.keys(turn.result?.dimensionValues ?? {}),
+  ].filter(Boolean).join(' ');
+}
+
+/** A stored turn read back the way `recentTurns` reads it (the DQL artifact re-bounded). */
+export function conversationTurnFromStorage(turn: ConversationTurn): ConversationTurn {
+  return { ...turn, dqlArtifact: turn.dqlArtifact && Object.keys(turn.dqlArtifact).length > 0 ? capDqlArtifact(turn.dqlArtifact) : undefined };
 }
 
 function capTurnResult(result: ConversationTurnResult | undefined): ConversationTurnResult | undefined {

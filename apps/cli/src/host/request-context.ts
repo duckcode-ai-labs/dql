@@ -190,6 +190,13 @@ export interface DqlHostHooks {
    */
   credentials?: DqlCredentialsHook;
   /**
+   * One event per warehouse statement DQL ran (RFC 0010 HH-6): the engine,
+   * whether it read data or schema, the outcome and how long it took — for a
+   * host's metrics. Never the SQL, its parameters, its rows or who asked.
+   * Called after the statement finishes; errors are ignored.
+   */
+  statements?: DqlStatementObserver;
+  /**
    * The model for this person (RFC 0010 HH-5), e.g. Claude through Amazon
    * Bedrock or Google Vertex in the customer's account
    * (`createBedrockClaudeProvider`, `createVertexClaudeProvider` in
@@ -315,6 +322,8 @@ export interface DqlHostHooks {
   /**
    * Where state lives (HH-6), for hosts that run several copies of DQL on
    * shared storage. Each defaults to today's SQLite file in the project.
+   * Every method returns a Promise; DQL awaits each call, so a store may be
+   * a network database.
    */
   stores?: {
     runs?: DqlRunStore;
@@ -490,12 +499,35 @@ export function safeHostBanner(banner: unknown): DqlHostBanner | undefined {
   return { text, tone: raw.tone === 'caution' ? 'caution' : 'info', ...(links.length ? { links } : {}) };
 }
 
-/** The run store surface the server uses (dql-agent's SQLite store satisfies it). */
-export type DqlRunStore = Pick<import('@duckcodeailabs/dql-agent').SqliteAgentRunStore, 'save' | 'get' | 'list' | 'getProgress' | 'saveProgress' | 'claimRequest' | 'requestClaim' | 'count'>;
-/** The memory store surface (dql-agent's MemoryStore satisfies it). */
-export type DqlMemoryStore = Pick<import('@duckcodeailabs/dql-agent').MemoryStore, keyof import('@duckcodeailabs/dql-agent').MemoryStore>;
-/** The conversation store surface (dql-agent's ConversationStore satisfies it). */
-export type DqlConversationStore = Pick<import('@duckcodeailabs/dql-agent').ConversationStore, keyof import('@duckcodeailabs/dql-agent').ConversationStore>;
+/** One warehouse statement, for metrics (HH-6): no SQL, parameters, rows or person. */
+export interface DqlStatementEvent {
+  at: string;
+  driver: string;
+  purpose: 'data' | 'metadata';
+  /** `refused`: the row policy or the person's connection stopped it before it ran. */
+  outcome: 'ok' | 'error' | 'refused';
+  durationMs: number;
+}
+export type DqlStatementObserver = (event: DqlStatementEvent) => void | Promise<void>;
+
+/**
+ * The run store surface the server uses (HH-6). Every method returns a
+ * Promise, so a host can keep runs in a shared database; DQL awaits each
+ * call. `dql-agent` exports the persisted form (`agentRunForStorage`,
+ * `agentRunFromStorage`, the progress pair and `interruptedAgentRun`) so a
+ * host store keeps the same records the SQLite store keeps.
+ */
+export type DqlRunStore = import('@duckcodeailabs/dql-agent').PromisedMethods<DqlRunStoreMethods>;
+/** The same surface as DQL calls it: its own SQLite store answers synchronously. */
+export type DqlRunStoreLike = import('@duckcodeailabs/dql-agent').AwaitableMethods<DqlRunStoreMethods>;
+type DqlRunStoreMethods = Pick<import('@duckcodeailabs/dql-agent').SqliteAgentRunStore, 'save' | 'get' | 'list' | 'getProgress' | 'saveProgress' | 'claimRequest' | 'requestClaim' | 'count'>;
+/** The memory store surface (HH-6); every method returns a Promise. */
+export type DqlMemoryStore = import('@duckcodeailabs/dql-agent').PromisedMethods<Pick<import('@duckcodeailabs/dql-agent').MemoryStore, 'upsert' | 'get' | 'list' | 'search' | 'setEnabled' | 'delete'>> & { close?(): Promise<void> };
+/** The conversation store surface (HH-6); every method returns a Promise. */
+export type DqlConversationStore = import('@duckcodeailabs/dql-agent').PromisedMethods<import('@duckcodeailabs/dql-agent').ConversationStoreMethods> & {
+  pruneThreads?(olderThanDays: number): Promise<number>;
+  close?(): Promise<void>;
+};
 
 /** The generate/stream surface DQL needs from a model; dql-agent's AgentProvider satisfies it. */
 export type DqlModelProvider = import('@duckcodeailabs/dql-agent').AgentProvider;

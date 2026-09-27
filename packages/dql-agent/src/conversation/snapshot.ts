@@ -4,7 +4,7 @@
  * a few verbatim recent turns + how the new question relates to the topic.
  */
 
-import type { ConversationResultMemberSetV1, ConversationStore, ConversationTurn } from './session-store.js';
+import type { ConversationResultMemberSetV1, ConversationStore, ConversationStoreLike, ConversationThread, ConversationTurn } from './session-store.js';
 import type { AgentDqlArtifactReference } from '../answer-loop.js';
 import type { CascadeAnswerResult } from '../cascade/cascade.js';
 import type { KnowledgeLens } from '../domain-context.js';
@@ -150,24 +150,48 @@ export function isLikelyClarificationReply(value: string): boolean {
  * new topic (shift), the carried filters are deterministically cleared in the
  * snapshot — stale-context protection that doesn't rely on the model.
  */
+export interface ConversationSnapshotOptions {
+  question?: string;
+  recent?: number;
+  /**
+   * Host-only structured-choice continuation. The Notebook replays the
+   * original analytical question when an option is clicked, so that complete
+   * wording must not clear the persisted server selection before the router
+   * can validate it.
+   */
+  preservePendingClarification?: boolean;
+}
+
 export function buildConversationSnapshot(
   store: ConversationStore,
   threadId: string,
-  options: {
-    question?: string;
-    recent?: number;
-    /**
-     * Host-only structured-choice continuation. The Notebook replays the
-     * original analytical question when an option is clicked, so that complete
-     * wording must not clear the persisted server selection before the router
-     * can validate it.
-     */
-    preservePendingClarification?: boolean;
-  } = {},
+  options: ConversationSnapshotOptions = {},
 ): ConversationSnapshot | null {
   const thread = store.getThread(threadId);
   if (!thread) return null;
-  const recent = store.recentTurns(threadId, options.recent ?? RECENT_TURNS);
+  return snapshotFromThread(thread, store.recentTurns(threadId, options.recent ?? RECENT_TURNS), options);
+}
+
+/**
+ * `buildConversationSnapshot` over any conversation store, including a
+ * host's own whose methods return Promises (RFC 0010 HH-6).
+ */
+export async function loadConversationSnapshot(
+  store: ConversationStoreLike,
+  threadId: string,
+  options: ConversationSnapshotOptions = {},
+): Promise<ConversationSnapshot | null> {
+  const thread = await store.getThread(threadId);
+  if (!thread) return null;
+  return snapshotFromThread(thread, await store.recentTurns(threadId, options.recent ?? RECENT_TURNS), options);
+}
+
+function snapshotFromThread(
+  thread: ConversationThread,
+  recent: ConversationTurn[],
+  options: ConversationSnapshotOptions,
+): ConversationSnapshot {
+  const threadId = thread.id;
   let workingState = parseWorkingState(thread.workingState);
   let topicRelation: TopicRelation | undefined;
   if (options.question && workingState.topicKey) {
@@ -289,32 +313,52 @@ export function advanceThreadState(store: ConversationStore, threadId: string, t
   try {
     const thread = store.getThread(threadId);
     if (!thread) return;
-    const { state } = reduceWorkingState(parseWorkingState(thread.workingState), turn);
-    // Compact everything older than the recent verbatim window.
-    const compactBefore = Math.max(turn.seq - RECENT_TURNS + 1, 1);
-    const compactable = thread.summaryTurnSeq < compactBefore - 1
-      ? store.turnsForCompaction(threadId, thread.summaryTurnSeq, compactBefore)
-      : [];
-    const rollingSummary = compactable.length > 0
-      ? updateRollingSummary({ previousSummary: thread.rollingSummary, compactedTurns: compactable })
-      : thread.rollingSummary;
-    const structuredSummary = compactable.length > 0
-      ? updateStructuredConversationSummary({
-          previousSummary: thread.structuredSummary,
-          compactedTurns: compactable,
-        })
-      : thread.structuredSummary;
-    store.updateThreadState(threadId, {
-      workingState: state as unknown as Record<string, unknown>,
-      rollingSummary,
-      ...(structuredSummary ? { structuredSummary } : {}),
-      summaryTurnSeq: compactable.length > 0
-        ? compactable[compactable.length - 1].seq
-        : thread.summaryTurnSeq,
-    });
+    const window = compactionWindow(thread, turn);
+    const compactable = window ? store.turnsForCompaction(threadId, window.afterSeq, window.beforeSeq) : [];
+    store.updateThreadState(threadId, nextThreadState(thread, turn, compactable));
   } catch {
     // Advisory maintenance — never fail the run for it.
   }
+}
+
+/** `advanceThreadState` over any conversation store, including a host's own (RFC 0010 HH-6). Never throws. */
+export async function advanceThreadStateAsync(store: ConversationStoreLike, threadId: string, turn: ConversationTurn): Promise<void> {
+  try {
+    const thread = await store.getThread(threadId);
+    if (!thread) return;
+    const window = compactionWindow(thread, turn);
+    const compactable = window ? await store.turnsForCompaction(threadId, window.afterSeq, window.beforeSeq) : [];
+    await store.updateThreadState(threadId, nextThreadState(thread, turn, compactable));
+  } catch {
+    // Advisory maintenance — never fail the run for it.
+  }
+}
+
+/** Everything older than the recent verbatim window and not yet folded in, or nothing. */
+function compactionWindow(thread: ConversationThread, turn: ConversationTurn): { afterSeq: number; beforeSeq: number } | undefined {
+  const compactBefore = Math.max(turn.seq - RECENT_TURNS + 1, 1);
+  return thread.summaryTurnSeq < compactBefore - 1 ? { afterSeq: thread.summaryTurnSeq, beforeSeq: compactBefore } : undefined;
+}
+
+function nextThreadState(thread: ConversationThread, turn: ConversationTurn, compactable: ConversationTurn[]): Parameters<ConversationStore['updateThreadState']>[1] {
+  const { state } = reduceWorkingState(parseWorkingState(thread.workingState), turn);
+  const rollingSummary = compactable.length > 0
+    ? updateRollingSummary({ previousSummary: thread.rollingSummary, compactedTurns: compactable })
+    : thread.rollingSummary;
+  const structuredSummary = compactable.length > 0
+    ? updateStructuredConversationSummary({
+        previousSummary: thread.structuredSummary,
+        compactedTurns: compactable,
+      })
+    : thread.structuredSummary;
+  return {
+    workingState: state as unknown as Record<string, unknown>,
+    rollingSummary,
+    ...(structuredSummary ? { structuredSummary } : {}),
+    summaryTurnSeq: compactable.length > 0
+      ? compactable[compactable.length - 1].seq
+      : thread.summaryTurnSeq,
+  };
 }
 
 /**
@@ -325,14 +369,14 @@ export function advanceThreadState(store: ConversationStore, threadId: string, t
  * `limit` hits. Never throws.
  */
 export async function recallRelevantTurns(
-  store: ConversationStore,
+  store: ConversationStoreLike,
   threadId: string,
   question: string,
   options: { limit?: number; excludeTurnIds?: string[] } = {},
 ): Promise<ConversationSnapshotTurn[]> {
   try {
     const excluded = new Set(options.excludeTurnIds ?? []);
-    const candidates = store.searchTurns({ query: question, threadId, limit: 24 })
+    const candidates = (await store.searchTurns({ query: question, threadId, limit: 24 }))
       .filter((turn) => !excluded.has(turn.id))
       .filter((turn) => isUsableAnalyticalContextTurn(snapshotTurn(turn)));
     if (candidates.length === 0) return [];

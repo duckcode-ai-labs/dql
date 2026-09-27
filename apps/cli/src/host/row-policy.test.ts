@@ -45,6 +45,35 @@ class RecordingExecutor extends QueryExecutor {
 describe('the one query path (RFC 0010 HH-3)', () => {
   const connection: ConnectionConfig = { driver: 'duckdb', filepath: ':memory:' };
 
+  it('tells a statements observer each outcome and duration, never the SQL (HH-6)', async () => {
+    const events: Array<Record<string, unknown>> = [];
+    const inner = new RecordingExecutor();
+    const executor = withHostQueryHooks(inner, {
+      rowPolicy: (query) => (query.sql.includes('secret') ? { refuse: 'No.' } : { sql: query.sql }),
+      statements: (event) => { events.push(event as unknown as Record<string, unknown>); },
+    });
+    await executor.executePositional('SELECT 1', [], connection, { purpose: 'metadata' });
+    await expect(executor.executePositional('SELECT * FROM secret', [], connection)).rejects.toThrow('No.');
+    const connector = await executor.getConnector(connection);
+    await connector.execute('SELECT 2');
+    // Without a policy the observer still hears of each statement; a failing run is an error.
+    const failing = new RecordingExecutor();
+    failing.executePositional = async () => { throw new Error('warehouse down'); };
+    await expect(withHostQueryHooks(failing, { statements: (event) => { events.push(event as unknown as Record<string, unknown>); } }).executePositional('SELECT 3', [], connection)).rejects.toThrow('warehouse down');
+    expect(events.map(({ driver, purpose, outcome }) => ({ driver, purpose, outcome }))).toEqual([
+      { driver: 'duckdb', purpose: 'metadata', outcome: 'ok' },
+      { driver: 'duckdb', purpose: 'data', outcome: 'refused' },
+      { driver: 'duckdb', purpose: 'data', outcome: 'ok' },
+      { driver: 'duckdb', purpose: 'data', outcome: 'error' },
+    ]);
+    for (const event of events) {
+      expect(typeof event.durationMs).toBe('number');
+      expect(Object.keys(event).sort()).toEqual(['at', 'driver', 'durationMs', 'outcome', 'purpose']);
+    }
+    // An observer that throws never fails the statement.
+    await withHostQueryHooks(new RecordingExecutor(), { statements: () => { throw new Error('metrics down'); } }).executePositional('SELECT 4', [], connection);
+  });
+
   it('checks every kind of statement once, as the signed-in person, and runs what the policy returns', async () => {
     const seen: DqlQueryContext[] = [];
     const policy: DqlRowPolicy = (query) => {

@@ -10,6 +10,7 @@ import { dirname, join } from 'node:path';
 import { createRequire } from 'node:module';
 import type Database from 'better-sqlite3';
 import { sanitizeFtsQuery } from './fts-query.js';
+import type { Awaitable, AwaitableMethods } from '../store-types.js';
 
 const require = createRequire(import.meta.url);
 let databaseCtor: typeof Database | null = null;
@@ -133,27 +134,7 @@ export class MemoryStore {
   }
 
   upsert(input: AgentMemoryInput): AgentMemory {
-    const now = new Date().toISOString();
-    const id = input.id ?? `mem_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
-    const existing = this.get(id);
-    const row: AgentMemory = {
-      id,
-      scope: input.scope,
-      scopeId: input.scopeId,
-      title: input.title.trim(),
-      content: input.content.trim(),
-      tags: input.tags ?? [],
-      source: input.source ?? 'manual',
-      confidence: clamp(input.confidence ?? existing?.confidence ?? 0.7),
-      importance: clamp(input.importance ?? existing?.importance ?? 0.5),
-      validFrom: input.validFrom,
-      validTo: input.validTo,
-      supersedes: input.supersedes,
-      lastUsed: existing?.lastUsed,
-      createdAt: existing?.createdAt ?? now,
-      updatedAt: now,
-      enabled: input.enabled ?? existing?.enabled ?? true,
-    };
+    const row = memoryRecordForStorage(input, (id) => this.get(id));
 
     const txn = this.db.transaction(() => {
       this.db.prepare(`
@@ -262,6 +243,41 @@ export class MemoryStore {
   close(): void {
     this.db.close();
   }
+}
+
+/** The memory store surface DQL calls (RFC 0010 HH-6): this SQLite store, or a host's own whose methods return Promises. */
+export type MemoryStoreLike = AwaitableMethods<Pick<MemoryStore, 'upsert' | 'get' | 'list' | 'search' | 'setEnabled' | 'delete'>> & {
+  close?(): Awaitable<void>;
+};
+
+/**
+ * The record `upsert` writes: a fresh id unless one is given, scores clamped
+ * to 0..1, and what the existing record had (confidence, importance, last
+ * use, creation time, enabled) kept unless the input sets it. For a host's own
+ * store (HH-6), which passes the existing record it read.
+ */
+export function memoryRecordForStorage(input: AgentMemoryInput, existingOf: (id: string) => AgentMemory | null | undefined): AgentMemory {
+  const now = new Date().toISOString();
+  const id = input.id ?? `mem_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+  const existing = existingOf(id) ?? undefined;
+  return {
+    id,
+    scope: input.scope,
+    scopeId: input.scopeId,
+    title: input.title.trim(),
+    content: input.content.trim(),
+    tags: input.tags ?? [],
+    source: input.source ?? 'manual',
+    confidence: clamp(input.confidence ?? existing?.confidence ?? 0.7),
+    importance: clamp(input.importance ?? existing?.importance ?? 0.5),
+    validFrom: input.validFrom,
+    validTo: input.validTo,
+    supersedes: input.supersedes,
+    lastUsed: existing?.lastUsed,
+    createdAt: existing?.createdAt ?? now,
+    updatedAt: now,
+    enabled: input.enabled ?? existing?.enabled ?? true,
+  };
 }
 
 type MemoryRow = {

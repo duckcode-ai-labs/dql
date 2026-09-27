@@ -504,124 +504,8 @@ export class SqliteAgentRunStore implements AgentRunStore {
       for (const row of rows) {
         const progress = this.readProgress(row.payload_json);
         if (!progress) continue;
-        const completedAt = new Date().toISOString();
-        const userCancelled = progress.lifecycle.state === 'cancelling'
-          || progress.events.some((event) => event.type === 'run.cancelled');
-        const route = progress.route ?? (userCancelled ? 'cancelled' : 'blocked');
-        const retainedArtifacts = retainedInterruptedArtifacts(progress, userCancelled);
-        const retainedIndependentResult = retainedArtifacts.some((artifact) => artifact.trustState !== 'blocked');
-        const failure: AgentRunDiagnosticReceiptV1['failure'] = {
-          code: userCancelled ? 'RUN_CANCELLED' : 'RUN_INTERRUPTED',
-          phase: progress.lifecycle.phase,
-          message: userCancelled
-            ? 'Stopped by user.'
-            : retainedIndependentResult
-              ? 'The local DQL runtime restarted before this agent run completed. Completed independent task results remain available for inspection.'
-              : 'The local DQL runtime restarted before this agent run completed. No result was accepted.',
-          recoverable: !userCancelled,
-          safeActions: userCancelled ? [] : ['retry_same_request'],
-        };
-        const receipt: AgentRunDiagnosticReceiptV1 = {
-          version: 1,
-          runId: progress.id,
-          phase: progress.lifecycle.phase,
-          route,
-          plan: progress.plan,
-          steps: progress.steps,
-          artifacts: retainedArtifacts,
-          evaluations: progress.evaluations,
-          failure,
-        };
-        const runtimeReceipt = interruptedRuntimeReceiptV5(progress, userCancelled, route);
-        const runtimeReceiptV6 = runtimeReceipt
-          ? interruptedRuntimeReceiptV6(progress, userCancelled, runtimeReceipt)
-          : undefined;
-        const diagnosticArtifact = {
-          id: `${progress.id}:diagnostic`,
-          kind: 'answer' as const,
-          title: userCancelled ? 'Cancelled agent run' : 'Interrupted agent run',
-          trustState: 'blocked' as const,
-          payload: {
-            diagnosticReceipt: receipt,
-            ...(runtimeReceipt ? { diagnosticReceiptV5: runtimeReceipt } : {}),
-            ...(runtimeReceiptV6 ? { diagnosticReceiptV6: runtimeReceiptV6 } : {}),
-          },
-        };
-        const run: AgentRun = {
-          id: progress.id,
-          question: progress.question,
-          requestedMode: progress.requestedMode,
-          route,
-          status: userCancelled ? 'cancelled' : 'blocked',
-          trustState: userCancelled ? 'not_applicable' : 'blocked',
-          stopReason: userCancelled ? 'cancelled' : 'blocked',
-          startedAt: progress.lifecycle.startedAt,
-          completedAt,
-          selectedObject: progress.selectedObject,
-          plan: progress.plan,
-          steps: progress.steps,
-          summary: failure.message,
-          artifacts: userCancelled
-            ? retainedArtifacts
-            : [...retainedArtifacts, diagnosticArtifact],
-          evaluations: [
-            ...progress.evaluations,
-            userCancelled
-              ? {
-                  id: 'run-cancelled',
-                  label: 'Run cancelled',
-                  passed: true,
-                  severity: 'info' as const,
-                  message: failure.message,
-                }
-              : {
-                  id: 'run-interrupted',
-                  label: 'Run interrupted',
-                  passed: false,
-                  severity: 'blocking' as const,
-                  message: failure.message,
-                  suggestedRepair: 'Retry the same request.',
-                },
-          ],
-          events: [
-            ...progress.events,
-            {
-              id: `${progress.id}:event:${progress.events.length + 1}`,
-              runId: progress.id,
-              type: userCancelled ? 'run.cancelled' : 'run.failed',
-              at: completedAt,
-              message: failure.message,
-              route,
-              status: userCancelled ? 'cancelled' : 'blocked',
-              trustState: userCancelled ? 'not_applicable' : 'blocked',
-            },
-          ],
-          nextActions: userCancelled
-            ? []
-            : [{ id: 'retry-interrupted-run', label: 'Retry request', route: progress.route }],
-          repairAttempts: 0,
-          escalationAttempts: 0,
-          diagnosticReceipt: receipt,
-          ...(runtimeReceipt ? { diagnosticReceiptV5: runtimeReceipt } : {}),
-          ...(runtimeReceiptV6 ? { diagnosticReceiptV6: runtimeReceiptV6 } : {}),
-          ...(progress.askAnalystState ? { askAnalystState: progress.askAnalystState } : {}),
-          ...(progress.analyticalTaskOutcomes?.length
-            ? { analyticalTaskOutcomes: progress.analyticalTaskOutcomes }
-            : {}),
-          ...(progress.analyticalTaskOutcomeSummary
-            ? { analyticalTaskOutcomeSummary: progress.analyticalTaskOutcomeSummary }
-            : {}),
-          ...(progress.traceReference ? { traceReference: progress.traceReference } : {}),
-          lifecycle: {
-            ...progress.lifecycle,
-            state: 'terminal',
-            phase: userCancelled ? 'run.cancelled' : 'run.failed',
-            revision: progress.lifecycle.revision + 1,
-            eventCursor: progress.events.length + 1,
-            updatedAt: completedAt,
-            completedAt,
-          },
-        };
+        const run = interruptedAgentRun(progress);
+        const completedAt = run.completedAt ?? new Date().toISOString();
         update.run(run.route, run.status, completedAt, this.persistedRunJson(run), completedAt, run.id);
       }
     });
@@ -935,6 +819,163 @@ function interruptedDiagnosticState(state: AskAnalystState): AgentRunDiagnosticR
       repairAttempts: state.repairAttempts,
     },
   };
+}
+
+/**
+ * The terminal record for a run whose runtime stopped before it finished:
+ * cancelled when the person had asked to stop it, otherwise interrupted with
+ * one retryable receipt. `SqliteAgentRunStore` closes its own orphans this way
+ * when it opens; a host store (RFC 0010 HH-6) uses it for runs whose worker
+ * has gone.
+ *
+ * Acceptance: API-008, API-007.
+ */
+export function interruptedAgentRun(progress: AgentRunProgressV1, completedAt: string = new Date().toISOString()): AgentRun {
+  const userCancelled = progress.lifecycle.state === 'cancelling'
+    || progress.events.some((event) => event.type === 'run.cancelled');
+  const route = progress.route ?? (userCancelled ? 'cancelled' : 'blocked');
+  const retainedArtifacts = retainedInterruptedArtifacts(progress, userCancelled);
+  const retainedIndependentResult = retainedArtifacts.some((artifact) => artifact.trustState !== 'blocked');
+  const failure: AgentRunDiagnosticReceiptV1['failure'] = {
+    code: userCancelled ? 'RUN_CANCELLED' : 'RUN_INTERRUPTED',
+    phase: progress.lifecycle.phase,
+    message: userCancelled
+      ? 'Stopped by user.'
+      : retainedIndependentResult
+        ? 'The local DQL runtime restarted before this agent run completed. Completed independent task results remain available for inspection.'
+        : 'The local DQL runtime restarted before this agent run completed. No result was accepted.',
+    recoverable: !userCancelled,
+    safeActions: userCancelled ? [] : ['retry_same_request'],
+  };
+  const receipt: AgentRunDiagnosticReceiptV1 = {
+    version: 1,
+    runId: progress.id,
+    phase: progress.lifecycle.phase,
+    route,
+    plan: progress.plan,
+    steps: progress.steps,
+    artifacts: retainedArtifacts,
+    evaluations: progress.evaluations,
+    failure,
+  };
+  const runtimeReceipt = interruptedRuntimeReceiptV5(progress, userCancelled, route);
+  const runtimeReceiptV6 = runtimeReceipt
+    ? interruptedRuntimeReceiptV6(progress, userCancelled, runtimeReceipt)
+    : undefined;
+  const diagnosticArtifact = {
+    id: `${progress.id}:diagnostic`,
+    kind: 'answer' as const,
+    title: userCancelled ? 'Cancelled agent run' : 'Interrupted agent run',
+    trustState: 'blocked' as const,
+    payload: {
+      diagnosticReceipt: receipt,
+      ...(runtimeReceipt ? { diagnosticReceiptV5: runtimeReceipt } : {}),
+      ...(runtimeReceiptV6 ? { diagnosticReceiptV6: runtimeReceiptV6 } : {}),
+    },
+  };
+  const run: AgentRun = {
+    id: progress.id,
+    question: progress.question,
+    requestedMode: progress.requestedMode,
+    route,
+    status: userCancelled ? 'cancelled' : 'blocked',
+    trustState: userCancelled ? 'not_applicable' : 'blocked',
+    stopReason: userCancelled ? 'cancelled' : 'blocked',
+    startedAt: progress.lifecycle.startedAt,
+    completedAt,
+    selectedObject: progress.selectedObject,
+    plan: progress.plan,
+    steps: progress.steps,
+    summary: failure.message,
+    artifacts: userCancelled
+      ? retainedArtifacts
+      : [...retainedArtifacts, diagnosticArtifact],
+    evaluations: [
+      ...progress.evaluations,
+      userCancelled
+        ? {
+            id: 'run-cancelled',
+            label: 'Run cancelled',
+            passed: true,
+            severity: 'info' as const,
+            message: failure.message,
+          }
+        : {
+            id: 'run-interrupted',
+            label: 'Run interrupted',
+            passed: false,
+            severity: 'blocking' as const,
+            message: failure.message,
+            suggestedRepair: 'Retry the same request.',
+          },
+    ],
+    events: [
+      ...progress.events,
+      {
+        id: `${progress.id}:event:${progress.events.length + 1}`,
+        runId: progress.id,
+        type: userCancelled ? 'run.cancelled' : 'run.failed',
+        at: completedAt,
+        message: failure.message,
+        route,
+        status: userCancelled ? 'cancelled' : 'blocked',
+        trustState: userCancelled ? 'not_applicable' : 'blocked',
+      },
+    ],
+    nextActions: userCancelled
+      ? []
+      : [{ id: 'retry-interrupted-run', label: 'Retry request', route: progress.route }],
+    repairAttempts: 0,
+    escalationAttempts: 0,
+    diagnosticReceipt: receipt,
+    ...(runtimeReceipt ? { diagnosticReceiptV5: runtimeReceipt } : {}),
+    ...(runtimeReceiptV6 ? { diagnosticReceiptV6: runtimeReceiptV6 } : {}),
+    ...(progress.askAnalystState ? { askAnalystState: progress.askAnalystState } : {}),
+    ...(progress.analyticalTaskOutcomes?.length
+      ? { analyticalTaskOutcomes: progress.analyticalTaskOutcomes }
+      : {}),
+    ...(progress.analyticalTaskOutcomeSummary
+      ? { analyticalTaskOutcomeSummary: progress.analyticalTaskOutcomeSummary }
+      : {}),
+    ...(progress.traceReference ? { traceReference: progress.traceReference } : {}),
+    // The person who asked still owns the closed run (RFC 0010).
+    ...(progress.ownerId ? { ownerId: progress.ownerId } : {}),
+    lifecycle: {
+      ...progress.lifecycle,
+      state: 'terminal',
+      phase: userCancelled ? 'run.cancelled' : 'run.failed',
+      revision: progress.lifecycle.revision + 1,
+      eventCursor: progress.events.length + 1,
+      updatedAt: completedAt,
+      completedAt,
+    },
+  };
+  return run;
+}
+
+/**
+ * RFC 0010 HH-6: the persisted form of a run for a host's own store — the
+ * same normalisation and slimming `SqliteAgentRunStore` applies, with every
+ * artifact payload kept inline (no content-addressed blob table).
+ */
+export function agentRunForStorage(run: AgentRun, options: { compacted?: boolean } = {}): AgentRun {
+  const slim = slimRunForPersistence(normalizeRunProviderEgressReceipts(run));
+  return options.compacted ? { ...slim, events: [] } : slim;
+}
+
+/** A stored run read back, or undefined when it is not a run (HH-6). */
+export function agentRunFromStorage(value: unknown): AgentRun | undefined {
+  return isAgentRunRecord(value) ? normalizeRunProviderEgressReceipts(value) : undefined;
+}
+
+/** The persisted form of an in-flight run's progress (HH-6). */
+export function agentRunProgressForStorage(progress: AgentRunProgressV1): AgentRunProgressV1 {
+  return sanitizeProgressRoleCoverage(progress);
+}
+
+/** Stored progress read back, or undefined when it is not progress (HH-6). */
+export function agentRunProgressFromStorage(value: unknown): AgentRunProgressV1 | undefined {
+  return isAgentRunProgressRecord(value) ? sanitizeProgressRoleCoverage(value) : undefined;
 }
 
 export function defaultAgentRunSqlitePath(projectRoot: string): string {

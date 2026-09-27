@@ -487,8 +487,15 @@ export {
   SqliteAgentRunStore,
   defaultAgentRunSqlitePath,
   resolveAgentRunRetention,
+  interruptedAgentRun,
+  agentRunForStorage,
+  agentRunFromStorage,
+  agentRunProgressForStorage,
+  agentRunProgressFromStorage,
   type SqliteAgentRunStoreOptions,
 } from "./agent-run-store.js";
+export type { Awaitable, AwaitableMethods, PromisedMethods } from "./store-types.js";
+export { ftsTokens } from "./memory/fts-query.js";
 export type {
   AgentRouteExecutionContext,
   AgentRouteExecutor,
@@ -982,14 +989,22 @@ export type {
   AgentMemoryInput,
   AgentMemoryScope,
   MemorySearchOptions,
+  MemoryStoreLike,
 } from "./memory/sqlite-memory.js";
+export { memoryRecordForStorage } from "./memory/sqlite-memory.js";
 export {
   ConversationStore,
   defaultConversationPath,
   legacyConversationPath,
   prepareConversationPath,
+  newConversationThread,
+  conversationTurnForStorage,
+  conversationTurnFromStorage,
+  conversationTurnSearchTags,
 } from "./conversation/session-store.js";
 export type {
+  ConversationStoreLike,
+  ConversationStoreMethods,
   ConversationThread,
   ConversationTurn,
   ConversationTurnInput,
@@ -1020,7 +1035,9 @@ export type {
 } from "./conversation/rolling-summary.js";
 export {
   advanceThreadState,
+  advanceThreadStateAsync,
   buildConversationSnapshot,
+  loadConversationSnapshot,
   conversationEnvelopeFromContext,
   conversationHistoryFromContext,
   conversationTurnContextState,
@@ -1032,6 +1049,7 @@ export type {
   ConversationEnvelopeV1,
   ConversationHistoryMessage,
   ConversationSnapshot,
+  ConversationSnapshotOptions,
   ConversationSnapshotTurn,
 } from "./conversation/snapshot.js";
 export { conversationTurnTrust, isTrustedConversationTurn } from "./conversation/turn-trust.js";

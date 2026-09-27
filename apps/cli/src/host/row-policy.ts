@@ -6,7 +6,7 @@ import type {
   QueryPurpose,
 } from '@duckcodeailabs/dql-connectors';
 import { analyzeSqlReferences, extractTablesFromSql } from '@duckcodeailabs/dql-core';
-import { currentDestination, currentPrincipal, currentRequestContext, type DqlDestination, type DqlPrincipal } from './request-context.js';
+import { currentDestination, currentPrincipal, currentRequestContext, type DqlDestination, type DqlPrincipal, type DqlStatementObserver } from './request-context.js';
 import type { DqlAction } from './route-actions.js';
 
 /**
@@ -172,23 +172,55 @@ export async function applyRowPolicy(
   return { sql: answer.sql, params: Array.isArray(answer.params) ? answer.params : params };
 }
 
+/**
+ * Run one statement and tell the host's observer (HH-6) how it went and how
+ * long it took. `prepare` checks the statement (row policy, the person's
+ * connection); a refusal there is `refused`, a failure running it `error`.
+ * The observer never sees the SQL or rows, and its errors are ignored.
+ */
+async function timed<R>(observe: DqlStatementObserver | undefined, config: Pick<ConnectionConfig, 'driver'>, purpose: QueryPurpose | undefined, prepare: () => Promise<{ run: () => Promise<R> }>): Promise<R> {
+  if (!observe) return (await prepare()).run();
+  const started = Date.now();
+  const report = (outcome: 'ok' | 'error' | 'refused') => {
+    try {
+      void Promise.resolve(observe({ at: new Date().toISOString(), driver: String(config.driver ?? 'unknown'), purpose: purpose === 'metadata' ? 'metadata' : 'data', outcome, durationMs: Date.now() - started })).catch(() => undefined);
+    } catch { /* an observer never fails a query */ }
+  };
+  let prepared: { run: () => Promise<R> };
+  try {
+    prepared = await prepare();
+  } catch (error) {
+    report('refused');
+    throw error;
+  }
+  try {
+    const result = await prepared.run();
+    report('ok');
+    return result;
+  } catch (error) {
+    report('error');
+    throw error;
+  }
+}
+
 /** A connector whose statements — direct, streamed, or in a consistent read scope — pass the policy. */
-function guardConnector(connector: DatabaseConnector, policy: DqlRowPolicy | undefined, config: ConnectionConfig): DatabaseConnector {
-  if (!policy) return connector;
+function guardConnector(connector: DatabaseConnector, policy: DqlRowPolicy | undefined, config: ConnectionConfig, observe?: DqlStatementObserver): DatabaseConnector {
+  if (!policy && !observe) return connector;
+  const checked = (sql: string, params: unknown[], purpose?: QueryPurpose) => (policy ? applyRowPolicy(policy, sql, params, config, purpose) : Promise.resolve({ sql, params }));
   const target = connector as DatabaseConnector & { openConsistentReadScope?: () => Promise<{ execute: DatabaseConnector['execute'] }> };
   return new Proxy(target, {
     get(object, property) {
       if (property === 'execute') {
-        return async (sql: string, params: unknown[] = [], options?: QueryExecutionOptions) => {
-          const allowed = await applyRowPolicy(policy, sql, params, config, options?.purpose);
-          return object.execute(allowed.sql, allowed.params.length ? allowed.params : undefined, options);
-        };
+        return (sql: string, params: unknown[] = [], options?: QueryExecutionOptions) => timed(observe, config, options?.purpose, async () => {
+          const allowed = await checked(sql, params, options?.purpose);
+          return { run: () => object.execute(allowed.sql, allowed.params.length ? allowed.params : undefined, options) };
+        });
       }
       if (property === 'stream' && typeof object.stream === 'function') {
         return (sql: string, params: unknown[] = [], options?: QueryExecutionOptions) => {
           const stream = object.stream!.bind(object);
           return (async function* guarded() {
-            const allowed = await applyRowPolicy(policy, sql, params, config, options?.purpose);
+            const allowed = await checked(sql, params, options?.purpose);
             yield* stream(allowed.sql, allowed.params.length ? allowed.params : undefined, options);
           })();
         };
@@ -199,10 +231,10 @@ function guardConnector(connector: DatabaseConnector, policy: DqlRowPolicy | und
           return new Proxy(scope, {
             get(inner, key) {
               if (key === 'execute') {
-                return async (sql: string, params: unknown[] = [], options?: QueryExecutionOptions) => {
-                  const allowed = await applyRowPolicy(policy, sql, params, config, options?.purpose);
-                  return inner.execute(allowed.sql, allowed.params.length ? allowed.params : undefined, options);
-                };
+                return (sql: string, params: unknown[] = [], options?: QueryExecutionOptions) => timed(observe, config, options?.purpose, async () => {
+                  const allowed = await checked(sql, params, options?.purpose);
+                  return { run: () => inner.execute(allowed.sql, allowed.params.length ? allowed.params : undefined, options) };
+                });
               }
               const value = Reflect.get(inner, key, inner);
               return typeof value === 'function' ? value.bind(inner) : value;
@@ -219,6 +251,8 @@ function guardConnector(connector: DatabaseConnector, policy: DqlRowPolicy | und
 export interface HostQueryHooks {
   rowPolicy?: DqlRowPolicy;
   credentials?: DqlCredentialsHook;
+  /** HH-6: told of each statement's outcome and duration (no SQL, no values). */
+  statements?: DqlStatementObserver;
 }
 
 /**
@@ -229,19 +263,19 @@ export interface HostQueryHooks {
  * statement is checked once.
  */
 export function withHostQueryHooks<T extends QueryExecutor>(executor: T, hooks: HostQueryHooks): T {
-  const { rowPolicy, credentials } = hooks;
-  if (!rowPolicy && !credentials) return executor;
+  const { rowPolicy, credentials, statements } = hooks;
+  if (!rowPolicy && !credentials && !statements) return executor;
   const personConnection = (config: ConnectionConfig, purpose?: QueryPurpose) => (credentials ? resolvePersonConnection(credentials, config, purpose) : Promise.resolve(config));
   return new Proxy(executor, {
     get(target, property, receiver) {
       const own = Reflect.get(target, property, target);
       if (typeof own !== 'function') return own;
       if (property === 'executePositional') {
-        return async (sql: string, paramValues: unknown[], config: ConnectionConfig, options?: QueryExecutionOptions) => {
+        return (sql: string, paramValues: unknown[], config: ConnectionConfig, options?: QueryExecutionOptions) => timed(statements, config, options?.purpose, async () => {
           const connection = await personConnection(config, options?.purpose);
           const allowed = rowPolicy ? await applyRowPolicy(rowPolicy, sql, paramValues ?? [], connection, options?.purpose) : { sql, params: paramValues };
-          return target.executePositional(allowed.sql, allowed.params, connection, options);
-        };
+          return { run: () => target.executePositional(allowed.sql, allowed.params, connection, options) };
+        });
       }
       if (property === 'executeQuery') {
         // Runs the original expansion with `this` = the guarded executor.
@@ -250,7 +284,7 @@ export function withHostQueryHooks<T extends QueryExecutor>(executor: T, hooks: 
       if (property === 'getConnector') {
         return async (config: ConnectionConfig) => {
           const connection = await personConnection(config);
-          return guardConnector(await target.getConnector(connection), rowPolicy, connection);
+          return guardConnector(await target.getConnector(connection), rowPolicy, connection, statements);
         };
       }
       return own.bind(target);

@@ -100,6 +100,9 @@ export interface AskSemanticCompileContext {
   physicalBindings: PhysicalRelationBindingV1[];
 }
 
+type PriorIntent = { intent: AnalyticalIntentV1; summary?: string; executed?: boolean; sql?: string; drafted?: boolean };
+type ConversationMemory = { summary?: string; pendingClarification?: string };
+
 export interface AskPipelineHostDeps {
   projectRoot: string;
   /**
@@ -126,7 +129,8 @@ export interface AskPipelineHostDeps {
    * whether it executed, and — for an answer whose SQL the AI drafted — that
    * statement, so a follow-up edits it instead of starting over.
    */
-  priorIntent(request: AgentRunRequest): { intent: AnalyticalIntentV1; summary?: string; executed?: boolean; sql?: string; drafted?: boolean } | undefined;
+  /** The thread's last typed reading; may answer with a Promise (a host's conversation store, RFC 0010 HH-6). */
+  priorIntent(request: AgentRunRequest): PriorIntent | undefined | Promise<PriorIntent | undefined>;
   guidance?(request: AgentRunRequest): string | undefined;
   /**
    * The request-bound context pack for this envelope (CTX-010): complete
@@ -135,7 +139,7 @@ export interface AskPipelineHostDeps {
    */
   buildContextPack?(request: AgentRunRequest, envelope: DomainContextEnvelope): Promise<LocalContextPack | undefined>;
   /** The thread's compacted memory for a follow-up. */
-  conversation?(request: AgentRunRequest): { summary?: string; pendingClarification?: string } | undefined;
+  conversation?(request: AgentRunRequest): ConversationMemory | undefined | Promise<ConversationMemory | undefined>;
   /**
    * The catalog's own search (full text over names, descriptions and documented
    * columns), held to the request's domains. The SQL drafter finds the tables a
@@ -1775,7 +1779,9 @@ export function createAskPipelineHost(deps: AskPipelineHostDeps): AskPipelineHos
     // validation, execution evidence and receipt) reads the same bindings.
     let requestVocabulary = vocabulary;
     const currentVocabulary = () => requestVocabulary;
-    const prior = request.threadId ? deps.priorIntent(request) : undefined;
+    const prior = request.threadId ? await deps.priorIntent(request) : undefined;
+    // The thread's compacted memory, read once for this run (a host store answers with a Promise).
+    const conversationMemory = await deps.conversation?.(request);
     let engine: PrepareDeps['engine'];
     try { engine = await deps.semanticEngine?.(); } catch { engine = undefined; }
     // The context is assembled BEFORE the first model call; a run that ends
@@ -1869,7 +1875,7 @@ export function createAskPipelineHost(deps: AskPipelineHostDeps): AskPipelineHos
       // WHAT THE USER HAS SAID counts as much as what the reading named: the
       // conversation so far and the clauses the reading could not govern
       // choose tables too ("the competitor is in the deal notes").
-      const conversation = deps.conversation?.(request);
+      const conversation = conversationMemory;
       const contextText = [conversation?.summary, conversation?.pendingClarification].filter(Boolean).join(' ');
       const open = intent?.unresolved.map((item) => `${item.clause} ${item.question ?? ''}`).join(' ') ?? '';
       // THE CATALOG'S OWN SEARCH first: names, descriptions and documented
@@ -2473,7 +2479,7 @@ export function createAskPipelineHost(deps: AskPipelineHostDeps): AskPipelineHos
       // the dimension and the member, so the next turn reads that person.
       ...(selectedMember(request) ? { memberSelection: selectedMember(request)! } : {}),
       ...(view.context ? { context: view.context } : {}),
-      ...(deps.conversation?.(request) ? { conversation: deps.conversation(request)! } : {}),
+      ...(conversationMemory ? { conversation: conversationMemory } : {}),
       explorationOptIn: explorationOptIn(request),
       // Research branches phrase hypotheses ("because", "drivers"); the
       // full-question clause check is for questions a person asked.
