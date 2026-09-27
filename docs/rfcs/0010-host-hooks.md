@@ -128,6 +128,12 @@ export interface DqlHostHooks {
   delivery?: DeliverySink;
   signing?: SigningKeyProvider;
   git?: GitHost;
+
+  /** HH-16: a Home that summarises; following pages; who an App is for. */
+  homeCards?(principal: DqlPrincipal): Promise<DqlHomeCard[]>;
+  follows?: { list(principal: DqlPrincipal): Promise<DqlFollow[]>; set(principal: DqlPrincipal, follow: DqlFollow, following: boolean): Promise<void> };
+  pageEdition?(edition: DqlPageEdition): Promise<void>;
+  directoryGroups?(principal: DqlPrincipal): Promise<DqlDirectoryGroup[]>;
 }
 ```
 
@@ -148,6 +154,10 @@ program imports a supported API rather than a file path.
 | `stores.*` | Today's SQLite files. `traces` also writes OTLP when the standard `OTEL_EXPORTER_OTLP_ENDPOINT` is set |
 | `tools` | Pass-through |
 | `schedules`, `delivery`, `signing`, `git` | Today's in-process cron, notifiers, local signing key and `gh` |
+| `homeCards` | None |
+| `follows` | The person's own file in `.dql/local/private/home/` |
+| `pageEdition` | Nothing is told (a scheduled edition is still recorded, without figures) |
+| `directoryGroups` | The author types group names |
 
 ### Rules every hook follows
 
@@ -356,6 +366,24 @@ Tests: `server-auth.test.ts`, `ask-trace-navigation.test.ts`, `app-page-run.test
 Tests: `host/knowledge.test.ts` (Ask end to end through the server with a fake MCP document server, with and without a host), `llm/mcp-config.test.ts`, dql-agent `knowledge/knowledge.test.ts`, dql-mcp `knowledge-client.test.ts`, notebook `CitedDocuments.test.tsx`.
 
 **Needs a live check:** Atlassian's remote MCP server (tool names and result shapes of its search and fetch, and its OAuth audience), with a real Confluence Cloud site.
+
+### HH-16 — a Home that summarises, following pages, and who an App is for
+Stakeholders open DQL to see what changed, not to start from an empty question. Every hook here has a local default, so `dql notebook` gets the same Home for its one person.
+- **Home (`GET /api/home`)**, above Ask on a new chat, loaded after it: **My Apps** (the Apps the person may open — followed first, then the ones they opened last), and **What moved** on the pages they follow or opened: each page's certified or governed single figures (a KPI's value, a driver's current value, a leader's value) from the person's **own** last two complete runs of it, under one scope (filters, parameters and persona). Never another person's figures, never a tile that needs review, never rows; nothing is cached across people. Kept in `.dql/local/private/home/<person>.json` (a hash of the host's id; `local` without a host). When a scheduled run is newer than the person's last look, Home says so and shows no figure: they open the page and see it as themselves.
+- **`homeCards(principal)`** adds the host's own cards to Home — for example "Open requests": a title and up to eight items with a status and a same-origin link (`GET /api/host/home-cards`, called only when Home opens; plain text, other links dropped; an error or a slow host: none).
+- **Follow a page** (`POST /api/apps/:app/follow { pageId, following }`, action `app.view`). With **`follows: { list, set }`** the host keeps follows, so it can tell each person about new editions through their own notification preferences; without it, follows are the person's own state in the private folder.
+- **`pageEdition(edition)`**: a scheduled run of a page (HH-8's run pass) whose governed figures differ from the last scheduled run is a new edition. The host hears `{ appId, pageId, appTitle, pageTitle, href, runId, at, scheduleId }` — never a figure; the link is `/?app=…&page=…`. A reader's own run is never an edition.
+- **Story editions are per person with a host.** An edition holds the values one person's run showed (their row rules); each person now has their own file, so one person's values are never listed to another. Without a host there is one file, as before.
+- **Ask about this App.** The App reader has one question box for the whole App beside the per-chart questions. It is Ask with `workspaceContext.surface = 'apps'`, so the server scopes it from the App's own files (its domain and the filters on screen, `app-copilot-scope.ts`) and the answer carries the usual trust label. It is refused for someone the App's audience excludes.
+- **Who an App is for: `audienceGroups`** in `dql.app.json` — identity-provider groups. **`directoryGroups(principal)`** lists the groups an author may pick (`GET /api/host/groups`; an error: none may be saved); without it the author types them. Saving is `PUT /api/apps/:app/audience { groups, text? }` (`app.author`); a host that keeps Production to reviewed changes refuses it there with its `next` link (e.g. a draft space). With a host that signs people in, an App with audience groups opens — is listed, run, exported or asked about — only for members of those groups, its owners, people the host granted it (HH-11), and people the host lets author it (so an author sees their change). Without a host it is a note that carries over.
+
+Tests: `host/home.test.ts` (two people through the server on DuckDB: their own What moved, a scheduled edition told once without a figure, host cards, audience groups), `home/home-state.test.ts`, `story/story-editions.test.ts`, notebook `HomeSummary.test.tsx`, `StakeholderReader.test.tsx`.
+
+### HH-15, continued — definitions and Research
+- A reply that explains a governed term — an Ask definition, or a conversation reply about one — reads the person's documents under the same contract: cited, figure-free, never part of trust, the same model rule (`hostedModels`).
+- Research names the servers it did not read because the model runs off this machine: a **Team documents not read** step, as in Ask.
+
+Tests: `host/knowledge.test.ts` (a definition question), `host/knowledge-research.test.ts` (Research through the server with the fake knowledge server, read and held back).
 
 ### Answers, links and connections for hosts
 - **An answer's values for its owner:** `GET /api/host/answers/:runId?values=1` adds the answer's written text and first table (at most 500 rows) to its facts — only for the answer's owner, and nothing when HH-14 withheld its figures. Without `values=1`, facts carry no value, as before.

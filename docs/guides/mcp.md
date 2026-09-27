@@ -152,8 +152,15 @@ as **From team documents** with each page's title and link.
   "authorizationTokenEnv": "CONFLUENCE_MCP_TOKEN", "knowledge": { "hostedModels": true } }
 ```
 
+**Definitions too.** A question that asks what a governed term means ("What
+counts as a paid claim?") reads the same documents under the same rules: the
+definition comes from the project, the page is cited beside it, no figure
+comes from a document and trust is unchanged.
+
 Research reads the same sources after framing the question and lists what
-it read as context; context is never used in a verdict.
+it read as context; context is never used in a verdict. When pages are held
+back from a model off this machine, Research's steps say **Team documents
+not read**, as Ask's do.
 
 **Who reads what.** Without a host, the project file's servers and tokens
 are used, with the model rule above. When DQL runs inside a host that signs people in (RFC 0010), the
