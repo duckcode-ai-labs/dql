@@ -388,8 +388,21 @@ export function UnifiedAgentRunPanel({
   replaceDqlActionLabel,
   askLayout = false,
 }: UnifiedAgentRunPanelProps): JSX.Element {
-  const { state: notebookState } = useNotebook();
-  // An empty Ask suggests questions this project's own metrics can answer.
+  const { state: notebookState, dispatch: notebookDispatch } = useNotebook();
+  // An empty Ask suggests questions this project's own metrics can answer. Ask
+  // opened directly (a link, a reader's only page) has not loaded the semantic
+  // layer yet: load it once here; a failure just keeps the general examples.
+  const semanticRequested = useRef(false);
+  useEffect(() => {
+    if (semanticRequested.current || notebookState.semanticLayer.loading || (notebookState.semanticLayer.metrics ?? []).length) return undefined;
+    semanticRequested.current = true;
+    // The store outlives this panel, so the answer is kept even after it closes.
+    void Promise.resolve()
+      .then(() => api.getSemanticLayer())
+      .then((layer) => notebookDispatch({ type: 'SET_SEMANTIC_LAYER', layer }))
+      .catch(() => undefined);
+    return undefined;
+  }, [notebookDispatch, notebookState.semanticLayer.loading, notebookState.semanticLayer.metrics]);
   const projectPrompts = useMemo(
     () => projectExamplePrompts(notebookState.semanticLayer.metrics ?? [], notebookState.semanticLayer.dimensions ?? [], notebookState.semanticLayer.timeDimensions ?? []),
     [notebookState.semanticLayer.metrics, notebookState.semanticLayer.dimensions, notebookState.semanticLayer.timeDimensions],
