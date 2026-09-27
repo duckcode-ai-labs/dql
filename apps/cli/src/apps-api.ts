@@ -5883,7 +5883,8 @@ export interface AppPublicationCheck {
     title: string;
     tiles: Array<{ id: string; title: string | null; source: 'block' | 'semantic' | 'dataset' | 'exploratory' | 'content'; check: 'passes' | 'fails' | 'none'; problems: string[] }>;
   }>;
-  blockers: AppPublicationReadiness['blockers'];
+  /** Publication's blockers, plus a page file that doesn't load (`page_invalid`). */
+  blockers: Array<Omit<AppPublicationReadiness['blockers'][number], 'code'> & { code: AppPublicationReadiness['blockers'][number]['code'] | 'page_invalid' }>;
 }
 
 /** The same checks publication runs, for an App already in the project (RFC 0010 hosts and CI). */
@@ -5891,14 +5892,21 @@ export function checkAppPublication(projectRoot: string, appId: string): AppPubl
   const loaded = loadAppById(projectRoot, appId);
   if (!loaded) return null;
   const dashboards: DashboardDocument[] = [];
+  const unreadable: AppPublicationCheck['blockers'] = [];
   for (const path of findDashboardsForApp(loaded.appDir)) {
-    const { document } = loadDashboardDocument(path);
+    const { document, errors } = loadDashboardDocument(path);
     if (document) dashboards.push(document);
+    else {
+      // A page that doesn't load would not publish either; never skip it silently.
+      const file = relative(projectRoot, path);
+      const pageId = basename(path).replace(/\.dqld$/, '');
+      unreadable.push({ dashboardId: pageId, tileId: '', code: 'page_invalid', message: `${file} does not load: ${(errors ?? []).map((error) => error.message).slice(0, 3).join('; ') || 'unknown error'}` });
+    }
   }
   const readiness = appPublicationReadiness(projectRoot, dashboards);
   return {
     app: { id: loaded.app.id, title: loaded.app.name ?? loaded.app.id, domain: loaded.app.domain },
-    ready: readiness.ready,
+    ready: readiness.ready && unreadable.length === 0,
     governedTiles: readiness.governedTiles,
     pages: dashboards.map((dashboard) => ({
       id: dashboard.id,
@@ -5915,7 +5923,7 @@ export function checkAppPublication(projectRoot: string, appId: string): AppPubl
         } as AppPublicationCheck['pages'][number]['tiles'][number];
       }),
     })),
-    blockers: readiness.blockers,
+    blockers: [...unreadable, ...readiness.blockers],
   };
 }
 

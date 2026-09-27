@@ -483,6 +483,7 @@ async function runAppCheck(rest: string[], flags: CLIFlags): Promise<void> {
     const tiles = result.pages.flatMap((page) => page.tiles).filter((tile) => tile.check !== "none");
     const passing = tiles.filter((tile) => tile.check === "passes").length;
     const lines = [`${result.ready ? "Ready to publish" : "Not ready to publish"}: ${result.app.title} (${passing} of ${tiles.length} tiles pass)`];
+    for (const blocker of result.blockers.filter((item) => item.code === "page_invalid")) lines.push("", `  FAIL  ${blocker.message}`);
     for (const page of result.pages) {
       lines.push("", `  ${page.title}`);
       for (const tile of page.tiles) {

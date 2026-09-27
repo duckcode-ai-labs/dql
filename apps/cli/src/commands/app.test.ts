@@ -137,6 +137,13 @@ describe('dql app check', () => {
         expect(tile.check === 'fails').toBe(tile.problems.length > 0);
       }
       expect(result.ready).toBe(result.blockers.length === 0);
+
+      // A page that no longer loads fails the check instead of being skipped.
+      const pagePath = join(root, 'apps/commerce-pilot/dashboards/overview.dqld');
+      writeFileSync(pagePath, readFileSync(pagePath, 'utf8').replace(/"datasets": \[[\s\S]*?\n  \],/, '"datasets": [],'));
+      const broken = checkAppPublication(root, 'commerce-pilot')!;
+      expect(broken.ready).toBe(false);
+      expect(broken.blockers).toEqual(expect.arrayContaining([expect.objectContaining({ code: 'page_invalid', dashboardId: 'overview', message: expect.stringContaining('does not load') })]));
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
