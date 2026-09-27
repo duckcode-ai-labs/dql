@@ -366,6 +366,14 @@ Tests: `host/knowledge.test.ts` (Ask end to end through the server with a fake M
 - **Governed answers are headed "Governed answer"**, not "AI-generated answer".
 - **Run evidence belongs to who ran it:** the page and chart runs DQL keeps for snapshots, story drafts, chart questions and App Autopilot are found only by the person and App persona who ran them (`activePersonaPolicyFingerprint`); a run id alone reads as not current.
 
+### Key proofs: checking the keys certified content declares
+`POST /api/keys/prove` (action `query.run`) proves, as the person asking, the keys certified content declares: each certified block Dataset with a declared grain (`grain = { keys = [...], keyEvidence = "..." }`) runs DQL's own grain proof (the same complete-source probe `POST /api/datasets/validate-grain` runs), and each certified modeling join with keys runs DQL's own relationship validation (the statement `POST /api/modeling/dbt-first/relationships/validate` runs). Both go through the one query path, so the host's row policy and per-person credentials apply.
+- **Narrowing:** `blocks` (block names or file paths) and `relationships` (ids, qualified ids or source paths) limit it to what a change touched; without them it proves everything certified that declares keys.
+- **What comes back:** per Dataset its keys, `status` (`passed`, `failed` or `error`) and `uniqueness` (row, distinct-key, null-key and duplicate-key counts); per join its keys, cardinality, `status` and the validation's counts; `ok` when every one passed. Never a row or a key value. A Dataset proof keeps DQL's local, git-ignored proof evidence as `validate-grain` does; nothing else is written.
+- **Why a route:** both proofs existed only behind authoring routes (`dataset.author`), which a host refuses where Production follows main and in a pull request's read-only preview. Proving keys only reads, so it is `query.run`.
+
+The first host runs it on a pull request's preview as the steward reviewing it, and shows the result as the change's "Keys proven" check. Tests: `datasets/key-proofs.test.ts` (real DuckDB), `route-actions.test.ts`.
+
 ### One process, several servers
 Each request carries its own server's hooks in its request context, so a host that runs Production and pull request previews in one process never has one server's git, delivery, model, tool-gate or usage hooks replaced by another's; the process-wide values are only a fallback for work outside a request. A runtime's `close()` also ends open event streams (a browser tab with DQL open used to hold it forever), a host's own model id (`bedrock`, `vertex`) no longer fails the local provider settings, and `dql app ls` / `GET /api/apps` (without a host) name App files that don't load and why.
 

@@ -42,6 +42,7 @@ describe('what each API request does (RFC 0010 HH-2)', () => {
     ['POST', '/api/notebook/research', 'research', 'project'],
     ['POST', '/api/query', 'query.run', 'project'],
     ['POST', '/api/notebook/execute', 'query.run', 'project'],
+    ['POST', '/api/keys/prove', 'query.run', 'project'],
     ['GET', '/api/ask-traces/0123456789abcdef0123456789abcdef/export', 'export', 'project'],
     ['POST', '/api/modeling/entities', 'dataset.author', 'project'],
     ['POST', '/api/notebooks', 'project.write', 'project'],
