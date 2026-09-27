@@ -17,6 +17,8 @@ interface RunPass {
   principal: DqlPrincipal | null;
   appId: string;
   expiresAt: number;
+  /** The schedule this pass runs, so the run can be told apart from a reader's (HH-16). */
+  scheduleId?: string;
 }
 
 const passes = new Map<string, RunPass>();
@@ -25,10 +27,10 @@ export function isRunPass(token: string): boolean {
   return token.startsWith(PREFIX);
 }
 
-export function issueRunPass(principal: DqlPrincipal | null, appId: string, now = Date.now()): string {
+export function issueRunPass(principal: DqlPrincipal | null, appId: string, now = Date.now(), scheduleId?: string): string {
   for (const [token, pass] of passes) if (pass.expiresAt <= now) passes.delete(token);
   const token = `${PREFIX}${randomBytes(32).toString('base64url')}`;
-  passes.set(token, { principal, appId, expiresAt: now + TTL_MS });
+  passes.set(token, { principal, appId, expiresAt: now + TTL_MS, ...(scheduleId ? { scheduleId } : {}) });
   return token;
 }
 
@@ -37,7 +39,7 @@ export function revokeRunPass(token: string): void {
 }
 
 /** The person a pass carries, when it is live and this request is one of its App's page runs. */
-export function redeemRunPass(token: string, method: string | undefined, path: string, now = Date.now()): { principal: DqlPrincipal | null } | null {
+export function redeemRunPass(token: string, method: string | undefined, path: string, now = Date.now()): { principal: DqlPrincipal | null; scheduleId?: string } | null {
   const pass = passes.get(token);
   if (!pass) return null;
   if (pass.expiresAt <= now) {
@@ -46,5 +48,5 @@ export function redeemRunPass(token: string, method: string | undefined, path: s
   }
   const pageRun = new RegExp(`^/api/apps/${encodeURIComponent(pass.appId).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}/dashboards/[^/]+/run$`);
   if ((method ?? '').toUpperCase() !== 'POST' || !pageRun.test(path)) return null;
-  return { principal: pass.principal };
+  return { principal: pass.principal, ...(pass.scheduleId ? { scheduleId: pass.scheduleId } : {}) };
 }

@@ -40,6 +40,11 @@ function provider(): AgentProvider {
     available: () => analyst.available(),
     async generate(messages: AgentMessage[], options) {
       const system = messages.map((message) => (typeof message.content === 'string' ? message.content : '')).join('\n');
+      // A definition question: the interpreter explains the governed term, as a model does.
+      if (system.includes('as a JSON AnalyticalIntent') && /QUESTION:\s*What does lifetime spend mean/i.test(system)) {
+        options?.onProviderDispatch?.({ provider: 'ollama', operation: 'generate', attemptIndex: 1, envelope: { messages } } as never);
+        return JSON.stringify({ version: 1, kind: 'definition', reading: 'what lifetime spend means', reply: 'Lifetime spend is the governed total a customer paid.', measures: [], groupBy: [], display: [], filters: [], expectedShape: 'scalar', unresolved: [], provenance: {} });
+      }
       if (!system.includes("You look up what the team's documents say")) return analyst.generate(messages, options);
       const observations = messages.filter((message) => message.role === 'user' && /knowledge_(search|document)/.test(String(message.content)));
       if (observations.length === 0) return call('search_knowledge', { query: 'lifetime spend' });
@@ -101,11 +106,11 @@ async function start(hostHooks?: DqlHostHooks, projectFile = false): Promise<str
   return `http://127.0.0.1:${port}`;
 }
 
-async function ask(base: string, person?: string) {
+async function ask(base: string, person?: string, question = QUESTION, requestedMode = 'ask') {
   const response = await fetch(`${base}/api/agent-runs`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...(person ? { 'x-test-person': person } : {}) },
-    body: JSON.stringify({ question: QUESTION, requestedMode: 'ask' }),
+    body: JSON.stringify({ question, requestedMode }),
   });
   expect(response.status).toBe(201);
   return (await response.json() as { run: any }).run;
@@ -169,6 +174,21 @@ describe('knowledge sources (RFC 0010 HH-15)', () => {
     expect(recorded).not.toContain('lifetime spend');
     expect(recorded).not.toContain('Lifetime spend is');
     expect(recorded).not.toContain(QUESTION);
+  }, 120_000);
+
+  it('a definition question cites the team document too, with the same contract', async () => {
+    const plain = await ask(await start(), undefined, 'What does lifetime spend mean?');
+    const cited = await ask(await start(undefined, true), undefined, 'What does lifetime spend mean?');
+    expect(plain.knowledge).toBeUndefined();
+    expect(cited.knowledge?.citations.map((citation: any) => citation.docId)).toEqual(['glossary']);
+    // The document never raises trust or adds a figure.
+    expect(cited.trustState).toBe(plain.trustState);
+    expect(cited.status).toBe(plain.status);
+    expect(JSON.stringify(cited)).not.toContain('98,765');
+    // The same from the side panel's automatic mode.
+    const auto = await ask(await start(undefined, true), undefined, 'What does lifetime spend mean?', 'auto');
+    expect(auto.knowledge?.citations.map((citation: any) => citation.docId)).toEqual(['glossary']);
+    expect(auto.trustState).toBe(plain.trustState);
   }, 120_000);
 
   it('a gate that refuses knowledge tools, or a hook that fails, leaves the answer without documents', async () => {

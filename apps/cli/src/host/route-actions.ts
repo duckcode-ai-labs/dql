@@ -103,6 +103,8 @@ function actionFor(method: string, path: string): DqlAction {
     if (path === '/api/apps') return read ? 'project.read' : 'app.author';
     if (!read && /\/(promote|publish-to-project)$/.test(path)) return 'app.publish';
     if (!read && /^\/api\/apps\/[^/]+\/ask$/.test(path)) return 'ask';
+    // Following a page is reading it (HH-16): the person's own state, not the App's.
+    if (/^\/api\/apps\/[^/]+\/follow$/.test(path)) return 'app.view';
     // Running a page, and its story drawn from that run, are reading it.
     if (read || /^\/api\/apps\/[^/]+\/dashboards\/[^/]+\/(run|story)$/.test(path)) return 'app.view';
     return 'app.author';

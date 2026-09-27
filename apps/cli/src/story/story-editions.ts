@@ -28,12 +28,19 @@ export const MAX_STORY_EDITIONS = 30;
 
 const safe = (value: string) => `${value.replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 60)}-${createHash('sha256').update(value).digest('hex').slice(0, 8)}`;
 
-export function storyEditionsPath(projectRoot: string, appId: string, dashboardId: string): string {
-  return join(projectRoot, '.dql', 'local', 'story-editions', safe(appId), `${safe(dashboardId)}.json`);
+/**
+ * Where a page's editions live. With a host each person has their own
+ * (`person`, a hash of who they are): an edition holds the values that
+ * person's run showed under their row rules, so it is never shown to anyone
+ * else. Without a host there is one local person and one file, as before.
+ */
+export function storyEditionsPath(projectRoot: string, appId: string, dashboardId: string, person?: string): string {
+  const owner = person && person !== 'local' ? `.${person.replace(/[^a-z0-9-]/gi, '').slice(0, 64)}` : '';
+  return join(projectRoot, '.dql', 'local', 'story-editions', safe(appId), `${safe(dashboardId)}${owner}.json`);
 }
 
-export function listStoryEditions(projectRoot: string, appId: string, dashboardId: string): StoryEdition[] {
-  const path = storyEditionsPath(projectRoot, appId, dashboardId);
+export function listStoryEditions(projectRoot: string, appId: string, dashboardId: string, person?: string): StoryEdition[] {
+  const path = storyEditionsPath(projectRoot, appId, dashboardId, person);
   if (!existsSync(path)) return [];
   try {
     const parsed = JSON.parse(readFileSync(path, 'utf-8')) as unknown;
@@ -58,6 +65,8 @@ export function recordStoryEdition(input: {
   filterFingerprint: string;
   scope: string;
   now?: Date;
+  /** Whose editions (see `storyEditionsPath`). */
+  person?: string;
 }): StoryEdition | null {
   if (input.narrative.presentation !== 'story') return null;
   const keys = Array.from(new Set(input.narrative.blocks.flatMap((block) => (block.kind === 'text' ? storyBindingKeys(block.markdown) : []))));
@@ -66,7 +75,7 @@ export function recordStoryEdition(input: {
     const binding = input.catalog[key];
     if (binding) values[key] = { display: binding.display, value: binding.value, label: binding.label };
   }
-  const existing = listStoryEditions(input.projectRoot, input.appId, input.dashboardId);
+  const existing = listStoryEditions(input.projectRoot, input.appId, input.dashboardId, input.person);
   const latest = [...existing].reverse().find((edition) => edition.scope === input.scope);
   // An edition marks a change in the data, not in how a value is printed.
   const sameValues = (left: StoryEdition['values'], right: StoryEdition['values']) => {
@@ -83,7 +92,7 @@ export function recordStoryEdition(input: {
     values,
   };
   const next = [...existing, edition].slice(-MAX_STORY_EDITIONS);
-  const path = storyEditionsPath(input.projectRoot, input.appId, input.dashboardId);
+  const path = storyEditionsPath(input.projectRoot, input.appId, input.dashboardId, input.person);
   mkdirSync(join(path, '..'), { recursive: true });
   const temp = `${path}.${process.pid}.tmp`;
   writeFileSync(temp, `${JSON.stringify(next, null, 2)}\n`, 'utf-8');

@@ -29,6 +29,11 @@ describe('story edition store (RFC 0008 step 8)', () => {
       }
       expect(listStoryEditions(projectRoot, 'commerce', 'overview')).toHaveLength(MAX_STORY_EDITIONS);
       expect(listStoryEditions(projectRoot, 'other', 'overview')).toEqual([]);
+      // With a host, each person's editions are their own: another person's run never shows here.
+      recordStoryEdition({ ...base, catalog: catalog('$7'), runId: 'p1', resultFingerprint: 'p1', person: 'p-abc' });
+      expect(listStoryEditions(projectRoot, 'commerce', 'overview', 'p-abc').map((edition) => edition.runId)).toEqual(['p1']);
+      expect(listStoryEditions(projectRoot, 'commerce', 'overview').some((edition) => edition.runId === 'p1')).toBe(false);
+      expect(listStoryEditions(projectRoot, 'commerce', 'overview', 'p-other')).toEqual([]);
     } finally {
       rmSync(projectRoot, { recursive: true, force: true });
     }

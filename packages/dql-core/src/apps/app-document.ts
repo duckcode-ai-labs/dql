@@ -115,7 +115,15 @@ export interface AppDocument extends ProductDomainContext {
   domain: string;
   subdomain?: string;
   groups?: string[];
+  /** Who the App is written for, in words (e.g. "claims leadership"). */
   audience?: string;
+  /**
+   * The identity-provider groups the App is for. Without a host this is
+   * a note (DQL has one local owner); with a host that signs people in, only
+   * members of these groups, the App's owners and people the host granted it
+   * open the App (RFC 0010 HH-16). Empty: the App's policies decide alone.
+   */
+  audienceGroups?: string[];
   lifecycle?: AppLifecycle;
   owners: string[];
   tags?: string[];
@@ -291,6 +299,7 @@ function validateAppDocument(raw: unknown, path: string): AppDocumentLoadResult 
   const subdomain = optionalString(obj, 'subdomain', err);
   const groups = obj.groups === undefined ? [] : stringArray(obj, 'groups', err);
   const audience = optionalString(obj, 'audience', err);
+  const audienceGroups = obj.audienceGroups === undefined ? undefined : stringArray(obj, 'audienceGroups', err).map((group) => group.trim()).filter(Boolean);
   const lifecycle = enumField(obj, 'lifecycle', ['draft', 'review', 'certified', 'deprecated'] as const, err, 'draft');
   if (obj.usesDomains !== undefined) stringArray(obj, 'usesDomains', err);
   if (obj.requiredExports !== undefined) stringArray(obj, 'requiredExports', err);
@@ -343,6 +352,7 @@ function validateAppDocument(raw: unknown, path: string): AppDocumentLoadResult 
     subdomain,
     groups,
     audience,
+    ...(audienceGroups && audienceGroups.length ? { audienceGroups: [...new Set(audienceGroups)] } : {}),
     lifecycle,
     owners,
     tags,
