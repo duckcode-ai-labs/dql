@@ -53,6 +53,14 @@ export class BigQueryConnector implements DatabaseConnector {
       if (!credentials) throw new Error('BigQuery service account sign-in needs the key JSON.');
       options.credentials = credentials;
       if (!options.projectId && typeof credentials.project_id === 'string') options.projectId = credentials.project_id;
+    } else if (method === 'token') {
+      // A person's own OAuth access token (a host's per-person sign-in, RFC 0010 HH-4): BigQuery's
+      // own permissions apply to them. google-auth-library ships with @google-cloud/bigquery.
+      if (!config.token) throw new Error('BigQuery token sign-in needs an OAuth access token.');
+      const { OAuth2Client } = await loadDependency<{ OAuth2Client: new () => { setCredentials(credentials: Record<string, unknown>): void } }>('google-auth-library', config);
+      const authClient = new OAuth2Client();
+      authClient.setCredentials({ access_token: config.token });
+      options.authClient = authClient;
     }
     if (config.host) {
       // A BigQuery-compatible endpoint (an emulator, or a private service connect address).

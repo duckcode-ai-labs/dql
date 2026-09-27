@@ -165,6 +165,19 @@ describe('BigQuery connector (stub SDK)', () => {
     expect(stub().log.some((entry) => entry.cancelled)).toBe(true);
   });
 
+  it('signs in with a person\'s own OAuth access token', async () => {
+    const auth = join(root, 'node_modules', 'google-auth-library');
+    mkdirSync(auth, { recursive: true });
+    writeFileSync(join(auth, 'package.json'), JSON.stringify({ name: 'google-auth-library', main: 'index.js' }));
+    writeFileSync(join(auth, 'index.js'), 'class OAuth2Client { setCredentials(c) { this.credentials = c; } }\nmodule.exports = { OAuth2Client };');
+    const connector = new BigQueryConnector();
+    await expect(connector.connect({ driver: 'bigquery', projectId: 'acme', authMethod: 'token', moduleSearchPaths: [root] })).rejects.toThrow(/OAuth access token/);
+    await connector.connect({ driver: 'bigquery', projectId: 'acme', authMethod: 'token', token: 'ya29.person-token', moduleSearchPaths: [root] });
+    const options = stub().log.filter((entry) => entry.options).at(-1)!.options;
+    expect(options.authClient.credentials).toEqual({ access_token: 'ya29.person-token' });
+    expect(options).not.toHaveProperty('credentials');
+  });
+
   it('refuses malformed key JSON without echoing it', async () => {
     const connector = new BigQueryConnector();
     await expect(connector.connect({ driver: 'bigquery', authMethod: 'service_account_json', serviceAccountJson: '{"private_key": "secret-9f3"', moduleSearchPaths: [root] }))
