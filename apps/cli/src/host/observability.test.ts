@@ -15,7 +15,8 @@ vi.mock('@duckcodeailabs/dql-agent', async (importOriginal) => {
 });
 
 const { startLocalServer } = await import('../local-runtime.js');
-const { answerAuditEvent, observabilityFailures, otlpHeadersFromEnv, withAnswerAudit, withTraceExport } = await import('./observability.js');
+const { answerAuditEvent, auditModelUsage, observabilityFailures, otlpHeadersFromEnv, withAnswerAudit, withTraceExport } = await import('./observability.js');
+const { withRequestContext } = await import('./request-context.js');
 type DqlAuditEvent = import('./observability.js').DqlAuditEvent;
 type DqlPrincipal = import('./request-context.js').DqlPrincipal;
 
@@ -98,6 +99,20 @@ describe('audit (RFC 0010 HH-6)', () => {
     store.save({ id: 'r', status: 'completed', trustState: 'governed', artifacts: [] } as never);
     expect(saved).toHaveLength(2);
     expect(events).toHaveLength(1);
+  });
+});
+
+describe('model usage (RFC 0010 HH-6)', () => {
+  it('records each model call\'s tokens for the person whose request made it, and stops when removed', async () => {
+    const events: DqlAuditEvent[] = [];
+    let listener: ((line: never) => void) | null = null;
+    const setListener = (next: typeof listener) => { listener = next; };
+    auditModelUsage((event) => { events.push(event); }, setListener as never, () => ({ principal: maria, actor: 'maria@insurer.example', requestId: 'r-1' }));
+    withRequestContext({ principal: maria, requestId: 'r-1' }, () => listener!({ at: 't', provider: 'claude', model: 'claude-sonnet-5', operation: 'generate', inputTokens: 900, outputTokens: 120, cacheReadTokens: 700 } as never));
+    await Promise.resolve();
+    expect(events).toEqual([{ kind: 'model_usage', at: 't', requestId: 'r-1', actor: 'maria@insurer.example', principalId: 'u-maria', provider: 'claude', model: 'claude-sonnet-5', operation: 'generate', inputTokens: 900, outputTokens: 120, cacheReadTokens: 700 }]);
+    auditModelUsage(null, setListener as never, () => ({ principal: null, actor: null }));
+    expect(listener).toBeNull();
   });
 });
 

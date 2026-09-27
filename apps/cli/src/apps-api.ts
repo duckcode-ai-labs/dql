@@ -87,6 +87,8 @@ interface Ctx {
   projectRoot: string;
   /** Explicit local project opt-in for Dataset field-query authoring. */
   datasetsEnabled?: boolean;
+  /** With a host (RFC 0010): whether the person may open this App; the list shows only those. */
+  mayViewApp?: (appId: string) => Promise<boolean>;
   executeSql?: (sql: string) => Promise<unknown>;
   generateInvestigationSql?: (input: AppInvestigationGenerationRequest) => Promise<AppInvestigationGenerationResult>;
   runNotebook?: (appId: string, notebookPath: string) => Promise<void>;
@@ -1017,7 +1019,10 @@ export async function handleAppsApi(ctx: Ctx): Promise<boolean> {
   }
 
   if (req.method === 'GET' && path === '/api/apps') {
-    const apps = collectAppsList(projectRoot);
+    const all = collectAppsList(projectRoot);
+    // A host's reader sees only the Apps they may open, not ones that refuse them on click.
+    const may = ctx.mayViewApp;
+    const apps = may ? (await Promise.all(all.map(async (app) => ((await may(app.id).catch(() => false)) ? app : null)))).filter((app): app is (typeof all)[number] => app !== null) : all;
     sendJson(res, 200, { apps });
     return true;
   }
@@ -5866,6 +5871,52 @@ function appPublicationReadiness(
     }
   }
   return { ready: blockers.length === 0, governedTiles, blockers };
+}
+
+/** One published App's tiles as `dql app check` reports them: what each reads and whether it can publish. */
+export interface AppPublicationCheck {
+  app: { id: string; title: string; domain: string };
+  ready: boolean;
+  governedTiles: number;
+  pages: Array<{
+    id: string;
+    title: string;
+    tiles: Array<{ id: string; title: string | null; source: 'block' | 'semantic' | 'dataset' | 'exploratory' | 'content'; trust: 'certified' | 'needs_review' | 'none'; problems: string[] }>;
+  }>;
+  blockers: AppPublicationReadiness['blockers'];
+}
+
+/** The same checks publication runs, for an App already in the project (RFC 0010 hosts and CI). */
+export function checkAppPublication(projectRoot: string, appId: string): AppPublicationCheck | null {
+  const loaded = loadAppById(projectRoot, appId);
+  if (!loaded) return null;
+  const dashboards: DashboardDocument[] = [];
+  for (const path of findDashboardsForApp(loaded.appDir)) {
+    const { document } = loadDashboardDocument(path);
+    if (document) dashboards.push(document);
+  }
+  const readiness = appPublicationReadiness(projectRoot, dashboards);
+  return {
+    app: { id: loaded.app.id, title: loaded.app.name ?? loaded.app.id, domain: loaded.app.domain },
+    ready: readiness.ready,
+    governedTiles: readiness.governedTiles,
+    pages: dashboards.map((dashboard) => ({
+      id: dashboard.id,
+      title: dashboard.metadata.title,
+      tiles: dashboard.layout.items.map((item) => {
+        const problems = readiness.blockers.filter((blocker) => blocker.dashboardId === dashboard.id && blocker.tileId === item.i).map((blocker) => blocker.message);
+        const source = item.draftAnalysis ? 'exploratory' : item.block ? 'block' : item.semantic ? 'semantic' : item.query ? 'dataset' : 'content';
+        return {
+          id: item.i,
+          title: typeof item.title === 'string' ? item.title : null,
+          source,
+          trust: source === 'content' ? 'none' : problems.length ? 'needs_review' : 'certified',
+          problems,
+        } as AppPublicationCheck['pages'][number]['tiles'][number];
+      }),
+    })),
+    blockers: readiness.blockers,
+  };
 }
 
 function appAiBuildSessionDir(projectRoot: string): string {

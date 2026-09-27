@@ -38,10 +38,31 @@ function initializeServerToken(): string | undefined {
 
 const serverToken = initializeServerToken();
 
+/**
+ * How long after the person last touched the page a request still counts as
+ * theirs. Later requests (polls, refreshes, recovery loops) are marked
+ * `x-dql-background: 1`, so a host's idle sign-out isn't kept alive by a tab
+ * nobody is using (RFC 0010).
+ */
+export const BACKGROUND_AFTER_MS = 30_000;
+let lastActivityAt = Date.now();
+if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+  const touched = () => { lastActivityAt = Date.now(); };
+  for (const type of ['pointerdown', 'keydown', 'wheel', 'touchstart']) {
+    window.addEventListener(type, touched, { capture: true, passive: true });
+  }
+}
+
+/** Whether a request made now is background work rather than the person's own. */
+export function isBackgroundNow(now = Date.now(), lastActivity = lastActivityAt): boolean {
+  return now - lastActivity > BACKGROUND_AFTER_MS;
+}
+
 /** Attach the session-only token to same-origin DQL API calls when supplied. */
 export function withServerAuthorization(headers?: HeadersInit): Headers {
   const resolved = new Headers(headers);
   if (serverToken) resolved.set('Authorization', `Bearer ${serverToken}`);
+  if (isBackgroundNow()) resolved.set('x-dql-background', '1');
   return resolved;
 }
 

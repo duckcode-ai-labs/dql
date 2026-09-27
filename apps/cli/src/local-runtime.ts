@@ -255,6 +255,7 @@ import {
   type ExploratoryExecutionAuthorizationAttemptV1,
   type ExploratoryExecutionFreezeV1,
   type SqlAuthorizationCheck,
+  setProviderUsageListener,
 } from '@duckcodeailabs/dql-agent';
 import { applyEvalCassette, createDqlAgentProviderRunner, createEvalCassetteReplayProvider, resolveAgentFollowUpContext } from './llm/providers/provider-runner.js';
 import type {
@@ -734,12 +735,12 @@ import {
 } from "./notebook-datasets.js";
 import { prepareBlockInvocation } from './block-invocation.js';
 import { redactConnections, resolveSecretReferences, storeConnectionSecrets } from './connection-secrets.js';
-import { authorizeHostRequest, currentHostGitHooks, currentPrincipal, hostActor, hostGitAuthor, hostModelProvider, installHostPersonaSlots, resolveHostPrincipal, resultValuesMayReachModel, safeNextLink, setHostGitHooks, setHostModelHooks, withRequestContext, type DqlHostHooks } from './host/request-context.js';
+import { authorizeHostRequest, currentHostGitHooks, currentPrincipal, currentRequestContext, hostActor, hostGitAuthor, hostModelProvider, installHostPersonaSlots, resolveHostPrincipal, resultValuesMayReachModel, safeNextLink, setHostGitHooks, setHostModelHooks, withRequestContext, type DqlHostHooks } from './host/request-context.js';
 import { isRunPass, issueRunPass, redeemRunPass, revokeRunPass } from './host/schedule-runs.js';
 import { setDeliverySink } from './schedule/notifiers/index.js';
 import { routeAction, type DqlAction } from './host/route-actions.js';
 import { withHostQueryHooks } from './host/row-policy.js';
-import { auditActor, auditRequest, otlpHeadersFromEnv, withAnswerAudit, withTraceExport } from './host/observability.js';
+import { auditActor, auditModelUsage, auditRequest, otlpHeadersFromEnv, withAnswerAudit, withTraceExport } from './host/observability.js';
 import { withRunOwnership } from './host/run-ownership.js';
 import { answerFactsFromRun } from './host/answer-facts.js';
 const HOST_ICONS = new Set(['inbox', 'requests', 'review', 'work', 'health', 'admin', 'people', 'git', 'link']);
@@ -8749,6 +8750,13 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
   const agentRunStore = hostHooks?.audit
     ? withAnswerAudit(baseAgentRunStore, hostHooks.audit, () => ({ principal: currentPrincipal() ?? null, actor: auditActor(currentPrincipal()) }))
     : baseAgentRunStore;
+  // HH-6: each model call's token counts, for the person whose request made it (process-wide, like the model hooks).
+  if (hostHooks?.audit) {
+    auditModelUsage(hostHooks.audit, setProviderUsageListener, () => {
+      const context = currentRequestContext();
+      return { principal: context?.principal ?? null, actor: auditActor(context?.principal), ...(context?.requestId ? { requestId: context.requestId } : {}) };
+    });
+  }
   // OBS-002: traces intentionally live outside agent-runs.sqlite. A corrupt,
   // oversized, or schema-newer trace store must not make Ask unavailable.
   // HH-6: each finished trace, strictly redacted, also goes to the host's
@@ -19371,7 +19379,9 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
                 assertAppAccess({
                   app: loaded.app,
                   domain: block.domain ?? loaded.dashboard.metadata.domain ?? loaded.app.domain,
-                  level: 'execute',
+                  // Reading a published page is consumption: the App's `read` policy covers it; ad-hoc SQL,
+                  // investigations and notebooks still need `execute`.
+                  level: 'read',
                 });
                 const blockPath = join(projectRoot, block.filePath);
                 const blockSource = readFileSync(blockPath, 'utf-8');
@@ -20080,7 +20090,9 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
                 assertAppAccess({
                   app: loaded.app,
                   domain: discoveryDescriptor.domain ?? loaded.dashboard.metadata.domain ?? loaded.app.domain,
-                  level: 'execute',
+                  // Reading a published page is consumption: the App's `read` policy covers it; ad-hoc SQL,
+                  // investigations and notebooks still need `execute`.
+                  level: 'read',
                 });
                 const requestedHierarchyDrill = datasetDrills.get(item.i);
                 let effectiveDatasetQuery = item.query;
@@ -20459,7 +20471,9 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
             assertAppAccess({
               app: loaded.app,
               domain: block.domain ?? loaded.dashboard.metadata.domain ?? loaded.app.domain,
-              level: 'execute',
+              // Reading a published page is consumption: the App's `read` policy covers it; ad-hoc SQL,
+              // investigations and notebooks still need `execute`.
+              level: 'read',
             });
             const absBlockPath = join(projectRoot, block.filePath);
             blockSource = readFileSync(absBlockPath, 'utf-8');
@@ -21319,6 +21333,12 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
           path,
           projectRoot,
           datasetsEnabled: datasetsAppFeatureEnabled(projectConfig),
+          ...(hostIdentity && hostHooks?.authorize ? {
+            mayViewApp: async (appId: string) => {
+              const principal = currentPrincipal();
+              return !!principal && (await authorizeHostRequest(hostHooks, principal, { action: 'app.view', resource: { type: 'app', id: appId } })).allow;
+            },
+          } : {}),
           executeSql: executeLocalSqlForStoredResult,
           generateInvestigationSql: generateInvestigationSqlForApp,
           runNotebook: (appId, notebookPath) => runNotebookForApp(appId, notebookPath),

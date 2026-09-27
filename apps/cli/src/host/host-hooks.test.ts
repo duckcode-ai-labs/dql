@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import type { IncomingMessage, Server } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -23,10 +23,11 @@ afterEach(async () => {
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
 });
 
-async function start(hostHooks?: DqlHostHooks): Promise<string> {
+async function start(hostHooks?: DqlHostHooks, fixture?: string): Promise<string> {
   const projectRoot = mkdtempSync(join(tmpdir(), 'dql-host-hooks-'));
   roots.push(projectRoot);
-  writeFileSync(join(projectRoot, 'dql.config.json'), JSON.stringify({ project: 'host_hooks' }));
+  if (fixture) cpSync(fixture, projectRoot, { recursive: true });
+  else writeFileSync(join(projectRoot, 'dql.config.json'), JSON.stringify({ project: 'host_hooks' }));
   const port = await startLocalServer({
     rootDir: projectRoot,
     projectRoot,
@@ -131,6 +132,18 @@ describe('host principal (RFC 0010 HH-1)', () => {
       }),
     }).then((response) => response.json()) as { hint: { author?: string } };
     expect(captured.hint.author).toBe('local-analyst');
+  });
+});
+
+describe('the Apps a person is shown (RFC 0010 HH-2)', () => {
+  it('lists only the Apps the host lets this person open', async () => {
+    const base = await start({
+      ...headerHost,
+      authorize: (principal, action, resource) => ({ allow: !(action === 'app.view' && resource.type === 'app' && principal.id === 'u-dev') }),
+    }, join(import.meta.dirname, '../../test/fixtures/app-datasets-pilot'));
+    const list = async (who: string) => ((await (await fetch(`${base}/api/apps`, { headers: { 'x-test-person': who } })).json()) as { apps: Array<{ id: string }> }).apps.map((app) => app.id);
+    expect(await list('maria')).toEqual(['commerce-pilot']);
+    expect(await list('dev')).toEqual([]);
   });
 });
 

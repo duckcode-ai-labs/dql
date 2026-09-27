@@ -1497,6 +1497,7 @@ export {
   resolveThinkingMode,
   prepareProviderHttpDispatch,
   completeProviderHttpDispatch,
+  setProviderUsageListener,
 } from "./providers/index.js";
 export type {
   AgentProvider,
@@ -1519,6 +1520,7 @@ export type {
   ReasoningEffort,
   GeminiReasoningStyle,
   ThinkingMode,
+  ProviderUsageLine,
 } from "./providers/index.js";
 
 /**

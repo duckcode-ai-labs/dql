@@ -16,6 +16,7 @@
  *   dql app verify <snapshot.html> [--trust-key <public.pem>] [--format json]
  *   dql app key
  *   dql app diff [base] [head] [--html <file>] [--markdown <file>] [--check] [--format json]
+ *   dql app check <id> [--format json]
  */
 
 import {
@@ -44,6 +45,7 @@ import { readSnapshotPublicKey, verifySnapshot, type SnapshotVerification } from
 import { runAppDiff } from "./app-diff.js";
 import { findProjectRoot } from "../local-runtime.js";
 import {
+  checkAppPublication,
   createStoredAppBuildDraft,
   proposeAppBuildDraftOperations,
   writeStoredAppBuildDraft,
@@ -76,9 +78,11 @@ export async function runApp(
       return runAppKey(flags);
     case "diff":
       return runAppDiff(rest, flags);
+    case "check":
+      return runAppCheck(rest, flags);
     default:
       throw new Error(
-        "Usage: dql app <new|ls|show|build|reindex|verify|key|diff> [args]\n" +
+        "Usage: dql app <new|ls|show|build|reindex|verify|key|diff|check> [args]\n" +
           "  dql app new <id> --domain <domain> [--owner <user>]\n" +
           '  dql app generate "<prompt>" [--domain <domain>] [--owner <user>] [--ai-layout]\n' +
           "  dql app ls [path]\n" +
@@ -87,7 +91,8 @@ export async function runApp(
           "  dql app reindex [path]\n" +
           "  dql app verify <snapshot.html> [--trust-key <public.pem>] [--format json]\n" +
           "  dql app key\n" +
-          "  dql app diff [base] [head] [--html <file>] [--markdown <file>] [--check]",
+          "  dql app diff [base] [head] [--html <file>] [--markdown <file>] [--check]\n" +
+          "  dql app check <id> [--format json]",
       );
   }
 }
@@ -464,6 +469,33 @@ void readFileSync;
  * manifest, and (with --trust-key, or inside the project that signed it) the
  * key is one you trust. Exits 1 when any check fails.
  */
+// ---- check ----
+
+/** Whether an App's tiles would pass publication: each tile's source and trust, and what stops it. */
+async function runAppCheck(rest: string[], flags: CLIFlags): Promise<void> {
+  const id = rest.find((arg) => !arg.startsWith("-"));
+  if (!id) throw new Error("Usage: dql app check <id> [--format json]");
+  const result = checkAppPublication(findProjectRoot(process.cwd()), id);
+  if (!result) throw new Error(`No App with id "${id}" in this project.`);
+  if (flags.format === "json") {
+    console.log(JSON.stringify(result, null, 2));
+  } else {
+    const tiles = result.pages.flatMap((page) => page.tiles).filter((tile) => tile.trust !== "none");
+    const certified = tiles.filter((tile) => tile.trust === "certified").length;
+    const lines = [`${result.ready ? "Ready to publish" : "Not ready to publish"}: ${result.app.title} (${certified} of ${tiles.length} tiles certified)`];
+    for (const page of result.pages) {
+      lines.push("", `  ${page.title}`);
+      for (const tile of page.tiles) {
+        if (tile.trust === "none") continue;
+        lines.push(`    ${tile.trust === "certified" ? "ok  " : "FAIL"}  ${tile.title ?? tile.id} (${tile.source})`);
+        for (const problem of tile.problems) lines.push(`          ${problem}`);
+      }
+    }
+    console.log(lines.join("\n"));
+  }
+  if (!result.ready) process.exitCode = 1;
+}
+
 async function runAppVerify(rest: string[], flags: CLIFlags): Promise<void> {
   const file = rest.find((arg) => !arg.startsWith("-"));
   if (!file) throw new Error("Usage: dql app verify <snapshot.html> [--trust-key <public.pem>] [--format json]");

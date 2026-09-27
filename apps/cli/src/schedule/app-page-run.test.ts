@@ -111,5 +111,7 @@ describe('scheduled App page runs (RFC 0008 step 3c)', () => {
     expect(sent.markdown).toContain('2 of 3 tiles ran');
     expect(sent.markdown).toContain('## Did not run\n- Margin rate: The warehouse timed out.');
     expect(sent.html).toContain('Overview');
+    // The link that opens this page in DQL, for hosts and link-only deliveries.
+    expect(sent.appPage).toEqual({ appId: 'commerce-pilot', pageId: 'overview', title: 'Overview', href: '/?app=commerce-pilot&page=overview' });
   });
 });

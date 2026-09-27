@@ -119,3 +119,26 @@ describe('runApp', () => {
     });
   });
 });
+
+describe('dql app check', () => {
+  it('reports each tile\'s source and trust as publication checks them', async () => {
+    const { cpSync } = await import('node:fs');
+    const { checkAppPublication } = await import('../apps-api.js');
+    const root = mkdtempSync(join(tmpdir(), 'dql-app-check-'));
+    try {
+      cpSync(join(import.meta.dirname, '../../test/fixtures/app-datasets-pilot'), root, { recursive: true });
+      expect(checkAppPublication(root, 'no-such-app')).toBeNull();
+      const result = checkAppPublication(root, 'commerce-pilot')!;
+      expect(result.app).toMatchObject({ id: 'commerce-pilot', domain: 'commerce' });
+      const tiles = result.pages.flatMap((page) => page.tiles);
+      expect(tiles.length).toBeGreaterThan(0);
+      for (const tile of tiles) {
+        expect(['block', 'semantic', 'dataset', 'exploratory', 'content']).toContain(tile.source);
+        expect(tile.trust === 'needs_review').toBe(tile.problems.length > 0);
+      }
+      expect(result.ready).toBe(result.blockers.length === 0);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+});

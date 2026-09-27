@@ -12,7 +12,7 @@ import { OpenAIProvider } from './openai.js';
 import { GeminiProvider, normalizeGeminiBaseUrl } from './gemini.js';
 import { OllamaProvider } from './ollama.js';
 
-export { extractProviderUsage, recordProviderUsage, type ProviderUsage, type ProviderUsageLine } from './usage-ledger.js';
+export { extractProviderUsage, extractStreamedClaudeUsage, recordProviderUsage, setProviderUsageListener, type ProviderUsage, type ProviderUsageLine, type ProviderUsageListener } from './usage-ledger.js';
 export { DEFAULT_MAX_OUTPUT_TOKENS } from './types.js';
 
 export type {

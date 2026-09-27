@@ -79,19 +79,53 @@ export function extractProviderUsage(provider: ProviderName, body: unknown): Pro
   return undefined;
 }
 
+/** Usage from a Claude streaming reply: input tokens in `message_start`, output in the last `message_delta`. */
+export function extractStreamedClaudeUsage(text: string): ProviderUsage | undefined {
+  let usage: ProviderUsage | undefined;
+  for (const line of text.split(/\r?\n/)) {
+    if (!line.startsWith('data:')) continue;
+    let event: Record<string, any>;
+    try { event = JSON.parse(line.slice(5).trim()); } catch { continue; }
+    if (event.type === 'message_start') {
+      const start = extractProviderUsage('claude', { usage: event.message?.usage });
+      if (start) usage = start;
+    } else if (event.type === 'message_delta' && usage && count(event.usage?.output_tokens) !== undefined) {
+      usage = { ...usage, outputTokens: event.usage.output_tokens };
+    }
+  }
+  return usage;
+}
+
 /**
- * Record a successful call's usage when the ledger is on. Reads a clone of the
- * response, so the caller's body is untouched; any failure here is swallowed,
- * because accounting must never break the call it accounts for.
+ * Who hears about each call's usage besides the ledger file: a host (RFC 0010)
+ * records it against the person asking. Called in the caller's async context.
+ */
+export type ProviderUsageListener = (line: ProviderUsageLine) => void;
+let usageListener: ProviderUsageListener | null = null;
+export function setProviderUsageListener(listener: ProviderUsageListener | null): void {
+  usageListener = listener;
+}
+
+/**
+ * Record a successful call's usage when the ledger is on or a host listens.
+ * Reads a clone of the response, so the caller's body is untouched; any
+ * failure here is swallowed, because accounting must never break the call it
+ * accounts for.
  */
 export function recordProviderUsage(input: { provider: ProviderName; operation: string; model?: string; response: Response }, env: NodeJS.ProcessEnv = process.env): void {
   const file = env.DQL_PROVIDER_USAGE_LEDGER;
-  if (!file || !input.response.ok) return;
-  if (!/json/i.test(input.response.headers.get('content-type') ?? '')) return;
-  void input.response.clone().json().then((body) => {
-    const usage = extractProviderUsage(input.provider, body);
+  const listener = usageListener;
+  if ((!file && !listener) || !input.response.ok) return;
+  const type = input.response.headers.get('content-type') ?? '';
+  const streamed = /event-stream/i.test(type) && input.provider === 'claude';
+  if (!/json/i.test(type) && !streamed) return;
+  const read = streamed
+    ? input.response.clone().text().then((text) => extractStreamedClaudeUsage(text))
+    : input.response.clone().json().then((body) => extractProviderUsage(input.provider, body));
+  void read.then((usage) => {
     if (!usage) return;
     const line: ProviderUsageLine = { at: new Date().toISOString(), provider: input.provider, ...(input.model ? { model: input.model } : {}), operation: input.operation, ...usage };
-    appendFileSync(file, `${JSON.stringify(line)}\n`);
+    if (file) appendFileSync(file, `${JSON.stringify(line)}\n`);
+    try { listener?.(line); } catch { /* accounting never breaks the call */ }
   }).catch(() => undefined);
 }

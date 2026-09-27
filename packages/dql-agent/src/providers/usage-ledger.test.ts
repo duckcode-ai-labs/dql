@@ -2,7 +2,7 @@ import { mkdtempSync, readFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { extractProviderUsage, recordProviderUsage } from './usage-ledger.js';
+import { extractProviderUsage, extractStreamedClaudeUsage, recordProviderUsage, setProviderUsageListener, type ProviderUsageLine } from './usage-ledger.js';
 
 describe('the provider usage ledger', () => {
   it('reads each provider\'s usage block into one shape', () => {
@@ -36,5 +36,26 @@ describe('the provider usage ledger', () => {
 describe('local models', () => {
   it('reads Ollama token counts', () => {
     expect(extractProviderUsage('ollama', { prompt_eval_count: 11800, eval_count: 640 })).toEqual({ inputTokens: 11800, outputTokens: 640 });
+  });
+});
+
+describe('usage for a host (RFC 0010 HH-6)', () => {
+  it('reads a streamed Claude reply\'s tokens and tells a listening host, with no ledger file and no text', async () => {
+    const stream = [
+      'event: message_start', 'data: {"type":"message_start","message":{"usage":{"input_tokens":120,"output_tokens":1,"cache_read_input_tokens":80}}}', '',
+      'event: content_block_delta', 'data: {"type":"content_block_delta","delta":{"type":"text_delta","text":"SELECT secret"}}', '',
+      'event: message_delta', 'data: {"type":"message_delta","usage":{"output_tokens":42}}', '',
+    ].join('\n');
+    expect(extractStreamedClaudeUsage(stream)).toEqual({ inputTokens: 120, outputTokens: 42, cacheReadTokens: 80 });
+    const heard: ProviderUsageLine[] = [];
+    setProviderUsageListener((line) => { heard.push(line); });
+    try {
+      recordProviderUsage({ provider: 'claude', operation: 'stream', model: 'claude-sonnet-5', response: new Response(stream, { status: 200, headers: { 'content-type': 'text/event-stream' } }) }, {});
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    } finally {
+      setProviderUsageListener(null);
+    }
+    expect(heard).toEqual([expect.objectContaining({ provider: 'claude', model: 'claude-sonnet-5', operation: 'stream', inputTokens: 120, outputTokens: 42 })]);
+    expect(JSON.stringify(heard)).not.toContain('secret');
   });
 });

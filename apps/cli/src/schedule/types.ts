@@ -69,6 +69,16 @@ export interface NotifierPayload {
   monitors?: MonitorEvaluation[];
   /** A subject line written for this run, e.g. naming the alert that fired. */
   subject?: string;
+  /**
+   * The App page this run delivers, with its same-origin link (`/?app=…&page=…`)
+   * that opens it in DQL; a host prefixes its own address (RFC 0010).
+   */
+  appPage?: { appId: string; pageId: string; title: string; href: string };
+}
+
+/** The same-origin link that opens one App page in DQL. */
+export function appPageHref(appId: string, pageId: string): string {
+  return `/?${new URLSearchParams({ app: appId, page: pageId }).toString()}`;
 }
 
 export interface Notifier {

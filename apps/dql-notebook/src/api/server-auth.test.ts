@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
+  BACKGROUND_AFTER_MS,
   hashWithoutServerToken,
+  isBackgroundNow,
   reportServerAuthRejected,
   serverTokenFromAccessInput,
   serverTokenFromHash,
@@ -39,6 +41,16 @@ describe('LAN server authentication', () => {
   it('preserves caller headers when no browser token was initialized', () => {
     const headers = withServerAuthorization({ 'Content-Type': 'application/json' });
     expect(headers.get('Content-Type')).toBe('application/json');
+  });
+});
+
+describe('background requests (RFC 0010)', () => {
+  it('marks requests made after the person stopped touching the page, so they don\'t keep an idle session alive', () => {
+    const now = 1_000_000;
+    expect(isBackgroundNow(now, now - 1_000)).toBe(false);
+    expect(isBackgroundNow(now, now - BACKGROUND_AFTER_MS - 1)).toBe(true);
+    // Just loaded: the person is there.
+    expect(withServerAuthorization().get('x-dql-background')).toBeNull();
   });
 });
 

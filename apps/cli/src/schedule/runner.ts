@@ -13,7 +13,7 @@ import { dispatchNotifications, type DeliveryTarget } from './notifiers/index.js
 import { createRuntimePageRunner, summarizeAppPageRun, type AppPageRunner } from './app-page-run.js';
 import { writeDigestHtml, writeRunRecord } from './runs.js';
 import { buildAppDigest, readDigestState, writeDigestState, type DigestLayoutItem } from './app-digest.js';
-import type { NotifierPayload, QueryRunResult, RunRecord } from './types.js';
+import { appPageHref, type NotifierPayload, type QueryRunResult, type RunRecord } from './types.js';
 
 export interface RunOptions {
   executor: QueryExecutor;
@@ -250,6 +250,7 @@ export async function runAppDashboard(
           digestTitle: dashboard.title,
           monitors: digest.evaluations,
           subject: digest.subject,
+          appPage: { appId, pageId: dashboardId, title: dashboard.title, href: appPageHref(appId, dashboardId) },
         },
         projectRoot,
       );

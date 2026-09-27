@@ -326,6 +326,16 @@ Tests: `host-hooks.test.ts`, `app-workspace-loader.test.ts`.
 ### Schema refresh for hosts
 `startProjectRuntime` returns `syncSchema()`: it refreshes DQL's schema snapshot (table and column names, no values) through the runtime's own connection, so a DuckDB file is never opened twice. A host that applies column policies in `rowPolicy` uses it to know every protected table's columns. No project files change.
 
+### Host follow-ups (Enterprise's first full build)
+- **Background requests:** the app marks any API request made more than 30 seconds after the person last touched the page `x-dql-background: 1` (polls, refreshes, recovery loops), so a host's idle sign-out isn't kept alive by an unattended tab.
+- **App page links:** `/?app=<id>&page=<id>` opens that App page (the App's home page without `page`); the parameters are removed once read. App schedule deliveries carry `appPage { appId, pageId, title, href }` with that same-origin link, so a host can send a link-only message that opens the page.
+- **Model usage:** with an audit sink, every model call's provider, model, operation and token counts (including a streamed Claude reply's) is a `model_usage` audit event for the person whose request made it — never prompt or reply text. `setProviderUsageListener` in `@duckcodeailabs/dql-agent` is the underlying listener.
+- **The Apps list follows `app.view`:** with a host that authorizes, `GET /api/apps` lists only the Apps the person may open.
+- **Reading a published page is `read`:** an App's `read` policy (the scaffolded `viewer` role) runs a published page's tiles; ad-hoc SQL, investigations and notebooks still need `execute`.
+- **`dql app check <id> [--format json]`:** each tile's source and trust as publication checks them, and what would stop it publishing; exits 1 when not ready.
+
+Tests: `server-auth.test.ts`, `ask-trace-navigation.test.ts`, `app-page-run.test.ts`, `usage-ledger.test.ts`, `observability.test.ts`, `host-hooks.test.ts`, `app.test.ts`.
+
 ### Entry point
 `@duckcodeailabs/dql-cli/host` also exports `startProjectRuntime`: the full server with its UI for one project, as `dql notebook` runs it, taking `hostHooks`, `allowedOrigins` and a host-managed `connection`. The first host (DQL Enterprise) starts every workspace this way; its end-to-end test drives this branch's server through sign-in, roles, row rules and DuckDB for five people.
 

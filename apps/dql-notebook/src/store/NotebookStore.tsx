@@ -72,6 +72,32 @@ function readInitialMainView(): NotebookState['mainView'] {
     : 'apps';
 }
 
+/**
+ * `/?app=<id>&page=<id>` opens that App page (the link deliveries and hosts
+ * send). The parameters are removed once read, so a reload starts fresh.
+ */
+export function appLinkFromSearch(search: string): { appId: string; dashboardId: string | null } | null {
+  const params = new URLSearchParams(search);
+  const id = /^[A-Za-z0-9][\w.-]{0,127}$/;
+  const appId = params.get('app')?.trim() ?? '';
+  if (!id.test(appId)) return null;
+  const page = params.get('page')?.trim() ?? '';
+  return { appId, dashboardId: id.test(page) ? page : null };
+}
+
+const initialAppLink = (() => {
+  if (typeof window === 'undefined' || typeof window.location?.search !== 'string') return null;
+  const link = appLinkFromSearch(window.location.search);
+  if (link) {
+    const params = new URLSearchParams(window.location.search);
+    params.delete('app');
+    params.delete('page');
+    const rest = params.toString();
+    try { window.history.replaceState(window.history.state, '', `${window.location.pathname}${rest ? `?${rest}` : ''}${window.location.hash}`); } catch { /* keep the URL */ }
+  }
+  return link;
+})();
+
 function readInitialAskTraceRunId(): string | undefined {
   if (typeof window === 'undefined') return undefined;
   const route = askTraceRouteFromPathname(window.location?.pathname);
@@ -79,7 +105,7 @@ function readInitialAskTraceRunId(): string | undefined {
 }
 
 const initialState: NotebookState = {
-  mainView: readInitialMainView(),
+  mainView: initialAppLink ? 'apps' : readInitialMainView(),
   agentLogRun: undefined,
   askTraceRunId: readInitialAskTraceRunId(),
   settingsTab: 'overview',
@@ -146,9 +172,9 @@ const initialState: NotebookState = {
   inspectorContext: null,
   apps: [],
   appsLoading: false,
-  activeAppId: null,
+  activeAppId: initialAppLink?.appId ?? null,
   activeAppDraftId: null,
-  activeDashboardId: null,
+  activeDashboardId: initialAppLink?.dashboardId ?? null,
   activeAppExperience: 'view',
   activeAppSection: 'dashboards',
   activePersona: null,
@@ -879,8 +905,15 @@ function notebookReducer(state: NotebookState, action: NotebookAction): Notebook
         inspectorOpen: action.context !== null ? true : state.inspectorOpen,
       };
 
-    case 'SET_APPS':
+    case 'SET_APPS': {
+      // An App opened by link without a page lands on its home page once Apps are known.
+      if (state.activeAppId && !state.activeDashboardId && !state.activeAppDraftId) {
+        const app = action.apps.find((candidate) => candidate.id === state.activeAppId);
+        const home = app ? (app.homepage?.type === 'dashboard' ? app.homepage.id : (app.dashboards[0]?.id ?? null)) : null;
+        if (home) return { ...state, apps: action.apps, activeDashboardId: home };
+      }
       return { ...state, apps: action.apps };
+    }
 
     case 'SET_APPS_LOADING':
       return { ...state, appsLoading: action.loading };

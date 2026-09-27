@@ -43,6 +43,22 @@ export type DqlAuditEvent =
     /** sha256 of each SQL statement the answer's artifacts carry; never the SQL or its values. */
     sqlSha256: string[];
     sources: string[];
+  }
+  | {
+    /** One model call's token counts, for the person whose request made it; never prompt or reply text. */
+    kind: 'model_usage';
+    at: string;
+    requestId?: string;
+    actor: string | null;
+    principalId: string | null;
+    provider: string;
+    model: string | null;
+    operation: string;
+    inputTokens: number;
+    outputTokens: number;
+    cacheReadTokens?: number;
+    cacheWriteTokens?: number;
+    reasoningTokens?: number;
   };
 
 export type DqlAuditSink = (event: DqlAuditEvent) => void | Promise<void>;
@@ -127,6 +143,33 @@ export function answerAuditEvent(run: AuditableRun, who: { principal: DqlPrincip
     sqlSha256,
     sources,
   };
+}
+
+/** A model call's usage as an audit event, for whoever made the request it belongs to. */
+export function modelUsageAuditEvent(
+  line: { at: string; provider: string; model?: string; operation: string; inputTokens: number; outputTokens: number; cacheReadTokens?: number; cacheWriteTokens?: number; reasoningTokens?: number },
+  who: { principal: DqlPrincipal | null; actor: string | null; requestId?: string },
+): DqlAuditEvent {
+  return {
+    kind: 'model_usage',
+    at: line.at,
+    ...(who.requestId ? { requestId: who.requestId } : {}),
+    actor: who.actor,
+    principalId: who.principal?.id ?? null,
+    provider: line.provider,
+    model: line.model ?? null,
+    operation: line.operation,
+    inputTokens: line.inputTokens,
+    outputTokens: line.outputTokens,
+    ...(line.cacheReadTokens ? { cacheReadTokens: line.cacheReadTokens } : {}),
+    ...(line.cacheWriteTokens ? { cacheWriteTokens: line.cacheWriteTokens } : {}),
+    ...(line.reasoningTokens ? { reasoningTokens: line.reasoningTokens } : {}),
+  };
+}
+
+/** Send every model call's usage to the host's audit sink (null removes it). */
+export function auditModelUsage(sink: DqlAuditSink | null, setListener: (listener: ((line: Parameters<typeof modelUsageAuditEvent>[0]) => void) | null) => void, who: () => { principal: DqlPrincipal | null; actor: string | null; requestId?: string }): void {
+  setListener(sink ? (line) => emit(sink, modelUsageAuditEvent(line, who())) : null);
 }
 
 /** A run store that also reports each run once, when it first finishes. */

@@ -49,6 +49,7 @@ function webhookBody(payload: NotifierPayload) {
     trigger: payload.trigger,
     startedAt: payload.startedAt,
     ...(payload.subject ? { subject: payload.subject } : {}),
+    ...(payload.appPage ? { appPage: payload.appPage } : {}),
     markdown: payload.markdown ?? '',
     ...(payload.html ? { html: payload.html } : {}),
     ...(payload.monitors ? {
