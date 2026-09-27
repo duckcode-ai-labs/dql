@@ -16629,7 +16629,8 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
           ...(sameOrigin(extras.signOutUrl) ? { signOutUrl: extras.signOutUrl } : {}),
           ...(typeof extras.environment === 'string' ? { environment: extras.environment.slice(0, 80) } : {}),
           ...(safeHostBanner(extras.banner) ? { banner: safeHostBanner(extras.banner) } : {}),
-          links: (extras.links ?? []).filter((link) => sameOrigin(link.href) && typeof link.label === 'string').slice(0, 12)
+          // At most 12 links in DQL's rail and 12 in the person menu, each in the host's order.
+          links: capHostLinksByPlacement((extras.links ?? []).filter((link) => sameOrigin(link.href) && typeof link.label === 'string'), 12)
             .map((link) => ({ id: String(link.id), label: link.label.slice(0, 60), href: link.href, placement: link.placement === 'nav' ? 'nav' : 'menu', ...(Number.isInteger(link.badge) && link.badge! > 0 ? { badge: Math.min(link.badge!, 999) } : {}), ...(link.icon && HOST_ICONS.has(link.icon) ? { icon: link.icon } : {}) })),
           answerActions: (extras.answerActions ?? []).filter((action) => sameOrigin(action.url) && typeof action.label === 'string').slice(0, 4)
             .map((action) => {
@@ -39350,6 +39351,13 @@ export function storyValueRelations(
     for (const relation of relations) all.add(relation);
   }
   return { relations: [...all].sort() };
+}
+
+/** The host's links, keeping at most `limit` for the rail and `limit` for the person menu, in order. */
+export function capHostLinksByPlacement<T extends { placement?: string }>(links: T[], limit: number): T[] {
+  let nav = 0;
+  let menu = 0;
+  return links.filter((link) => (link.placement === 'nav' ? ++nav <= limit : ++menu <= limit));
 }
 
 export function extractBlockInvariants(source: string): string[] {

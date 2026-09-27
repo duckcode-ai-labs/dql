@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { QueryExecutor } from '@duckcodeailabs/dql-connectors';
-import { startLocalServer } from '../local-runtime.js';
+import { capHostLinksByPlacement, startLocalServer } from '../local-runtime.js';
 import { hostActor, hostModelProvider, normalizeHostPrincipal, resultValuesMayReachModel, setHostModelHooks, withRequestContext, type DqlHostHooks, type DqlPrincipal } from './request-context.js';
 
 /**
@@ -312,5 +312,15 @@ describe('one place every tool runs (RFC 0010 HH-7)', () => {
       'packages/dql-agent/src/agentic/ledger-tools.ts',
       'packages/dql-agent/src/agentic/tool-gate.ts',
     ]);
+  });
+});
+
+describe('host links in DQL\'s rail and menu (HH-9)', () => {
+  it('keeps up to 12 of each, in the host\'s order, so a full menu never pushes a rail link out', () => {
+    const menu = Array.from({ length: 14 }, (_, i) => ({ id: `m${i}`, placement: 'menu' }));
+    const nav = Array.from({ length: 9 }, (_, i) => ({ id: `n${i}`, placement: 'nav' }));
+    const kept = capHostLinksByPlacement([...menu.slice(0, 7), ...nav, ...menu.slice(7)], 12);
+    expect(kept.filter((link) => link.placement === 'nav').map((link) => link.id)).toEqual(nav.map((link) => link.id));
+    expect(kept.filter((link) => link.placement === 'menu').map((link) => link.id)).toEqual(menu.slice(0, 12).map((link) => link.id));
   });
 });
