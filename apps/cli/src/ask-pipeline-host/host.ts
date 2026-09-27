@@ -118,7 +118,7 @@ export interface AskPipelineHostDeps {
   /** The engine `compileSemantic` will use, known before preparation so the binder can speak its dialect. */
   semanticEngine?(): Promise<'native' | 'metricflow-cli' | 'dbt-cloud'>;
   /** Wrap one physical provider call in the run's dispatch ledger. */
-  dispatchOptions?(purpose: 'resolve' | 'correct' | 'repair' | 'draft' | 'research_select' | 'research_narrate', request: AgentRunRequest): { options: ProviderRunOptions; settle(outcome: 'ok' | 'error' | 'cancelled', error?: unknown): void };
+  dispatchOptions?(purpose: 'resolve' | 'correct' | 'repair' | 'draft' | 'research_select' | 'research_narrate' | 'knowledge', request: AgentRunRequest): { options: ProviderRunOptions; settle(outcome: 'ok' | 'error' | 'cancelled', error?: unknown): void };
   /** The executed intent of the last usable turn in this thread, when there is one. */
   /** The previous turn's typed reading. `executed: false` means it was blocked: its question stands, its result does not exist. */
   /**

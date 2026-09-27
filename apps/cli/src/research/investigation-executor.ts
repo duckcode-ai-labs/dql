@@ -81,7 +81,8 @@ export interface InvestigationExecutorDeps {
   host: Pick<AskPipelineHost, 'openScope'>;
   /** A stored run of this project, by id. */
   loadRun(runId: string): Promise<AgentRun | null | undefined>;
-  contextSources?: InvestigationContextSource[];
+  /** Outside context for this run (e.g. the person's knowledge sources); a function decides per run. */
+  contextSources?: InvestigationContextSource[] | ((context: Parameters<AgentRouteExecutor>[0]) => InvestigationContextSource[] | undefined);
   now?: () => Date;
 }
 
@@ -118,6 +119,7 @@ export function createInvestigationExecutor(deps: InvestigationExecutorDeps): Ag
     const opened = await deps.host.openScope(context, { route: 'research' });
     if ('blocked' in opened) return opened.blocked;
     const { scope } = opened;
+    const contextSources = typeof deps.contextSources === 'function' ? deps.contextSources(context) : deps.contextSources;
 
     const steps: AskStoryStepV1[] = [];
     const onStep = (step: AskStoryStepV1) => {
@@ -143,7 +145,7 @@ export function createInvestigationExecutor(deps: InvestigationExecutorDeps): Ag
         joinableRelations: (relations) => joinableRelations(modelingRelationshipEdges(scope.manifest()), relations),
         selectDimensions: (prompt) => scope.dispatch('research_select', [{ role: 'user', content: prompt }]),
         ...(request.signal ? { signal: request.signal } : {}),
-        ...(deps.contextSources?.length ? { contextSources: deps.contextSources } : {}),
+        ...(contextSources?.length ? { contextSources } : {}),
       },
       ...(deps.now ? { now: deps.now } : {}),
     });

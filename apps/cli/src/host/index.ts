@@ -20,6 +20,7 @@ export {
   type DqlMemoryStore,
   type DqlConversationStore,
   type DqlSourceRef,
+  type DqlKnowledgeServer,
 } from './request-context.js';
 export type { DqlAuditEvent, DqlAuditSink, DqlTraceSink } from './observability.js';
 export type { DeliverySink } from '../schedule/notifiers/index.js';

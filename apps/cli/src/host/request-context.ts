@@ -83,6 +83,31 @@ export async function hostAllowedSources(hooks: DqlHostHooks | undefined, princi
   }
 }
 
+/**
+ * One knowledge server as a host hands it over for one person (HH-15): a
+ * streamable HTTP MCP endpoint and that person's headers. DQL calls only its
+ * search and fetch tools (read-only), through the tool gate.
+ */
+export interface DqlKnowledgeServer {
+  /** Stable id, shown in audit and citations, e.g. "confluence". */
+  id: string;
+  /** Shown beside citations, e.g. "Confluence". */
+  label?: string;
+  /** https (plain http only on this machine). */
+  url: string;
+  /** This person's own headers, e.g. `{ Authorization: 'Bearer …' }`. */
+  headers?: Record<string, string>;
+  /** Search tool and its query argument (default `search` / `query`). */
+  searchTool?: string;
+  searchArg?: string;
+  /** Page tool and its id argument (default `fetch` / `id`). */
+  fetchTool?: string;
+  fetchArg?: string;
+  /** Fixed arguments for every search / fetch, e.g. `{ cloudId }`. */
+  searchArgs?: Record<string, unknown>;
+  fetchArgs?: Record<string, unknown>;
+}
+
 /** A host's answer to "may this person do this?". */
 export interface DqlDecision {
   allow: boolean;
@@ -215,6 +240,16 @@ export interface DqlHostHooks {
    * checks it; certified and governed answers are unchanged. An error withholds.
    */
   answerFigures?(principal: DqlPrincipal): 'show' | 'withhold_review' | Promise<'show' | 'withhold_review'>;
+  /**
+   * HH-15: the knowledge sources (read-only document servers, e.g.
+   * Confluence) this person may use, each with this person's own auth
+   * headers — never a shared key. DQL reads them with its own MCP client, so
+   * Ask and Research can cite documents with any model provider. With this
+   * hook the host decides alone; an error means none. Without it, a host that
+   * signs people in gives no knowledge sources, and `dql notebook` without a
+   * host reads the project's `.dql/mcp-servers.json` (`use: ["knowledge"]`).
+   */
+  knowledgeSources?(principal: DqlPrincipal): Promise<DqlKnowledgeServer[]> | DqlKnowledgeServer[];
   /** Each finished Ask trace, strictly redacted, as a bundle and as OTLP (HH-6). */
   traces?: DqlTraceSink;
   /**

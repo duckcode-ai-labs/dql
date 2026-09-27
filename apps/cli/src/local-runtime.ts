@@ -267,6 +267,9 @@ import type {
   ProviderId,
 } from './llm/types.js';
 import { listRemoteMcpSettings, saveRemoteMcpSettings } from './llm/mcp-config.js';
+import { knowledgeSessionFor } from './host/knowledge-sources.js';
+import { ledgeredProvider, withAnswerKnowledge } from './host/answer-knowledge.js';
+import { knowledgeContextSource, type KnowledgeSession } from '@duckcodeailabs/dql-agent';
 import {
   composeBusinessExplanation,
   ClaudeProvider,
@@ -6910,6 +6913,52 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
     plannedEngineCache = { at: Date.now(), value };
     return value;
   };
+  const selectAskProvider = async (request: AgentRunRequest) => {
+    // Host-only test/embedding seam, the same one the legacy runtime honours:
+    // an injected provider is the interpreter; it never comes from a payload.
+    if (opts.askAnalyticalPlannerProviderFactory) {
+      const injected = await opts.askAnalyticalPlannerProviderFactory({ projectRoot, request });
+      return injected ?? undefined;
+    }
+    const requested = agentRunWorkspaceValue(request, 'provider');
+    const selected = await selectAssistProvider(projectRoot, requested as ProviderSettingsId | undefined);
+    if (selected) askRequestProviders.set(request, selected.id);
+    return selected?.provider;
+  };
+  const askDispatchOptions: NonNullable<Parameters<typeof createAskPipelineHost>[0]['dispatchOptions']> = (purpose, request) => {
+    // Research words its summary from computed facts only with the run's
+    // consent: that call is narration on the ledger, never a drafting turn.
+    const narrate = purpose === 'research_narrate';
+    const dispatchPhase = purpose === 'resolve' ? 'agent_control' as const : narrate ? 'narration' as const : 'tool_followup' as const;
+    const egressPurpose = narrate ? 'research_narration' as const : 'answer_generation' as const;
+    const trace = createProviderDispatchTrace({
+      observer: askTraceObserverForV1(request),
+      phase: dispatchPhase,
+      purpose: egressPurpose,
+      admit: (event) => {
+        const ledger = agentRunProviderEvidenceContext.getStore();
+        if (ledger) {
+          // Drafting one SQL statement is a short call: it is bounded by its own
+          // size, not by how long the question took to read.
+          return ledger.observe(event, { purpose: egressPurpose, dispatchPhase, optIn: narrate && request.researchResultRowsOptIn === true, ...(purpose === 'draft' || purpose === 'research_select' || purpose === 'knowledge' ? { expectedMs: 30_000 } : {}) });
+        }
+        const envelope = prepareProviderWireEnvelopeForDispatch(event.provider, event.envelope);
+        assertProviderPayloadAllowed(envelope, { allowResultRows: false, maxResultRows: 0, purpose: egressPurpose });
+        return envelope;
+      },
+    });
+    // How hard the model thinks on this call. Without it every provider ran
+    // at its own default, and on the subscription CLI that default spent
+    // 8-12k thinking tokens reading one question: 80-120 s per call against
+    // a 90 s CLI deadline, so Ask timed out, retried and often gave up.
+    const reasoningEffort = askDispatchReasoningEffort(
+      projectRoot,
+      purpose,
+      request,
+      askRequestProviders.get(request) ?? getActiveProvider(projectRoot),
+    );
+    return { options: { ...trace.options, reasoningEffort }, settle: trace.settle };
+  };
   const askPipelineHost = createAskPipelineHost({
     projectRoot,
     executor,
@@ -6945,18 +6994,7 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
       const snapshot = projectSnapshot();
       return { manifest: snapshot.manifest, snapshotId: snapshot.snapshotId };
     },
-    selectProvider: async (request) => {
-      // Host-only test/embedding seam, the same one the legacy runtime honours:
-      // an injected provider is the interpreter; it never comes from a payload.
-      if (opts.askAnalyticalPlannerProviderFactory) {
-        const injected = await opts.askAnalyticalPlannerProviderFactory({ projectRoot, request });
-        return injected ?? undefined;
-      }
-      const requested = agentRunWorkspaceValue(request, 'provider');
-      const selected = await selectAssistProvider(projectRoot, requested as ProviderSettingsId | undefined);
-      if (selected) askRequestProviders.set(request, selected.id);
-      return selected?.provider;
-    },
+    selectProvider: selectAskProvider,
     // The engine the semantic candidate will compile on, decided the same
     // way `compileSemantic` decides it, so the binder speaks its dialect.
     semanticEngine: async () => plannedAskEngine().then((planned) => planned.engine),
@@ -7012,40 +7050,7 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
         ...(compiled.warnings?.length ? { warnings: compiled.warnings } : {}),
       };
     },
-    dispatchOptions: (purpose, request) => {
-      // Research words its summary from computed facts only with the run's
-      // consent: that call is narration on the ledger, never a drafting turn.
-      const narrate = purpose === 'research_narrate';
-      const dispatchPhase = purpose === 'resolve' ? 'agent_control' as const : narrate ? 'narration' as const : 'tool_followup' as const;
-      const egressPurpose = narrate ? 'research_narration' as const : 'answer_generation' as const;
-      const trace = createProviderDispatchTrace({
-        observer: askTraceObserverForV1(request),
-        phase: dispatchPhase,
-        purpose: egressPurpose,
-        admit: (event) => {
-          const ledger = agentRunProviderEvidenceContext.getStore();
-          if (ledger) {
-            // Drafting one SQL statement is a short call: it is bounded by its own
-            // size, not by how long the question took to read.
-            return ledger.observe(event, { purpose: egressPurpose, dispatchPhase, optIn: narrate && request.researchResultRowsOptIn === true, ...(purpose === 'draft' || purpose === 'research_select' ? { expectedMs: 30_000 } : {}) });
-          }
-          const envelope = prepareProviderWireEnvelopeForDispatch(event.provider, event.envelope);
-          assertProviderPayloadAllowed(envelope, { allowResultRows: false, maxResultRows: 0, purpose: egressPurpose });
-          return envelope;
-        },
-      });
-      // How hard the model thinks on this call. Without it every provider ran
-      // at its own default, and on the subscription CLI that default spent
-      // 8-12k thinking tokens reading one question: 80-120 s per call against
-      // a 90 s CLI deadline, so Ask timed out, retried and often gave up.
-      const reasoningEffort = askDispatchReasoningEffort(
-        projectRoot,
-        purpose,
-        request,
-        askRequestProviders.get(request) ?? getActiveProvider(projectRoot),
-      );
-      return { options: { ...trace.options, reasoningEffort }, settle: trace.settle };
-    },
+    dispatchOptions: askDispatchOptions,
     priorIntent: (request) => {
       const store = getConversationStore();
       if (!store || !request.threadId) return undefined;
@@ -7190,12 +7195,37 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
   });
   const askPipelineExecutor = askPipelineHost.execute;
 
+  // HH-15: the knowledge sources (team documents) of the person asking, for one run.
+  const knowledgeSessionForRun = (runId: string) => {
+    const context = currentRequestContext();
+    return knowledgeSessionFor({
+      projectRoot,
+      hooks: context?.hooks ?? hostHooks,
+      principal: currentPrincipal() ?? null,
+      runId,
+      ...(context?.requestId ? { requestId: context.requestId } : {}),
+    }).catch(() => undefined);
+  };
+
   const answerRunExecutor: AgentRouteExecutor = async (executionContext) => {
     // THE ASK PIPELINE. One interpreter, every tier prepared before anything
     // is committed. This is the whole answer path for every analytical route.
     const { runId, request } = executionContext;
     if (!request.runId) request.runId = runId;
-    return askPipelineExecutor(executionContext);
+    const result = await askPipelineExecutor(executionContext);
+    // Then, when the person has knowledge sources, the team documents that
+    // explain the question's terms — cited beside the answer, never a figure
+    // source and never part of its trust.
+    const session = await knowledgeSessionForRun(runId);
+    if (!session) return result;
+    const provider = await selectAskProvider(request).catch(() => undefined);
+    return withAnswerKnowledge({
+      result,
+      question: request.question,
+      session,
+      provider: provider ? ledgeredProvider(provider, askDispatchOptions, request) : undefined,
+      onStep: (step) => executionContext.emit({ type: 'executor.started', message: step.title, route: executionContext.route, payload: { askStep: step } }),
+    }).catch(() => result);
   };
 
   const conversationRunExecutor: AgentRouteExecutor = async ({ request, routeDecision, emitAnswerDelta }) => {
@@ -7825,6 +7855,29 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
     };
   };
 
+  // Research gathers the person's team documents as context (never used in a
+  // verdict) and cites the pages it read.
+  const researchKnowledge = new Map<string, KnowledgeSession>();
+  const investigationExecutor = createInvestigationExecutor({
+    host: askPipelineHost,
+    loadRun: async (runId) => agentRunStore.get(runId),
+    contextSources: (context) => {
+      const session = researchKnowledge.get(context.runId);
+      return session ? [knowledgeContextSource(session)] : undefined;
+    },
+  });
+  const researchWithKnowledge: AgentRouteExecutor = async (context) => {
+    const session = await knowledgeSessionForRun(context.runId);
+    if (!session) return investigationExecutor(context);
+    researchKnowledge.set(context.runId, session);
+    try {
+      const result = await investigationExecutor(context);
+      const citations = session.citations();
+      return citations.length ? { ...result, knowledge: { version: 1, citations, contextOnly: true } } : result;
+    } finally {
+      researchKnowledge.delete(context.runId);
+    }
+  };
   const agentRunExecutors: AgentRunExecutors = {
     conversation: conversationRunExecutor,
     certified_answer: answerRunExecutor,
@@ -7832,7 +7885,7 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
     generated_answer: answerRunExecutor,
     modeling_draft: modelingAuthoringRunExecutor,
     skill_draft: skillAuthoringRunExecutor,
-    research: createInvestigationExecutor({ host: askPipelineHost, loadRun: async (runId) => agentRunStore.get(runId) }),
+    research: researchWithKnowledge,
     sql_cell: async ({ request, routeDecision, attempt, repairHint }) => {
       const selectedCellSql = agentRunWorkspaceValue(request, 'cellSql');
       const mixedSourcePlan = selectedCellSql
@@ -28765,7 +28818,7 @@ const API_READING_LOW_PROVIDERS = new Set<string>(['anthropic', 'openai', 'gemin
 
 export function askDispatchReasoningEffort(
   projectRoot: string,
-  purpose: 'resolve' | 'correct' | 'repair' | 'draft' | 'research_select' | 'research_narrate',
+  purpose: 'resolve' | 'correct' | 'repair' | 'draft' | 'research_select' | 'research_narrate' | 'knowledge',
   request: Pick<AgentRunRequest, 'reasoningEffort' | 'thinkingMode'>,
   provider: ProviderId | undefined,
 ): ReasoningEffort {
@@ -28780,7 +28833,8 @@ export function askDispatchReasoningEffort(
   // and stops from 11.4% to 6.5%, with no significant accuracy change
   // (69.9% against 72.4%, paired p = 0.55). Subscription command-line
   // providers keep the route effort.
-  const reading = purpose === 'resolve' || purpose === 'correct';
+  // Looking up team documents is a short reading call too.
+  const reading = purpose === 'resolve' || purpose === 'correct' || purpose === 'knowledge';
   const envReading = process.env.DQL_ASK_READING_EFFORT;
   const readingOverride = !reading
     ? undefined

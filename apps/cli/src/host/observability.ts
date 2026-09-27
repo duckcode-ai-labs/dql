@@ -59,6 +59,24 @@ export type DqlAuditEvent =
     cacheReadTokens?: number;
     cacheWriteTokens?: number;
     reasoningTokens?: number;
+  }
+  | {
+    /**
+     * One knowledge call (HH-15): which source, which page and how it went.
+     * Never the question, the search words or document text.
+     */
+    kind: 'knowledge';
+    at: string;
+    requestId?: string;
+    runId?: string;
+    actor: string | null;
+    principalId: string | null;
+    action: 'search' | 'fetch';
+    sourceId: string;
+    docId?: string;
+    url?: string;
+    outcome: 'ok' | 'error' | 'refused';
+    resultCount?: number;
   };
 
 export type DqlAuditSink = (event: DqlAuditEvent) => void | Promise<void>;
@@ -165,6 +183,32 @@ export function modelUsageAuditEvent(
     ...(line.cacheWriteTokens ? { cacheWriteTokens: line.cacheWriteTokens } : {}),
     ...(line.reasoningTokens ? { reasoningTokens: line.reasoningTokens } : {}),
   };
+}
+
+/** A knowledge call as an audit event: ids, link and outcome only. */
+export function knowledgeAuditEvent(
+  activity: { action: 'search' | 'fetch'; sourceId: string; docId?: string; url?: string; outcome: 'ok' | 'error' | 'refused'; resultCount?: number },
+  who: { principal: DqlPrincipal | null; actor: string | null; requestId?: string; runId?: string },
+): DqlAuditEvent {
+  return {
+    kind: 'knowledge',
+    at: new Date().toISOString(),
+    ...(who.requestId ? { requestId: who.requestId } : {}),
+    ...(who.runId ? { runId: who.runId } : {}),
+    actor: who.actor,
+    principalId: who.principal?.id ?? null,
+    action: activity.action,
+    sourceId: activity.sourceId,
+    ...(activity.docId ? { docId: activity.docId } : {}),
+    ...(activity.url ? { url: activity.url } : {}),
+    outcome: activity.outcome,
+    ...(typeof activity.resultCount === 'number' ? { resultCount: activity.resultCount } : {}),
+  };
+}
+
+/** Report one knowledge call to the host's audit sink; never fails the answer. */
+export function auditKnowledge(sink: DqlAuditSink, ...input: Parameters<typeof knowledgeAuditEvent>): void {
+  emit(sink, knowledgeAuditEvent(...input));
 }
 
 /** Send every model call's usage to the host's audit sink (null removes it). */

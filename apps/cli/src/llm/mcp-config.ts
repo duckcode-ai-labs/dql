@@ -3,6 +3,24 @@ import { dirname, join } from 'node:path';
 
 export type NativeMcpProvider = 'openai' | 'anthropic';
 
+/**
+ * What DQL uses a server for. `chat` (the default): the chat cell hands it to
+ * the provider's hosted MCP connector (Anthropic/OpenAI only). `knowledge`:
+ * DQL's own MCP client reads it as a document source for Ask and Research
+ * answers, with every provider (RFC 0010 HH-15). Knowledge use is read-only.
+ */
+export type McpServerUse = 'chat' | 'knowledge';
+
+/** How DQL reads a knowledge server: its search and page tools. */
+export interface KnowledgeToolMapping {
+  searchTool?: string;
+  searchArg?: string;
+  fetchTool?: string;
+  fetchArg?: string;
+  searchArgs?: Record<string, unknown>;
+  fetchArgs?: Record<string, unknown>;
+}
+
 export interface RemoteMcpServer {
   kind?: 'server' | 'connector';
   name: string;
@@ -16,6 +34,14 @@ export interface RemoteMcpServer {
   trusted: boolean;
   deferLoading?: boolean;
   providers?: NativeMcpProvider[];
+  /** Absent means `['chat']`, today's behaviour. */
+  use?: McpServerUse[];
+  /** Shown beside citations for a knowledge server. */
+  label?: string;
+  /** A local knowledge server started over stdio (knowledge use only). */
+  command?: string;
+  args?: string[];
+  knowledge?: KnowledgeToolMapping;
 }
 
 export interface RemoteMcpLoadResult {
@@ -69,6 +95,8 @@ export function loadRemoteMcpServers(projectRoot: string, provider: NativeMcpPro
     ...normalizeEntries(parsed.connectors, 'connector', warnings),
   ].filter((server) => {
     if (!server.enabled) return false;
+    // Knowledge-only servers are read by DQL's own client, never handed to a provider.
+    if (!usesFor(server, 'chat') || (!server.url && !server.connectorId)) return false;
     if (server.providers?.length && !server.providers.includes(provider)) return false;
     if (!server.trusted) {
       warnings.push(`MCP ${server.connectorId ? 'connector' : 'server'} "${server.name}" is skipped because trusted=true is required.`);
@@ -110,6 +138,11 @@ export function saveRemoteMcpSettings(projectRoot: string, input: RemoteMcpSetti
       trusted: entry.trusted,
       deferLoading: entry.deferLoading,
       providers: entry.providers,
+      use: entry.use,
+      label: entry.label,
+      command: entry.command,
+      args: entry.args,
+      knowledge: entry.knowledge,
     }));
   const connectors = entries
     .filter((entry) => entry.kind === 'connector')
@@ -203,7 +236,9 @@ function normalizeEntries(input: unknown, kind: 'server' | 'connector', warnings
     }
     const url = cleanUrl(raw.url ?? raw.server_url ?? raw.serverUrl);
     const connectorId = cleanString(raw.connectorId ?? raw.connector_id);
-    if (kind === 'server' && !url) {
+    const use = cleanUseArray(raw.use);
+    const command = cleanString(raw.command);
+    if (kind === 'server' && !url && !(command && use?.includes('knowledge'))) {
       warnings.push(`Ignoring MCP server "${name}" because url/server_url is required.`);
       continue;
     }
@@ -224,9 +259,76 @@ function normalizeEntries(input: unknown, kind: 'server' | 'connector', warnings
       trusted: raw.trusted === true,
       deferLoading: raw.deferLoading === true || raw.defer_loading === true,
       providers: cleanProviderArray(raw.providers),
+      ...knowledgeFields(raw, use, command),
     });
   }
   return out;
+}
+
+function knowledgeFields(raw: Record<string, unknown>, use: McpServerUse[] | undefined, command: string | undefined): Pick<RemoteMcpServer, 'use' | 'label' | 'command' | 'args' | 'knowledge'> {
+  const mapping = raw.knowledge && typeof raw.knowledge === 'object' && !Array.isArray(raw.knowledge) ? raw.knowledge as Record<string, unknown> : undefined;
+  const objectOf = (value: unknown) => (value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : undefined);
+  const knowledge: KnowledgeToolMapping = {
+    ...(cleanString(mapping?.searchTool) ? { searchTool: cleanString(mapping?.searchTool) } : {}),
+    ...(cleanString(mapping?.searchArg) ? { searchArg: cleanString(mapping?.searchArg) } : {}),
+    ...(cleanString(mapping?.fetchTool) ? { fetchTool: cleanString(mapping?.fetchTool) } : {}),
+    ...(cleanString(mapping?.fetchArg) ? { fetchArg: cleanString(mapping?.fetchArg) } : {}),
+    ...(objectOf(mapping?.searchArgs) ? { searchArgs: objectOf(mapping?.searchArgs) } : {}),
+    ...(objectOf(mapping?.fetchArgs) ? { fetchArgs: objectOf(mapping?.fetchArgs) } : {}),
+  };
+  // Arguments keep their order and repeats.
+  const args = Array.isArray(raw.args) && raw.args.every((item) => typeof item === 'string') ? raw.args as string[] : undefined;
+  return {
+    ...(use ? { use } : {}),
+    ...(cleanString(raw.label) ? { label: cleanString(raw.label) } : {}),
+    ...(command ? { command } : {}),
+    ...(args ? { args } : {}),
+    ...(Object.keys(knowledge).length ? { knowledge } : {}),
+  };
+}
+
+function usesFor(server: Pick<RemoteMcpServer, 'use'>, use: McpServerUse): boolean {
+  return (server.use?.length ? server.use : ['chat']).includes(use);
+}
+
+/** A knowledge server from the project file, in the shape DQL's MCP client takes. */
+export interface ProjectKnowledgeServer extends KnowledgeToolMapping {
+  id: string;
+  label?: string;
+  url?: string;
+  headers?: Record<string, string>;
+  command?: string;
+  args?: string[];
+  cwd?: string;
+  allowedTools?: string[];
+}
+
+/**
+ * The project's knowledge servers (`use: ["knowledge"]`), enabled and
+ * trusted, with their token as a bearer header. Used only when no host
+ * decides (RFC 0010 HH-15).
+ */
+export function loadKnowledgeServers(projectRoot: string): { path: string; servers: ProjectKnowledgeServer[]; warnings: string[] } {
+  const { path, parsed, warnings } = readRawMcpConfig(projectRoot);
+  const servers: ProjectKnowledgeServer[] = [];
+  for (const server of normalizeEntries(parsed?.servers, 'server', warnings)) {
+    if (!server.enabled || !usesFor(server, 'knowledge')) continue;
+    if (!server.trusted) {
+      warnings.push(`Knowledge server "${server.name}" is skipped because trusted=true is required.`);
+      continue;
+    }
+    const token = authToken(server);
+    servers.push({
+      id: server.name,
+      ...(server.label ? { label: server.label } : {}),
+      ...(server.url ? { url: server.url } : {}),
+      ...(token && server.url ? { headers: { Authorization: `Bearer ${token}` } } : {}),
+      ...(server.command && !server.url ? { command: server.command, args: server.args ?? [], cwd: projectRoot } : {}),
+      ...(server.allowedTools?.length ? { allowedTools: server.allowedTools } : {}),
+      ...(server.knowledge ?? {}),
+    });
+  }
+  return { path, servers, warnings };
 }
 
 function readRawMcpConfig(projectRoot: string): { path: string; parsed?: RawMcpConfig; warnings: string[] } {
@@ -274,7 +376,17 @@ function normalizeSaveEntries(
     }
     const url = cleanUrl(raw.url ?? raw.server_url ?? raw.serverUrl);
     const connectorId = cleanString(raw.connectorId ?? raw.connector_id);
-    if (kind === 'server' && !url) {
+    const existingEntry = current.get(entryKey(kind, name));
+    // The Settings page edits chat fields; a knowledge server's own fields
+    // (use, label, stdio command, tool mapping) are kept unless sent.
+    const kept = knowledgeFields(raw, cleanUseArray(raw.use) ?? existingEntry?.use, cleanString(raw.command) ?? existingEntry?.command);
+    const carried: Pick<RemoteMcpServer, 'use' | 'label' | 'command' | 'args' | 'knowledge'> = {
+      ...kept,
+      ...(kept.label || !existingEntry?.label ? {} : { label: existingEntry.label }),
+      ...(kept.args || !existingEntry?.args ? {} : { args: existingEntry.args }),
+      ...(kept.knowledge || !existingEntry?.knowledge ? {} : { knowledge: existingEntry.knowledge }),
+    };
+    if (kind === 'server' && !url && !(carried.command && carried.use?.includes('knowledge'))) {
       warnings.push(`Ignoring MCP server "${name}" because URL is required.`);
       continue;
     }
@@ -282,7 +394,7 @@ function normalizeSaveEntries(
       warnings.push(`Ignoring MCP connector "${name}" because connector ID is required.`);
       continue;
     }
-    const existing = current.get(entryKey(kind, name));
+    const existing = existingEntry;
     const newToken = cleanString(raw.authorizationToken ?? raw.authorization ?? raw.authorization_token);
     entries.push({
       kind,
@@ -297,6 +409,7 @@ function normalizeSaveEntries(
       trusted: raw.trusted === true,
       deferLoading: raw.deferLoading === true || raw.defer_loading === true,
       providers: cleanProviderArray(raw.providers),
+      ...carried,
     });
   }
   return entries;
@@ -366,6 +479,13 @@ function cleanStringArray(value: unknown): string[] | undefined {
   if (!Array.isArray(value)) return undefined;
   const values = value.map(cleanString).filter((item): item is string => Boolean(item));
   return values.length ? Array.from(new Set(values)) : undefined;
+}
+
+function cleanUseArray(value: unknown): McpServerUse[] | undefined {
+  const values = cleanStringArray(value);
+  if (!values) return undefined;
+  const uses = values.filter((item): item is McpServerUse => item === 'chat' || item === 'knowledge');
+  return uses.length ? uses : undefined;
 }
 
 function cleanProviderArray(value: unknown): NativeMcpProvider[] | undefined {

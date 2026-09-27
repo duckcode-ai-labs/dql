@@ -21,7 +21,8 @@ embeds DQL can use it to tell DQL:
 - whose warehouse credentials to use;
 - which model to call;
 - where runs, memory, traces and audit events are kept;
-- how tool calls are checked.
+- how tool calls are checked;
+- which team documents an answer may read, with whose token.
 
 Each hook is bound once per request through `AsyncLocalStorage`, so none of
 the more than 250 routes has to pass anything new along. With no hooks,
@@ -342,6 +343,18 @@ Tests: `server-auth.test.ts`, `ask-trace-navigation.test.ts`, `app-page-run.test
 
 ### HH-14 — figures of an answer that needs review
 `answerFigures(principal)` returns `show` or `withhold_review`. For a person it withholds from, an Ask answer that needs review is stored and sent without any value: its answer text, result rows, step summaries, events, evaluations and receipts are left out, and the run keeps its trust, SQL, sources, tables and each result's column names and row count (`figuresWithheld: true`). Nothing that could quote a figure streams to that person while the run is going (answer deltas and progress wording). Certified and governed answers are unchanged; the host's answer actions (ask an analyst, make it certified) stay on the answer. An error withholds.
+
+### HH-15 — knowledge sources: answers that cite documents
+`knowledgeSources(principal)` returns the read-only document servers this person may use — streamable HTTP MCP endpoints, each with **this person's** headers (e.g. their own OAuth token) — as `DqlKnowledgeServer { id, label?, url, headers?, searchTool?, searchArg?, fetchTool?, fetchArg?, searchArgs?, fetchArgs? }`.
+- **Who decides:** with the hook, the host alone (an error or a malformed server: none). A host that signs people in but has no hook gives none — a project-file key never reads a host's people's documents. Without a host, `.dql/mcp-servers.json` servers with `use: ["knowledge"]` (HTTP or stdio).
+- **DQL's own MCP client** (`@duckcodeailabs/dql-mcp` `createMcpKnowledgeSource`) reads them, so knowledge works with every provider, Bedrock, Vertex and local models included. It calls only the search and fetch tools, both on the allowlist; a server that says either writes is refused. Plain http only on this machine.
+- **Ask:** after the governed answer, a bounded tool loop (`search_knowledge`, `fetch_knowledge_page`, at most three calls) runs through the HH-7 gate with the person asking; a page can be read only if a search in this answer returned it. The run gains `knowledge { note?, citations[], contextOnly: true }` and a story step. **Research:** a context source reads the best pages after framing; context is never used in a verdict.
+- **The answer contract, enforced in code:** a sentence in the note that states a figure is removed; a sentence in the answer that states a figure only a document holds is removed; trust, status and sources come from the governed answer alone (citations are never read for trust).
+- **Audit:** each search and page read is a `knowledge` event — source id, page id and link, outcome, result count, run and person — never the question, search words or document text.
+
+Tests: `host/knowledge.test.ts` (Ask end to end through the server with a fake MCP document server, with and without a host), `llm/mcp-config.test.ts`, dql-agent `knowledge/knowledge.test.ts`, dql-mcp `knowledge-client.test.ts`, notebook `CitedDocuments.test.tsx`.
+
+**Needs a live check:** Atlassian's remote MCP server (tool names and result shapes of its search and fetch, and its OAuth audience), with a real Confluence Cloud site.
 
 ### Answers, links and connections for hosts
 - **An answer's values for its owner:** `GET /api/host/answers/:runId?values=1` adds the answer's written text and first table (at most 500 rows) to its facts — only for the answer's owner, and nothing when HH-14 withheld its figures. Without `values=1`, facts carry no value, as before.

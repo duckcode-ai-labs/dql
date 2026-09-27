@@ -78,6 +78,79 @@ provider filtering when a server should only be available to one SDK. OpenAI
 uses the Responses API `mcp` tool for remote servers and connectors; Anthropic
 uses the Messages API MCP connector for remote HTTP/SSE servers.
 
+## Knowledge sources: answers that cite your team's documents
+
+A server marked `"use": ["knowledge"]` is a **knowledge source**: a
+read-only document store (Confluence, a wiki, a notes server) that Ask and
+Research may read to explain a question's terms, and cite under the answer.
+DQL reads it with its **own** MCP client — it does not hand the server to a
+provider's hosted connector — so it works with every model: Anthropic,
+OpenAI, Bedrock, Vertex, Ollama and the subscription CLIs.
+
+```json
+{
+  "servers": [
+    {
+      "name": "confluence",
+      "label": "Confluence",
+      "url": "https://mcp.atlassian.com/v1/mcp",
+      "use": ["knowledge"],
+      "trusted": true,
+      "authorizationTokenEnv": "CONFLUENCE_MCP_TOKEN",
+      "knowledge": { "searchTool": "search", "searchArg": "query", "fetchTool": "fetch", "fetchArg": "id" }
+    },
+    {
+      "name": "notes",
+      "command": "node",
+      "args": ["tools/notes-mcp.mjs"],
+      "use": ["knowledge"],
+      "trusted": true
+    }
+  ]
+}
+```
+
+- **Transport.** Streamable HTTP (`url`, https; plain http only on this
+  machine), or stdio (`command`, `args`) for a local server started in the
+  project folder.
+- **Tools.** DQL calls exactly two tools: the server's search (default
+  `search` with `query`) and its page read (default `fetch` with `id`).
+  `knowledge.searchArgs` / `fetchArgs` add fixed arguments (for example a
+  site id). `allowedTools` narrows further. Nothing else on the server is
+  ever called.
+- **Read-only.** A server that marks its search or fetch tool as one that
+  writes (`readOnlyHint: false` or `destructiveHint: true`) is refused.
+- **Tool gate.** Every search and page read runs through the same tool gate
+  as DQL's other agent tools (a host's `tools` hook sees each call with the
+  person asking). A page can be read only if a search in the same answer
+  returned it.
+- `trusted: true` is required, as for chat servers. `use` defaults to
+  `["chat"]`; a server may list both. A knowledge-only server is never
+  attached to the chat cell.
+
+**What an answer does with documents.** The governed answer is made first,
+exactly as without knowledge. The model then looks up what the documents say
+about the question's terms and writes a short note, shown under the answer
+as **From team documents** with each page's title and link.
+
+- **Figures come only from governed queries.** Any sentence in the note that
+  states a figure is removed, and a sentence in the answer that states a
+  figure only a document holds is removed too.
+- **Documents never change trust.** A certified answer is certified because
+  of its block; an answer that needs review still needs review. Citations
+  are kept apart from the trust decision.
+- **What leaves the machine.** Document text read for an answer goes to the
+  model you configured, like the question does. Result values never go to
+  the knowledge step.
+
+Research reads the same sources after framing the question and lists what
+it read as context; context is never used in a verdict.
+
+**Who reads what.** Without a host, the project file's servers and tokens
+are used. When DQL runs inside a host that signs people in (RFC 0010), the
+host's `knowledgeSources` hook decides, per person, with that person's own
+token; without that hook such a host gets no knowledge sources.
+
 ## Run the server
 
 From a DQL project folder:

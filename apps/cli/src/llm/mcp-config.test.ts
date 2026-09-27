@@ -125,4 +125,29 @@ describe('remote MCP config', () => {
       headers: { Authorization: 'Bearer secret-token-1234' },
     });
   });
+
+  it('keeps knowledge servers away from the chat cell and keeps their fields when Settings saves', () => {
+    const projectRoot = mkdtempSync(join(tmpdir(), 'dql-mcp-config-'));
+    tempDirs.push(projectRoot);
+    mkdirSync(join(projectRoot, '.dql'), { recursive: true });
+    writeFileSync(remoteMcpConfigPath(projectRoot), JSON.stringify({
+      servers: [
+        { name: 'confluence', url: 'https://mcp.example/v1/mcp', use: ['knowledge'], label: 'Confluence', trusted: true, knowledge: { searchTool: 'search', fetchArgs: { cloudId: 'c1' } } },
+        { name: 'notes', command: 'node', args: ['notes.mjs', '--x', '--x'], use: ['knowledge'], trusted: true },
+        { name: 'both', url: 'https://both.example/mcp', use: ['chat', 'knowledge'], trusted: true },
+      ],
+    }));
+    expect(loadRemoteMcpServers(projectRoot, 'anthropic').servers.map((server) => server.name)).toEqual(['both']);
+
+    const listed = listRemoteMcpSettings(projectRoot);
+    // Settings sends back only the fields it edits.
+    saveRemoteMcpSettings(projectRoot, {
+      entries: listed.entries.map((entry) => ({ kind: entry.kind, name: entry.name, url: entry.url, trusted: entry.trusted, enabled: entry.enabled })),
+    });
+    expect(listRemoteMcpSettings(projectRoot).entries).toEqual([
+      expect.objectContaining({ name: 'confluence', use: ['knowledge'], label: 'Confluence', knowledge: { searchTool: 'search', fetchArgs: { cloudId: 'c1' } } }),
+      expect.objectContaining({ name: 'notes', command: 'node', args: ['notes.mjs', '--x', '--x'], use: ['knowledge'] }),
+      expect.objectContaining({ name: 'both', use: ['chat', 'knowledge'] }),
+    ]);
+  });
 });
