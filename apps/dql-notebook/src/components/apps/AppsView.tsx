@@ -2188,7 +2188,10 @@ function AppWorkspaceSurface({
   onOpenLineageNode: (nodeId: string) => void;
 }) {
   const readOnlyLink = isViewerLink();
-  const readerOnly = readOnlyLink || !hostAllows(useHostUi(), 'app.author');
+  const hostUi = useHostUi();
+  const readerOnly = readOnlyLink || !hostAllows(hostUi, 'app.author');
+  // "Ask about this App" is asking: only for people the host lets ask.
+  const mayAskAboutApp = !readOnlyLink && hostAllows(hostUi, 'ask');
   const dispatch = useDispatch();
   const hostPage = useHostPage();
   const workspaceAppId = metadataApp?.id ?? app?.id ?? null;
@@ -2783,7 +2786,7 @@ function AppWorkspaceSurface({
                     <ArrowLeft size={14} /> Back to previous page
                   </button>
                 ) : null}
-                {readOnlyLink ? null : (
+                {!mayAskAboutApp ? null : (
                   <AskAboutApp
                     scope={{
                       appId: metadataApp.id,
