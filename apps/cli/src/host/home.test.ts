@@ -157,7 +157,7 @@ describe('Home with a host (RFC 0010 HH-16)', () => {
       expect(moved[0].changes.every((change) => change.direction === 'up')).toBe(true);
       // Her figures, not anyone else's: US's revenue appears nowhere in her Home.
       const usRevenue = kpi(us, 'order-lines-dataset-kpi');
-      expect(caHome.text).not.toContain(String(Math.round(usRevenue)));
+      expect(caHome.text).not.toMatch(new RegExp(`\\b${Math.round(usRevenue)}\\b`));
       // US ran once: nothing moved for him, and nothing of CA's is on his Home.
       const usHome = await call('us', 'GET', '/api/home');
       expect(usHome.body.moved).toEqual([]);
@@ -172,7 +172,8 @@ describe('Home with a host (RFC 0010 HH-16)', () => {
       expect((await call('admin', 'POST', '/api/apps/commerce-pilot/schedules/weekly/run', {})).status).toBe(200);
       await new Promise((done) => setTimeout(done, 50));
       expect(editions).toEqual([expect.objectContaining({ appId: 'commerce-pilot', pageId: 'overview', appTitle: 'Commerce pilot', pageTitle: 'Overview', href: '/?app=commerce-pilot&page=overview', scheduleId: 'weekly' })]);
-      expect(JSON.stringify(editions)).not.toMatch(new RegExp(String(Math.round(kpi(second, 'order-lines-dataset-kpi')))));
+      // A whole number only: ids and timestamps may contain the same digits.
+      expect(JSON.stringify(editions)).not.toMatch(new RegExp(`\\b${Math.round(kpi(second, 'order-lines-dataset-kpi'))}\\b`));
       await call('admin', 'POST', '/api/apps/commerce-pilot/schedules/weekly/run', {});
       await new Promise((done) => setTimeout(done, 50));
       expect(editions).toHaveLength(1);
