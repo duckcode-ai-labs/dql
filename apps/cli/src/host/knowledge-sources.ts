@@ -69,8 +69,34 @@ export async function knowledgeServersFor(input: {
   }
   // A host that signs people in decides whose documents are read; without
   // its hook, nobody's are.
-  if (hooks?.resolvePrincipal || (principal && principal.source !== 'local')) return [];
+  if (!usesProjectFile(hooks, principal)) return [];
   return loadKnowledgeServers(input.projectRoot).servers;
+}
+
+/** Whether the knowledge servers come from the project's own file: no host deciding. */
+function usesProjectFile(hooks: DqlHostHooks | undefined, principal: DqlPrincipal | null | undefined): boolean {
+  return !hooks?.knowledgeSources && !hooks?.resolvePrincipal && !(principal && principal.source !== 'local');
+}
+
+/**
+ * The project file's servers whose pages may reach the model answering:
+ * every server when the model runs on this machine, otherwise only those
+ * the person marked `knowledge.hostedModels: true`. With a host, the host's
+ * `knowledgeSources` already decided.
+ */
+export async function serversForModel<T extends KnowledgeServerConfig>(
+  servers: T[],
+  modelOnThisMachine: (() => boolean | Promise<boolean>) | undefined,
+): Promise<{ allowed: T[]; withheld: T[] }> {
+  const marked = (server: T) => (server as T & { hostedModels?: boolean }).hostedModels === true;
+  if (servers.every(marked)) return { allowed: servers, withheld: [] };
+  let local = false;
+  try {
+    local = (await modelOnThisMachine?.()) === true;
+  } catch {
+    local = false;
+  }
+  return local ? { allowed: servers, withheld: [] } : { allowed: servers.filter(marked), withheld: servers.filter((server) => !marked(server)) };
 }
 
 /**
@@ -85,8 +111,17 @@ export async function knowledgeSessionFor(input: {
   requestId?: string;
   /** For tests: build sources without the network. */
   sourceFor?: (server: KnowledgeServerConfig) => KnowledgeSource;
+  /** Without a host: whether the model that will read the pages runs on this machine. Asked only when it matters. */
+  modelOnThisMachine?: () => boolean | Promise<boolean>;
+  /** The project file's servers left out because the model runs elsewhere and the person has not allowed it. */
+  onWithheld?: (labels: string[]) => void;
 }): Promise<KnowledgeSession | undefined> {
-  const servers = await knowledgeServersFor(input);
+  let servers = await knowledgeServersFor(input);
+  if (servers.length && usesProjectFile(input.hooks, input.principal)) {
+    const decided = await serversForModel(servers, input.modelOnThisMachine);
+    servers = decided.allowed;
+    if (decided.withheld.length) input.onWithheld?.(decided.withheld.map((server) => server.label ?? server.id));
+  }
   const sources: KnowledgeSource[] = [];
   for (const server of servers) {
     try {

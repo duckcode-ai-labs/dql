@@ -19,6 +19,12 @@ export interface KnowledgeToolMapping {
   fetchArg?: string;
   searchArgs?: Record<string, unknown>;
   fetchArgs?: Record<string, unknown>;
+  /**
+   * Whether this server's pages may go to a model that runs off this
+   * machine (a hosted API). Off by default: without it, pages are read only
+   * when the model runs here (Ollama on loopback).
+   */
+  hostedModels?: boolean;
 }
 
 export interface RemoteMcpServer {
@@ -275,6 +281,7 @@ function knowledgeFields(raw: Record<string, unknown>, use: McpServerUse[] | und
     ...(cleanString(mapping?.fetchArg) ? { fetchArg: cleanString(mapping?.fetchArg) } : {}),
     ...(objectOf(mapping?.searchArgs) ? { searchArgs: objectOf(mapping?.searchArgs) } : {}),
     ...(objectOf(mapping?.fetchArgs) ? { fetchArgs: objectOf(mapping?.fetchArgs) } : {}),
+    ...(mapping?.hostedModels === true ? { hostedModels: true } : {}),
   };
   // Arguments keep their order and repeats.
   const args = Array.isArray(raw.args) && raw.args.every((item) => typeof item === 'string') ? raw.args as string[] : undefined;

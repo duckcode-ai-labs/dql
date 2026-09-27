@@ -12,7 +12,8 @@ import {
 import { closeKnowledgeConnections, startFakeKnowledgeServer, type FakeKnowledgeServer } from '@duckcodeailabs/dql-mcp';
 import type { QueryExecutor } from '@duckcodeailabs/dql-connectors';
 import { startLocalServer } from '../local-runtime.js';
-import { knowledgeServersFor, normalizeHostKnowledgeServer } from './knowledge-sources.js';
+import { knowledgeServersFor, knowledgeSessionFor, normalizeHostKnowledgeServer } from './knowledge-sources.js';
+import { withKnowledgeWithheld } from './answer-knowledge.js';
 import type { DqlAuditEvent } from './observability.js';
 import type { DqlHostHooks, DqlPrincipal } from './request-context.js';
 
@@ -208,5 +209,54 @@ describe('which knowledge servers a person gets', () => {
       principal: PEOPLE.maria,
     })).toEqual([{ id: 'w', url: 'https://w', headers: { Authorization: 'Bearer a' } }]);
     expect(normalizeHostKnowledgeServer({ id: 'x' })).toBeUndefined();
+  });
+});
+
+describe('team documents and a model off this machine', () => {
+  it('without a host, reads pages only for a model on this machine, or for servers the person allowed to reach hosted models', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'dql-knowledge-hosted-'));
+    roots.push(root);
+    mkdirSync(join(root, '.dql'));
+    writeFileSync(join(root, '.dql', 'mcp-servers.json'), JSON.stringify({ servers: [
+      { name: 'wiki', label: 'Team wiki', url: 'https://wiki.example/mcp', use: ['knowledge'], trusted: true },
+      { name: 'handbook', label: 'Public handbook', url: 'https://handbook.example/mcp', use: ['knowledge'], trusted: true, knowledge: { hostedModels: true } },
+    ] }));
+    const local: DqlPrincipal = { id: 'me', kind: 'person', source: 'local' };
+    const read: string[][] = [];
+    const sessionFor = async (onThisMachine: boolean) => {
+      const used: string[] = [];
+      let withheld: string[] = [];
+      const session = await knowledgeSessionFor({
+        projectRoot: root, hooks: undefined, principal: local,
+        sourceFor: (server) => { used.push(server.id); return { id: server.id, label: server.id, search: async () => [], fetch: async () => undefined } as never; },
+        modelOnThisMachine: () => onThisMachine,
+        onWithheld: (labels) => { withheld = labels; },
+      });
+      read.push(used);
+      return { session, withheld };
+    };
+    // A hosted model: only the server the person marked.
+    expect((await sessionFor(false)).withheld).toEqual(['Team wiki']);
+    expect(read.at(-1)).toEqual(['handbook']);
+    // A model on this machine: every server.
+    expect((await sessionFor(true)).withheld).toEqual([]);
+    expect(read.at(-1)).toEqual(['wiki', 'handbook']);
+    // A host decides on its own; the project file's flag never widens it.
+    let asked = false;
+    await knowledgeSessionFor({
+      projectRoot: root, hooks: { knowledgeSources: () => [{ id: 'w', url: 'https://w.example' }] }, principal: PEOPLE.maria,
+      sourceFor: (server) => ({ id: server.id, label: server.id, search: async () => [], fetch: async () => undefined }) as never,
+      modelOnThisMachine: () => { asked = true; return false; },
+    });
+    expect(asked).toBe(false);
+  });
+
+  it('says in the answer which documents were not read and how to allow them, and changes nothing else', () => {
+    const result = { status: 'completed', trustState: 'certified', answer: 'Lifetime spend is 12.', askPipelineReceipt: { story: [] } } as never;
+    const told = withKnowledgeWithheld(result, ['Team wiki']) as { answer: string; trustState: string; askPipelineReceipt: { story: Array<{ title: string; detail: string }> } };
+    expect(told.answer).toBe('Lifetime spend is 12.');
+    expect(told.trustState).toBe('certified');
+    expect(told.askPipelineReceipt.story).toEqual([expect.objectContaining({ title: 'Team documents not read', detail: expect.stringContaining('"hostedModels": true') })]);
+    expect(withKnowledgeWithheld(result, [])).toBe(result);
   });
 });

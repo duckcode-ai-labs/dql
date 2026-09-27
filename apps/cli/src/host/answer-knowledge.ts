@@ -98,3 +98,25 @@ export async function withAnswerKnowledge(input: {
     knowledge,
   };
 }
+
+/**
+ * An answer whose team documents were not read because the model runs off
+ * this machine and the person has not allowed that: one step says so, and
+ * how to allow it. The answer itself is unchanged.
+ */
+export function withKnowledgeWithheld(result: AgentRouteExecutorResult, labels: string[], onStep?: (step: AskStoryStepV1) => void): AgentRouteExecutorResult {
+  if (!labels.length) return result;
+  const names = labels.join(', ');
+  const step: AskStoryStepV1 = {
+    version: 1,
+    phase: 'search',
+    title: 'Team documents not read',
+    detail: `${names}: your model runs off this machine, so DQL did not send it these pages. To allow it, set "knowledge": { "hostedModels": true } for ${labels.length === 1 ? 'that server' : 'each server'} in .dql/mcp-servers.json.`,
+    state: 'done',
+    ms: 0,
+    at: Date.now(),
+  };
+  onStep?.(step);
+  const receipt = result.askPipelineReceipt as { story?: AskStoryStepV1[] } | undefined;
+  return receipt ? { ...result, askPipelineReceipt: { ...receipt, story: [...(receipt.story ?? []), step] } as AgentRouteExecutorResult['askPipelineReceipt'] } : result;
+}

@@ -139,15 +139,24 @@ as **From team documents** with each page's title and link.
 - **Documents never change trust.** A certified answer is certified because
   of its block; an answer that needs review still needs review. Citations
   are kept apart from the trust decision.
-- **What leaves the machine.** Document text read for an answer goes to the
-  model you configured, like the question does. Result values never go to
-  the knowledge step.
+- **What leaves the machine.** Pages go only to a model on this machine
+  (Ollama on a loopback address) unless you allow a server's pages to reach
+  a hosted model: add `"hostedModels": true` to its `knowledge` settings.
+  `.dql/mcp-servers.json` is private (git-ignored), so this is your own
+  choice, per server. When pages are held back, the answer's steps say
+  **Team documents not read** and name the servers. Result values never go
+  to the knowledge step.
+
+```json
+{ "name": "confluence", "url": "https://mcp.atlassian.com/v1/mcp", "use": ["knowledge"], "trusted": true,
+  "authorizationTokenEnv": "CONFLUENCE_MCP_TOKEN", "knowledge": { "hostedModels": true } }
+```
 
 Research reads the same sources after framing the question and lists what
 it read as context; context is never used in a verdict.
 
 **Who reads what.** Without a host, the project file's servers and tokens
-are used. When DQL runs inside a host that signs people in (RFC 0010), the
+are used, with the model rule above. When DQL runs inside a host that signs people in (RFC 0010), the
 host's `knowledgeSources` hook decides, per person, with that person's own
 token; without that hook such a host gets no knowledge sources.
 

@@ -268,8 +268,8 @@ import type {
 } from './llm/types.js';
 import { listRemoteMcpSettings, saveRemoteMcpSettings } from './llm/mcp-config.js';
 import { knowledgeSessionFor } from './host/knowledge-sources.js';
-import { ledgeredProvider, withAnswerKnowledge } from './host/answer-knowledge.js';
-import { knowledgeContextSource, type KnowledgeSession } from '@duckcodeailabs/dql-agent';
+import { ledgeredProvider, withAnswerKnowledge, withKnowledgeWithheld } from './host/answer-knowledge.js';
+import { knowledgeContextSource, type AskStoryStepV1, type KnowledgeSession } from '@duckcodeailabs/dql-agent';
 import {
   composeBusinessExplanation,
   ClaudeProvider,
@@ -7196,7 +7196,17 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
   const askPipelineExecutor = askPipelineHost.execute;
 
   // HH-15: the knowledge sources (team documents) of the person asking, for one run.
-  const knowledgeSessionForRun = (runId: string) => {
+  // Without a host, pages go only to a model on this machine unless the person
+  // allowed a server's pages to reach hosted models (`knowledge.hostedModels`).
+  const askModelOnThisMachine = async (request: AgentRunRequest): Promise<boolean> => {
+    // Host-only test seam: the injected interpreter stands in for a local model.
+    if (opts.askAnalyticalPlannerProviderFactory) return true;
+    await selectAskProvider(request).catch(() => undefined);
+    const id = askRequestProviders.get(request);
+    if (id !== 'ollama') return false;
+    return isLoopbackUrl(getEffectiveProviderConfig(projectRoot, id)?.baseUrl ?? 'http://127.0.0.1:11434');
+  };
+  const knowledgeSessionForRun = (runId: string, request: AgentRunRequest, onWithheld?: (labels: string[]) => void) => {
     const context = currentRequestContext();
     return knowledgeSessionFor({
       projectRoot,
@@ -7204,6 +7214,8 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
       principal: currentPrincipal() ?? null,
       runId,
       ...(context?.requestId ? { requestId: context.requestId } : {}),
+      modelOnThisMachine: () => askModelOnThisMachine(request),
+      ...(onWithheld ? { onWithheld } : {}),
     }).catch(() => undefined);
   };
 
@@ -7216,16 +7228,19 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
     // Then, when the person has knowledge sources, the team documents that
     // explain the question's terms — cited beside the answer, never a figure
     // source and never part of its trust.
-    const session = await knowledgeSessionForRun(runId);
-    if (!session) return result;
+    let withheld: string[] = [];
+    const session = await knowledgeSessionForRun(runId, request, (labels) => { withheld = labels; });
+    const onStep = (step: AskStoryStepV1) => executionContext.emit({ type: 'executor.started', message: step.title, route: executionContext.route, payload: { askStep: step } });
+    const told = withKnowledgeWithheld(result, withheld, onStep);
+    if (!session) return told;
     const provider = await selectAskProvider(request).catch(() => undefined);
     return withAnswerKnowledge({
-      result,
+      result: told,
       question: request.question,
       session,
       provider: provider ? ledgeredProvider(provider, askDispatchOptions, request) : undefined,
-      onStep: (step) => executionContext.emit({ type: 'executor.started', message: step.title, route: executionContext.route, payload: { askStep: step } }),
-    }).catch(() => result);
+      onStep,
+    }).catch(() => told);
   };
 
   const conversationRunExecutor: AgentRouteExecutor = async ({ request, routeDecision, emitAnswerDelta }) => {
@@ -7867,7 +7882,7 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
     },
   });
   const researchWithKnowledge: AgentRouteExecutor = async (context) => {
-    const session = await knowledgeSessionForRun(context.runId);
+    const session = await knowledgeSessionForRun(context.runId, context.request);
     if (!session) return investigationExecutor(context);
     researchKnowledge.set(context.runId, session);
     try {
