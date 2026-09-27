@@ -190,6 +190,8 @@ function resolveReasoningEffortSetting(
 export function getEffectiveProviderConfig(projectRoot: string, id: ProviderSettingsId): EffectiveProviderConfig {
   const stored = readStoredProviderState(projectRoot).providers[id];
   const meta = PROVIDER_META[id];
+  // A host's own model (RFC 0010 HH-5, e.g. `bedrock` or `vertex`) has no local settings.
+  if (!meta) return { enabled: true };
   return {
     apiKey: stored?.apiKey || (meta.keyEnv ? process.env[meta.keyEnv] : undefined),
     baseUrl: stored?.baseUrl || (meta.baseUrlEnv ? process.env[meta.baseUrlEnv] : undefined),

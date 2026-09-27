@@ -40,6 +40,41 @@ export interface DqlPrincipal {
 export interface DqlRequestContext {
   principal: DqlPrincipal;
   requestId: string;
+  /**
+   * The hooks of the server this request arrived at. Several servers can run
+   * in one process (a host's Production and its previews); each request uses
+   * its own server's hooks, and the process-wide ones are only a fallback.
+   */
+  hooks?: DqlHostHooks;
+}
+
+/** The hooks of the server handling the current request, if a host set them. */
+export function currentHostHooks(): DqlHostHooks | undefined {
+  return requestContext.getStore()?.hooks;
+}
+
+/** A certified source a person could read, as the host's `sourceAccess` sees it. */
+export interface DqlSourceRef {
+  id: string;
+  kind: 'dataset' | 'block' | 'metric';
+  name: string;
+  domain?: string;
+  /** Project-relative file, for blocks and block Datasets. */
+  path?: string;
+}
+
+/**
+ * The ids among `sources` this person may use, or null when no host decides
+ * (all allowed). A host that errs allows none (fail closed).
+ */
+export async function hostAllowedSources(hooks: DqlHostHooks | undefined, principal: DqlPrincipal | null | undefined, sources: DqlSourceRef[]): Promise<Set<string> | null> {
+  if (!hooks?.sourceAccess || !sources.length) return null;
+  if (!principal) return new Set();
+  try {
+    return new Set(await hooks.sourceAccess(principal, sources));
+  } catch {
+    return new Set();
+  }
 }
 
 /** A host's answer to "may this person do this?". */
@@ -155,6 +190,13 @@ export interface DqlHostHooks {
    * Dan Kim". Shown beside the answer; the answer's own trust label stays.
    */
   answerStatus?(principal: DqlPrincipal, runIds: string[]): Promise<Record<string, DqlAnswerStatus>> | Record<string, DqlAnswerStatus>;
+  /**
+   * HH-13: which certified sources this person may use — App Datasets
+   * (`app:block:…`, `app:semantic:…`), certified blocks and metrics. Returns
+   * the ids allowed; the rest are left out of Ask and refused on App tiles.
+   * An error allows none. Without it, every certified source is usable.
+   */
+  sourceAccess?(principal: DqlPrincipal, sources: DqlSourceRef[]): Promise<Iterable<string>> | Iterable<string>;
   /** Each finished Ask trace, strictly redacted, as a bundle and as OTLP (HH-6). */
   traces?: DqlTraceSink;
   /**
@@ -232,7 +274,14 @@ export function setHostGitHooks(hooks: DqlHostHooks['git'] | undefined): void {
   hostGitHooks = hooks;
 }
 export function currentHostGitHooks(): DqlHostHooks['git'] | undefined {
-  return hostGitHooks;
+  const scoped = currentHostHooks();
+  return scoped ? scoped.git : hostGitHooks;
+}
+
+/** The model hooks for the current request's server, else the process's. */
+function modelHooks(): Pick<DqlHostHooks, 'modelProvider' | 'isInBoundary'> {
+  const scoped = currentHostHooks();
+  return scoped ? { ...(scoped.modelProvider ? { modelProvider: scoped.modelProvider } : {}), ...(scoped.isInBoundary ? { isInBoundary: scoped.isInBoundary } : {}) } : hostModelHooks;
 }
 
 /** `Name <email>` for the signed-in person, to author commits; undefined without an email. */
@@ -246,7 +295,7 @@ export function hostGitAuthor(): string | undefined {
 /** The host's model for the person asking, if the host supplies one. */
 export function hostModelProvider(): { id: string; provider: DqlModelProvider } | undefined {
   try {
-    return hostModelHooks.modelProvider?.({ principal: currentPrincipal() ?? null }) ?? undefined;
+    return modelHooks().modelProvider?.({ principal: currentPrincipal() ?? null }) ?? undefined;
   } catch {
     return undefined;
   }
@@ -258,9 +307,10 @@ export function hostModelProvider(): { id: string; provider: DqlModelProvider } 
  * machine qualifies.
  */
 export function resultValuesMayReachModel(model: { id: string; name: string; model?: string; baseUrl?: string }, isLocal: () => boolean): boolean {
-  if (hostModelHooks.isInBoundary) {
+  const hooks = modelHooks();
+  if (hooks.isInBoundary) {
     try {
-      return hostModelHooks.isInBoundary(model) === true;
+      return hooks.isInBoundary(model) === true;
     } catch {
       return false;
     }

@@ -4,6 +4,7 @@ import { createEmailNotifier } from './email.js';
 import { createFileNotifier } from './file.js';
 import { createSlackNotifier } from './slack.js';
 import { createWebhookNotifier } from './webhook.js';
+import { currentHostHooks } from '../../host/request-context.js';
 
 /** A delivery target: compiled block notifications, or an App schedule's webhook. */
 export type DeliveryTarget = NotificationIR | { type: 'webhook'; recipients: string[] };
@@ -33,8 +34,11 @@ export async function dispatchNotifications(
   payload: NotifierPayload,
   projectRoot: string,
 ): Promise<NotificationDispatchResult[]> {
-  if (deliverySink) {
-    const sink = deliverySink;
+  // The current request's server's sink first: a host's previews and Production share a process.
+  const scopedHooks = currentHostHooks();
+  const activeSink = scopedHooks ? (scopedHooks.delivery ?? null) : deliverySink;
+  if (activeSink) {
+    const sink = activeSink;
     const delivered: NotificationDispatchResult[] = [];
     for (const n of notifications) {
       try {

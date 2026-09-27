@@ -336,6 +336,14 @@ Tests: `host-hooks.test.ts`, `app-workspace-loader.test.ts`.
 
 Tests: `server-auth.test.ts`, `ask-trace-navigation.test.ts`, `app-page-run.test.ts`, `usage-ledger.test.ts`, `observability.test.ts`, `host-hooks.test.ts`, `app.test.ts`.
 
+### HH-13 — which certified sources a person may use
+`sourceAccess(principal, sources)` gets App Datasets (`app:block:…`, `app:semantic:…`), certified blocks (their `app:block:` id when the block has a file) and metrics (`metric:<name>`), and returns the ids the person may use; an error allows none. Ask builds its vocabulary only from the admitted ones, before anything reaches the model (the cached view is keyed by the person's access), and an App page refuses just the tiles on a refused Dataset ("You don't have access to the Dataset …"), which also covers `/api/app-datasets/run` and field values. Tables themselves stay governed by row rules and warehouse permissions: a restricted Dataset is not a restricted table.
+
+### One process, several servers
+Each request carries its own server's hooks in its request context, so a host that runs Production and pull request previews in one process never has one server's git, delivery, model, tool-gate or usage hooks replaced by another's; the process-wide values are only a fallback for work outside a request. A runtime's `close()` also ends open event streams (a browser tab with DQL open used to hold it forever), a host's own model id (`bedrock`, `vertex`) no longer fails the local provider settings, and `dql app ls` / `GET /api/apps` (without a host) name App files that don't load and why.
+
+Tests: `host-hooks.test.ts`, `host-scope.test.ts`, `scoped-hooks.test.ts`, `notebook.test.ts`, `provider-settings.test.ts`, `app.test.ts`.
+
 ### Entry point
 `@duckcodeailabs/dql-cli/host` also exports `startProjectRuntime`: the full server with its UI for one project, as `dql notebook` runs it, taking `hostHooks`, `allowedOrigins` and a host-managed `connection`. The first host (DQL Enterprise) starts every workspace this way; its end-to-end test drives this branch's server through sign-in, roles, row rules and DuckDB for five people.
 

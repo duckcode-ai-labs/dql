@@ -105,6 +105,8 @@ export async function startProjectRuntime(
     close: () => (closed ??= new Promise<void>((resolveClose) => {
       if (!server) return resolveClose();
       server.close(() => resolveClose());
+      // Open event streams (operations, file watch) would hold close() forever while a browser has DQL open.
+      server.closeAllConnections?.();
     }).then(() => executor.disconnect().catch(() => undefined))),
   };
 }

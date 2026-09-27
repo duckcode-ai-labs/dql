@@ -149,3 +149,22 @@ describe('dql app check', () => {
     }
   });
 });
+
+describe('App files that do not load', () => {
+  it('names the file and the reason instead of dropping the App', async () => {
+    const { cpSync } = await import('node:fs');
+    const { unloadableApps } = await import('./app.js');
+    const root = mkdtempSync(join(tmpdir(), 'dql-app-unloadable-'));
+    try {
+      cpSync(join(import.meta.dirname, '../../test/fixtures/app-datasets-pilot'), root, { recursive: true });
+      expect(unloadableApps(root)).toEqual([]);
+      const appPath = join(root, 'apps/commerce-pilot/dql.app.json');
+      const app = JSON.parse(readFileSync(appPath, 'utf8'));
+      app.policies[0].allowedRoles = ['finance-leaders'];
+      writeFileSync(appPath, JSON.stringify(app, null, 2));
+      expect(unloadableApps(root)).toEqual([{ path: 'apps/commerce-pilot/dql.app.json', problems: [expect.stringContaining('undeclared role "finance-leaders"')] }]);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+});

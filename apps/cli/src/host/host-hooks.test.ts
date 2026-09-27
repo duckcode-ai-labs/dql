@@ -147,6 +147,25 @@ describe('the Apps a person is shown (RFC 0010 HH-2)', () => {
   });
 });
 
+describe('certified sources a person may use (RFC 0010 HH-13)', () => {
+  it('refuses the tiles of a Dataset the host keeps from this person, each on its own', async () => {
+    const asked: Array<{ person: string; ids: string[] }> = [];
+    const base = await start({
+      ...headerHost,
+      authorize: () => ({ allow: true }),
+      sourceAccess: (principal, sources) => {
+        asked.push({ person: principal.id, ids: sources.map((source) => source.id) });
+        return principal.id === 'u-maria' ? sources.map((source) => source.id) : [];
+      },
+    }, join(import.meta.dirname, '../../test/fixtures/app-datasets-pilot'));
+    const run = await fetch(`${base}/api/apps/commerce-pilot/dashboards/overview/run`, { method: 'POST', headers: { 'x-test-person': 'dev', 'Content-Type': 'application/json' }, body: '{}' });
+    const body = await run.json() as { tiles?: Array<{ status: string; error?: string }> };
+    const refused = (body.tiles ?? []).filter((tile) => /You don't have access to the Dataset/.test(tile.error ?? ''));
+    expect(refused.length).toBeGreaterThan(0);
+    expect(asked.find((entry) => entry.person === 'u-dev')?.ids.every((id) => id.startsWith('app:'))).toBe(true);
+  });
+});
+
 describe('what a signed-in person may do (RFC 0010 HH-2)', () => {
   it('asks the host about each request and refuses with its reason, naming the action', async () => {
     const asked: Array<{ person: string; action: string; resource: unknown }> = [];

@@ -68,4 +68,20 @@ describe('resolveNotebookConnection', () => {
       rmSync(root, { recursive: true, force: true });
     }
   });
+
+  it('closes while a browser still holds DQL\'s event streams open', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'dql-notebook-close-'));
+    writeFileSync(join(root, 'dql.config.json'), JSON.stringify({ project: 'close-test' }));
+    const runtime = await startProjectRuntime(root, { preferredPort: 0 });
+    const controller = new AbortController();
+    try {
+      const stream = await fetch(`${runtime.url}/api/operations/events`, { signal: controller.signal });
+      expect(stream.status).toBe(200);
+      const closed = await Promise.race([runtime.close().then(() => 'closed'), new Promise((done) => setTimeout(() => done('stuck'), 5_000))]);
+      expect(closed).toBe('closed');
+    } finally {
+      controller.abort();
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
 });

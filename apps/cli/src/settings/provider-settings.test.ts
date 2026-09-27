@@ -72,6 +72,13 @@ describe('provider configured state', () => {
   });
 });
 
+describe('a host\'s own model (RFC 0010 HH-5)', () => {
+  it('has an empty local config instead of failing, for ids DQL does not know (bedrock, vertex)', () => {
+    expect(getEffectiveProviderConfig(root, 'bedrock' as never)).toEqual({ enabled: true });
+    expect(getEffectiveProviderConfig(root, 'vertex' as never).reasoningEffort).toBeUndefined();
+  });
+});
+
 describe('provider reasoning-effort settings', () => {
   it('defaults to auto (no ceiling) when unset', () => {
     const cfg = getEffectiveProviderConfig(root, 'anthropic');

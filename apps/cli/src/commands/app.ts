@@ -216,10 +216,16 @@ async function runAppGenerate(rest: string[], flags: CLIFlags): Promise<void> {
 async function runAppList(targetPath: string | null, flags: CLIFlags): Promise<void> {
   const projectRoot = resolveAppProjectRoot(targetPath);
   const apps = collectApps(projectRoot);
+  const unloadable = unloadableApps(projectRoot);
 
   if ((flags as { format?: string }).format === "json") {
-    console.log(JSON.stringify({ apps }, null, 2));
+    console.log(JSON.stringify({ apps, ...(unloadable.length ? { problems: unloadable } : {}) }, null, 2));
+    if (unloadable.length) process.exitCode = 1;
     return;
+  }
+  for (const item of unloadable) {
+    console.error(`Could not load ${item.path}:\n${item.problems.map((problem) => `  ${problem}`).join("\n")}`);
+    process.exitCode = 1;
   }
   if (apps.length === 0) {
     console.log(
@@ -374,6 +380,16 @@ function resolveAppProjectRoot(targetPath: string | null): string {
 
 interface ResolvedApp extends Omit<ManifestApp, "dashboards"> {
   dashboards: Array<{ id: string; title: string }>;
+}
+
+/** App files that don't load, and why: without this an App with a bad policy just disappears. */
+export function unloadableApps(projectRoot: string): Array<{ path: string; problems: string[] }> {
+  const out: Array<{ path: string; problems: string[] }> = [];
+  for (const appJsonPath of findAppDocuments(projectRoot)) {
+    const { document, errors } = loadAppDocument(appJsonPath);
+    if (!document) out.push({ path: relative(projectRoot, appJsonPath), problems: errors.map((error) => error.message) });
+  }
+  return out;
 }
 
 function collectApps(projectRoot: string): ResolvedApp[] {

@@ -7,7 +7,7 @@ const connection = { driver: 'duckdb', path: ':memory:' } as ConnectionConfig;
 const manifest = { sources: { opportunities: { name: 'opportunities', origin: 'dbt', referencedBy: [], dbtModel: { uniqueId: 'model.opportunities', schema: 'sales', columns: { opportunity_id: { name: 'opportunity_id' }, stage: { name: 'stage' }, amount: { name: 'amount' } } } } } };
 const DRAFTER = 'You write exactly ONE read-only SQL statement';
 
-function fixture(options: { reading?: () => string } = {}) {
+function fixture(options: { reading?: () => string; admitSources?: AskPipelineHostDeps['admitSources'] } = {}) {
   const statements: string[] = [];
   const draftPrompts: string[] = [];
   const readPrompts: string[] = [];
@@ -39,6 +39,7 @@ function fixture(options: { reading?: () => string } = {}) {
     priorIntent: () => undefined,
     buildContextPack: contextPacks,
     dispatchOptions: (purpose) => { purposes.push(purpose); return { options: {}, settle: () => undefined }; },
+    ...(options.admitSources ? { admitSources: options.admitSources } : {}),
   };
   return { host: createAskPipelineHost(deps), statements, draftPrompts, readPrompts, purposes, contextPacks };
 }
@@ -140,5 +141,26 @@ describe('one request scope serves several pipeline runs', () => {
     expect(host).toBeTruthy();
     const opened = await blockedHost.openScope(context());
     expect('blocked' in opened && opened.blocked.answer).toContain('No AI model is configured');
+  });
+});
+
+describe('sources a person may use (RFC 0010 HH-13)', () => {
+  it('builds the vocabulary only from what the host admits for this person', async () => {
+    const admitted: string[] = [];
+    const { host } = fixture({
+      admitSources: {
+        key: () => 'u-dev',
+        admit: async (source) => { admitted.push('called'); return { ...source, relations: [] }; },
+      },
+    });
+    const opened = await host.openScope(context());
+    if (!('scope' in opened)) throw new Error('the scope should open');
+    expect(admitted.length).toBeGreaterThan(0);
+    expect(refNamed(opened.scope.vocabulary(), 'amount')).toBeUndefined();
+
+    const open = fixture();
+    const unfiltered = await open.host.openScope(context());
+    if (!('scope' in unfiltered)) throw new Error('the scope should open');
+    expect(refNamed(unfiltered.scope.vocabulary(), 'amount')).toBeDefined();
   });
 });

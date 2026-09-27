@@ -1020,10 +1020,15 @@ export async function handleAppsApi(ctx: Ctx): Promise<boolean> {
 
   if (req.method === 'GET' && path === '/api/apps') {
     const all = collectAppsList(projectRoot);
+    // App files that don't load, and why (an App with a bad policy would otherwise just disappear).
+    const problems = ctx.mayViewApp ? [] : findAppDocuments(projectRoot).flatMap((file) => {
+      const { document, errors } = loadAppDocument(file);
+      return document ? [] : [{ path: relative(projectRoot, file), problems: errors.map((error) => error.message) }];
+    });
     // A host's reader sees only the Apps they may open, not ones that refuse them on click.
     const may = ctx.mayViewApp;
     const apps = may ? (await Promise.all(all.map(async (app) => ((await may(app.id).catch(() => false)) ? app : null)))).filter((app): app is (typeof all)[number] => app !== null) : all;
-    sendJson(res, 200, { apps });
+    sendJson(res, 200, { apps, ...(problems.length ? { problems } : {}) });
     return true;
   }
 

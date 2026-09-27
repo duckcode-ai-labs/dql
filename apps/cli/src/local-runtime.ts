@@ -735,7 +735,7 @@ import {
 } from "./notebook-datasets.js";
 import { prepareBlockInvocation } from './block-invocation.js';
 import { redactConnections, resolveSecretReferences, storeConnectionSecrets } from './connection-secrets.js';
-import { authorizeHostRequest, currentHostGitHooks, currentPrincipal, currentRequestContext, hostActor, hostGitAuthor, hostModelProvider, installHostPersonaSlots, resolveHostPrincipal, resultValuesMayReachModel, safeNextLink, setHostGitHooks, setHostModelHooks, withRequestContext, type DqlHostHooks } from './host/request-context.js';
+import { authorizeHostRequest, currentHostGitHooks, currentPrincipal, currentRequestContext, hostActor, hostAllowedSources, hostGitAuthor, hostModelProvider, installHostPersonaSlots, resolveHostPrincipal, resultValuesMayReachModel, safeNextLink, setHostGitHooks, setHostModelHooks, withRequestContext, type DqlHostHooks } from './host/request-context.js';
 import { isRunPass, issueRunPass, redeemRunPass, revokeRunPass } from './host/schedule-runs.js';
 import { setDeliverySink } from './schedule/notifiers/index.js';
 import { routeAction, type DqlAction } from './host/route-actions.js';
@@ -4908,9 +4908,16 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
   setDeliverySink(hostHooks?.delivery ?? null);
   setHostGitHooks(hostHooks?.git);
   // HH-7: every tool an agent runs in this process passes the host's gate.
-  setAgentToolGate(hostHooks?.tools
-    ? (call, next) => hostHooks.tools!({ ...call, principal: currentPrincipal() ?? null }, next)
-    : null);
+  // The gate follows the request's own server when several run in one process.
+  if (hostHooks) {
+    setAgentToolGate((call, next) => {
+      const scoped = currentRequestContext()?.hooks;
+      const tools = scoped ? scoped.tools : hostHooks.tools;
+      return tools ? tools({ ...call, principal: currentPrincipal() ?? null }, next) : next();
+    });
+  } else {
+    setAgentToolGate(null);
+  }
   const hostIdentity = typeof hostHooks?.resolvePrincipal === 'function';
   // Each signed-in person — and each read-only link — keeps its own App
   // persona ("view as"), apart from the owner's.
@@ -6898,6 +6905,31 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
   const askPipelineHost = createAskPipelineHost({
     projectRoot,
     executor,
+    // HH-13: only the certified blocks and metrics this person may use reach Ask.
+    ...(hostHooks?.sourceAccess ? {
+      admitSources: {
+        key: () => {
+          const principal = currentPrincipal();
+          return principal ? `${principal.id}:${[...(principal.groups ?? [])].sort().join(',')}` : 'nobody';
+        },
+        admit: async (source) => {
+          const blockId = (block: { name: string; domain?: string; sourcePath?: string }) => (block.sourcePath
+            ? `app:block:${block.domain || 'global'}:${createHash('sha256').update(`${block.sourcePath}\u0000${block.name}`).digest('hex').slice(0, 20)}`
+            : `block:${block.domain || 'global'}.${block.name}`);
+          const refs = [
+            ...(source.blocks ?? []).map((block) => ({ id: blockId(block), kind: 'block' as const, name: block.name, ...(block.domain ? { domain: block.domain } : {}), ...(block.sourcePath ? { path: block.sourcePath } : {}) })),
+            ...(source.metrics ?? []).map((metric) => ({ id: `metric:${metric.name}`, kind: 'metric' as const, name: metric.name })),
+          ];
+          const allowed = await hostAllowedSources(hostHooks, currentPrincipal(), refs);
+          if (!allowed) return source;
+          return {
+            ...source,
+            ...(source.blocks ? { blocks: source.blocks.filter((block) => allowed.has(blockId(block))) } : {}),
+            ...(source.metrics ? { metrics: source.metrics.filter((metric) => allowed.has(`metric:${metric.name}`)) } : {}),
+          };
+        },
+      },
+    } : {}),
     autoExploration: readProjectAskAutoExploration(projectRoot),
     resolveConnection: resolveAgentRunExecutionConnection,
     getSemanticLayer: () => semanticLayer,
@@ -8752,7 +8784,9 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
     : baseAgentRunStore;
   // HH-6: each model call's token counts, for the person whose request made it (process-wide, like the model hooks).
   if (hostHooks?.audit) {
-    auditModelUsage(hostHooks.audit, setProviderUsageListener, () => {
+    const processAudit = hostHooks.audit;
+    // Usage goes to the audit of the server whose request made the call.
+    auditModelUsage((event) => (currentRequestContext()?.hooks?.audit ?? processAudit)(event), setProviderUsageListener, () => {
       const context = currentRequestContext();
       return { principal: context?.principal ?? null, actor: auditActor(context?.principal), ...(context?.requestId ? { requestId: context.requestId } : {}) };
     });
@@ -13265,7 +13299,7 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
     }
     const requestId = randomUUID();
     if (requestPrincipal) Object.assign(auditWho, { principal: requestPrincipal, actor: auditActor(requestPrincipal), requestId });
-    return withRequestContext(requestPrincipal ? { principal: requestPrincipal, requestId } : undefined, async () => {
+    return withRequestContext(requestPrincipal ? { principal: requestPrincipal, requestId, ...(hostHooks ? { hooks: hostHooks } : {}) } : undefined, async () => {
 
     // Existing `dql notebook` runtimes cannot hand their in-memory capability
     // to a later CLI process. A short-lived challenge is therefore issued only
@@ -18945,6 +18979,13 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
               sourcePolicy,
             );
             for (const source of resolvedSources.items) datasetSourceById.set(source.sourceId, source);
+            // HH-13: a Dataset this person may not use refuses its tiles only, not the page.
+            const allowed = await hostAllowedSources(hostHooks, currentPrincipal(), resolvedSources.items.map((source) => ({ id: source.sourceId, kind: 'dataset' as const, name: source.title, ...(source.domain ? { domain: source.domain } : {}) })));
+            if (allowed) {
+              for (const source of resolvedSources.items) {
+                if (!allowed.has(source.sourceId)) datasetSourceErrors.set(source.sourceId, `You don't have access to the Dataset ${source.title}.`);
+              }
+            }
             for (const sourceId of resolvedSources.missingSourceIds) {
               datasetSourceErrors.set(
                 sourceId,

@@ -102,6 +102,12 @@ export interface AskSemanticCompileContext {
 
 export interface AskPipelineHostDeps {
   projectRoot: string;
+  /**
+   * RFC 0010 HH-13: leave out the certified sources this person may not use,
+   * before any of them reaches the model. `key` names the person's access so
+   * a cached view is never another person's.
+   */
+  admitSources?: { key(): string; admit(source: VocabularySource): Promise<VocabularySource> };
   executor: QueryExecutor;
   resolveConnection(request: AgentRunRequest): Promise<ConnectionConfig>;
   getSemanticLayer(): SemanticLayer | undefined;
@@ -1515,12 +1521,15 @@ export function createAskPipelineHost(deps: AskPipelineHostDeps): AskPipelineHos
       const relevant = hintsForQuestion(pack.appliedHints, request.question);
       if (relevant.length !== pack.appliedHints.length) pack = { ...pack, appliedHints: relevant };
     }
+    const admitted = deps.admitSources;
     if (!pack) {
-      const vocabulary = await timed('index', () => buildVocabularyIndex(source));
-      return { vocabulary, envelope, source, context: { envelope: ledgerEnvelope(envelope), admitted: { byKind: countKinds(vocabulary) }, timings: phases } };
+      const allowedSource = admitted ? await timed('access', () => admitted.admit(source)) : source;
+      const vocabulary = await timed('index', () => buildVocabularyIndex(allowedSource));
+      return { vocabulary, envelope, source: allowedSource, context: { envelope: ledgerEnvelope(envelope), admitted: { byKind: countKinds(vocabulary) }, timings: phases } };
     }
-    const viewKey = vocabularyViewKey(key, envelope, pack);
-    const projected = await timed('projection', () => projectVocabularySource(source, pack!, projectionScopeFor(envelope, deps.getManifest().manifest)));
+    const viewKey = `${vocabularyViewKey(key, envelope, pack)}${admitted ? `|access:${admitted.key()}` : ''}`;
+    const unfiltered = await timed('projection', () => projectVocabularySource(source, pack!, projectionScopeFor(envelope, deps.getManifest().manifest)));
+    const projected = admitted ? { ...unfiltered, source: await timed('access', () => admitted.admit(unfiltered.source)) } : unfiltered;
     const vocabulary = viewCache?.key === viewKey ? viewCache.view.vocabulary : await timed('index', () => buildVocabularyIndex(projected.source));
     const rankedRefs = rankedRefsFromPack(pack.objects);
     const lanes: Record<string, number> = {};
