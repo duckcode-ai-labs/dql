@@ -59,6 +59,8 @@ import type { Cell, BlockBinding, BlockParameterDefinition } from "../../store/t
 import type { CellResearchState } from "../../utils/notebook-research";
 import { format as formatSQL } from "sql-formatter";
 import { api, type DatasetSource } from "../../api/client";
+import { useHostUi } from "../../host/host-ui";
+import { exportQuery } from "../../api/exports";
 import { CellChrome } from "@duckcodeailabs/dql-ui";
 import { CombineDataPanel, type CombineDataRequest } from '../notebook/CombineDataPanel';
 import { buildCombinedDatasetCell } from '../../utils/dataset-references';
@@ -1085,6 +1087,8 @@ function ExecutionTrustPanel({ cell, t }: { cell: Cell; t: Theme }) {
 }
 
 function CellComponentInner({ cell, index, onStartResearch, researchState }: CellProps) {
+  // With a host, a SQL cell's download is its statement run again for the file (HH-16).
+  const hostedExport = useHostUi().host;
   const state = useNotebookStore(useShallow((store) => ({
     activeFile: store.activeFile,
     appMode: store.appMode,
@@ -2502,7 +2506,13 @@ function CellComponentInner({ cell, index, onStartResearch, researchState }: Cel
                       )}
                     </>
                   ) : (
-                    <TableOutput result={cell.result} themeMode={state.themeMode} />
+                    <TableOutput
+                      result={cell.result}
+                      themeMode={state.themeMode}
+                      onExport={hostedExport && cell.type === 'sql' && cell.content.trim()
+                        ? (format) => exportQuery({ sql: cell.content, format, ...(cell.name ? { title: cell.name } : {}), ...(cell.executionTarget ? { executionTarget: cell.executionTarget } : {}) })
+                        : undefined}
+                    />
                   )
                 )}
               </>

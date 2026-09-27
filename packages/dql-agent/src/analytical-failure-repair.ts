@@ -130,6 +130,8 @@ const ERROR_CODE_ALIASES: Record<string, AnalyticalFailureCode> = {
   RESULT_CONTRACT_MISMATCH: 'RESULT_CONTRACT_MISMATCH',
   COMPILATION_FAILED: 'COMPILATION_FAILED',
   POLICY_DENIED: 'POLICY_DENIED',
+  // A host's row policy refused the statement (RFC 0010 HH-3, HH-16): no repair can change that.
+  ROW_POLICY_REFUSED: 'POLICY_DENIED',
 };
 
 const SAFE_FAILURES: Record<AnalyticalFailureCode, {

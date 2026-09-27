@@ -37,9 +37,30 @@ export interface DqlPrincipal {
   source: 'local' | 'host' | 'link';
 }
 
+/**
+ * WHERE A STATEMENT'S RESULT GOES (RFC 0010 HH-16), beyond the person
+ * asking: `person` (shown to them), `model` (an Ask or Research answer, whose
+ * results a model may read), `delivery` (a schedule's run, sent to its
+ * recipients) or `export` (a file that leaves DQL: CSV, JSON, Excel).
+ */
+export type DqlDestination = 'person' | 'model' | 'delivery' | 'export';
+
+/** The destination of a request's statements, from its route action (HH-2). */
+export function destinationForAction(action: DqlAction | undefined): DqlDestination | undefined {
+  if (!action) return undefined;
+  if (action === 'export') return 'export';
+  if (action === 'ask' || action === 'research') return 'model';
+  if (action === 'schedule.manage') return 'delivery';
+  return 'person';
+}
+
 export interface DqlRequestContext {
   principal: DqlPrincipal;
   requestId: string;
+  /** The route action this request was authorized as (HH-2); statements it runs carry it (HH-16). */
+  action?: DqlAction;
+  /** Where the request's statements' results go (HH-16); from `action`, or `delivery` for a scheduled run. */
+  destination?: DqlDestination;
   /**
    * The hooks of the server this request arrived at. Several servers can run
    * in one process (a host's Production and its previews); each request uses
@@ -266,6 +287,17 @@ export interface DqlHostHooks {
    * lineage, cadence). With a host, the host decides this, not the request.
    */
   enterpriseCertification?: boolean;
+  /**
+   * HH-16: how Ask and Research screen questions for personal data about
+   * individuals. `wording` (the default) refuses before planning by the
+   * question's words: payment, health, contact and protected attributes. With
+   * `columns` the host refuses by column instead: its `rowPolicy` refuses a
+   * statement whose `destination` is `model` when it would list classified
+   * columns for individuals, and aggregates stay answerable ("claims by
+   * diagnosis"). Regulated identifiers (SSN, passport, date of birth) and one
+   * person's pay are refused by wording either way.
+   */
+  sensitiveQuestions?: 'wording' | 'columns';
 }
 
 /** The host's additions to the DQL app for one person (HH-9). */
@@ -538,10 +570,21 @@ export function hostPrincipalVariables(): Record<string, unknown> | undefined {
   return out;
 }
 
-/** What about the signed-in person can change query results, for cache and proof keys. */
+/**
+ * What about the signed-in person can change query results, for cache and
+ * proof keys. An export's results are read under the host's export rules
+ * (HH-16), so they never share a key with what the person sees on screen.
+ */
 export function hostPrincipalPolicyIdentity(): Record<string, unknown> | undefined {
   const principal = currentPrincipal();
   if (!principal || principal.source !== 'host') return undefined;
   const attributes = Object.fromEntries(Object.entries(principal.attributes ?? {}).sort(([left], [right]) => left.localeCompare(right)));
-  return { id: principal.id, groups: [...(principal.groups ?? [])].sort(), attributes };
+  const destination = currentDestination();
+  return { id: principal.id, groups: [...(principal.groups ?? [])].sort(), attributes, ...(destination === 'export' ? { destination } : {}) };
+}
+
+/** Where the current request's statements' results go (HH-16); undefined outside a request. */
+export function currentDestination(): DqlDestination | undefined {
+  const context = requestContext.getStore();
+  return context?.destination ?? destinationForAction(context?.action);
 }

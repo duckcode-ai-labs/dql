@@ -61,7 +61,7 @@ const EXPECTED_TEST_FILES = 176;
 // 2320 with an empty multi-select read as no filter in page stories (+1 test);
 // 2321 with the conversation an answer was given in (links to one answer, +1 test);
 // 2335 with knowledge sources: cited documents, never a figure source (RFC 0010 HH-15, +14 tests).
-const EXPECTED_TESTS = 2335;
+const EXPECTED_TESTS = 2337;
 
 function discoverTestFiles(directory) {
   return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {

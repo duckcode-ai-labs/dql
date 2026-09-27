@@ -1,5 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, PointerEvent as ReactPointerEvent, ReactNode } from 'react';
+import { useHostUi } from '../../host/host-ui';
+import { EXPORT_LABELS, exportAppTile, type ExportFormat } from '../../api/exports';
 import { Activity, AlertTriangle, BarChart3, Bot, Code2, Download, FileText, MoreHorizontal, ChartArea, ChartColumnBig, ChartColumnIncreasing, ChartColumnStacked, ChartScatter, CheckCircle2, Donut, Filter, Gauge, GitBranch, Grid3x3, GripVertical, Hash, LineChart, Loader2, Maximize2, PieChart, Plus, ShieldCheck, SlidersHorizontal, Sparkles, Table2, Trash2, Wand2, Workflow, Wrench, X } from 'lucide-react';
 import {
   api,
@@ -224,6 +226,11 @@ export function DashboardRenderer({
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [trustLens, setTrustLens] = useState(false);
   const readOnlyLink = isViewerLink();
+  // With a host, a tile's download is made on the server for the export (HH-16).
+  const hosted = useHostUi().host;
+  const tileExport = hosted && !editable && !readOnlyLink
+    ? (tileId: string) => (format: ExportFormat) => exportAppTile(appId, dashboard.id, { tileId, format, variables: runVariables })
+    : undefined;
   /** The open "Why did it move?" panel, if any. */
   const [driverPanel, setDriverPanel] = useState<{
     item: DashboardDocumentResponse['dashboard']['layout']['items'][number];
@@ -471,6 +478,7 @@ export function DashboardRenderer({
           retryDisabled={Boolean(retryingTileId && retryingTileId !== item.i)}
           onOpenNotebook={(nextTile) => void openTileInNotebook(item, nextTile)}
           activeVariables={runVariables}
+          onExport={tileExport?.(item.i)}
           crossFilterFields={datasetCrossFilterFields(dashboard, item)}
           onSelectDatasetMark={(field, values) => applyDatasetMark(item, field, values)}
           onDrillDatasetMark={(candidate, row) => applyDatasetHierarchyDrill(item, candidate, row)}
@@ -1365,6 +1373,7 @@ export function DashboardRenderer({
                       retryDisabled={Boolean(retryingTileId && retryingTileId !== item.i)}
                       onOpenNotebook={(nextTile) => void openTileInNotebook(item, nextTile)}
                       activeVariables={runVariables}
+                      onExport={tileExport?.(item.i)}
                       crossFilterFields={datasetCrossFilterFields(dashboard, item)}
                       onSelectDatasetMark={(field, values) => applyDatasetMark(item, field, values)}
                       onDrillDatasetMark={(candidate, row) => applyDatasetHierarchyDrill(item, candidate, row)}
@@ -1544,7 +1553,10 @@ function DashboardTile({
   onNavigate,
   reader,
   onExplainChange,
+  onExport,
 }: {
+  /** With a host: download this tile as a file made on the server (HH-16). */
+  onExport?: (format: ExportFormat) => Promise<string>;
   /** Reader: "Why did it move?" for a trend tile, with its driver definition. */
   onExplainChange?: (item: DashboardDocumentResponse['dashboard']['layout']['items'][number], tile: DashboardRunResponse['tiles'][number]) => void;
   item: DashboardDocumentResponse['dashboard']['layout']['items'][number];
@@ -1581,6 +1593,8 @@ function DashboardTile({
   onNavigate?: () => void;
 }): JSX.Element {
   const tileRef = useRef<HTMLDivElement | null>(null);
+  const [exportNote, setExportNote] = useState<string | null>(null);
+  const hosted = useHostUi().host;
   const [dragOffset, setDragOffset] = useState<{ x: number; y: number } | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [inspectorOpen, setInspectorOpen] = useState(false);
@@ -1837,11 +1851,13 @@ function DashboardTile({
               {canAsk ? <button type="button" role="menuitem" onClick={() => { setTileMenuOpen(false); askAboutTile(); }}><Sparkles size={14} /> {canAskChart ? 'Ask about this chart' : 'Ask AI about this'}</button> : null}
               {canOpenNotebook && tile ? <button type="button" role="menuitem" onClick={() => { setTileMenuOpen(false); onOpenNotebook?.(tile); }}><FileText size={14} /> Open in notebook</button> : null}
               {viewerVizChoices.length ? <><hr /><small className="dql-tile-menu-label">Show as</small>{viewerVizChoices.map((option) => <button key={option.value} type="button" role="menuitemradio" aria-checked={activeChart === option.value} className={activeChart === option.value ? 'on' : ''} onClick={() => { setTileMenuOpen(false); switchGeneratedViz(option.value); }}>{option.label}</button>)}</> : null}
-              {tileResult ? <><hr /><button type="button" role="menuitem" onClick={() => { setTileMenuOpen(false); downloadResultCsv(item.title ?? item.i, tileResult); }}><Download size={14} /> Download CSV</button></> : null}
+              {onExport && tileResult ? <><hr />{(['csv', 'json', 'xlsx'] as const).map((format) => <button key={format} type="button" role="menuitem" onClick={() => { setTileMenuOpen(false); setExportNote(null); void onExport(format).catch((cause: unknown) => setExportNote(cause instanceof Error ? cause.message : String(cause))); }}><Download size={14} /> Download {EXPORT_LABELS[format]}</button>)}</> : null}
+              {!onExport && !hosted && tileResult ? <><hr /><button type="button" role="menuitem" onClick={() => { setTileMenuOpen(false); downloadResultCsv(item.title ?? item.i, tileResult); }}><Download size={14} /> Download CSV</button></> : null}
             </div>
           ) : null}
         </div>
       ) : null}
+      {exportNote ? <div role="alert" style={{ position: 'absolute', left: 10, right: 10, bottom: 8, zIndex: 3, fontSize: 11, lineHeight: 1.4, padding: '6px 8px', borderRadius: 6, background: 'var(--bg-2)', border: '1px solid var(--border-default)', color: 'var(--text-primary)' }} onClick={() => setExportNote(null)}>{exportNote}</div> : null}
       {editable && !narrow ? (
         <div
           style={{

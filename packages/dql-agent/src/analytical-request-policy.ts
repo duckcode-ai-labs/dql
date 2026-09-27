@@ -89,6 +89,18 @@ function namesAnIndividual(question: string): boolean {
   return INDIVIDUAL_SUBJECT_RE.test(question) || NAMED_INDIVIDUAL_REFERENCE_RE.test(question);
 }
 
+export interface AnalyticalRequestPolicyOptions {
+  /**
+   * How payment, health, contact and protected-attribute data is screened.
+   * `wording` (the default): by the question's words, here, before planning.
+   * `columns`: a host refuses by column instead, when a statement would list
+   * classified columns for individuals (RFC 0010 HH-16), so aggregates such as
+   * "claims by diagnosis" stay answerable. Regulated identifiers and one
+   * person's pay are refused by wording either way.
+   */
+  sensitiveData?: 'wording' | 'columns';
+}
+
 /**
  * Evaluate a raw Ask question at the ingress boundary.
  *
@@ -97,7 +109,7 @@ function namesAnIndividual(question: string): boolean {
  * words never turn a named or singular person's compensation into a safe
  * request.
  */
-export function evaluateAnalyticalRequestPolicy(question: string): AnalyticalRequestPolicyDecision {
+export function evaluateAnalyticalRequestPolicy(question: string, options: AnalyticalRequestPolicyOptions = {}): AnalyticalRequestPolicyDecision {
   const normalized = question.trim();
   if (!normalized) return { allowed: true };
 
@@ -113,8 +125,8 @@ export function evaluateAnalyticalRequestPolicy(question: string): AnalyticalReq
     };
   }
 
-  const sensitive = SENSITIVE_PERSONAL_DATA_RE.test(normalized)
-    || (PERSONAL_WHEN_ABOUT_A_PERSON_RE.test(normalized) && isAboutPeople(normalized));
+  const sensitive = options.sensitiveData !== 'columns' && (SENSITIVE_PERSONAL_DATA_RE.test(normalized)
+    || (PERSONAL_WHEN_ABOUT_A_PERSON_RE.test(normalized) && isAboutPeople(normalized)));
   if (sensitive && !isSystemPolicyQuestion && !isPopulationAggregate) {
     return {
       allowed: false,

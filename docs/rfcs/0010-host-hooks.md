@@ -100,8 +100,16 @@ export interface DqlHostHooks {
   /** May this principal do this? Called at route dispatch and before tool calls. */
   authorize?(principal: DqlPrincipal, action: DqlAction, resource: DqlResource): Promise<DqlDecision>;
 
-  /** Narrow a query to what the principal may see. Called for every query. */
+  /**
+   * Narrow a query to what the principal may see. Called for every query.
+   * The context says where the result goes (HH-16): `destination` is
+   * `person`, `model` (Ask, Research), `delivery` (a schedule) or `export`
+   * (a CSV, JSON or Excel file), and `action` is the request's route action.
+   */
   rowPolicy?(query: DqlQueryContext): Promise<{ sql: string; params: unknown[] } | DqlRefusal>;
+
+  /** HH-16: screen personal-data questions by wording (default) or leave them to the host's column refusals. */
+  sensitiveQuestions?: 'wording' | 'columns';
 
   /** Credentials for a connection, as this principal. */
   credentials?(input: { principal: DqlPrincipal; connection: string; driver: string }): Promise<DqlConnectionSecret | DqlRefusal>;
@@ -142,6 +150,7 @@ program imports a supported API rather than a file path.
 | `resolvePrincipal` | The local owner from `resolveLocalOwner`. The shared-token check keeps working for non-loopback binds |
 | `authorize` | Today's persona and App-policy checks, unchanged |
 | `rowPolicy` | Today's `@rls` lowering for blocks. Every other query passes through unchanged |
+| `sensitiveQuestions` | `wording`: Ask and Research refuse direct payment, health, contact and protected-attribute questions about individuals by their words, before planning (today's check) |
 | `credentials` | Project config plus the local credential vault (`.dql/local/private`) |
 | `modelProvider` | Today's provider selection |
 | `isInBoundary` | Ollama on a loopback URL (today's rule) |
@@ -356,6 +365,14 @@ Tests: `server-auth.test.ts`, `ask-trace-navigation.test.ts`, `app-page-run.test
 Tests: `host/knowledge.test.ts` (Ask end to end through the server with a fake MCP document server, with and without a host), `llm/mcp-config.test.ts`, dql-agent `knowledge/knowledge.test.ts`, dql-mcp `knowledge-client.test.ts`, notebook `CitedDocuments.test.tsx`.
 
 **Needs a live check:** Atlassian's remote MCP server (tool names and result shapes of its search and fetch, and its OAuth audience), with a real Confluence Cloud site.
+
+### HH-16 — where a statement's result goes; questions and exports by column
+- **`DqlQueryContext.destination`** — `person`, `model`, `delivery` or `export` — and **`action`**, the request's route action (HH-2), on every statement a request runs. DQL sets them from the request: `ask` and `research` are `model`, `export` is `export`, `schedule.manage` and a scheduled run's pass are `delivery`, anything else `person`; work nobody asked for (a startup sync) has neither. The request context carries `action` and `destination`, so every statement a request starts — directly, streamed, in a read scope, or from an agent's tool — hears the same.
+- **Exports are files made on the server**: `POST /api/query/export` (`{ sql, format, title?, executionTarget? }`, route action `export`; with a host the person must also be allowed `query.run`) and `POST /api/apps/:app/dashboards/:page/export` (`{ tileId, format, variables? }`, one tile of a published page, action `export` on that App). `format` is `csv`, `json` or `xlsx`. The statement runs again for the file with `destination: 'export'`, so the host's policy decides what the file may hold (mask, or refuse with a reason: 403 `EXPORT_REFUSED` for SQL, 422 for a tile). CSV text a spreadsheet would read as a formula is prefixed with `'`; Excel cells are inline strings, never formulas. An export's results are cached apart from what the person sees on screen (`destination` is part of the host principal's cache identity when it is `export`).
+- **The app**: with a host, a table's CSV / JSON / Excel buttons and an App tile's **Download** items call these routes; a hosted table with no export route (an Ask answer, a Block Studio preview) offers no download, since the host decides what may leave. Without a host nothing changes: CSV and JSON are saved from the table on screen.
+- **`sensitiveQuestions: 'columns'`** tells Ask and Research that the host refuses personal data by column: its `rowPolicy` refuses a `model` statement that would list classified columns (health, card data) for individuals, with a reason the person reads, and lets aggregates through ("claims by diagnosis"). The wording check for payment, health, contact and protected attributes is then skipped; regulated identifiers (SSN, passport, date of birth) and one person's pay stay refused by wording. Without the setting (and without a host) the wording check is unchanged. A row policy's refusal (`ROW_POLICY_REFUSED`) is classified `POLICY_DENIED`: nothing an automatic repair can change.
+
+Tests: `host/exports.test.ts` (destinations from actions, SQL and tile exports as CSV, JSON and Excel with a host that masks and refuses, the screen and the file kept apart, standalone unchanged), `export/result-file.test.ts`, dql-agent `analytical-request-policy.test.ts`, `analytical-failure-repair.test.ts`.
 
 ### Answers, links and connections for hosts
 - **An answer's values for its owner:** `GET /api/host/answers/:runId?values=1` adds the answer's written text and first table (at most 500 rows) to its facts — only for the answer's owner, and nothing when HH-14 withheld its figures. Without `values=1`, facts carry no value, as before.

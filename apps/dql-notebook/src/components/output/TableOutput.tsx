@@ -3,6 +3,8 @@ import { themes, type Theme, type ThemeMode } from '../../themes/notebook-theme'
 import type { QueryResult } from '../../store/types';
 import { inferColumnKind, type ColumnKind } from '../../utils/column-kind';
 import { formatDisplayValue } from '../../utils/value-format';
+import { useHostUi } from '../../host/host-ui';
+import { EXPORT_LABELS, type ExportFormat } from '../../api/exports';
 import {
   CONDITIONAL_TONE_LABELS,
   conditionalCell,
@@ -23,6 +25,12 @@ interface TableOutputProps {
   onRowClick?: (row: Record<string, unknown>, pointer?: { x: number; y: number }) => void;
   /** Colour scales, data bars and threshold rules per measure column (App tiles). */
   conditionalFormats?: DashboardConditionalFormat[];
+  /**
+   * A file made on the server (RFC 0010 HH-16). With a host, downloads go
+   * only this way — the host decides what may leave — so without it a hosted
+   * table offers none; without a host, CSV and JSON are saved from the table.
+   */
+  onExport?: (format: ExportFormat) => Promise<unknown>;
 }
 
 const TONE_COLORS: Record<ConditionalTone, string> = {
@@ -132,7 +140,13 @@ function SortArrow({ dir, color }: { dir: SortDir; color: string }) {
 
 // ─── TableOutput ──────────────────────────────────────────────────────────────
 
-export function TableOutput({ result, themeMode, maxHeight = 440, initialPageSize = 50, onRowClick, conditionalFormats }: TableOutputProps) {
+export function TableOutput({ result, themeMode, maxHeight = 440, initialPageSize = 50, onRowClick, conditionalFormats, onExport }: TableOutputProps) {
+  const hosted = useHostUi().host;
+  const [exportNote, setExportNote] = useState<string | null>(null);
+  const serverExport = (format: ExportFormat) => {
+    setExportNote(null);
+    void onExport?.(format).catch((error: unknown) => setExportNote(error instanceof Error ? error.message : String(error)));
+  };
   const t = themes[themeMode];
   const [hoveredRow, setHoveredRow] = useState<number | null>(null);
   const [sortCol, setSortCol] = useState<string | null>(null);
@@ -252,9 +266,18 @@ export function TableOutput({ result, themeMode, maxHeight = 440, initialPageSiz
 
         <div style={{ flex: 1 }} />
 
-        {/* Export buttons */}
-        <ExportBtn label="CSV" onClick={() => exportCSV(result)} t={t} />
-        <ExportBtn label="JSON" onClick={() => exportJSON(result)} t={t} />
+        {/* Export buttons: made on the server when a host decides what may leave (HH-16). */}
+        {onExport ? (
+          <>
+            {exportNote ? <span role="alert" style={{ fontSize: 11, color: t.error, fontFamily: t.font, maxWidth: 320 }}>{exportNote}</span> : null}
+            {(['csv', 'json', 'xlsx'] as const).map((format) => <ExportBtn key={format} label={EXPORT_LABELS[format]} onClick={() => serverExport(format)} t={t} />)}
+          </>
+        ) : hosted ? null : (
+          <>
+            <ExportBtn label="CSV" onClick={() => exportCSV(result)} t={t} />
+            <ExportBtn label="JSON" onClick={() => exportJSON(result)} t={t} />
+          </>
+        )}
 
         {/* Page size selector */}
         <select

@@ -85,4 +85,16 @@ describe('analytical request ingress policy', () => {
   ])('allows business questions that share words with personal data: %s', (question) => {
     expect(evaluateAnalyticalRequestPolicy(question)).toEqual({ allowed: true });
   });
+
+  // RFC 0010 HH-16: a host that refuses by column (what a statement would list
+  // for individuals) replaces the wording check for personal data; identifiers
+  // and one person's pay stay refused by wording.
+  it('leaves personal-data questions to a host that refuses by column', () => {
+    const columns = { sensitiveData: 'columns' as const };
+    expect(evaluateAnalyticalRequestPolicy('How many claims by diagnosis?', columns)).toEqual({ allowed: true });
+    expect(evaluateAnalyticalRequestPolicy('List each member with their diagnosis', columns)).toEqual({ allowed: true });
+    expect(evaluateAnalyticalRequestPolicy('List each member with their diagnosis')).toMatchObject({ allowed: false, code: 'SENSITIVE_PERSONAL_DATA_REQUEST' });
+    expect(evaluateAnalyticalRequestPolicy('Show Jessica Richard\'s SSN', columns)).toMatchObject({ allowed: false, code: 'REGULATED_IDENTIFIER_REQUEST' });
+    expect(evaluateAnalyticalRequestPolicy('What is the CEO\'s salary?', columns)).toMatchObject({ allowed: false, code: 'INDIVIDUAL_COMPENSATION_REQUEST' });
+  });
 });
