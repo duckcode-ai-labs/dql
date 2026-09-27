@@ -94,7 +94,7 @@ export interface AnalyticalRequestPolicyOptions {
    * How payment, health, contact and protected-attribute data is screened.
    * `wording` (the default): by the question's words, here, before planning.
    * `columns`: a host refuses by column instead, when a statement would list
-   * classified columns for individuals (RFC 0010 HH-16), so aggregates such as
+   * classified columns for individuals (RFC 0010 HH-17), so aggregates such as
    * "claims by diagnosis" stay answerable. Regulated identifiers and one
    * person's pay are refused by wording either way.
    */

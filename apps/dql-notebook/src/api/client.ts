@@ -263,6 +263,8 @@ export interface AppDocumentSummary {
     visibility?: 'shared' | 'private' | 'template';
     publicationIntent?: 'personal' | 'shared_project';
     audience?: string;
+    /** Identity-provider groups the App is for (RFC 0010 HH-16). */
+    audienceGroups?: string[];
     lifecycle?: 'draft' | 'review' | 'certified' | 'deprecated';
     owners: string[];
     tags?: string[];

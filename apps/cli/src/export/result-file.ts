@@ -3,7 +3,7 @@ import { deflateRawSync } from 'node:zlib';
 /**
  * A result as a file to download: CSV, JSON or Excel (.xlsx). Built on the
  * server from a statement DQL ran for the export itself, so a host's rules
- * for exports (RFC 0010 HH-16) apply to exactly what the file holds.
+ * for exports (RFC 0010 HH-17) apply to exactly what the file holds.
  */
 export type ExportFormat = 'csv' | 'json' | 'xlsx';
 export const EXPORT_FORMATS: readonly ExportFormat[] = ['csv', 'json', 'xlsx'];

@@ -4,14 +4,14 @@ import { HostUiProvider, type HostUi } from '../../host/host-ui';
 import { TableOutput } from './TableOutput';
 
 /**
- * RFC 0010 HH-16: with a host, a download is a file made on the server under
+ * RFC 0010 HH-17: with a host, a download is a file made on the server under
  * the host's export rules; without one, the table on screen is saved as today.
  */
 const result = { columns: ['region', 'n'], rows: [{ region: 'CA', n: 3 }], rowCount: 1 };
 const host: HostUi = { host: true, person: { id: 'u-1', name: 'Maria', kind: 'person' }, capabilities: {}, links: [], answerActions: [] };
 const buttons = (markup: string) => [...markup.matchAll(/<\/svg>(CSV|JSON|Excel)<\/button>/g)].map((match) => match[1]);
 
-describe('table downloads (HH-16)', () => {
+describe('table downloads (HH-17)', () => {
   it('saves CSV and JSON from the table without a host', () => {
     expect(buttons(renderToStaticMarkup(<TableOutput result={result} themeMode="light" />))).toEqual(['CSV', 'JSON']);
   });

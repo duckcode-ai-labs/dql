@@ -1087,7 +1087,7 @@ function ExecutionTrustPanel({ cell, t }: { cell: Cell; t: Theme }) {
 }
 
 function CellComponentInner({ cell, index, onStartResearch, researchState }: CellProps) {
-  // With a host, a SQL cell's download is its statement run again for the file (HH-16).
+  // With a host, a SQL cell's download is its statement run again for the file (HH-17).
   const hostedExport = useHostUi().host;
   const state = useNotebookStore(useShallow((store) => ({
     activeFile: store.activeFile,

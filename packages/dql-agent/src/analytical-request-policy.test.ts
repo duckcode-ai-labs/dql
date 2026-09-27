@@ -86,7 +86,7 @@ describe('analytical request ingress policy', () => {
     expect(evaluateAnalyticalRequestPolicy(question)).toEqual({ allowed: true });
   });
 
-  // RFC 0010 HH-16: a host that refuses by column (what a statement would list
+  // RFC 0010 HH-17: a host that refuses by column (what a statement would list
   // for individuals) replaces the wording check for personal data; identifiers
   // and one person's pay stay refused by wording.
   it('leaves personal-data questions to a host that refuses by column', () => {

@@ -89,6 +89,14 @@ describe('parseAppDocument', () => {
     expect(document?.notebooks?.[0]).toEqual(app.notebooks[0]);
   });
 
+  it('keeps the identity-provider groups an App is for, trimmed and once each', () => {
+    const { document, errors } = parseAppDocument(JSON.stringify({ ...minimalApp, audienceGroups: [' claims-leaders ', 'claims-leaders', '', 'finance-leaders'] }));
+    expect(errors).toEqual([]);
+    expect(document?.audienceGroups).toEqual(['claims-leaders', 'finance-leaders']);
+    expect(parseAppDocument(JSON.stringify(minimalApp)).document).not.toHaveProperty('audienceGroups');
+    expect(parseAppDocument(JSON.stringify({ ...minimalApp, audienceGroups: 'claims-leaders' })).errors.length).toBeGreaterThan(0);
+  });
+
   it('round-trips exact ProductDomainContext including explicit empty arrays', () => {
     const { document, errors } = parseAppDocument(JSON.stringify({
       ...minimalApp,

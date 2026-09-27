@@ -25,6 +25,9 @@ import {
   type ThreadItem,
 } from '../agent/UnifiedAgentRunPanel';
 
+// A Home that summarises (RFC 0010 HH-16) loads after Ask, never before it.
+const HomeSummary = React.lazy(() => import('./HomeSummary').then((module) => ({ default: module.HomeSummary })));
+
 /**
  * Analytics Home — the stakeholder ChatGPT-style entry. Text→SQL questions run
  * through the governed agent loop; answers, research reports, and app drafts render
@@ -1099,6 +1102,12 @@ export function AnalyticsHome() {
       />
 
       <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        {/* Above Ask on a new chat: my Apps, what moved, and what the host adds. */}
+        {historyVerified && activeItems.length === 0 ? (
+          <React.Suspense fallback={null}>
+            <HomeSummary />
+          </React.Suspense>
+        ) : null}
         <AskHistoryVerificationGate
           state={historyVerificationState}
           t={t}

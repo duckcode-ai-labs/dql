@@ -1,0 +1,61 @@
+import { useState, type FormEvent } from 'react';
+import { MessageSquare, SendHorizontal } from 'lucide-react';
+
+/**
+ * "Ask about this App" (RFC 0010, HH-16): one question box for the whole App
+ * in the reader, beside the questions on each chart. It is asked through the
+ * governed Ask loop with the App's scope — its domain and the filters on
+ * screen (the server reads both from the App's own files; see
+ * app-copilot-scope) — so the answer carries the same trust label as any
+ * other and is never wider than the view it was asked from.
+ */
+export interface AskAboutAppScope {
+  appId: string;
+  appName: string;
+  domain?: string;
+  dashboardId?: string;
+  pageTitle?: string;
+  /** The filters with a value on screen, as the reader sees them. */
+  filters: Array<{ label: string; value: string }>;
+}
+
+export function AskAboutApp({ scope, onAsk }: { scope: AskAboutAppScope; onAsk: (question: string) => void }): JSX.Element {
+  const [question, setQuestion] = useState('');
+  const submit = (event: FormEvent) => {
+    event.preventDefault();
+    const text = question.trim();
+    if (!text) return;
+    onAsk(text);
+    setQuestion('');
+  };
+  const chips = [scope.domain ? `Domain: ${scope.domain}` : null, ...scope.filters.map((filter) => `${filter.label}: ${filter.value}`)].filter((chip): chip is string => !!chip);
+  return (
+    <form
+      className="dql-app-ask-about"
+      aria-label={`Ask about ${scope.appName}`}
+      onSubmit={submit}
+      style={{ display: 'grid', gap: 6, margin: '4px 0 12px', padding: '10px 12px', border: '1px solid var(--border-subtle)', borderRadius: 10, background: 'var(--bg-2)' }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <MessageSquare size={14} aria-hidden="true" style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
+        <input
+          value={question}
+          onChange={(event) => setQuestion(event.target.value)}
+          placeholder={`Ask about ${scope.appName}…`}
+          aria-label={`Ask a question about ${scope.appName}`}
+          maxLength={600}
+          style={{ flex: 1, minWidth: 0, border: 'none', outline: 'none', background: 'transparent', color: 'var(--text-primary)', fontSize: 13.5 }}
+        />
+        <button type="submit" className="dql-apps-btn dql-apps-btn-primary" disabled={!question.trim()} title="Ask with this App's scope">
+          <SendHorizontal size={13} /> Ask
+        </button>
+      </div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, fontSize: 11.5, color: 'var(--text-secondary)' }} aria-label="What the question is scoped to">
+        <span>Scoped to {scope.appName}{scope.pageTitle ? ` · ${scope.pageTitle}` : ''}</span>
+        {chips.map((chip) => (
+          <span key={chip} style={{ padding: '1px 7px', borderRadius: 999, border: '1px solid var(--border-subtle)', background: 'var(--bg-1)' }}>{chip}</span>
+        ))}
+      </div>
+    </form>
+  );
+}

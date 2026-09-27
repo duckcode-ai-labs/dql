@@ -38,7 +38,7 @@ export interface DqlPrincipal {
 }
 
 /**
- * WHERE A STATEMENT'S RESULT GOES (RFC 0010 HH-16), beyond the person
+ * WHERE A STATEMENT'S RESULT GOES (RFC 0010 HH-17), beyond the person
  * asking: `person` (shown to them), `model` (an Ask or Research answer, whose
  * results a model may read), `delivery` (a schedule's run, sent to its
  * recipients) or `export` (a file that leaves DQL: CSV, JSON, Excel).
@@ -57,9 +57,9 @@ export function destinationForAction(action: DqlAction | undefined): DqlDestinat
 export interface DqlRequestContext {
   principal: DqlPrincipal;
   requestId: string;
-  /** The route action this request was authorized as (HH-2); statements it runs carry it (HH-16). */
+  /** The route action this request was authorized as (HH-2); statements it runs carry it (HH-17). */
   action?: DqlAction;
-  /** Where the request's statements' results go (HH-16); from `action`, or `delivery` for a scheduled run. */
+  /** Where the request's statements' results go (HH-17); from `action`, or `delivery` for a scheduled run. */
   destination?: DqlDestination;
   /**
    * The hooks of the server this request arrived at. Several servers can run
@@ -271,6 +271,32 @@ export interface DqlHostHooks {
    * host reads the project's `.dql/mcp-servers.json` (`use: ["knowledge"]`).
    */
   knowledgeSources?(principal: DqlPrincipal): Promise<DqlKnowledgeServer[]> | DqlKnowledgeServer[];
+  /**
+   * HH-16: what the host adds to this person's Home — e.g. "Open requests":
+   * each card a title and a few items with a status and a same-origin link.
+   * Called only when Home opens. An error or nothing: no host cards.
+   */
+  homeCards?(principal: DqlPrincipal): Promise<DqlHomeCard[]> | DqlHomeCard[];
+  /**
+   * HH-16: the App pages each person follows, kept by the host so it can
+   * tell them about each new edition (`pageEdition`) through their own
+   * notification preferences. Without it, follows are this person's own
+   * state in the project's private folder (`.dql/local/private/home/`).
+   */
+  follows?: DqlFollowStore;
+  /**
+   * HH-16: a scheduled run of a page gave a new edition (its governed figures
+   * changed since the last scheduled run). Carries ids, titles and a
+   * same-origin link — never a figure: a follower opens the page and sees it
+   * as themselves, with their own row rules. Errors are ignored.
+   */
+  pageEdition?(edition: DqlPageEdition): Promise<void> | void;
+  /**
+   * HH-16: the identity-provider groups an author may name as an App's
+   * audience (`audienceGroups` in dql.app.json). Without it the author types
+   * group names; with it only these may be saved (an error: none may).
+   */
+  directoryGroups?(principal: DqlPrincipal): Promise<DqlDirectoryGroup[]> | DqlDirectoryGroup[];
   /** Each finished Ask trace, strictly redacted, as a bundle and as OTLP (HH-6). */
   traces?: DqlTraceSink;
   /**
@@ -288,7 +314,7 @@ export interface DqlHostHooks {
    */
   enterpriseCertification?: boolean;
   /**
-   * HH-16: how Ask and Research screen questions for personal data about
+   * HH-17: how Ask and Research screen questions for personal data about
    * individuals. `wording` (the default) refuses before planning by the
    * question's words: payment, health, contact and protected attributes. With
    * `columns` the host refuses by column instead: its `rowPolicy` refuses a
@@ -338,6 +364,96 @@ export interface DqlHostUi {
    * Production). `caution` draws it in the warning colour.
    */
   banner?: DqlHostBanner;
+}
+
+/** One card the host adds to a person's Home (HH-16), e.g. "Open requests". */
+export interface DqlHomeCard {
+  id: string;
+  title: string;
+  items: Array<{ id: string; title: string; status?: string; detail?: string; href?: string; tone?: 'info' | 'caution' | 'done' }>;
+  /** Shown when there are no items, e.g. "Nothing waiting on you". */
+  emptyText?: string;
+  /** A same-origin page with all of them. */
+  more?: { label: string; href: string };
+}
+
+/** A page someone follows (HH-16). No `pageId`: the App's home page. */
+export interface DqlFollow {
+  appId: string;
+  pageId?: string;
+  /** "Claims Weekly · Claims this week", for the host's notices. */
+  title?: string;
+  followedAt?: string;
+}
+
+/** Where a host keeps follows (HH-16). */
+export interface DqlFollowStore {
+  list(principal: DqlPrincipal): Promise<DqlFollow[]> | DqlFollow[];
+  set(principal: DqlPrincipal, follow: DqlFollow, following: boolean): Promise<void> | void;
+}
+
+/** A page's new edition (HH-16): what and where, never a figure. */
+export interface DqlPageEdition {
+  appId: string;
+  pageId: string;
+  appTitle: string;
+  pageTitle: string;
+  /** Same-origin link that opens the page: `/?app=<id>&page=<id>`. */
+  href: string;
+  runId: string;
+  at: string;
+  /** Which schedule ran it, when DQL knows. */
+  scheduleId?: string;
+}
+
+/** An identity-provider group an author may pick as an App's audience (HH-16). */
+export interface DqlDirectoryGroup {
+  id: string;
+  label?: string;
+  members?: number;
+}
+
+const HOME_TONES = new Set(['info', 'caution', 'done']);
+const sameOriginPath = (href: unknown): href is string => typeof href === 'string' && href.startsWith('/') && !href.startsWith('//') && !href.includes('\\');
+const plain = (value: unknown, max: number): string => (typeof value === 'string' ? value.replace(/\s+/g, ' ').trim().slice(0, max) : '');
+
+/** A host's Home cards as DQL passes them to the app: plain text, same-origin links, bounded. */
+export function safeHomeCards(cards: unknown): DqlHomeCard[] {
+  if (!Array.isArray(cards)) return [];
+  const out: DqlHomeCard[] = [];
+  for (const raw of cards.slice(0, 4)) {
+    if (!raw || typeof raw !== 'object') continue;
+    const card = raw as Record<string, unknown>;
+    const id = plain(card.id, 60);
+    const title = plain(card.title, 60);
+    if (!id || !title) continue;
+    const items = (Array.isArray(card.items) ? card.items : []).slice(0, 8).flatMap((entry) => {
+      if (!entry || typeof entry !== 'object') return [];
+      const item = entry as Record<string, unknown>;
+      const itemTitle = plain(item.title, 160);
+      if (!itemTitle) return [];
+      const status = plain(item.status, 80);
+      const detail = plain(item.detail, 200);
+      return [{
+        id: plain(item.id, 80) || itemTitle.slice(0, 80),
+        title: itemTitle,
+        ...(status ? { status } : {}),
+        ...(detail ? { detail } : {}),
+        ...(sameOriginPath(item.href) ? { href: item.href } : {}),
+        ...(typeof item.tone === 'string' && HOME_TONES.has(item.tone) ? { tone: item.tone as 'info' | 'caution' | 'done' } : {}),
+      }];
+    });
+    const emptyText = plain(card.emptyText, 120);
+    const more = card.more && typeof card.more === 'object' ? card.more as Record<string, unknown> : undefined;
+    out.push({
+      id,
+      title,
+      items,
+      ...(emptyText ? { emptyText } : {}),
+      ...(more && sameOriginPath(more.href) && plain(more.label, 40) ? { more: { label: plain(more.label, 40), href: more.href } } : {}),
+    });
+  }
+  return out;
 }
 
 /** The host's strip above DQL's screens (HH-9). */
@@ -573,7 +689,7 @@ export function hostPrincipalVariables(): Record<string, unknown> | undefined {
 /**
  * What about the signed-in person can change query results, for cache and
  * proof keys. An export's results are read under the host's export rules
- * (HH-16), so they never share a key with what the person sees on screen.
+ * (HH-17), so they never share a key with what the person sees on screen.
  */
 export function hostPrincipalPolicyIdentity(): Record<string, unknown> | undefined {
   const principal = currentPrincipal();
@@ -583,7 +699,7 @@ export function hostPrincipalPolicyIdentity(): Record<string, unknown> | undefin
   return { id: principal.id, groups: [...(principal.groups ?? [])].sort(), attributes, ...(destination === 'export' ? { destination } : {}) };
 }
 
-/** Where the current request's statements' results go (HH-16); undefined outside a request. */
+/** Where the current request's statements' results go (HH-17); undefined outside a request. */
 export function currentDestination(): DqlDestination | undefined {
   const context = requestContext.getStore();
   return context?.destination ?? destinationForAction(context?.action);

@@ -32,7 +32,7 @@ const result = {
   ],
 };
 
-describe('result files (RFC 0010 HH-16 exports)', () => {
+describe('result files (RFC 0010 HH-17 exports)', () => {
   it('writes CSV that no spreadsheet runs as a formula', () => {
     expect(toCsv(result)).toBe('region,note,n\r\nCA,"says ""hi"", ok",3\r\nUS,"\'=HYPERLINK(""http://x"")",-5\r\n,-12.5,1.5\r\n');
   });

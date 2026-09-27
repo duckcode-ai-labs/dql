@@ -23,7 +23,7 @@ import type { DqlAction } from './route-actions.js';
  *
  * Cached and proven results are keyed by the signed-in person (HH-2), so a
  * policy must depend only on the person, the statement and its destination
- * (an export's results are keyed apart, HH-16). A policy that changes for
+ * (an export's results are keyed apart, HH-17). A policy that changes for
  * other reasons should carry a version in the person's attributes.
  */
 export interface DqlQueryContext {
@@ -35,12 +35,12 @@ export interface DqlQueryContext {
   connection: { driver: string; name?: string };
   purpose: QueryPurpose;
   /**
-   * HH-16: where the result goes — `person`, `model` (Ask, Research: a
+   * HH-17: where the result goes — `person`, `model` (Ask, Research: a
    * question's answer), `delivery` (a scheduled run) or `export` (a CSV,
    * JSON or Excel file). Absent for work nobody asked for (a startup sync).
    */
   destination?: DqlDestination;
-  /** HH-16: the route action of the request the statement serves (HH-2), e.g. `ask`, `export`, `app.view`. */
+  /** HH-17: the route action of the request the statement serves (HH-2), e.g. `ask`, `export`, `app.view`. */
   action?: DqlAction;
 }
 

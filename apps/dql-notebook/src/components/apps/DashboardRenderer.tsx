@@ -226,7 +226,7 @@ export function DashboardRenderer({
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [trustLens, setTrustLens] = useState(false);
   const readOnlyLink = isViewerLink();
-  // With a host, a tile's download is made on the server for the export (HH-16).
+  // With a host, a tile's download is made on the server for the export (HH-17).
   const hosted = useHostUi().host;
   const tileExport = hosted && !editable && !readOnlyLink
     ? (tileId: string) => (format: ExportFormat) => exportAppTile(appId, dashboard.id, { tileId, format, variables: runVariables })
@@ -1555,7 +1555,7 @@ function DashboardTile({
   onExplainChange,
   onExport,
 }: {
-  /** With a host: download this tile as a file made on the server (HH-16). */
+  /** With a host: download this tile as a file made on the server (HH-17). */
   onExport?: (format: ExportFormat) => Promise<string>;
   /** Reader: "Why did it move?" for a trend tile, with its driver definition. */
   onExplainChange?: (item: DashboardDocumentResponse['dashboard']['layout']['items'][number], tile: DashboardRunResponse['tiles'][number]) => void;

@@ -11,7 +11,7 @@ import {
   defaultPersonaRegistry,
   mergePersonaVariables,
 } from '@duckcodeailabs/dql-project';
-import { currentPrincipal, hostPrincipalPolicyIdentity, hostPrincipalVariables, hostUserContext } from './host/request-context.js';
+import { currentPrincipal, hostPrincipalPolicyIdentity, hostPrincipalVariables, hostUserContext, type DqlPrincipal } from './host/request-context.js';
 
 export class DQLAccessDeniedError extends Error {
   constructor(message: string) {
@@ -54,6 +54,27 @@ export function activePersonaPolicyFingerprint(): string {
     // Only with a host, so a local project's existing keys stay the same.
     ...(host ? { principal: host } : {}),
   })).digest('hex');
+}
+
+/**
+ * WHO AN APP IS FOR (RFC 0010, HH-16). An App's `audienceGroups` name the
+ * identity-provider groups it is written for. With a host that signs people
+ * in, only members of those groups, the App's owners and people the host gave
+ * the App (HH-11) open it. Without a host, or with no audience groups, this
+ * allows everything and the App's policies decide, as before.
+ */
+export function appAudienceDecision(
+  app: Pick<AppDocument, 'id' | 'name' | 'owners' | 'audienceGroups'> | null | undefined,
+  principal: DqlPrincipal | null | undefined = currentPrincipal(),
+): { allow: true } | { allow: false; reason: string } {
+  const groups = app?.audienceGroups ?? [];
+  if (!app || !groups.length || !principal || principal.source !== 'host') return { allow: true };
+  if (principal.appGrants?.[app.id]) return { allow: true };
+  const email = principal.email?.toLowerCase();
+  if (app.owners.some((owner) => owner === principal.id || (!!email && owner.toLowerCase() === email))) return { allow: true };
+  if ((principal.groups ?? []).some((group) => groups.includes(group))) return { allow: true };
+  const named = groups.length === 1 ? groups[0] : `${groups.slice(0, -1).join(', ')} or ${groups.at(-1)}`;
+  return { allow: false, reason: `${app.name} is for ${named}. Ask its owner for access.` };
 }
 
 export function loadRuntimeApp(projectRoot: string, appId: string | undefined | null): AppDocument | null {

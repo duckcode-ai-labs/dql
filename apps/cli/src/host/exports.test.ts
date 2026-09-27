@@ -12,7 +12,7 @@ import { destinationForAction, withRequestContext, type DqlHostHooks, type DqlPr
 import { withRowPolicy, type DqlQueryContext } from './row-policy.js';
 
 /**
- * RFC 0010 HH-16: where a statement's result goes. Exports are files made on
+ * RFC 0010 HH-17: where a statement's result goes. Exports are files made on
  * the server from a statement run for the export itself, so the host's row
  * policy hears `destination: 'export'` and decides what the file may hold.
  */
@@ -38,7 +38,7 @@ function unzip(archive: Buffer): Record<string, string> {
 
 const maria: DqlPrincipal = { id: 'u-maria', kind: 'person', email: 'maria@insurer.example', appGrants: { 'commerce-pilot': 'execute' }, source: 'host' };
 
-describe('destinations on every statement (HH-16)', () => {
+describe('destinations on every statement (HH-17)', () => {
   it('reads the destination from the request\'s action, and a scheduled run\'s pass as a delivery', async () => {
     expect(['export', 'ask', 'research', 'schedule.manage', 'app.view', 'query.run'].map((action) => destinationForAction(action as never)))
       .toEqual(['export', 'model', 'model', 'delivery', 'person', 'person']);
@@ -54,7 +54,7 @@ describe('destinations on every statement (HH-16)', () => {
   });
 });
 
-withDuckDb('exports as files, under the host\'s export rules (HH-16)', () => {
+withDuckDb('exports as files, under the host\'s export rules (HH-17)', () => {
   const projectRoot = mkdtempSync(join(tmpdir(), 'dql-exports-'));
   const databasePath = join(projectRoot, 'app-datasets-pilot.duckdb');
   const connection: ConnectionConfig = { driver: 'duckdb', filepath: databasePath, moduleSearchPaths: [connectorRoot ?? ''] };

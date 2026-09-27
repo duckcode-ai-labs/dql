@@ -553,8 +553,10 @@ import {
   type SemanticTileConversionAcceptResponse,
   type SemanticTileConversionPreviewRequest,
   type SemanticTileConversionPreviewResponse,
+  setAppAudience,
 } from './apps-api.js';
 import { listStoryEditions, recordStoryEdition, storyEditionScope } from './story/story-editions.js';
+import { editionFingerprint, followsPage, homePersonKey, movedOnPage, pageFiguresFrom, readHomeState, readPublishedEdition, recordPageVisit, recordPublishedEdition, setLocalFollow } from './home/home-state.js';
 import { addPageMonitor, listPageMonitors, MonitorStoreError, removePageMonitor } from './schedule/app-monitor-store.js';
 import { loadOrCreateSnapshotKey, localSnapshotSigner, readSnapshotPublicKey, signSnapshotWith, snapshotBodyIssues, snapshotFigures, snapshotFileName } from './snapshot/app-snapshot.js';
 import { dashboardDriverProbeItem, dashboardExploreProbeItem, expandDashboardDriverItems, foldDashboardDriverTiles, withDriverFilterScopes } from './datasets/dashboard-drivers.js';
@@ -614,6 +616,7 @@ import {
   DQLAccessDeniedError,
   activePersonaAppId,
   activePersonaPolicyFingerprint,
+  appAudienceDecision,
   assertAppAccess,
   loadRuntimeApp,
   runtimeVariables,
@@ -738,7 +741,7 @@ import {
 } from "./notebook-datasets.js";
 import { prepareBlockInvocation } from './block-invocation.js';
 import { readPrivateConnections, redactConnections, resolveSecretReferences, storeConnectionSecrets } from './connection-secrets.js';
-import { authorizeHostRequest, currentHostGitHooks, currentPrincipal, currentRequestContext, hostActor, hostAllowedSources, hostGitAuthor, hostModelProvider, installHostPersonaSlots, resolveHostPrincipal, resultValuesMayReachModel, safeHostBanner, safeNextLink, setHostGitHooks, setHostModelHooks, withRequestContext, type DqlHostHooks } from './host/request-context.js';
+import { authorizeHostRequest, currentHostGitHooks, currentPrincipal, currentRequestContext, hostActor, hostAllowedSources, hostGitAuthor, hostModelProvider, installHostPersonaSlots, resolveHostPrincipal, resultValuesMayReachModel, safeHomeCards, safeHostBanner, safeNextLink, setHostGitHooks, setHostModelHooks, withRequestContext, type DqlFollow, type DqlHostHooks } from './host/request-context.js';
 import { isRunPass, issueRunPass, redeemRunPass, revokeRunPass } from './host/schedule-runs.js';
 import { setDeliverySink } from './schedule/notifiers/index.js';
 import { routeAction, type DqlAction } from './host/route-actions.js';
@@ -4925,6 +4928,8 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
     setAgentToolGate(null);
   }
   const hostIdentity = typeof hostHooks?.resolvePrincipal === 'function';
+  // HH-16: page runs a schedule made (under its run pass), so a new edition can be told to followers.
+  const scheduledPageRuns = new WeakMap<IncomingMessage, { scheduleId?: string }>();
   // Each signed-in person — and each read-only link — keeps its own App
   // persona ("view as"), apart from the owner's.
   if (hostIdentity || !loopback) installHostPersonaSlots(defaultPersonaRegistry);
@@ -7244,6 +7249,36 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
     }).catch(() => told);
   };
 
+  /**
+   * HH-15 on conversation replies: a reply that explains a governed term
+   * ("What counts as a paid claim?") reads the person's team documents with
+   * the same contract as an answer — cited beside it, no figure from a
+   * document, never part of its trust, the same model rule. Greetings, thanks
+   * and general-knowledge replies read nothing.
+   */
+  const conversationWithKnowledge: AgentRouteExecutor = async (executionContext) => {
+    const result = await conversationRunExecutor(executionContext);
+    const { runId, request, routeDecision } = executionContext;
+    const kind = routeDecision?.conversationalKind;
+    const explainsTerm = routeDecision?.category !== 'general_knowledge'
+      && kind !== 'greeting' && kind !== 'gratitude' && kind !== 'meta_capability'
+      && (buildAnalysisQuestionPlan(request.question).mode === 'definition' || Boolean(buildGovernedObjectExplanation(request.question)));
+    if (!explainsTerm || result.status === 'cancelled') return result;
+    let withheld: string[] = [];
+    const session = await knowledgeSessionForRun(runId, request, (labels) => { withheld = labels; });
+    const onStep = (step: AskStoryStepV1) => executionContext.emit({ type: 'executor.started', message: step.title, route: executionContext.route, payload: { askStep: step } });
+    const told = withKnowledgeWithheld(result, withheld, onStep);
+    if (!session) return told;
+    const provider = await selectAskProvider(request).catch(() => undefined);
+    return withAnswerKnowledge({
+      result: told,
+      question: request.question,
+      session,
+      provider: provider ? ledgeredProvider(provider, askDispatchOptions, request) : undefined,
+      onStep,
+    }).catch(() => told);
+  };
+
   const conversationRunExecutor: AgentRouteExecutor = async ({ request, routeDecision, emitAnswerDelta }) => {
     const kind = routeDecision?.conversationalKind ?? 'smalltalk';
     const isGeneralKnowledge = routeDecision?.category === 'general_knowledge';
@@ -7883,11 +7918,15 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
     },
   });
   const researchWithKnowledge: AgentRouteExecutor = async (context) => {
-    const session = await knowledgeSessionForRun(context.runId, context.request);
-    if (!session) return investigationExecutor(context);
+    // Pages held back from a model off this machine are named in a
+    // "Team documents not read" step, as in Ask.
+    let withheld: string[] = [];
+    const session = await knowledgeSessionForRun(context.runId, context.request, (labels) => { withheld = labels; });
+    const onStep = (step: AskStoryStepV1) => context.emit({ type: 'executor.started', message: step.title, route: 'research', payload: { askStep: step } });
+    if (!session) return withKnowledgeWithheld(await investigationExecutor(context), withheld, onStep);
     researchKnowledge.set(context.runId, session);
     try {
-      const result = await investigationExecutor(context);
+      const result = withKnowledgeWithheld(await investigationExecutor(context), withheld, onStep);
       const citations = session.citations();
       return citations.length ? { ...result, knowledge: { version: 1, citations, contextOnly: true } } : result;
     } finally {
@@ -7895,7 +7934,7 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
     }
   };
   const agentRunExecutors: AgentRunExecutors = {
-    conversation: conversationRunExecutor,
+    conversation: conversationWithKnowledge,
     certified_answer: answerRunExecutor,
     semantic_answer: answerRunExecutor,
     generated_answer: answerRunExecutor,
@@ -8919,7 +8958,7 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
   };
   const agentRunEngine = new AgentRunEngine({
     store: agentRunStore,
-    // HH-16: a host that refuses sensitive questions by column replaces the wording check.
+    // HH-17: a host that refuses sensitive questions by column replaces the wording check.
     ...(hostHooks?.sensitiveQuestions === 'columns' ? { sensitiveQuestions: 'columns' as const } : {}),
     executors: {
       ...agentRunExecutors,
@@ -12329,6 +12368,73 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
     };
   };
 
+  /**
+   * Key proofs for certified content (`POST /api/keys/prove`): DQL's own
+   * grain proof for each certified block Dataset that declares keys, and its
+   * own relationship validation for each certified join with keys, run as
+   * the caller (row policy and credentials apply). Only counts and outcomes
+   * leave: never a row or a key value.
+   */
+  const proveDeclaredKeys = async (body: Record<string, unknown>) => {
+    const narrowTo = (value: unknown): Set<string> | null => (Array.isArray(value)
+      ? new Set(value.filter((item): item is string => typeof item === 'string' && item.trim() !== '').map((item) => item.trim()))
+      : null);
+    const blockFilter = narrowTo(body.blocks);
+    const relationshipFilter = narrowTo(body.relationships);
+    const snapshot = projectSnapshot();
+    const manifest = snapshot.manifest;
+    const datasets: Array<Record<string, unknown>> = [];
+    for (const block of Object.values(manifest.blocks ?? {})) {
+      const keys = block.datasetGrain?.keys ?? [];
+      if (block.status !== 'certified' || !keys.length || !block.filePath) continue;
+      if (blockFilter && !blockFilter.has(block.name) && !blockFilter.has(block.filePath)) continue;
+      const sourceId = `app:block:${block.domain || 'global'}:${createHash('sha256').update(`${block.filePath}\u0000${block.name}`).digest('hex').slice(0, 20)}`;
+      const base = { kind: 'dataset', name: block.name, filePath: block.filePath, sourceId, keys };
+      try {
+        const validation = await validateDatasetSourceGrain({ sourceId, ...(body.connection ? { connection: body.connection } : {}) });
+        datasets.push({ ...base, keys: validation.evidence.keyFields, status: validation.evidence.status, uniqueness: validation.evidence.uniqueness });
+      } catch (error) {
+        datasets.push({ ...base, status: 'error', message: error instanceof Error ? error.message : String(error) });
+      }
+    }
+    const relationships: Array<Record<string, unknown>> = [];
+    for (const relationship of Object.values(manifest.modeling?.relationships ?? {})) {
+      if (relationship.status !== 'certified' || !relationship.keys?.length) continue;
+      if (relationshipFilter && !relationshipFilter.has(relationship.id) && !relationshipFilter.has(relationship.qualifiedId) && !relationshipFilter.has(relationship.sourcePath)) continue;
+      const base = { kind: 'relationship', id: relationship.qualifiedId || relationship.id, from: relationship.from, to: relationship.to, keys: relationship.keys, cardinality: relationship.cardinality, sourcePath: relationship.sourcePath };
+      try {
+        const connection = await resolveExecutionConnection(body);
+        const evidence = await validateModelingRelationship(
+          { id: relationship.id, domain: relationship.ownerDomain ?? '', from: relationship.from, to: relationship.to, keys: relationship.keys, cardinality: relationship.cardinality, fanout: relationship.fanout },
+          manifest,
+          (sql) => executor.executeQuery(sql, [], {}, connection),
+          (identifier) => getDialect(connection.driver).quoteIdentifier(identifier),
+          projectRoot,
+          connection.driver,
+        );
+        relationships.push({
+          ...base,
+          status: evidence.status,
+          counts: {
+            fromRows: evidence.fromRows, toRows: evidence.toRows, joinedRows: evidence.joinedRows, fromNullKeys: evidence.fromNullKeys,
+            toNullKeys: evidence.toNullKeys, unmatchedFrom: evidence.unmatchedFrom, maxFromPerKey: evidence.maxFromPerKey, maxToPerKey: evidence.maxToPerKey,
+          },
+          ...(evidence.message ? { message: evidence.message } : {}),
+        });
+      } catch (error) {
+        relationships.push({ ...base, status: 'error', message: error instanceof Error ? error.message : String(error) });
+      }
+    }
+    const all = [...datasets, ...relationships];
+    return {
+      snapshotId: snapshot.snapshotId,
+      ok: all.every((item) => item.status === 'passed'),
+      proved: all.filter((item) => item.status === 'passed').length,
+      datasets,
+      relationships,
+    };
+  };
+
   const writeAgentRunSse = (
     response: ServerResponse,
     event: string,
@@ -13320,6 +13426,7 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
       res.end(serializeJSON({ error: 'This scheduled run is no longer valid.' }));
       return;
     }
+    if (runPass) scheduledPageRuns.set(req, { ...(runPass.scheduleId ? { scheduleId: runPass.scheduleId } : {}) });
 
     // A read-only link names one App (RFC 0010 HH-2); it never carries the
     // server's own token.
@@ -13375,10 +13482,21 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
         }));
         return;
       }
+      // HH-16: an App written for some groups opens only for them, its owners,
+      // people the host gave it, and those who may author it (to see their change).
+      if (route.resource.type === 'app' && route.resource.id && requestPrincipal.source === 'host') {
+        const audience = appAudienceDecision(loadRuntimeApp(projectRoot, route.resource.id), requestPrincipal);
+        const mayAuthor = !!hostHooks?.authorize && (await authorizeHostRequest(hostHooks, requestPrincipal, { action: 'app.author', resource: route.resource })).allow;
+        if (!audience.allow && !mayAuthor) {
+          res.writeHead(403, { 'Content-Type': 'application/json; charset=utf-8' });
+          res.end(serializeJSON({ error: audience.reason, code: 'PERMISSION_DENIED', action: route.action, resource: route.resource }));
+          return;
+        }
+      }
     }
     const requestId = randomUUID();
     if (requestPrincipal) Object.assign(auditWho, { principal: requestPrincipal, actor: auditActor(requestPrincipal), requestId });
-    // HH-16: statements carry the route's action, and where their results go
+    // HH-17: statements carry the route's action, and where their results go
     // (a scheduled run's pass: its delivery).
     const requestAction = path.startsWith('/api/') ? routeAction(req.method, path).action : undefined;
     return withRequestContext(requestPrincipal ? {
@@ -15810,6 +15928,20 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
         // view. The server resolves that App's domain and filter labels from
         // its files (never from the browser) and states the view in the
         // question, so Ask applies each filter or says it could not.
+        // "Ask about this App" (HH-16) scopes only to an App the person may open.
+        const askedApp = parsed.request.workspaceContext?.surface === 'apps' && typeof parsed.request.workspaceContext.appId === 'string'
+          ? loadRuntimeApp(projectRoot, parsed.request.workspaceContext.appId)
+          : null;
+        const askedAppAudience = appAudienceDecision(askedApp);
+        const askerMayAuthor = async () => {
+          const asker = currentPrincipal();
+          return !!askedApp && !!asker && !!hostHooks?.authorize && (await authorizeHostRequest(hostHooks, asker, { action: 'app.author', resource: { type: 'app', id: askedApp.id } })).allow;
+        };
+        if (!askedAppAudience.allow && !(await askerMayAuthor())) {
+          res.writeHead(403, { 'Content-Type': 'application/json; charset=utf-8' });
+          res.end(serializeJSON({ error: askedAppAudience.reason, code: 'PERMISSION_DENIED' }));
+          return;
+        }
         scopeAppCopilotRequest(projectRoot, parsed.request, {
           knownDomain: (domain) => Boolean(projectSnapshot().manifest?.domains?.[domain]),
         });
@@ -16572,6 +16704,203 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
       }
       res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
       res.end(serializeJSON({ statuses }));
+      return;
+    }
+
+    // ── HH-16: a Home that summarises, for everyone ───────────────────────
+    // My Apps, What moved (from this person's own runs) and follows. Nothing
+    // here is cached: every figure comes from the person's own last runs.
+    const homeHooks = () => currentRequestContext()?.hooks ?? hostHooks;
+    const followsForPerson = async (): Promise<DqlFollow[]> => {
+      const principal = currentPrincipal();
+      const store = homeHooks()?.follows;
+      if (store && principal?.source === 'host') {
+        try {
+          const listed = await store.list(principal);
+          return (Array.isArray(listed) ? listed : []).filter((follow): follow is DqlFollow => !!follow && typeof follow.appId === 'string')
+            .map((follow) => ({ appId: follow.appId, ...(typeof follow.pageId === 'string' && follow.pageId ? { pageId: follow.pageId } : {}), ...(typeof follow.title === 'string' ? { title: follow.title } : {}), ...(typeof follow.followedAt === 'string' ? { followedAt: follow.followedAt } : {}) }));
+        } catch {
+          return [];
+        }
+      }
+      return readHomeState(projectRoot, homePersonKey(principal)).follows;
+    };
+    const mayOpenAppForHome = async (app: import('@duckcodeailabs/dql-core').AppDocument): Promise<boolean> => {
+      const principal = currentPrincipal();
+      if (!principal || principal.source !== 'host') return true;
+      if (!appAudienceDecision(app, principal).allow) return false;
+      return !hostHooks?.authorize || (await authorizeHostRequest(hostHooks, principal, { action: 'app.view', resource: { type: 'app', id: app.id } })).allow;
+    };
+    if (req.method === 'GET' && path === '/api/home') {
+      try {
+        const principal = currentPrincipal();
+        if (principal?.source === 'link') {
+          res.writeHead(403, { 'Content-Type': 'application/json; charset=utf-8' });
+          res.end(serializeJSON({ error: 'A page link opens one App only.' }));
+          return;
+        }
+        const state = readHomeState(projectRoot, homePersonKey(principal));
+        const follows = await followsForPerson();
+        type HomeApp = { id: string; name: string; domain: string; description?: string; homePageId?: string; pages: Array<{ id: string; title: string }>; following: boolean; lastOpenedAt?: string };
+        const apps: HomeApp[] = [];
+        for (const file of findAppDocuments(projectRoot)) {
+          const { document } = loadAppDocument(file);
+          if (!document || !(await mayOpenAppForHome(document))) continue;
+          const pages = findDashboardsForApp(file.slice(0, -'/dql.app.json'.length))
+            .map((dashboardPath) => loadDashboardDocument(dashboardPath).document)
+            .filter((page): page is NonNullable<typeof page> => !!page)
+            .map((page) => ({ id: page.id, title: page.metadata.title }));
+          const opened = state.recent.find((entry) => entry.appId === document.id)?.openedAt;
+          apps.push({
+            id: document.id,
+            name: document.name,
+            domain: document.domain,
+            ...(document.description ? { description: document.description } : {}),
+            ...(document.homepage?.type === 'dashboard' ? { homePageId: document.homepage.id } : pages[0] ? { homePageId: pages[0].id } : {}),
+            pages,
+            following: follows.some((follow) => follow.appId === document.id),
+            ...(opened ? { lastOpenedAt: opened } : {}),
+          });
+        }
+        // Followed first, then the most recently opened, then by name.
+        apps.sort((left, right) => Number(right.following) - Number(left.following)
+          || (right.lastOpenedAt ?? '').localeCompare(left.lastOpenedAt ?? '')
+          || left.name.localeCompare(right.name));
+        const byId = new Map(apps.map((app) => [app.id, app]));
+        const watched = new Map<string, { appId: string; pageId: string }>();
+        for (const follow of follows) {
+          const app = byId.get(follow.appId);
+          const pageId = follow.pageId ?? app?.homePageId;
+          if (app && pageId) watched.set(`${app.id}/${pageId}`, { appId: app.id, pageId });
+        }
+        for (const entry of state.recent) if (byId.has(entry.appId)) watched.set(`${entry.appId}/${entry.pageId}`, entry);
+        const moved = [...watched.values()].flatMap(({ appId, pageId }) => {
+          const app = byId.get(appId)!;
+          const page = app.pages.find((candidate) => candidate.id === pageId);
+          if (!page) return [];
+          const published = readPublishedEdition(projectRoot, appId, pageId)?.at;
+          const own = state.pages[`${appId}/${pageId}`];
+          const item = own ? movedOnPage(own, published) : published ? { appId, pageId, at: published, changes: [], unchanged: 0, newEditionAt: published } : undefined;
+          if (!item || (!item.changes.length && !item.newEditionAt)) return [];
+          return [{ ...item, appName: app.name, pageTitle: page.title, following: followsPage(follows, appId, pageId) || followsPage(follows, appId, undefined) && app.homePageId === pageId }];
+        }).sort((left, right) => (right.newEditionAt ?? right.at).localeCompare(left.newEditionAt ?? left.at)).slice(0, 6);
+        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
+        res.end(serializeJSON({ apps: apps.slice(0, 24), moved, follows }));
+      } catch (error) {
+        res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(serializeJSON({ error: error instanceof Error ? error.message : String(error) }));
+      }
+      return;
+    }
+
+    // HH-16: what the host adds to this person's Home (e.g. their open requests).
+    if (req.method === 'GET' && path === '/api/host/home-cards') {
+      const principal = currentPrincipal();
+      const hook = homeHooks()?.homeCards;
+      let cards: ReturnType<typeof safeHomeCards> = [];
+      if (hook && principal?.source === 'host') {
+        try {
+          cards = safeHomeCards(await Promise.race([
+            Promise.resolve(hook(principal)),
+            new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timeout')), 5_000).unref?.()),
+          ]));
+        } catch {
+          cards = [];
+        }
+      }
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
+      res.end(serializeJSON({ cards }));
+      return;
+    }
+
+    // HH-16: the groups an author may name as an App's audience. Without the
+    // host's list, the author types them.
+    const directoryGroupsFor = async (): Promise<{ source: 'host'; groups: Array<{ id: string; label?: string; members?: number }> } | { source: 'free_text' }> => {
+      const principal = currentPrincipal();
+      const hook = homeHooks()?.directoryGroups;
+      if (!hook || principal?.source !== 'host') return { source: 'free_text' };
+      try {
+        const listed = await hook(principal);
+        const seen = new Set<string>();
+        const groups = (Array.isArray(listed) ? listed : []).flatMap((group) => {
+          const id = typeof group?.id === 'string' ? group.id.trim().slice(0, 120) : '';
+          if (!id || seen.has(id)) return [];
+          seen.add(id);
+          return [{ id, ...(typeof group.label === 'string' && group.label.trim() ? { label: group.label.trim().slice(0, 120) } : {}), ...(Number.isInteger(group.members) && group.members! >= 0 ? { members: group.members } : {}) }];
+        }).slice(0, 500);
+        return { source: 'host', groups };
+      } catch {
+        return { source: 'host', groups: [] };
+      }
+    };
+    if (req.method === 'GET' && path === '/api/host/groups') {
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
+      res.end(serializeJSON(await directoryGroupsFor()));
+      return;
+    }
+
+    // HH-16: follow a page. With a host's `follows` hook the host keeps it
+    // (and tells the person about new editions); otherwise it is this
+    // person's own state in the project's private folder.
+    const followRoute = path.match(/^\/api\/apps\/([^/]+)\/follow$/);
+    if (followRoute && (req.method === 'GET' || req.method === 'POST')) {
+      const principal = currentPrincipal();
+      const appId = decodeURIComponent(followRoute[1]!);
+      const app = loadRuntimeApp(projectRoot, appId);
+      if (!app || principal?.source === 'link') {
+        res.writeHead(app ? 403 : 404, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(serializeJSON({ error: app ? 'A page link cannot follow a page.' : `App "${appId}" not found` }));
+        return;
+      }
+      const reply = async (status: number) => {
+        const follows = (await followsForPerson()).filter((follow) => follow.appId === appId);
+        const pageId = url.searchParams.get('page') ?? undefined;
+        res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
+        res.end(serializeJSON({ follows, ...(pageId !== undefined ? { following: followsPage(follows, appId, pageId) } : {}) }));
+      };
+      if (req.method === 'GET') {
+        await reply(200);
+        return;
+      }
+      const body = await readJSON(req).catch(() => ({})) as { pageId?: unknown; following?: unknown };
+      const pageId = typeof body.pageId === 'string' && body.pageId.trim() ? body.pageId.trim() : undefined;
+      const page = pageId ? loadAppDashboard(projectRoot, appId, pageId)?.dashboard : undefined;
+      if (typeof body.following !== 'boolean' || (pageId && !page)) {
+        res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(serializeJSON({ error: pageId && !page ? `No page "${pageId}" in ${app.name}.` : 'Say whether to follow: { "following": true | false }.' }));
+        return;
+      }
+      const follow: DqlFollow = { appId, ...(pageId ? { pageId } : {}), title: page ? `${app.name} · ${page.metadata.title}` : app.name };
+      try {
+        const store = homeHooks()?.follows;
+        if (store && principal?.source === 'host') await store.set(principal, follow, body.following);
+        else setLocalFollow(projectRoot, homePersonKey(principal), follow, body.following);
+      } catch (error) {
+        res.writeHead(502, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(serializeJSON({ error: `Following could not be saved: ${error instanceof Error ? error.message : String(error)}` }));
+        return;
+      }
+      url.searchParams.set('page', pageId ?? '');
+      await reply(200);
+      return;
+    }
+
+    // HH-16: who an App is for — identity-provider groups in dql.app.json.
+    // A change to the App's file, so `app.author` (a host that follows git
+    // sends it through a draft space and review).
+    const audienceRoute = path.match(/^\/api\/apps\/([^/]+)\/audience$/);
+    if (audienceRoute && req.method === 'PUT') {
+      const appId = decodeURIComponent(audienceRoute[1]!);
+      const body = await readJSON(req).catch(() => ({})) as { groups?: unknown; text?: unknown };
+      const directory = await directoryGroupsFor();
+      const result = setAppAudience(projectRoot, appId, {
+        groups: body.groups,
+        ...(body.text !== undefined ? { text: body.text } : {}),
+        ...(directory.source === 'host' ? { allowedGroups: new Set(directory.groups.map((group) => group.id)) } : {}),
+      });
+      if (result.ok) scheduleProjectRefresh('app-audience');
+      res.writeHead(result.ok ? 200 : result.code === 'APP_NOT_FOUND' ? 404 : 400, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(serializeJSON(result.ok ? { ok: true, path: result.path, audienceGroups: result.app.audienceGroups ?? [], audience: result.app.audience ?? null } : result));
       return;
     }
 
@@ -18062,7 +18391,7 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
         res.end(serializeJSON({ ok: false, error: `No schedule "${scheduleId}" in App "${appId}".` }));
         return;
       }
-      const pass = issueRunPass(currentPrincipal() ?? null, appId);
+      const pass = issueRunPass(currentPrincipal() ?? null, appId, Date.now(), scheduleId);
       try {
         const record = await runScheduledApp(schedule, {
           projectRoot,
@@ -18219,7 +18548,7 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
     // Story editions of a published page, newest first (RFC 0008 step 8).
     const storyEditionsRoute = path.match(/^\/api\/apps\/([^/]+)\/dashboards\/([^/]+)\/story-editions$/);
     if (req.method === 'GET' && storyEditionsRoute) {
-      const editions = listStoryEditions(projectRoot, decodeURIComponent(storyEditionsRoute[1]), decodeURIComponent(storyEditionsRoute[2])).reverse();
+      const editions = listStoryEditions(projectRoot, decodeURIComponent(storyEditionsRoute[1]), decodeURIComponent(storyEditionsRoute[2]), homePersonKey(currentPrincipal())).reverse();
       res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(serializeJSON({ editions }));
       return;
@@ -18694,7 +19023,7 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
       return;
     }
 
-    // A page run, or one tile of a published page run for a file (HH-16 exports:
+    // A page run, or one tile of a published page run for a file (HH-17 exports:
     // `destination: 'export'`, so a host's export rules apply to what the file holds).
     const appDashExport = path.match(/^\/api\/(apps)\/([^/]+)\/dashboards\/([^/]+)\/export$/);
     const appDashRun = path.match(/^\/api\/(apps|app-builds)\/([^/]+)\/dashboards\/([^/]+)\/run$/) ?? appDashExport;
@@ -21321,6 +21650,7 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
         const editionScope = storyEditionScope(loaded.dashboard, dashboardVariables, [...datasetCrossFilters, ...Array.from(datasetDrills.values())]);
         // A complete run of a published story page is an edition: readers can
         // see what changed since the last one. Recording never fails a run.
+        const scheduledRun = scheduledPageRuns.get(req);
         if (runSurface === 'apps' && !mcpRequest && !staleRun && !partialRun && !incompleteRun && loaded.dashboard.narrative?.presentation === 'story') {
           try {
             recordStoryEdition({
@@ -21333,9 +21663,51 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
               resultFingerprint,
               filterFingerprint,
               scope: editionScope,
+              // With a host, each person's editions are their own (their row rules).
+              person: homePersonKey(currentPrincipal()),
             });
           } catch (error) {
             console.warn(`[dql] Could not record a story edition for ${appId}/${dashboardId}: ${error instanceof Error ? error.message : String(error)}`);
+          }
+        }
+        // HH-16: a reader's whole-page run is theirs on Home — recent, and its
+        // governed figures for "What moved" (their own run, their row rules).
+        // A scheduled run is a published edition instead: followers hear of it
+        // (no figures) when what it shows changed.
+        if (runSurface === 'apps' && !mcpRequest && !staleRun && !partialRun && !incompleteRun) {
+          try {
+            if (scheduledRun) {
+              const edition = recordPublishedEdition(projectRoot, {
+                appId,
+                pageId: dashboardId,
+                runId,
+                fingerprint: editionFingerprint(runEvidence.storyBindings, resultFingerprint),
+                ...(scheduledRun.scheduleId ? { scheduleId: scheduledRun.scheduleId } : {}),
+              });
+              const tellHost = (currentRequestContext()?.hooks ?? hostHooks)?.pageEdition;
+              if (edition && tellHost) {
+                void Promise.resolve().then(() => tellHost({
+                  appId,
+                  pageId: dashboardId,
+                  appTitle: (loaded as { app?: { name?: string } }).app?.name ?? appId,
+                  pageTitle: loaded.dashboard.metadata.title,
+                  href: `/?app=${encodeURIComponent(appId)}&page=${encodeURIComponent(dashboardId)}`,
+                  runId,
+                  at: edition.at,
+                  ...(edition.scheduleId ? { scheduleId: edition.scheduleId } : {}),
+                })).catch(() => undefined);
+              }
+            } else if (currentPrincipal()?.source !== 'link') {
+              recordPageVisit(projectRoot, homePersonKey(currentPrincipal()), {
+                appId,
+                pageId: dashboardId,
+                runId,
+                scope: `${editionScope}:${personaFingerprint}`,
+                figures: pageFiguresFrom(runEvidence.storyBindings, runEvidence.tileTrust, Object.fromEntries(loaded.dashboard.layout.items.map((item) => [item.i, item.title]))),
+              });
+            }
+          } catch (error) {
+            console.warn(`[dql] Could not record this page run for Home (${appId}/${dashboardId}): ${error instanceof Error ? error.message : String(error)}`);
           }
         }
         // MCP runs intentionally have no App/chart-answer lifecycle. They use
@@ -21529,10 +21901,14 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
           path,
           projectRoot,
           datasetsEnabled: datasetsAppFeatureEnabled(projectConfig),
-          ...(hostIdentity && hostHooks?.authorize ? {
+          ...(hostIdentity ? {
+            // A host's reader sees the Apps they may open: the App's audience (HH-16), then the host's own rule.
             mayViewApp: async (appId: string) => {
               const principal = currentPrincipal();
-              return !!principal && (await authorizeHostRequest(hostHooks, principal, { action: 'app.view', resource: { type: 'app', id: appId } })).allow;
+              if (!principal) return false;
+              if (principal.source === 'host' && !appAudienceDecision(loadRuntimeApp(projectRoot, appId), principal).allow
+                && !(hostHooks?.authorize && (await authorizeHostRequest(hostHooks, principal, { action: 'app.author', resource: { type: 'app', id: appId } })).allow)) return false;
+              return !hostHooks?.authorize || (await authorizeHostRequest(hostHooks, principal, { action: 'app.view', resource: { type: 'app', id: appId } })).allow;
             },
           } : {}),
           executeSql: executeLocalSqlForStoredResult,
@@ -23851,6 +24227,24 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
         const conflict = message.startsWith('DATASET_SOURCE_DRIFT') || message.startsWith('DATASET_SOURCE_CATALOG_STALE');
         res.writeHead(conflict ? 409 : 400, { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(serializeJSON({ ok: false, error: message }));
+      }
+      return;
+    }
+
+    // RFC 0010 (key proofs): prove the keys certified content declares, as the
+    // person asking — each certified block Dataset's declared grain through
+    // DQL's own grain proof, each certified join with keys through DQL's own
+    // relationship validation. A host runs it on a change before approving;
+    // anyone can run it on their own project. Counts and outcomes only, never
+    // a row. `blocks` (names or file paths) and `relationships` (ids) narrow it.
+    if (req.method === 'POST' && path === '/api/keys/prove') {
+      try {
+        const body = await readJSON(req).catch(() => ({})) as Record<string, unknown>;
+        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(serializeJSON(await proveDeclaredKeys(body)));
+      } catch (error) {
+        res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(serializeJSON({ error: error instanceof Error ? error.message : String(error) }));
       }
       return;
     }
@@ -26975,7 +27369,7 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
       return;
     }
 
-    // A statement's result as a file (RFC 0010 HH-16): run again for the export
+    // A statement's result as a file (RFC 0010 HH-17): run again for the export
     // itself, so a host's export rules apply to exactly what the file holds.
     if (req.method === 'POST' && path === '/api/query/export') {
       try {
@@ -47394,7 +47788,7 @@ function isMemoryScope(value: unknown): value is 'thread' | 'notebook' | 'projec
 }
 
 
-/** Send a result file (HH-16 exports); the name is never a path. */
+/** Send a result file (HH-17 exports); the name is never a path. */
 function sendExportFile(res: ServerResponse, file: ExportFile): void {
   res.writeHead(200, {
     'Content-Type': file.contentType,

@@ -5631,6 +5631,48 @@ export function renameApp(
   };
 }
 
+/**
+ * Set who an App is for (RFC 0010, HH-16): the identity-provider groups in
+ * `audienceGroups`, and optionally the audience in words. Only those two
+ * fields of `dql.app.json` change; everything else is kept as written. With a
+ * host that follows git, this runs in a draft space and reaches Production
+ * through review like any other change.
+ */
+export function setAppAudience(
+  projectRoot: string,
+  appId: string,
+  input: { groups?: unknown; text?: unknown; allowedGroups?: ReadonlySet<string> },
+): { ok: true; app: AppDocument; path: string } | { ok: false; error: string; code?: string } {
+  const loaded = loadAppById(projectRoot, appId);
+  if (!loaded) return { ok: false, error: `App "${appId}" not found`, code: 'APP_NOT_FOUND' };
+  if (!Array.isArray(input.groups) || input.groups.some((group) => typeof group !== 'string')) return { ok: false, error: 'groups must be a list of group names.', code: 'INVALID_REQUEST' };
+  const groups = [...new Set((input.groups as string[]).map((group) => group.trim()).filter(Boolean))];
+  if (groups.length > 20) return { ok: false, error: 'An App can name at most 20 audience groups.', code: 'INVALID_REQUEST' };
+  const bad = groups.find((group) => group.length > 120 || /[\u0000-\u001f]/.test(group));
+  if (bad !== undefined) return { ok: false, error: 'A group name is too long or has control characters.', code: 'INVALID_REQUEST' };
+  if (input.allowedGroups) {
+    const unknown = groups.filter((group) => !input.allowedGroups!.has(group));
+    if (unknown.length) return { ok: false, error: `Not a group in your directory: ${unknown.join(', ')}.`, code: 'UNKNOWN_GROUP' };
+  }
+  const text = input.text === undefined ? undefined : typeof input.text === 'string' ? input.text.replace(/\s+/g, ' ').trim().slice(0, 120) : null;
+  if (text === null) return { ok: false, error: 'text must be words.', code: 'INVALID_REQUEST' };
+  const appPath = join(loaded.appDir, 'dql.app.json');
+  const raw = JSON.parse(readFileSync(appPath, 'utf-8')) as Record<string, unknown>;
+  if (groups.length) raw.audienceGroups = groups;
+  else delete raw.audienceGroups;
+  if (text !== undefined) {
+    if (text) raw.audience = text;
+    else delete raw.audience;
+  }
+  const next = `${JSON.stringify(raw, null, 2)}\n`;
+  const parsed = parseAppDocument(next, appPath);
+  if (!parsed.document) return { ok: false, error: parsed.errors.map((error) => error.message).join('; ') };
+  const temp = `${appPath}.${process.pid}.tmp`;
+  writeFileSync(temp, next, 'utf-8');
+  renameSync(temp, appPath);
+  return { ok: true, app: parsed.document, path: relative(projectRoot, appPath) };
+}
+
 export function promoteAppForStakeholders(
   projectRoot: string,
   appId: string,

@@ -6,7 +6,7 @@ import { privateConnectionsPath, readPrivateConnections } from './connection-sec
 import { loadProjectConfig } from './local-runtime.js';
 
 /**
- * A person's own connections, outside git (RFC 0010 HH-16: a host's command
+ * A person's own connections, outside git (RFC 0010 HH-17: a host's command
  * line writes the development copy an admin named, so a laptop never needs
  * Production's credentials).
  */

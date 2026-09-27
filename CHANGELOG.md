@@ -8,6 +8,29 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+### A Home that summarises, following pages, and who an App is for (RFC 0010 HH-16)
+
+- **Home**, above Ask on a new chat: **My Apps** (followed first, then
+  recently opened) and **What moved** on the pages you follow or opened —
+  your own figures from your own last two runs (certified or governed
+  single figures only; per person, never cached across people). A host can
+  add cards such as **Open requests** (`homeCards`).
+- **Follow** an App page. Without a host it is your own state in
+  `.dql/local/private/home/`; a host's `follows` hook keeps it and tells you
+  about each new edition — a scheduled run whose figures changed
+  (`pageEdition`, which carries no figure).
+- **Ask about this App**: one question box per App, scoped to the App, its
+  domain and the filters on screen, through the governed Ask loop.
+- **App audience groups**: `audienceGroups` in `dql.app.json`, edited in App
+  settings (from a host's `directoryGroups`, or typed). With a host that
+  signs people in, only those groups, the owners, granted people and authors
+  open the App.
+- Story editions are kept per person when a host signs people in (they held
+  one person's values).
+- Team documents: definition and conversation replies about a governed term
+  cite them under the same contract; Research says **Team documents not
+  read** when pages are held back from an off-machine model.
+
 ### Ask analyst: one plan, five tools
 
 - The model-facing tool surface is five tools: `describe_relation`,

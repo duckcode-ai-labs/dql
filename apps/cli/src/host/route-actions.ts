@@ -103,6 +103,8 @@ function actionFor(method: string, path: string): DqlAction {
     if (path === '/api/apps') return read ? 'project.read' : 'app.author';
     if (!read && /\/(promote|publish-to-project)$/.test(path)) return 'app.publish';
     if (!read && /^\/api\/apps\/[^/]+\/ask$/.test(path)) return 'ask';
+    // Following a page is reading it (HH-16): the person's own state, not the App's.
+    if (/^\/api\/apps\/[^/]+\/follow$/.test(path)) return 'app.view';
     // Running a page, and its story drawn from that run, are reading it.
     if (read || /^\/api\/apps\/[^/]+\/dashboards\/[^/]+\/(run|story)$/.test(path)) return 'app.view';
     return 'app.author';
@@ -124,6 +126,8 @@ function actionFor(method: string, path: string): DqlAction {
 
   // SQL the person writes themselves.
   if (!read && (path === '/api/query' || path === '/api/notebook/execute' || path === '/api/dql/artifacts/execute')) return 'query.run';
+  // Proving the keys certified content declares: read-only probes as the person, counts only (RFC 0010 key proofs).
+  if (!read && path === '/api/keys/prove') return 'query.run';
 
   // A published page runs its Dataset tiles and filter lists through these.
   if (!read && (path === '/api/app-datasets/run' || path === '/api/app-datasets/field-values')) return 'app.view';

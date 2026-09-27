@@ -26,7 +26,7 @@ interface TableOutputProps {
   /** Colour scales, data bars and threshold rules per measure column (App tiles). */
   conditionalFormats?: DashboardConditionalFormat[];
   /**
-   * A file made on the server (RFC 0010 HH-16). With a host, downloads go
+   * A file made on the server (RFC 0010 HH-17). With a host, downloads go
    * only this way — the host decides what may leave — so without it a hosted
    * table offers none; without a host, CSV and JSON are saved from the table.
    */
@@ -266,7 +266,7 @@ export function TableOutput({ result, themeMode, maxHeight = 440, initialPageSiz
 
         <div style={{ flex: 1 }} />
 
-        {/* Export buttons: made on the server when a host decides what may leave (HH-16). */}
+        {/* Export buttons: made on the server when a host decides what may leave (HH-17). */}
         {onExport ? (
           <>
             {exportNote ? <span role="alert" style={{ fontSize: 11, color: t.error, fontFamily: t.font, maxWidth: 320 }}>{exportNote}</span> : null}

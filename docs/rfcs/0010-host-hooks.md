@@ -102,13 +102,13 @@ export interface DqlHostHooks {
 
   /**
    * Narrow a query to what the principal may see. Called for every query.
-   * The context says where the result goes (HH-16): `destination` is
+   * The context says where the result goes (HH-17): `destination` is
    * `person`, `model` (Ask, Research), `delivery` (a schedule) or `export`
    * (a CSV, JSON or Excel file), and `action` is the request's route action.
    */
   rowPolicy?(query: DqlQueryContext): Promise<{ sql: string; params: unknown[] } | DqlRefusal>;
 
-  /** HH-16: screen personal-data questions by wording (default) or leave them to the host's column refusals. */
+  /** HH-17: screen personal-data questions by wording (default) or leave them to the host's column refusals. */
   sensitiveQuestions?: 'wording' | 'columns';
 
   /** Credentials for a connection, as this principal. */
@@ -136,6 +136,12 @@ export interface DqlHostHooks {
   delivery?: DeliverySink;
   signing?: SigningKeyProvider;
   git?: GitHost;
+
+  /** HH-16: a Home that summarises; following pages; who an App is for. */
+  homeCards?(principal: DqlPrincipal): Promise<DqlHomeCard[]>;
+  follows?: { list(principal: DqlPrincipal): Promise<DqlFollow[]>; set(principal: DqlPrincipal, follow: DqlFollow, following: boolean): Promise<void> };
+  pageEdition?(edition: DqlPageEdition): Promise<void>;
+  directoryGroups?(principal: DqlPrincipal): Promise<DqlDirectoryGroup[]>;
 }
 ```
 
@@ -157,6 +163,10 @@ program imports a supported API rather than a file path.
 | `stores.*` | Today's SQLite files. `traces` also writes OTLP when the standard `OTEL_EXPORTER_OTLP_ENDPOINT` is set |
 | `tools` | Pass-through |
 | `schedules`, `delivery`, `signing`, `git` | Today's in-process cron, notifiers, local signing key and `gh` |
+| `homeCards` | None |
+| `follows` | The person's own file in `.dql/local/private/home/` |
+| `pageEdition` | Nothing is told (a scheduled edition is still recorded, without figures) |
+| `directoryGroups` | The author types group names |
 
 ### Rules every hook follows
 
@@ -366,7 +376,25 @@ Tests: `host/knowledge.test.ts` (Ask end to end through the server with a fake M
 
 **Needs a live check:** Atlassian's remote MCP server (tool names and result shapes of its search and fetch, and its OAuth audience), with a real Confluence Cloud site.
 
-### HH-16 — where a statement's result goes; questions and exports by column
+### HH-16 — a Home that summarises, following pages, and who an App is for
+Stakeholders open DQL to see what changed, not to start from an empty question. Every hook here has a local default, so `dql notebook` gets the same Home for its one person.
+- **Home (`GET /api/home`)**, above Ask on a new chat, loaded after it: **My Apps** (the Apps the person may open — followed first, then the ones they opened last), and **What moved** on the pages they follow or opened: each page's certified or governed single figures (a KPI's value, a driver's current value, a leader's value) from the person's **own** last two complete runs of it, under one scope (filters, parameters and persona). Never another person's figures, never a tile that needs review, never rows; nothing is cached across people. Kept in `.dql/local/private/home/<person>.json` (a hash of the host's id; `local` without a host). When a scheduled run is newer than the person's last look, Home says so and shows no figure: they open the page and see it as themselves.
+- **`homeCards(principal)`** adds the host's own cards to Home — for example "Open requests": a title and up to eight items with a status and a same-origin link (`GET /api/host/home-cards`, called only when Home opens; plain text, other links dropped; an error or a slow host: none).
+- **Follow a page** (`POST /api/apps/:app/follow { pageId, following }`, action `app.view`). With **`follows: { list, set }`** the host keeps follows, so it can tell each person about new editions through their own notification preferences; without it, follows are the person's own state in the private folder.
+- **`pageEdition(edition)`**: a scheduled run of a page (HH-8's run pass) whose governed figures differ from the last scheduled run is a new edition. The host hears `{ appId, pageId, appTitle, pageTitle, href, runId, at, scheduleId }` — never a figure; the link is `/?app=…&page=…`. A reader's own run is never an edition.
+- **Story editions are per person with a host.** An edition holds the values one person's run showed (their row rules); each person now has their own file, so one person's values are never listed to another. Without a host there is one file, as before.
+- **Ask about this App.** The App reader has one question box for the whole App beside the per-chart questions. It is Ask with `workspaceContext.surface = 'apps'`, so the server scopes it from the App's own files (its domain and the filters on screen, `app-copilot-scope.ts`) and the answer carries the usual trust label. It is refused for someone the App's audience excludes.
+- **Who an App is for: `audienceGroups`** in `dql.app.json` — identity-provider groups. **`directoryGroups(principal)`** lists the groups an author may pick (`GET /api/host/groups`; an error: none may be saved); without it the author types them. Saving is `PUT /api/apps/:app/audience { groups, text? }` (`app.author`); a host that keeps Production to reviewed changes refuses it there with its `next` link (e.g. a draft space). With a host that signs people in, an App with audience groups opens — is listed, run, exported or asked about — only for members of those groups, its owners, people the host granted it (HH-11), and people the host lets author it (so an author sees their change). Without a host it is a note that carries over.
+
+Tests: `host/home.test.ts` (two people through the server on DuckDB: their own What moved, a scheduled edition told once without a figure, host cards, audience groups), `home/home-state.test.ts`, `story/story-editions.test.ts`, notebook `HomeSummary.test.tsx`, `StakeholderReader.test.tsx`.
+
+### HH-15, continued — definitions and Research
+- A reply that explains a governed term — an Ask definition, or a conversation reply about one — reads the person's documents under the same contract: cited, figure-free, never part of trust, the same model rule (`hostedModels`).
+- Research names the servers it did not read because the model runs off this machine: a **Team documents not read** step, as in Ask.
+
+Tests: `host/knowledge.test.ts` (a definition question), `host/knowledge-research.test.ts` (Research through the server with the fake knowledge server, read and held back).
+
+### HH-17 — where a statement's result goes; questions and exports by column
 - **`DqlQueryContext.destination`** — `person`, `model`, `delivery` or `export` — and **`action`**, the request's route action (HH-2), on every statement a request runs. DQL sets them from the request: `ask` and `research` are `model`, `export` is `export`, `schedule.manage` and a scheduled run's pass are `delivery`, anything else `person`; work nobody asked for (a startup sync) has neither. The request context carries `action` and `destination`, so every statement a request starts — directly, streamed, in a read scope, or from an agent's tool — hears the same.
 - **Exports are files made on the server**: `POST /api/query/export` (`{ sql, format, title?, executionTarget? }`, route action `export`; with a host the person must also be allowed `query.run`) and `POST /api/apps/:app/dashboards/:page/export` (`{ tileId, format, variables? }`, one tile of a published page, action `export` on that App). `format` is `csv`, `json` or `xlsx`. The statement runs again for the file with `destination: 'export'`, so the host's policy decides what the file may hold (mask, or refuse with a reason: 403 `EXPORT_REFUSED` for SQL, 422 for a tile). CSV text a spreadsheet would read as a formula is prefixed with `'`; Excel cells are inline strings, never formulas. An export's results are cached apart from what the person sees on screen (`destination` is part of the host principal's cache identity when it is `export`).
 - **The app**: with a host, a table's CSV / JSON / Excel buttons and an App tile's **Download** items call these routes; a hosted table with no export route (an Ask answer, a Block Studio preview) offers no download, since the host decides what may leave. Without a host nothing changes: CSV and JSON are saved from the table on screen.
@@ -383,6 +411,14 @@ Tests: `host/exports.test.ts` (destinations from actions, SQL and tile exports a
 - **Idle connectors close:** the connection pool disconnects network connectors unused for 30 minutes and keeps at most 64 (least recently used first), since per-person sign-in makes one per person per token; local embedded databases are never evicted.
 - **Governed answers are headed "Governed answer"**, not "AI-generated answer".
 - **Run evidence belongs to who ran it:** the page and chart runs DQL keeps for snapshots, story drafts, chart questions and App Autopilot are found only by the person and App persona who ran them (`activePersonaPolicyFingerprint`); a run id alone reads as not current.
+
+### Key proofs: checking the keys certified content declares
+`POST /api/keys/prove` (action `query.run`) proves, as the person asking, the keys certified content declares: each certified block Dataset with a declared grain (`grain = { keys = [...], keyEvidence = "..." }`) runs DQL's own grain proof (the same complete-source probe `POST /api/datasets/validate-grain` runs), and each certified modeling join with keys runs DQL's own relationship validation (the statement `POST /api/modeling/dbt-first/relationships/validate` runs). Both go through the one query path, so the host's row policy and per-person credentials apply.
+- **Narrowing:** `blocks` (block names or file paths) and `relationships` (ids, qualified ids or source paths) limit it to what a change touched; without them it proves everything certified that declares keys.
+- **What comes back:** per Dataset its keys, `status` (`passed`, `failed` or `error`) and `uniqueness` (row, distinct-key, null-key and duplicate-key counts); per join its keys, cardinality, `status` and the validation's counts; `ok` when every one passed. Never a row or a key value. A Dataset proof keeps DQL's local, git-ignored proof evidence as `validate-grain` does; nothing else is written.
+- **Why a route:** both proofs existed only behind authoring routes (`dataset.author`), which a host refuses where Production follows main and in a pull request's read-only preview. Proving keys only reads, so it is `query.run`.
+
+The first host runs it on a pull request's preview as the steward reviewing it, and shows the result as the change's "Keys proven" check. Tests: `datasets/key-proofs.test.ts` (real DuckDB), `route-actions.test.ts`.
 
 ### One process, several servers
 Each request carries its own server's hooks in its request context, so a host that runs Production and pull request previews in one process never has one server's git, delivery, model, tool-gate or usage hooks replaced by another's; the process-wide values are only a fallback for work outside a request. A runtime's `close()` also ends open event streams (a browser tab with DQL open used to hold it forever), a host's own model id (`bedrock`, `vertex`) no longer fails the local provider settings, and `dql app ls` / `GET /api/apps` (without a host) name App files that don't load and why.
