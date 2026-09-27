@@ -8,6 +8,25 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+### Where a result goes; downloads made on the server; your own connections (RFC 0010 HH-17)
+
+- Every statement a request runs tells a host's `rowPolicy` where its
+  result goes (`destination`: `person`, `model`, `delivery` or `export`) and
+  the request's route action, so a host can treat a question, a scheduled
+  delivery and a file differently.
+- **Downloads made on the server**: `POST /api/query/export` and
+  `POST /api/apps/:app/dashboards/:page/export` run a statement or one tile
+  again for a CSV, JSON or Excel file, under the host's export rules. With a
+  host, the app's download buttons use them; without one nothing changes.
+  CSV cells a spreadsheet would read as a formula are prefixed with `'`.
+- **`sensitiveQuestions: 'columns'`**: a host that refuses personal data by
+  column replaces Ask's wording check for payment, health, contact and
+  protected attributes (identifiers and one person's pay stay refused by
+  wording). A row policy's refusal ends an answer with its reason.
+- **Your own connections**: `.dql/local/private/connections.json` (outside
+  git) adds or replaces connections for you alone and can set your default
+  connection — for example a development copy of the warehouse.
+
 ### A Home that summarises, following pages, and who an App is for (RFC 0010 HH-16)
 
 - **Home**, above Ask on a new chat: **My Apps** (followed first, then
