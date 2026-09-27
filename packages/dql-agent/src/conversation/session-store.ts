@@ -333,6 +333,12 @@ export class ConversationStore {
     return thread;
   }
 
+  /** The conversation a run was answered in, for a link to that answer (`/ask?run=<id>`). */
+  threadIdForRun(runId: string): string | null {
+    const row = this.db.prepare('SELECT thread_id FROM conversation_turns WHERE agent_run_id = ? ORDER BY seq LIMIT 1').get(runId) as { thread_id: string } | undefined;
+    return row?.thread_id ?? null;
+  }
+
   getThread(id: string): ConversationThread | null {
     const row = this.db.prepare('SELECT * FROM conversation_threads WHERE id = ?').get(id) as ThreadRow | undefined;
     return row ? rowToThread(row) : null;

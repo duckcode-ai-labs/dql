@@ -743,7 +743,7 @@ import { withHostQueryHooks } from './host/row-policy.js';
 import { auditActor, auditModelUsage, auditRequest, otlpHeadersFromEnv, withAnswerAudit, withTraceExport } from './host/observability.js';
 import { shouldWithhold, withholdRunFigures } from './host/answer-figures.js';
 import { withRunOwnership } from './host/run-ownership.js';
-import { answerFactsFromRun } from './host/answer-facts.js';
+import { answerFactsFromRun, answerValuesFromRun } from './host/answer-facts.js';
 const HOST_ICONS = new Set(['inbox', 'requests', 'review', 'work', 'health', 'admin', 'people', 'git', 'link']);
 import { isViewerToken, mintViewerToken, readViewerToken, viewerDecision, viewerLinkBlockedReason, viewerPrincipal } from './host/viewer-links.js';
 import { boundAgentSchemaColumns, mergeAgentSchemaCompleteness } from './ask-schema-context.js';
@@ -15992,6 +15992,24 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
       return;
     }
 
+    // A link to one answer (`/ask?run=<id>`) opens the conversation it was answered in —
+    // only for someone who may see that answer (the run store is owner-scoped with a host).
+    const agentRunThreadMatch = /^\/api\/agent-runs\/([^/]+)\/thread$/.exec(path);
+    if (req.method === 'GET' && agentRunThreadMatch) {
+      const id = decodeURIComponent(agentRunThreadMatch[1]);
+      const store = getConversationStore();
+      const threadId = (await agentRunStore.get(id)) && store ? store.threadIdForRun(id) : null;
+      const thread = threadId && store ? store.getThread(threadId) : null;
+      if (!thread || !conversationVisibleToCaller(thread)) {
+        res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(serializeJSON({ error: 'That answer was not found among your conversations.' }));
+        return;
+      }
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(serializeJSON({ threadId: thread.id }));
+      return;
+    }
+
     const agentRunMatch = /^\/api\/agent-runs\/([^/]+)$/.exec(path);
     if (req.method === 'GET' && agentRunMatch) {
       const id = decodeURIComponent(agentRunMatch[1]);
@@ -16430,7 +16448,9 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
         return;
       }
       res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
-      res.end(serializeJSON(answerFactsFromRun(run as unknown as Record<string, unknown>)));
+      const facts = answerFactsFromRun(run as unknown as Record<string, unknown>);
+      // Values only when the host asks, and only for the answer's owner (the store is owner-scoped).
+      res.end(serializeJSON(url.searchParams.get('values') === '1' ? { ...facts, ...answerValuesFromRun(run as unknown as Record<string, unknown>) } : facts));
       return;
     }
 

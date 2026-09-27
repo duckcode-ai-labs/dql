@@ -84,4 +84,18 @@ describe('resolveNotebookConnection', () => {
       rmSync(root, { recursive: true, force: true });
     }
   });
+
+  it('reads one metadata statement through its own connection, and nothing else', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'dql-notebook-metadata-'));
+    writeFileSync(join(root, 'dql.config.json'), JSON.stringify({ project: 'metadata-test', connections: { default: { driver: 'duckdb', filepath: ':memory:' } } }));
+    const runtime = await startProjectRuntime(root, { preferredPort: 0 });
+    try {
+      expect(await runtime.metadataQuery("SELECT 'claims' AS table_name")).toEqual({ columns: ['table_name'], rows: [{ table_name: 'claims' }] });
+      await expect(runtime.metadataQuery('DROP TABLE claims')).rejects.toThrow('one read-only statement');
+      await expect(runtime.metadataQuery('SELECT 1; DROP TABLE claims')).rejects.toThrow('one read-only statement');
+    } finally {
+      await runtime.close();
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
 });

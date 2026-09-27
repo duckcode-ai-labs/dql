@@ -159,3 +159,34 @@ describe('ConnectionPoolManager singleflight', () => {
     expect(await pool.getConnector(config)).toBe(fresh);
   });
 });
+
+describe('ConnectionPoolManager idle eviction', () => {
+  const fake = (driverName: string, disconnected: string[], name: string) => ({
+    driverName, connect: async () => undefined, disconnect: async () => { disconnected.push(name); },
+    execute: async () => ({ columns: [], rows: [], rowCount: 0, executionTimeMs: 0 }), ping: async () => true,
+  });
+
+  it('disconnects network connectors left idle, keeps local ones, and caps how many it holds', async () => {
+    const disconnected: string[] = [];
+    const pool = new ConnectionPoolManager({ idleMs: 1_000, maxConnectors: 2, sweepMs: 60_000 });
+    let made = 0;
+    (pool as any).createConnector = (config: { driver: string; token?: string }) => fake(config.driver, disconnected, `${config.driver}:${config.token ?? made++}`);
+    // One person's token renews: a new connector per token; the old one goes idle.
+    await pool.getConnector({ driver: 'snowflake', account: 'a', token: 't1' });
+    await pool.getConnector({ driver: 'duckdb', filepath: ':memory:' } as never);
+    const start = Date.now();
+    expect(await pool.evictIdle(start)).toBe(0);
+    await pool.getConnector({ driver: 'snowflake', account: 'a', token: 't2' });
+    expect(await pool.evictIdle(start + 5_000)).toBe(2);
+    expect(disconnected.sort()).toEqual(['snowflake:t1', 'snowflake:t2']);
+    // DuckDB (in process, maybe in memory) is never evicted.
+    expect(disconnected.some((name) => name.startsWith('duckdb'))).toBe(false);
+
+    // Past the cap, the least recently used network connector goes, even if not yet idle.
+    disconnected.length = 0;
+    for (const token of ['a', 'b', 'c']) await pool.getConnector({ driver: 'snowflake', account: 'a', token });
+    expect(await pool.evictIdle(Date.now())).toBe(1);
+    expect(disconnected).toEqual(['snowflake:a']);
+    await pool.disconnectAll();
+  });
+});

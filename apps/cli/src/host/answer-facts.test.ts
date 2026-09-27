@@ -60,3 +60,12 @@ describe('run ownership', () => {
     expect(runs.get('c')?.ownerId).toBeUndefined();
   });
 });
+
+describe('an answer\'s values for its owner (HH-10 follow-up)', () => {
+  it('gives the first table and written answer, and nothing when the figures were withheld', async () => {
+    const { answerValuesFromRun } = await import('./answer-facts.js');
+    const run = { answer: 'ADJ-16 leads.', artifacts: [{ kind: 'answer', payload: { result: { columns: [{ name: 'adjuster_id' }, 'open_claims'], rows: [{ adjuster_id: 'ADJ-16', open_claims: 15 }, { adjuster_id: 'ADJ-04', open_claims: 7 }] } } }] };
+    expect(answerValuesFromRun(run, 1)).toEqual({ answer: 'ADJ-16 leads.', result: { columns: ['adjuster_id', 'open_claims'], rows: [{ adjuster_id: 'ADJ-16', open_claims: 15 }], rowCount: 2, truncated: true }, figuresWithheld: false });
+    expect(answerValuesFromRun({ ...run, figuresWithheld: true })).toEqual({ answer: null, result: null, figuresWithheld: true });
+  });
+});

@@ -112,3 +112,25 @@ export function answerFactsFromRun(run: AnyRecord): DqlAnswerFacts {
     ...answerIdentities(run as { artifacts?: unknown[] }),
   };
 }
+
+/**
+ * HH-10 follow-up: an answer's own values, for its owner, when a host asks
+ * for them (`GET /api/host/answers/:runId?values=1`) — e.g. to show the
+ * person the figures in Slack. The first table the answer holds (at most
+ * `limit` rows) and its written answer; nothing when the host withheld the
+ * figures from this person (HH-14).
+ */
+export function answerValuesFromRun(run: Record<string, unknown>, limit = 500): { answer: string | null; result: { columns: string[]; rows: unknown[]; rowCount: number; truncated: boolean } | null; figuresWithheld: boolean } {
+  if (run.figuresWithheld === true) return { answer: null, result: null, figuresWithheld: true };
+  const answer = typeof run.answer === 'string' && run.answer ? run.answer : null;
+  for (const artifact of Array.isArray(run.artifacts) ? run.artifacts : []) {
+    const payload = record(record(artifact)?.payload) ?? {};
+    const result = record(payload.result);
+    if (result && Array.isArray(result.rows)) {
+      const columns = (Array.isArray(result.columns) ? result.columns : []).map((column) => (typeof column === 'string' ? column : text(record(column)?.name) ?? '')).filter(Boolean);
+      const rows = result.rows as unknown[];
+      return { answer, result: { columns, rows: rows.slice(0, limit), rowCount: rows.length, truncated: rows.length > limit }, figuresWithheld: false };
+    }
+  }
+  return { answer, result: null, figuresWithheld: false };
+}

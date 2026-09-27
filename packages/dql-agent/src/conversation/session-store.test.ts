@@ -23,6 +23,13 @@ describe('ConversationStore', () => {
     rmSync(root, { recursive: true, force: true });
   });
 
+  it('finds the conversation an answer was given in', () => {
+    const thread = store.createThread({ surface: 'notebook' });
+    store.appendTurn(thread.id, { question: 'claims by region', agentRunId: 'run-42' });
+    expect(store.threadIdForRun('run-42')).toBe(thread.id);
+    expect(store.threadIdForRun('run-unknown')).toBeNull();
+  });
+
   it('creates threads and appends turns with monotonic seq', () => {
     const thread = store.createThread({ surface: 'notebook' });
     const first = store.appendTurn(thread.id, { question: 'revenue by category' });

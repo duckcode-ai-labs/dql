@@ -111,12 +111,69 @@ export function createConnectionConfigKey(config: ConnectionConfig): string {
   return createHash('sha1').update(payload).digest('hex');
 }
 
+/** Local embedded databases are one per project and hold data in process: never evicted. */
+const LOCAL_DRIVERS = new Set(['duckdb', 'file', 'sqlite']);
+
+export interface ConnectionPoolOptions {
+  /** Disconnect a network connector unused this long (default 30 minutes). */
+  idleMs?: number;
+  /** At most this many network connectors; past it the least recently used one goes (default 64). */
+  maxConnectors?: number;
+  /** How often idle connectors are looked for (default 1 minute). */
+  sweepMs?: number;
+}
+
+/**
+ * Connectors are keyed by their full settings, so a host's per-person sign-in
+ * (a token that renews every few minutes) makes a new one per person per
+ * renewal. Idle network connectors are therefore disconnected after a while,
+ * and their number is capped.
+ */
 export class ConnectionPoolManager {
   private connectors: Map<string, DatabaseConnector> = new Map();
   private pendingConnectors: Map<string, Promise<DatabaseConnector>> = new Map();
+  private lastUsed: Map<string, number> = new Map();
+  private local: Set<string> = new Set();
+  private readonly idleMs: number;
+  private readonly maxConnectors: number;
+  private readonly sweepMs: number;
+  private sweeper: ReturnType<typeof setInterval> | undefined;
+
+  constructor(options: ConnectionPoolOptions = {}) {
+    this.idleMs = options.idleMs ?? 30 * 60_000;
+    this.maxConnectors = options.maxConnectors ?? 64;
+    this.sweepMs = options.sweepMs ?? 60_000;
+  }
+
+  private arm(): void {
+    if (this.sweeper) return;
+    this.sweeper = setInterval(() => { void this.evictIdle(); }, this.sweepMs);
+    this.sweeper.unref?.();
+  }
+
+  /** Disconnect network connectors unused for longer than `idleMs`, and the least recently used past the cap. */
+  async evictIdle(now = Date.now()): Promise<number> {
+    const network = [...this.connectors.keys()].filter((key) => !this.local.has(key));
+    const byAge = network.sort((a, b) => (this.lastUsed.get(a) ?? 0) - (this.lastUsed.get(b) ?? 0));
+    const idle = byAge.filter((key) => now - (this.lastUsed.get(key) ?? 0) > this.idleMs);
+    const overCap = byAge.filter((key) => !idle.includes(key)).slice(0, Math.max(0, byAge.length - idle.length - this.maxConnectors));
+    let evicted = 0;
+    for (const key of [...idle, ...overCap]) {
+      const connector = this.connectors.get(key);
+      if (!connector) continue;
+      this.connectors.delete(key);
+      this.lastUsed.delete(key);
+      evicted += 1;
+      try { await connector.disconnect(); } catch { /* already evicted; a later query reconnects */ }
+    }
+    return evicted;
+  }
 
   async getConnector(config: ConnectionConfig): Promise<DatabaseConnector> {
     const key = this.configKey(config);
+    this.arm();
+    this.lastUsed.set(key, Date.now());
+    if (LOCAL_DRIVERS.has(config.driver)) this.local.add(key);
     const existing = this.connectors.get(key);
     if (existing) return existing;
     const pending = this.pendingConnectors.get(key);
@@ -174,6 +231,8 @@ export class ConnectionPoolManager {
   }
 
   async disconnectAll(): Promise<void> {
+    if (this.sweeper) clearInterval(this.sweeper);
+    this.sweeper = undefined;
     await Promise.allSettled(this.pendingConnectors.values());
     const promises = [...this.connectors.values()].map((c) => c.disconnect());
     await Promise.all(promises);

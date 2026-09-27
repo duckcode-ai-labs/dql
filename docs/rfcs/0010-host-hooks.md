@@ -342,6 +342,13 @@ Tests: `server-auth.test.ts`, `ask-trace-navigation.test.ts`, `app-page-run.test
 ### HH-14 — figures of an answer that needs review
 `answerFigures(principal)` returns `show` or `withhold_review`. For a person it withholds from, an Ask answer that needs review is stored and sent without any value: its answer text, result rows, step summaries, events, evaluations and receipts are left out, and the run keeps its trust, SQL, sources, tables and each result's column names and row count (`figuresWithheld: true`). Nothing that could quote a figure streams to that person while the run is going (answer deltas and progress wording). Certified and governed answers are unchanged; the host's answer actions (ask an analyst, make it certified) stay on the answer. An error withholds.
 
+### Answers, links and connections for hosts
+- **An answer's values for its owner:** `GET /api/host/answers/:runId?values=1` adds the answer's written text and first table (at most 500 rows) to its facts — only for the answer's owner, and nothing when HH-14 withheld its figures. Without `values=1`, facts carry no value, as before.
+- **A link to one answer:** `/ask?run=<runId>` opens the conversation the answer was given in (`GET /api/agent-runs/:id/thread`, only for someone who may see it); otherwise plain Ask.
+- **Metadata through the runtime's own connection:** `startProjectRuntime` also returns `metadataQuery(sql)` — one read-only statement (SELECT, WITH, SHOW, DESCRIBE) as metadata, e.g. a host reading warehouse tags without opening a second connection.
+- **Idle connectors close:** the connection pool disconnects network connectors unused for 30 minutes and keeps at most 64 (least recently used first), since per-person sign-in makes one per person per token; local embedded databases are never evicted.
+- **Governed answers are headed "Governed answer"**, not "AI-generated answer".
+
 ### One process, several servers
 Each request carries its own server's hooks in its request context, so a host that runs Production and pull request previews in one process never has one server's git, delivery, model, tool-gate or usage hooks replaced by another's; the process-wide values are only a fallback for work outside a request. A runtime's `close()` also ends open event streams (a browser tab with DQL open used to hold it forever), a host's own model id (`bedrock`, `vertex`) no longer fails the local provider settings, and `dql app ls` / `GET /api/apps` (without a host) name App files that don't load and why.
 

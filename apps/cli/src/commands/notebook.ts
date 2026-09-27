@@ -45,6 +45,12 @@ export interface ProjectRuntimeHandle {
    */
   syncSchema: () => Promise<{ relations: number; columns: number }>;
   /**
+   * RFC 0010: one read-only metadata statement (SELECT, WITH, SHOW, DESCRIBE)
+   * through the runtime's own connection, e.g. a host reading warehouse tags.
+   * It runs as the runtime, not as a person; use it for metadata only.
+   */
+  metadataQuery: (sql: string) => Promise<{ columns: string[]; rows: Array<Record<string, unknown>> }>;
+  /**
    * Stop the HTTP listener and disconnect the warehouse, so the process can
    * exit and a DuckDB file is free for the next process (no-op if closed).
    */
@@ -101,6 +107,13 @@ export async function startProjectRuntime(
     syncSchema: async () => {
       if (!connection) throw new Error('This project has no connection, so there is no schema to read.');
       return syncRuntimeSchema(projectRoot, executor, connection);
+    },
+    metadataQuery: async (sql: string) => {
+      if (!connection) throw new Error('This project has no connection, so there is no metadata to read.');
+      const statement = sql.trim().replace(/;\s*$/, '');
+      if (!/^(select|with|show|describe|desc)\b/i.test(statement) || statement.includes(';')) throw new Error('A metadata query is one read-only statement.');
+      const result = await executor.executeQuery(statement, [], {}, connection, { purpose: 'metadata' });
+      return { columns: result.columns.map((column) => column.name), rows: result.rows as Array<Record<string, unknown>> };
     },
     close: () => (closed ??= new Promise<void>((resolveClose) => {
       if (!server) return resolveClose();

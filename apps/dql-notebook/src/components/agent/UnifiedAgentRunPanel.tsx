@@ -3061,7 +3061,10 @@ function AskRunCard(props: AskRunCardProps) {
         ? 'Certified answer'
         : run.artifacts.some((artifact) => artifact.kind === 'research_run' && investigationReportOf(payloadOf(artifact)))
           ? 'Research report'
-          : 'AI-generated answer';
+          // A governed answer comes from approved semantic definitions, not AI-written SQL.
+          : run.trustState === 'governed' || run.trustState === 'grounded'
+            ? 'Governed answer'
+            : 'AI-generated answer';
   // The card supplies its own headline, so the body wants the most SPECIFIC text
   // available: the producer's own message beats the canned per-code headline,
   // which is the same sentence for everything unclassified.
