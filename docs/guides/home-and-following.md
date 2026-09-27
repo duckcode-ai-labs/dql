@@ -40,7 +40,7 @@ review).
 
 ## Who an App is for
 
-In an App, **Edit → Settings → Audience**: describe the audience in words and
+In an App, **Edit → ⋯ → App settings → Audience**: describe the audience in words and
 name the identity-provider groups it is for. They are saved in
 `dql.app.json`:
 
