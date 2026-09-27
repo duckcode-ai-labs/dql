@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useHostUi } from '../../host/host-ui';
 import { useShallow } from 'zustand/react/shallow';
 import { Plus, MessageSquare, Trash2, Loader2, ShieldCheck, Star, Pencil } from 'lucide-react';
 import {
@@ -1161,6 +1162,7 @@ function ConversationSidebar({
   onToggleFavorite: (id: string) => void;
 }) {
   const switchTitle = busy ? 'Finish the current question first' : undefined;
+  const hostUi = useHostUi();
   const [hoverId, setHoverId] = useState<string | null>(null);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [draftTitle, setDraftTitle] = useState('');
@@ -1318,7 +1320,7 @@ function ConversationSidebar({
       </div>
       <div style={{ padding: '10px 12px', borderTop: `1px solid ${t.headerBorder}`, display: 'flex', alignItems: 'center', gap: 7, fontSize: 11, color: t.textMuted }}>
         <ShieldCheck size={12} style={{ flexShrink: 0, color: t.success }} />
-        <span>Private project history · not committed to Git</span>
+        <span>{hostUi.host ? 'Only you see your chats' : 'Private project history · not committed to Git'}</span>
       </div>
     </aside>
   );

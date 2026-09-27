@@ -27,6 +27,15 @@ describe('dashboard business story', () => {
     expect(validateDashboardStoryBrief(result.story, result.facts)).toEqual({ ok: true, errors: [] });
   });
 
+  it('reads an empty multi-select (All) as no filter, not as a blank value', () => {
+    const result = buildDeterministicDashboardStory({
+      goal: 'Claims this week', filters: { region: [] },
+      tiles: [{ tileId: 'filed', title: 'Claims filed', status: 'ok', trustState: 'certified', result: { columns: ['claim_count'], rows: [{ claim_count: 147 }] }, citation: { kind: 'block', name: 'claims' } }],
+    });
+    expect(result.story.paragraphs[0]).toMatch(/^For the current scope, /);
+    expect(result.story.paragraphs.join(' ')).not.toContain('region ,');
+  });
+
   it('rejects invented numbers and unsupported causal language', () => {
     const result = buildDeterministicDashboardStory({
       goal: 'Revenue overview', filters: {},

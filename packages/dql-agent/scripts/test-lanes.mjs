@@ -56,8 +56,9 @@ const EXPECTED_TEST_FILES = 175;
 // provider-transport regressions total 1,891 non-skipped tests; a future
 // accidental skip must not be hidden by a broad package pass.
 // 2318 with the Bedrock Guardrail option (RFC 0010 HH-5 follow-up, +1 test);
-// 2319 with model usage for a host (RFC 0010 HH-6 follow-up, +1 test).
-const EXPECTED_TESTS = 2319;
+// 2319 with model usage for a host (RFC 0010 HH-6 follow-up, +1 test);
+// 2320 with an empty multi-select read as no filter in page stories (+1 test).
+const EXPECTED_TESTS = 2320;
 
 function discoverTestFiles(directory) {
   return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {

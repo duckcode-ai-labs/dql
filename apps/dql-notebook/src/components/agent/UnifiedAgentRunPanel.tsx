@@ -1294,7 +1294,7 @@ export function UnifiedAgentRunPanel({
                   </button>
                 </div>
               </div>
-              <div style={{ textAlign: 'center', fontSize: 10.5, color: t.textMuted, marginTop: 8 }}>Every answer is grounded in your certified metrics and dbt lineage.</div>
+              <div style={{ textAlign: 'center', fontSize: 10.5, color: t.textMuted, marginTop: 8 }}>Each answer says what it is built on: certified, governed, or needs review.</div>
             </div>
           </div>
         </div>

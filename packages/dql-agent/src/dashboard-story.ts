@@ -243,7 +243,8 @@ function joinFacts(facts: DashboardStoryFact[]): string {
 }
 
 function filterScope(filters: Record<string, unknown>): string {
-  const active = Object.entries(filters).filter(([, value]) => value !== undefined && value !== null && value !== '');
+  // An empty multi-select is "All", not a filter.
+  const active = Object.entries(filters).filter(([, value]) => value !== undefined && value !== null && value !== '' && !(Array.isArray(value) && value.length === 0));
   if (active.length === 0) return 'the current scope';
   return active.map(([key, value]) => `${humanize(key)} ${Array.isArray(value) ? value.join(' to ') : String(value)}`).join(', ');
 }
