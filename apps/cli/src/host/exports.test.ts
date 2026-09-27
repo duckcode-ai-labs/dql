@@ -8,7 +8,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { QueryExecutor, type ConnectionConfig, type QueryResult } from '@duckcodeailabs/dql-connectors';
 import { startLocalServer } from '../local-runtime.js';
 import { inflateRawSync } from 'node:zlib';
-import { destinationForAction, withRequestContext, type DqlHostHooks, type DqlPrincipal } from './request-context.js';
+import { destinationForAction, destinationForRequest, withRequestContext, type DqlHostHooks, type DqlPrincipal } from './request-context.js';
 import { withRowPolicy, type DqlQueryContext } from './row-policy.js';
 
 /**
@@ -42,6 +42,11 @@ describe('destinations on every statement (HH-17)', () => {
   it('reads the destination from the request\'s action, and a scheduled run\'s pass as a delivery', async () => {
     expect(['export', 'ask', 'research', 'schedule.manage', 'app.view', 'query.run'].map((action) => destinationForAction(action as never)))
       .toEqual(['export', 'model', 'model', 'delivery', 'person', 'person']);
+    // Only the file exports run statements for a file; a signed snapshot reads the person's own run as they saw it.
+    expect(destinationForRequest('export', '/api/query/export')).toBe('export');
+    expect(destinationForRequest('export', '/api/apps/claims/dashboards/overview/export')).toBe('export');
+    expect(destinationForRequest('export', '/api/apps/claims/dashboards/overview/snapshot')).toBe('person');
+    expect(destinationForRequest('export', '/api/ask-traces/t1/export')).toBe('person');
     const seen: DqlQueryContext[] = [];
     const inner = { executePositional: async () => ({ columns: [], rows: [] }) as unknown as QueryResult } as unknown as QueryExecutor;
     const executor = withRowPolicy(inner, (query) => { seen.push(query); return { sql: query.sql }; });

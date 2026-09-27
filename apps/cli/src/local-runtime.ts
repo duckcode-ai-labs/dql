@@ -741,7 +741,7 @@ import {
 } from "./notebook-datasets.js";
 import { prepareBlockInvocation } from './block-invocation.js';
 import { readPrivateConnections, redactConnections, resolveSecretReferences, storeConnectionSecrets } from './connection-secrets.js';
-import { authorizeHostRequest, currentHostGitHooks, currentPrincipal, currentRequestContext, hostActor, hostAllowedSources, hostGitAuthor, hostModelProvider, installHostPersonaSlots, resolveHostPrincipal, resultValuesMayReachModel, safeHomeCards, safeHostBanner, safeNextLink, setHostGitHooks, setHostModelHooks, withRequestContext, type DqlFollow, type DqlHostHooks } from './host/request-context.js';
+import { authorizeHostRequest, currentHostGitHooks, currentPrincipal, currentRequestContext, destinationForRequest, hostActor, hostAllowedSources, hostGitAuthor, hostModelProvider, installHostPersonaSlots, resolveHostPrincipal, resultValuesMayReachModel, safeHomeCards, safeHostBanner, safeNextLink, setHostGitHooks, setHostModelHooks, withRequestContext, type DqlFollow, type DqlHostHooks } from './host/request-context.js';
 import { isRunPass, issueRunPass, redeemRunPass, revokeRunPass } from './host/schedule-runs.js';
 import { setDeliverySink } from './schedule/notifiers/index.js';
 import { routeAction, type DqlAction } from './host/route-actions.js';
@@ -13499,11 +13499,12 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
     // HH-17: statements carry the route's action, and where their results go
     // (a scheduled run's pass: its delivery).
     const requestAction = path.startsWith('/api/') ? routeAction(req.method, path).action : undefined;
+    const requestDestination = runPass ? 'delivery' as const : destinationForRequest(requestAction, path);
     return withRequestContext(requestPrincipal ? {
       principal: requestPrincipal,
       requestId,
       ...(requestAction ? { action: requestAction } : {}),
-      ...(runPass ? { destination: 'delivery' as const } : {}),
+      ...(requestDestination ? { destination: requestDestination } : {}),
       ...(hostHooks ? { hooks: hostHooks } : {}),
     } : undefined, async () => {
 

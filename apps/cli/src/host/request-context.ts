@@ -45,6 +45,19 @@ export interface DqlPrincipal {
  */
 export type DqlDestination = 'person' | 'model' | 'delivery' | 'export';
 
+/** DQL's file exports: a statement or one App tile run again for a CSV, JSON or Excel file. */
+const FILE_EXPORT_ROUTE = /^\/api\/(?:query|apps\/[^/]+\/dashboards\/[^/]+)\/export$/;
+
+/**
+ * The destination of a request's statements, from its route action and path.
+ * Only the file exports are `export`: a signed snapshot or a trace download
+ * (also the `export` action) reads a run already made, as the person saw it.
+ */
+export function destinationForRequest(action: DqlAction | undefined, path: string): DqlDestination | undefined {
+  if (action === 'export') return FILE_EXPORT_ROUTE.test(path) ? 'export' : 'person';
+  return destinationForAction(action);
+}
+
 /** The destination of a request's statements, from its route action (HH-2). */
 export function destinationForAction(action: DqlAction | undefined): DqlDestination | undefined {
   if (!action) return undefined;
