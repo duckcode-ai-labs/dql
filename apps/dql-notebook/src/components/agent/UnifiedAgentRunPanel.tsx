@@ -81,6 +81,7 @@ import { BlockParameterControls, isRuntimeEditableParameter } from '../parameter
 export { deriveResultChartConfig } from '../output/ResultView';
 import type { QueryResult, AppSummary, CellChartConfig, Cell, BlockParameterDefinition, ExecutionTarget } from '../../store/types';
 import { useNotebook } from '../../store/NotebookStore';
+import { projectExamplePrompts } from './project-prompts';
 import { buildConversationContext } from './agentConversationContext';
 import { describeJoin, explainAskRun, explanationForTrace, isAskPipelineReceipt, type RunExplanation } from './ask-run-explanation';
 import { runContextLine, runContextSummary } from './run-context-summary';
@@ -386,6 +387,12 @@ export function UnifiedAgentRunPanel({
   replaceDqlActionLabel,
   askLayout = false,
 }: UnifiedAgentRunPanelProps): JSX.Element {
+  const { state: notebookState } = useNotebook();
+  // An empty Ask suggests questions this project's own metrics can answer.
+  const projectPrompts = useMemo(
+    () => projectExamplePrompts(notebookState.semanticLayer.metrics ?? [], notebookState.semanticLayer.dimensions ?? [], notebookState.semanticLayer.timeDimensions ?? []),
+    [notebookState.semanticLayer.metrics, notebookState.semanticLayer.dimensions, notebookState.semanticLayer.timeDimensions],
+  );
   const t = themes[themeMode];
   // One clean composer everywhere: an auto-routed box — no mode chips. Capability
   // still varies server-side by `audience` (analyst keeps the
@@ -1218,7 +1225,7 @@ export function UnifiedAgentRunPanel({
                   <div style={largeIconShellStyle(t)}><Sparkles size={20} /></div>
                   <div style={{ fontSize: 13.5, lineHeight: 1.5, maxWidth: 400, color: t.textSecondary }}>{emptyHint ?? DEFAULT_EMPTY_HINT}</div>
                   <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'center', maxWidth: 520 }}>
-                    {(examplePrompts ?? EXAMPLE_PROMPTS).map((ex) => (
+                    {(examplePrompts ?? (projectPrompts.length ? projectPrompts : EXAMPLE_PROMPTS)).map((ex) => (
                       <button key={ex.label} type="button" className="dql-hover dql-lift" onClick={() => { setInput(ex.prompt); requestAnimationFrame(() => inputRef.current?.focus()); }} style={suggestionChipStyle(t)}>{ex.label}</button>
                     ))}
                   </div>
@@ -1375,7 +1382,7 @@ export function UnifiedAgentRunPanel({
               {emptyHint ?? DEFAULT_EMPTY_HINT}
             </div>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'center', maxWidth: 520 }}>
-              {(examplePrompts ?? EXAMPLE_PROMPTS).map((ex) => (
+              {(examplePrompts ?? (projectPrompts.length ? projectPrompts : EXAMPLE_PROMPTS)).map((ex) => (
                 <button key={ex.label} type="button" className="dql-hover dql-lift" onClick={() => { setInput(ex.prompt); requestAnimationFrame(() => inputRef.current?.focus()); }} style={suggestionChipStyle(t)}>
                   {ex.label}
                 </button>
@@ -1484,7 +1491,7 @@ export function UnifiedAgentRunPanel({
   );
 }
 
-const DEFAULT_EMPTY_HINT = 'Ask a question — every answer is grounded in your certified metrics and dbt lineage. Use Research deeper on any answer to investigate what changed.';
+const DEFAULT_EMPTY_HINT = 'Ask a question. Each answer says what it is built on: certified, governed, or needs review. Use Research deeper on any answer to investigate what changed.';
 const EXAMPLE_PROMPTS: ExamplePrompt[] = [
   { label: 'What is total revenue?', prompt: 'What is total revenue?' },
   { label: 'Why is revenue down by region?', prompt: 'Why is revenue down by region?' },
