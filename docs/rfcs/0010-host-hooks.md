@@ -345,6 +345,7 @@ Tests: `server-auth.test.ts`, `ask-trace-navigation.test.ts`, `app-page-run.test
 
 ### Answers, links and connections for hosts
 - **An answer's values for its owner:** `GET /api/host/answers/:runId?values=1` adds the answer's written text and first table (at most 500 rows) to its facts — only for the answer's owner, and nothing when HH-14 withheld its figures. Without `values=1`, facts carry no value, as before.
+- **A certified answer names its block:** its facts' `sources` (and its audit event's) list the certified block it ran as `block:<domain>.<name>` and `app:block:<domain>:<hash>`, the ids HH-13 `sourceAccess` hears, and `source` is `{ kind: 'block', name }` — so a host can tell whether the answer read a Dataset it restricts.
 - **A link to one answer:** `/ask?run=<runId>` opens the conversation the answer was given in (`GET /api/agent-runs/:id/thread`, only for someone who may see it); otherwise plain Ask.
 - **Metadata through the runtime's own connection:** `startProjectRuntime` also returns `metadataQuery(sql)` — one read-only statement (SELECT, WITH, SHOW, DESCRIBE) as metadata, e.g. a host reading warehouse tags without opening a second connection.
 - **Idle connectors close:** the connection pool disconnects network connectors unused for 30 minutes and keeps at most 64 (least recently used first), since per-person sign-in makes one per person per token; local embedded databases are never evicted.

@@ -70,6 +70,22 @@ function unquote(part: string): string {
   return part.replace(/^["`[]|["`\]]$/g, '');
 }
 
+/**
+ * The certified block a certified answer ran, by the ids a host's
+ * `sourceAccess` hears for it (HH-13): `block:<domain>.<name>`, and for a
+ * block saved in an App's Datasets also `app:block:<domain>:<hash>`.
+ */
+export function certifiedBlockIds(payload: AnyRecord): { ids: string[]; name?: string } {
+  const ref = text(payload.certifiedBlockRef);
+  const match = ref?.match(/^block:([^.]+)\.(.+)$/);
+  if (!ref || !match) return { ids: [] };
+  const [, domain, name] = match;
+  const sourcePath = text(record(payload.dqlArtifact)?.sourcePath);
+  const ids = [ref];
+  if (sourcePath) ids.push(`app:block:${domain}:${createHash('sha256').update(`${sourcePath}\u0000${name}`).digest('hex').slice(0, 20)}`);
+  return { ids, name };
+}
+
 /** SQL hashes and source ids of a run, computed exactly as its audit event does (observability.ts). */
 export function answerIdentities(run: { artifacts?: unknown[] }): { sqlSha256: string[]; sources: string[] } {
   const sql = new Set<string>();
@@ -81,7 +97,7 @@ export function answerIdentities(run: { artifacts?: unknown[] }): { sqlSha256: s
       const value = payload[key];
       if (typeof value === 'string' && value.trim()) sql.add(createHash('sha256').update(value).digest('hex'));
     }
-    for (const value of [item.sourceId, payload.sourceId, payload.blockId, payload.datasetId]) {
+    for (const value of [item.sourceId, payload.sourceId, payload.blockId, payload.datasetId, ...certifiedBlockIds(payload).ids]) {
       if (typeof value === 'string' && value) sources.add(value);
     }
   }
@@ -94,7 +110,11 @@ export function answerFactsFromRun(run: AnyRecord): DqlAnswerFacts {
   const executed = record(receipt?.executed);
   const trace = record(run.traceReference);
   const selected = record(run.selectedObject);
-  const sourceName = text(selected?.title) ?? text(selected?.id) ?? text(selected?.path);
+  const certified = (Array.isArray(run.artifacts) ? run.artifacts : [])
+    .map((artifact) => certifiedBlockIds(record(record(artifact)?.payload) ?? {}).name)
+    .find((name): name is string => !!name);
+  const selectedName = text(selected?.title) ?? text(selected?.id) ?? text(selected?.path);
+  const sourceName = selectedName ?? certified;
   return {
     runId: String(run.id),
     question: String(run.question ?? ''),
@@ -108,7 +128,7 @@ export function answerFactsFromRun(run: AnyRecord): DqlAnswerFacts {
       : sql ? { sqlFingerprint: `sha256:${createHash('sha256').update(sql.sql).digest('hex')}` } : {}),
     tables: sql ? tablesRead(sql.sql) : [],
     ...(text(trace?.traceId) ? { traceId: text(trace?.traceId)! } : {}),
-    ...(sourceName ? { source: { kind: String(selected?.kind ?? 'object'), name: sourceName } } : {}),
+    ...(sourceName ? { source: { kind: selectedName ? String(selected?.kind ?? 'object') : 'block', name: sourceName } } : {}),
     ...answerIdentities(run as { artifacts?: unknown[] }),
   };
 }

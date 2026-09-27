@@ -33,6 +33,20 @@ describe('what a host may keep about an answer (HH-10)', () => {
     expect(withIds.sources).toEqual(['block:claims_paid', 'ds:claims']);
     expect(withIds.sqlSha256).toEqual([createHash('sha256').update('SELECT 1').digest('hex')]);
   });
+
+  it('names the certified block a certified answer ran, by the ids a host\'s source rule hears', () => {
+    const facts = answerFactsFromRun({
+      id: 'run-2', question: 'Claims paid by region', status: 'completed', trustState: 'certified', route: 'ask',
+      artifacts: [{ kind: 'answer', payload: {
+        kind: 'certified', certifiedBlockRef: 'block:claims.claims_paid_by_region',
+        dqlArtifact: { kind: 'certified_block', name: 'claims_paid_by_region', sourcePath: 'blocks/claims/claims_paid_by_region.dql' },
+        result: { sql: 'SELECT region, SUM(amount) FROM claims.payments GROUP BY 1', rows: [] },
+      } }],
+    });
+    const hash = createHash('sha256').update('blocks/claims/claims_paid_by_region.dql\u0000claims_paid_by_region').digest('hex').slice(0, 20);
+    expect(facts.sources).toEqual([`app:block:claims:${hash}`, 'block:claims.claims_paid_by_region']);
+    expect(facts.source).toEqual({ kind: 'block', name: 'claims_paid_by_region' });
+  });
 });
 
 describe('run ownership', () => {
