@@ -8,6 +8,15 @@ export { DQLContext, findProjectRoot } from './context.js';
 export type { DQLContextOptions } from './context.js';
 export { runStdio } from './transports/stdio.js';
 export { runLoopbackHTTP } from './transports/http.js';
+export {
+  createMcpKnowledgeSource,
+  closeKnowledgeConnections,
+  parseHits as parseKnowledgeHits,
+  parseDocument as parseKnowledgeDocument,
+  KnowledgeServerError,
+  type KnowledgeServerConfig,
+} from './client/knowledge-client.js';
+export { startFakeKnowledgeServer, type FakeKnowledgePage, type FakeKnowledgeServer, type FakeKnowledgeServerOptions } from './testing/fake-knowledge-server.js';
 
 export { searchBlocks, searchBlocksInput } from './tools/search-blocks.js';
 export { getBlock, getBlockInput } from './tools/get-block.js';

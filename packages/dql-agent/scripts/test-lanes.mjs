@@ -48,8 +48,9 @@ const REQUIRED_TEST_FILES = [
 // 172 with the story-drafting suite (RFC 0008 step 8, +1 file, +4 tests);
 // 173 with the governed-HTML drafting suite (RFC 0008 step 9, +1 file, +4 tests);
 // 174 with Claude on Bedrock and Vertex (RFC 0010 HH-5, +1 file, +8 tests);
-// 175 with the tool gate (RFC 0010 HH-7, +1 file, +2 tests).
-const EXPECTED_TEST_FILES = 175;
+// 175 with the tool gate (RFC 0010 HH-7, +1 file, +2 tests);
+// 176 with knowledge sources (RFC 0010 HH-15, +1 file, +14 tests).
+const EXPECTED_TEST_FILES = 176;
 // Keep the aggregate receipt exact. The Ask pipeline suites (intent contract,
 // vocabulary, governed defaults and host proofs, prepare tiers), the engine,
 // observability, retrieval, semantic-proof, research-ledger, conversation and
@@ -58,8 +59,9 @@ const EXPECTED_TEST_FILES = 175;
 // 2318 with the Bedrock Guardrail option (RFC 0010 HH-5 follow-up, +1 test);
 // 2319 with model usage for a host (RFC 0010 HH-6 follow-up, +1 test);
 // 2320 with an empty multi-select read as no filter in page stories (+1 test);
-// 2321 with the conversation an answer was given in (links to one answer, +1 test).
-const EXPECTED_TESTS = 2321;
+// 2321 with the conversation an answer was given in (links to one answer, +1 test);
+// 2335 with knowledge sources: cited documents, never a figure source (RFC 0010 HH-15, +14 tests).
+const EXPECTED_TESTS = 2335;
 
 function discoverTestFiles(directory) {
   return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {

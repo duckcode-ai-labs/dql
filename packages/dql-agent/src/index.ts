@@ -2076,3 +2076,4 @@ export {
 export type { CanvasDraftInput, CanvasDraftResult } from './canvas-draft.js';
 
 export { runGatedTool, setAgentToolGate, type AgentToolCall, type AgentToolGate } from './agentic/tool-gate.js';
+export * from './knowledge/index.js';

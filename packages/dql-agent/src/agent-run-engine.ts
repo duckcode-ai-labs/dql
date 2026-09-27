@@ -1,3 +1,4 @@
+import type { AgentRunKnowledgeV1 } from './knowledge/consult.js';
 import { composeAnswer, type TerminalIncidentCode } from './ask-runtime/compose-answer.js';
 import type { AnswerRefusalCode } from './answer-loop.js';
 import type { AskPipelineReceiptV9 } from './ask-pipeline/outcomes.js';
@@ -691,6 +692,11 @@ export interface AgentRun {
    * checks it (RFC 0010 HH-14): the run holds what it is built on, never a value.
    */
   figuresWithheld?: boolean;
+  /**
+   * Team documents the answer read (knowledge sources, RFC 0010 HH-15): a
+   * figure-free note and citations. Context only — never part of trust.
+   */
+  knowledge?: AgentRunKnowledgeV1;
   /** How to read `answer` for trust; defaults to "governed". */
   answerKind?: AgentRunAnswerKind;
   artifacts: AgentRunArtifact[];
@@ -866,6 +872,8 @@ export interface AgentRouteExecutorResult {
   /** Optional executor update to the runtime state after a fact-backed result. */
   askAnalystState?: AskAnalystState;
   businessAnswer?: BusinessAnswer;
+  /** Team documents the answer read; persisted as the run's `knowledge`, never read for trust. */
+  knowledge?: AgentRunKnowledgeV1;
 }
 
 export type AgentRouteExecutor = (
@@ -3005,6 +3013,7 @@ export class AgentRunEngine {
       ...(finalResult.askPipelineReceipt ? { diagnosticReceiptV9: finalResult.askPipelineReceipt } : {}),
       ...(finalResult.askAnalystState ? { askAnalystState: finalResult.askAnalystState } : {}),
       ...(finalResult.businessAnswer ? { businessAnswer: finalResult.businessAnswer } : {}),
+      ...(finalResult.knowledge ? { knowledge: finalResult.knowledge } : {}),
       escalationAttempts,
       budgetUsage: input.budgetUsage,
       ...(finalResult.analyticalTurnPlan ? { analyticalTurnPlan: finalResult.analyticalTurnPlan } : {}),
