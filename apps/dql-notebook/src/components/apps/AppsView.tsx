@@ -67,6 +67,8 @@ import { AppStudioLaunchSurface, AppStudioV2, type AppStudioLaunchConfig } from 
 import { APP_STYLES } from './app-styles';
 import { cleanStakeholderCopy, formatBusinessLabel, tidyTitle } from './app-text';
 import { AiPinsPanel, DraftsPanel, EmptyPanel, NotebookListPanel, PanelCard, PanelHead, SettingsPanel, StatusSeal } from './AppSidePanels';
+import { FollowPageButton } from './FollowPageButton';
+import { AskAboutApp } from './AskAboutApp';
 import { ResearchPanel } from './ResearchPanel';
 import { formatVariableEntryValue, formatVariableValue } from './app-variables';
 import type { AppAnalysisHandoff, AppResearchSeed, CreateInvestigationResult } from './app-research-types';
@@ -2346,6 +2348,42 @@ function AppWorkspaceSurface({
     setAskSeed({ text: question, nonce: Date.now() });
   }, [dispatch, isEditable, workspaceAppId, workspaceAppName, dashboardDoc?.dashboard.id, dashboardDoc?.dashboard.metadata.title, onExplainChange]);
 
+  // "Ask about this App" (HH-16): the whole App, its domain and the filters on
+  // screen, through the governed Ask loop (the server scopes it; see
+  // app-copilot-scope). Readers ask in the global rail; authors in App AI.
+  const handleAskApp = useCallback((question: string) => {
+    if (isEditable) {
+      onExplainChange(true);
+      setAskSeed({ text: question, nonce: Date.now() });
+      return;
+    }
+    const appTitle = tidyTitle(workspaceAppName) || 'this App';
+    dispatch({
+      type: 'OPEN_GLOBAL_AI',
+      audience: 'stakeholder',
+      context: {
+        title: `Ask about ${appTitle}`,
+        scopeHint: `Scoped to ${appTitle}${dashboardDoc?.dashboard.metadata.title ? ` · ${dashboardDoc.dashboard.metadata.title}` : ''}`,
+        selectedObject: { kind: 'app', id: workspaceAppId ?? undefined, title: appTitle },
+        workspaceContext: {
+          surface: 'apps',
+          appId: workspaceAppId ?? undefined,
+          appName: workspaceAppName ?? undefined,
+          dashboardId: dashboardDoc?.dashboard.id,
+          dashboardTitle: dashboardDoc?.dashboard.metadata.title,
+          dashboardFilters: variables,
+        },
+        suggestedQuestions: (dashboardDoc?.app as { copilot?: { suggestedQuestions?: string[] } } | undefined)?.copilot?.suggestedQuestions,
+      },
+      autoRun: { text: question, mode: 'ask' },
+    });
+  }, [dispatch, isEditable, onExplainChange, workspaceAppId, workspaceAppName, dashboardDoc, variables]);
+  const askAboutAppFilters = useMemo(() => dashboardFilters.flatMap((filter) => {
+    const value = dashboardFilterValues[filter.id];
+    const text = Array.isArray(value) ? value.map(String).join(', ') : typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean' ? String(value) : '';
+    return text.trim() ? [{ label: formatBusinessLabel((filter as { label?: string }).label ?? filter.id), value: text.slice(0, 80) }] : [];
+  }), [dashboardFilters, dashboardFilterValues]);
+
   const handleAskChart = useCallback(async ({ tileId, runId, question }: { tileId: string; runId: string; question: string }) => {
     if (!workspaceAppId || !dashboardDoc) return;
     const requestToken = chartAnswerRequestRef.current + 1;
@@ -2514,6 +2552,9 @@ function AppWorkspaceSurface({
         </div>}
 
         <div className="dql-app-view-actions">
+          {!readOnlyLink && workspaceAppId && dashboardDoc && section === 'dashboards'
+            ? <FollowPageButton appId={workspaceAppId} pageId={dashboardDoc.dashboard.id} />
+            : null}
           {readerOnly ? null : <PersonaSwitcher app={metadataApp} />}
           {isEditable ? (
             semanticTileIds.length > 0 ? (
@@ -2742,6 +2783,19 @@ function AppWorkspaceSurface({
                     <ArrowLeft size={14} /> Back to previous page
                   </button>
                 ) : null}
+                {readOnlyLink ? null : (
+                  <AskAboutApp
+                    scope={{
+                      appId: metadataApp.id,
+                      appName: tidyTitle(metadataApp.name) || metadataApp.id,
+                      domain: metadataApp.domain,
+                      dashboardId: dashboardDoc.dashboard.id,
+                      pageTitle: dashboardDoc.dashboard.metadata.title,
+                      filters: askAboutAppFilters,
+                    }}
+                    onAsk={handleAskApp}
+                  />
+                )}
                 <DashboardRenderer
                   appId={metadataApp.id}
                   dashboard={dashboardDoc.dashboard}
@@ -2792,7 +2846,10 @@ function AppWorkspaceSurface({
             ) : section === 'drafts' ? (
               <DraftsPanel appDoc={appDoc} />
             ) : section === 'settings' ? (
-              <SettingsPanel appDoc={appDoc} />
+              <SettingsPanel
+                appDoc={appDoc}
+                onOpenLink={(label, href) => { hostPage.openPage({ id: `app-settings-${href}`, label, href }); dispatch({ type: 'SET_MAIN_VIEW', view: 'host_page' }); }}
+              />
             ) : (
               <EmptyPanel title="No dashboard page selected." detail="Choose a dashboard page or add one in Build mode." />
             )}

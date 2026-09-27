@@ -1,6 +1,7 @@
 import React, { type ReactNode } from 'react';
 import { Blocks, BookOpenText, Bot, FileText, LayoutDashboard, ShieldCheck, Workflow } from 'lucide-react';
 import type { AppDocumentSummary } from '../../api/client';
+import { AppAudienceEditor } from './AppAudienceEditor';
 
 /**
  * Read-only side panels for the App workspace (notebooks, pins, drafts,
@@ -73,10 +74,11 @@ export function DraftsPanel({ appDoc }: { appDoc: AppDocumentSummary | null }) {
   );
 }
 
-export function SettingsPanel({ appDoc }: { appDoc: AppDocumentSummary | null }) {
+export function SettingsPanel({ appDoc, onOpenLink }: { appDoc: AppDocumentSummary | null; onOpenLink?: (label: string, href: string) => void }) {
   if (!appDoc) return <EmptyPanel title="No App selected." detail="Choose an App to inspect its settings." />;
   return (
     <div className="dql-app-settings-grid">
+      <AppAudienceEditor key={appDoc.app.id} appId={appDoc.app.id} audience={appDoc.app.audience} groups={appDoc.app.audienceGroups ?? []} {...(onOpenLink ? { onOpenLink } : {})} />
       <PanelCard icon={<ShieldCheck size={16} />}><b>Owners</b><span>{appDoc.app.owners.join(', ')}</span></PanelCard>
       <PanelCard icon={<Workflow size={16} />}><b>Lifecycle</b><span>{appDoc.app.lifecycle ?? 'draft'}</span></PanelCard>
       <PanelCard icon={<Blocks size={16} />}><b>Policies</b><span>{appDoc.app.policies.length} local access policies</span></PanelCard>
