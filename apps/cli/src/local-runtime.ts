@@ -737,7 +737,7 @@ import {
   type DatasetSource,
 } from "./notebook-datasets.js";
 import { prepareBlockInvocation } from './block-invocation.js';
-import { redactConnections, resolveSecretReferences, storeConnectionSecrets } from './connection-secrets.js';
+import { readPrivateConnections, redactConnections, resolveSecretReferences, storeConnectionSecrets } from './connection-secrets.js';
 import { authorizeHostRequest, currentHostGitHooks, currentPrincipal, currentRequestContext, hostActor, hostAllowedSources, hostGitAuthor, hostModelProvider, installHostPersonaSlots, resolveHostPrincipal, resultValuesMayReachModel, safeHostBanner, safeNextLink, setHostGitHooks, setHostModelHooks, withRequestContext, type DqlHostHooks } from './host/request-context.js';
 import { isRunPass, issueRunPass, redeemRunPass, revokeRunPass } from './host/schedule-runs.js';
 import { setDeliverySink } from './schedule/notifiers/index.js';
@@ -32511,6 +32511,12 @@ export function loadProjectConfig(projectRoot: string): ProjectConfig {
   }
 
   const raw = JSON.parse(readFileSync(configPath, 'utf-8')) as Record<string, unknown>;
+  // This person's own connections (`.dql/local/private/connections.json`, never in git) replace shared ones.
+  const own = readPrivateConnections(projectRoot);
+  if (own) {
+    raw.connections = { ...getStoredConnections(raw), ...own.connections };
+    if (own.defaultConnection) raw.defaultConnectionName = own.defaultConnection;
+  }
   const config = raw as unknown as ProjectConfig;
 
   const connections = getStoredConnections(raw);
