@@ -1,6 +1,6 @@
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
-import type { DQLManifest, SemanticLayer, WarehouseCatalogSnapshotV1 } from '@duckcodeailabs/dql-core';
+import { resolveBlockReplacement, type DQLManifest, type SemanticLayer, type WarehouseCatalogSnapshotV1 } from '@duckcodeailabs/dql-core';
 import { buildVocabularyIndex, extractBlockContract, parsePhysicalIdentifier, physicalRelationBinding, physicalRelationIdentity, physicalRelationText, mergePhysicalRelationBinding, renderPhysicalIdentifier, type PhysicalRelationBindingV1, type VocabularyEntry, type VocabularyIndex, type VocabularySource } from '@duckcodeailabs/dql-agent';
 
 /**
@@ -810,7 +810,19 @@ export function buildVocabularySource(input: VocabularySourceInput): VocabularyS
     }
   }
 
-  for (const block of Object.values(input.manifest?.blocks ?? {})) {
+  // Retired blocks never answer. A retired block that names its replacement
+  // lends its name to that replacement, so a question that still asks for the
+  // old block reaches the new one (and the run says it did).
+  const manifestBlocks = Object.values(input.manifest?.blocks ?? {});
+  const supersededBy = new Map<string, Array<{ name: string; deprecatedOn?: string }>>();
+  for (const block of manifestBlocks) {
+    const replacement = resolveBlockReplacement(manifestBlocks, block)?.replacement;
+    if (!replacement) continue;
+    const list = supersededBy.get(replacement.name) ?? [];
+    list.push({ name: block.name, ...(block.deprecatedOn ? { deprecatedOn: block.deprecatedOn } : {}) });
+    supersededBy.set(replacement.name, list);
+  }
+  for (const block of manifestBlocks) {
     const certified = (block.status ?? '').toLowerCase() === 'certified';
     if (!certified) continue;
     // Certification is one state. A block whose status says certified while
@@ -827,6 +839,7 @@ export function buildVocabularySource(input: VocabularySourceInput): VocabularyS
       }),
       ...(block.examples?.length ? { examples: block.examples.map((example) => example.question) } : {}),
       ...(block.tags?.length ? { tags: block.tags } : {}), sql: block.sql,
+      ...(supersededBy.get(block.name)?.length ? { supersedes: supersededBy.get(block.name) } : {}),
     });
   }
   for (const term of Object.values(input.manifest?.terms ?? {})) {

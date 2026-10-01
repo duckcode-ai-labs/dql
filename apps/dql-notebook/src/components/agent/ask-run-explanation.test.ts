@@ -145,6 +145,23 @@ describe('how an Ask run was answered, as steps in plain words', () => {
     expect(quoted.dataUsed.tables).toEqual(['jaffle_shop.dev.orders']);
   });
 
+  it('a question that named a retired block says it was answered from the replacement, on the certified step', () => {
+    const retired = base({
+      reading: 'Paid claims.',
+      intent: { kind: 'analytics', reading: 'Paid claims.', unresolved: [] },
+      tiers: [{ round: 0, tier: 'certified', outcome: 'prepared' }],
+      executed: { tier: 'certified', rowCount: 1, ms: 5, proofs: [] },
+      story: [
+        { version: 1, phase: 'tier', title: 'Certified blocks: prepared an answer', state: 'done', at: 1 },
+        { version: 1, phase: 'tier', title: 'Claims Summary was retired on 2026-09-30; answered from Claims Dataset', state: 'done', at: 2 },
+      ],
+    });
+    const explanation = explainAskRun({ receipt: retired, payload: { certifiedBlockRef: 'block:claims.Claims Dataset' }, status: 'completed' })!;
+    const certified = explanation.steps.find((step) => step.id === 'tier-certified')!;
+    expect(certified.outcome).toBe('done');
+    expect(certified.notes).toContain('Claims Summary was retired on 2026-09-30; answered from Claims Dataset.');
+  });
+
   it('an older pipeline receipt without recorded checks still shows the checks its story holds', () => {
     const older = { ...aiAnswer, checks: undefined, story: [...(aiAnswer.story as unknown[]), { phase: 'schema', title: 'Checked the drafted SQL', state: 'done', detail: 'applies Splunk', at: 4 }] };
     const explanation = explainAskRun({ receipt: older, payload: {}, status: 'completed' })!;

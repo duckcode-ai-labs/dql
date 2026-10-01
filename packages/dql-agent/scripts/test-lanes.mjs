@@ -63,8 +63,9 @@ const EXPECTED_TEST_FILES = 177;
 // 2321 with the conversation an answer was given in (links to one answer, +1 test);
 // 2335 with knowledge sources: cited documents, never a figure source (RFC 0010 HH-15, +14 tests);
 // 2337 on main;
-// 2340 with stores that answer with Promises: async conversation helpers and host run records (RFC 0010 HH-6, +3 tests).
-const EXPECTED_TESTS = 2340;
+// 2340 with stores that answer with Promises: async conversation helpers and host run records (RFC 0010 HH-6, +3 tests);
+// 2343 with retired blocks answered from their replacement (replacedBy, +3 tests).
+const EXPECTED_TESTS = 2343;
 
 function discoverTestFiles(directory) {
   return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {

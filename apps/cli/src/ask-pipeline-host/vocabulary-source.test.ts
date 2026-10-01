@@ -340,6 +340,22 @@ describe('contradictory block metadata is never certified evidence', () => {
   });
 });
 
+describe('a retired block never answers; its name reaches its replacement', () => {
+  it('leaves the deprecated block out and lends its name to the certified block it was replaced by', () => {
+    const manifest = { blocks: {
+      old: { name: 'Claims Summary', status: 'deprecated', replacedBy: 'Claims Interim', deprecatedOn: '2026-09-30', filePath: 'blocks/old.dql', sql: 'SELECT 1 AS x', declaredOutputs: ['x'], tags: [] },
+      mid: { name: 'Claims Interim', status: 'deprecated', replacedBy: 'blocks/new.dql', filePath: 'blocks/mid.dql', sql: 'SELECT 1 AS x', declaredOutputs: ['x'], tags: [] },
+      next: { name: 'Claims Dataset', status: 'certified', filePath: 'blocks/new.dql', sql: 'SELECT 1 AS x', declaredOutputs: ['x'], tags: [] },
+    } } as unknown as DQLManifest;
+    const source = buildVocabularySource({ manifest, semanticLayer: undefined, relations: [] } as never);
+    expect(source.blocks!.map((block) => block.name)).toEqual(['Claims Dataset']);
+    expect(source.blocks![0]!.supersedes).toEqual([{ name: 'Claims Summary', deprecatedOn: '2026-09-30' }, { name: 'Claims Interim' }]);
+    const entry = buildVocabularyIndex(source).get('block:global.Claims Dataset');
+    expect(entry?.aliases).toEqual(expect.arrayContaining(['Claims Summary', 'Claims Interim']));
+    expect(entry?.certified).toBe(true);
+  });
+});
+
 describe('a native DQL semantic layer binds through its own table', () => {
   it('reads the aggregate out of the expression, or takes the declared type', () => {
     expect(nativeAggregateBinding('SUM(points)', 'sum')).toEqual({ expr: 'points', aggregate: 'sum' });

@@ -78,7 +78,16 @@ export type LineageEdgeType =
   | 'depends_on'       // dbt model/source dependency edge
   | 'contains'         // dashboard contains a block/chart
   | 'crosses_domain'   // data crosses a domain boundary
-  | 'certified_by';    // block certified by a person/process
+  | 'certified_by'     // block certified by a person/process
+  | 'replaced_by';     // deprecated block → the block that replaces it (not data flow)
+
+/**
+ * True for edges that carry data or composition. `replaced_by` records a
+ * retirement, not a dependency, so impact/ancestor/descendant walks skip it.
+ */
+export function isDataFlowEdge(edge: Pick<LineageEdge, 'type'>): boolean {
+  return edge.type !== 'replaced_by';
+}
 
 export interface LineageEdge {
   source: string; // node id
@@ -204,6 +213,7 @@ export class LineageGraph {
     while (queue.length > 0) {
       const current = queue.shift()!;
       for (const edge of this.incoming.get(current) ?? []) {
+        if (!isDataFlowEdge(edge)) continue;
         if (!visited.has(edge.source)) {
           visited.add(edge.source);
           queue.push(edge.source);
@@ -225,6 +235,7 @@ export class LineageGraph {
     while (queue.length > 0) {
       const current = queue.shift()!;
       for (const edge of this.outgoing.get(current) ?? []) {
+        if (!isDataFlowEdge(edge)) continue;
         if (!visited.has(edge.target)) {
           visited.add(edge.target);
           queue.push(edge.target);
@@ -250,6 +261,7 @@ export class LineageGraph {
     while (queue.length > 0) {
       const current = queue.shift()!;
       for (const edge of this.outgoing.get(current) ?? []) {
+        if (!isDataFlowEdge(edge)) continue;
         if (!visited.has(edge.target)) {
           visited.add(edge.target);
           parent.set(edge.target, current);

@@ -98,7 +98,11 @@ export interface DQLManifest {
 
 export interface ManifestDiagnostic {
   /**
-   * 'parse' | 'resolve' | 'dbt' | 'semantic' | 'config' | 'conflict' | 'drift'
+   * 'parse' | 'resolve' | 'dbt' | 'semantic' | 'config' | 'conflict' | 'drift' | 'retirement'
+   *
+   * `retirement` (additive) covers `replacedBy` / `deprecatedOn` on deprecated
+   * blocks — a missing or cyclic replacement is an error, a chain or a
+   * remaining use of a deprecated block is a warning. See manifest/retirement.
    *
    * `conflict` (additive) flags two certified governance artifacts — two terms
    * or two certified blocks — that target the same concept/identifier/grain but
@@ -445,6 +449,13 @@ export interface ManifestBlock {
   sourceSystems?: string[];
   /** Block names this block is intended to replace or supersede. */
   replacementFor?: string[];
+  /**
+   * For a deprecated block: the block that supersedes it, as written in source
+   * (block name or project-relative `.dql` path). See manifest/retirement.
+   */
+  replacedBy?: string;
+  /** For a deprecated block: the date it was retired, YYYY-MM-DD. */
+  deprecatedOn?: string;
   /** Business term names declared by this block that were not found during compile. */
   unresolvedTermRefs?: string[];
   /**

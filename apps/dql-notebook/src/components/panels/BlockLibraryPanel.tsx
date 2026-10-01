@@ -6,6 +6,7 @@ import { useNotebook } from '../../store/NotebookStore';
 import { themes } from '../../themes/notebook-theme';
 import { openAiBuild } from '../../utils/ai-build-bus';
 import { STATUS_COLORS, type BlockEntry } from '../blocks/block-types';
+import { BlockReplacementLink } from '../blocks/BlockRetirement';
 
 const STATUS_TONE: Record<string, 'success' | 'warning' | 'accent' | 'neutral' | 'error'> = {
   certified: 'success',
@@ -51,7 +52,7 @@ export function BlockLibraryPanel() {
   });
   const visibleBlocks = showAll || search ? filtered : filtered.slice(0, 10);
 
-  const handleOpen = (block: BlockEntry) => {
+  const handleOpen = (block: Pick<BlockEntry, 'name' | 'path'>) => {
     const file = {
       name: block.path.split('/').pop() ?? block.name,
       path: block.path,
@@ -211,6 +212,15 @@ export function BlockLibraryPanel() {
                   marginBottom: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                 }}>
                   {block.description}
+                </div>
+              )}
+              {block.status === 'deprecated' && (
+                <div style={{ marginBottom: 4 }}>
+                  <BlockReplacementLink
+                    info={block}
+                    t={t}
+                    onOpen={(path) => handleOpen({ path, name: block.replacement?.name ?? path })}
+                  />
                 </div>
               )}
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 10, color: t.textMuted, fontFamily: t.font }}>

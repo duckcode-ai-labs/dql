@@ -26,6 +26,7 @@ import {
   TYPE_TITLES,
   EDGE_TYPE_COLORS,
   EDGE_TITLES,
+  lineageEdgeLabel,
   LAYER_ORDER,
   LINEAGE_NODE_TYPE_ORDER,
   TECHNICAL_LINEAGE_NODE_TYPES,
@@ -310,14 +311,17 @@ export function LineageDAG() {
     const edges: Edge[] = filteredGraph.edges.map((edge, index) => {
       const onPath = dimConnected ? dimConnected.has(edge.source) && dimConnected.has(edge.target) : false;
       const color = onPath ? 'var(--accent)' : EDGE_TYPE_COLORS[edge.type] ?? 'var(--color-text-tertiary)';
+      const label = lineageEdgeLabel(edge.type);
       return {
         id: `edge-${index}-${edge.source}-${edge.target}-${edge.type}`,
         source: edge.source,
         target: edge.target,
+        ...(label ? { label, labelStyle: { fill: color, fontSize: 10, fontWeight: 600 } } : {}),
         style: {
           stroke: color,
           strokeWidth: onPath ? 2 : 1.5,
           opacity: dimConnected && !onPath ? 0.25 : 1,
+          ...(label ? { strokeDasharray: '4 3' } : {}),
         },
         markerEnd: {
           type: MarkerType.ArrowClosed,

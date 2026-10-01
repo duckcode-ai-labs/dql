@@ -37,6 +37,7 @@ export {
 export {
   LineageGraph,
   getLayerForNodeType,
+  isDataFlowEdge,
   type LineageNode,
   type LineageEdge,
   type LineageNodeType,

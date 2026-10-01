@@ -6,6 +6,7 @@
  * with domain boundaries and certification edges.
  */
 
+import { isDeprecatedStatus, resolveBlockReference } from '../manifest/retirement.js';
 import { extractTablesFromSql } from './sql-parser.js';
 import { LineageGraph, getLayerForNodeType } from './lineage-graph.js';
 
@@ -48,6 +49,10 @@ export interface LineageBlockInput {
   filterBindings?: Array<{ filter: string; binding: string }>;
   sourceSystems?: string[];
   replacementFor?: string[];
+  /** Deprecated block: the block reference that supersedes it. */
+  replacedBy?: string;
+  /** Deprecated block: retirement date, YYYY-MM-DD. */
+  deprecatedOn?: string;
 }
 
 export interface LineageMetricInput {
@@ -307,9 +312,25 @@ export function buildLineageGraph(
         filterBindings: block.filterBindings,
         sourceSystems: block.sourceSystems,
         replacementFor: block.replacementFor,
+        replacedBy: block.replacedBy,
+        deprecatedOn: block.deprecatedOn,
       },
     });
     addDomainContainmentEdge(graph, domain, `block:${block.name}`);
+  }
+
+  // 2a. Retired blocks: old → new "replaced by" edge. Not a data-flow edge;
+  // impact and path traversals skip it (see isDataFlowEdge).
+  for (const block of blocks) {
+    if (!block.replacedBy || !isDeprecatedStatus(block.status)) continue;
+    const replacement = resolveBlockReference(blocks, block.replacedBy);
+    if (!replacement || replacement === block) continue;
+    graph.addEdge({
+      source: `block:${block.name}`,
+      target: `block:${replacement.name}`,
+      type: 'replaced_by',
+      metadata: block.deprecatedOn ? { deprecatedOn: block.deprecatedOn } : undefined,
+    });
   }
 
   // 2b. Add business view nodes before edges so views can compose other views.

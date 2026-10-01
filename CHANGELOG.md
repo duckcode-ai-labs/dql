@@ -8,6 +8,28 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+### Retired blocks name their replacement (`replacedBy`, `deprecatedOn`)
+
+- A deprecated block can declare `replacedBy = "<block>"` (name or `.dql`
+  path) and `deprecatedOn = "YYYY-MM-DD"`. The parser, formatter, manifest
+  and lineage carry both.
+- Checks (`kind: 'retirement'` manifest diagnostics, shown by `dql validate`
+  and `dql compile`): a replacement that is not a block or that loops is an
+  error; a replacement that is itself deprecated, the fields on a block that
+  is not deprecated, and blocks or App pages still using a deprecated block
+  are warnings.
+- Block Studio and the block library show **Replaced by `<name>`** with a link,
+  and a retired block offers **Open the replacement**.
+- Ask never answers from a deprecated block. A question naming one is
+  answered from its replacement when that fits, under the replacement's own
+  trust, and **How it answered** says "`<old>` was retired on `<date>`; answered
+  from `<new>`".
+- App Studio shows "Retired — replaced by `<new>`" on tiles bound to a retired
+  block; the publish check names the replacement. Readers see the tile's
+  normal trust state.
+- Lineage adds a dashed `replaced_by` edge from the old block to the new
+  one. Impact and path walks do not follow it.
+
 ### Where a result goes; downloads made on the server; your own connections (RFC 0010 HH-17)
 
 - Every statement a request runs tells a host's `rowPolicy` where its

@@ -21,6 +21,12 @@ export interface BlockEntry {
    * holds unpublished edits to a certified block.
    */
   visibility?: 'private' | 'shared';
+  /** Retired blocks: the block named as the replacement, as written in source. */
+  replacedBy?: string;
+  /** Retired blocks: retirement date, YYYY-MM-DD. */
+  deprecatedOn?: string;
+  /** The active block replacedBy resolves to; null when it names no block. */
+  replacement?: { name: string; path: string } | null;
 }
 
 export const STATUS_COLORS: Record<string, string> = {

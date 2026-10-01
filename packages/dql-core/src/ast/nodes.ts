@@ -353,6 +353,15 @@ export interface BlockDeclNode extends BaseNode {
    */
   status?: string;
   /**
+   * Retirement metadata, meaningful only when `status = "deprecated"`.
+   * `replacedBy` names the block that supersedes this one (block name, or a
+   * `.dql` path relative to the project); `deprecatedOn` is the ISO date
+   * (YYYY-MM-DD) the block was retired. The inverse of `replacementFor`,
+   * which the new block may also declare.
+   */
+  replacedBy?: string;
+  deprecatedOn?: string;
+  /**
    * v1.6 — DataLex contract reference. Format:
    * `<domain>.<Entity>.<contract_name>` with optional `@<version>` suffix.
    * The compile-time check resolves this against the project's DataLex

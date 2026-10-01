@@ -79,6 +79,7 @@ import { SemanticSearchBar } from '../panels/SemanticSearchBar';
 import { SemanticTreeNode as TreeRow } from '../panels/SemanticTreeNode';
 import type { AiSqlDraftMeta } from '../agent/AiSqlDraftDialog';
 import { BlockStatusBadge } from '../blocks/BlockStatusBadge';
+import { BlockReplacementLink, OpenReplacementButton } from '../blocks/BlockRetirement';
 import { UnifiedAgentRunPanel, usePersistedAgentThreadId, type InsertDqlPayload } from '../agent/UnifiedAgentRunPanel';
 import { AiSidePanel, AI_SIDE_PANEL_EXPANDED_WIDTH } from '../agent/AiSidePanel';
 import {
@@ -711,6 +712,12 @@ export function BlockStudio() {
     setImportSession(null);
     setWorkspaceMode('start');
     setEditorMode('visual');
+  };
+
+  // A retired block offers its replacement: opening it is opening a saved block.
+  const openReplacementBlock = (path: string) => {
+    const name = state.blockStudioMetadata?.replacement?.name ?? path.split('/').pop()?.replace(/\.dql$/, '') ?? path;
+    void openSavedBlock({ name, path } as BlockEntry);
   };
 
   const openSavedBlock = async (block: BlockEntry) => {
@@ -1592,6 +1599,13 @@ export function BlockStudio() {
           {state.blockStudioMetadata?.reviewStatus && (
             <BlockStatusBadge status={state.blockStudioMetadata.reviewStatus} t={t} />
           )}
+          {state.blockStudioMetadata?.reviewStatus === 'deprecated' && (
+            <BlockReplacementLink
+              info={{ status: state.blockStudioMetadata.reviewStatus, replacedBy: state.blockStudioMetadata.replacedBy, deprecatedOn: state.blockStudioMetadata.deprecatedOn, replacement: state.blockStudioMetadata.replacement }}
+              t={t}
+              onOpen={openReplacementBlock}
+            />
+          )}
           {hasActiveDraft && workspaceMode === 'manual' && editorMode !== 'detail' && (
             <div style={{ display: 'inline-flex', alignItems: 'center', gap: 2, padding: 2, border: `1px solid ${t.headerBorder}`, borderRadius: 7, background: t.appBg, marginLeft: 6, flexShrink: 0 }}>
               <button type="button" onClick={() => setEditorMode('visual')} style={editorModeButtonStyle(t, editorMode === 'visual')}>Visual Builder</button>
@@ -1751,6 +1765,7 @@ export function BlockStudio() {
               running={running}
               onOpenBuilder={() => setEditorMode('visual')}
               onOpenSource={() => setEditorMode('source')}
+              onOpenReplacement={openReplacementBlock}
               onDelete={() => state.activeBlockPath && requestDeleteBlock(state.activeBlockPath, state.blockStudioMetadata?.name || activeBlockName || state.activeBlockPath)}
               onRun={() => void handleRun()}
               onOpenHistory={() => {
@@ -2967,6 +2982,7 @@ function BlockDetailView({
   running,
   onOpenBuilder,
   onOpenSource,
+  onOpenReplacement,
   onDelete,
   onRun,
   onOpenHistory,
@@ -2982,6 +2998,7 @@ function BlockDetailView({
   running: boolean;
   onOpenBuilder: () => void;
   onOpenSource: () => void;
+  onOpenReplacement?: (path: string) => void;
   onDelete: () => void;
   onRun: () => void;
   onOpenHistory: () => void;
@@ -3024,12 +3041,18 @@ function BlockDetailView({
             <div style={{ display: 'flex', alignItems: 'center', gap: 9, flexWrap: 'wrap' }}>
               <span style={{ fontSize: 17, fontWeight: 700, color: t.textPrimary, fontFamily: t.fontMono, letterSpacing: '-0.01em' }}>{name}</span>
               {metadata?.reviewStatus ? <BlockStatusBadge status={metadata.reviewStatus} t={t} /> : null}
+              {metadata?.reviewStatus === 'deprecated' ? (
+                <BlockReplacementLink info={{ status: metadata.reviewStatus, replacedBy: metadata.replacedBy, deprecatedOn: metadata.deprecatedOn, replacement: metadata.replacement }} t={t} onOpen={onOpenReplacement} />
+              ) : null}
             </div>
             <div style={{ fontSize: 12, color: t.textMuted, marginTop: 4 }}>
               {[metadata?.domain, metadata?.folderPath ? `folder: ${metadata.folderPath}` : null, metadata?.owner, ...(metadata?.tags?.length ? [metadata.tags.join(', ')] : [])].filter(Boolean).join(' · ') || 'Unsaved draft'}
             </div>
           </div>
           <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+            {metadata?.reviewStatus === 'deprecated' && onOpenReplacement ? (
+              <OpenReplacementButton info={{ status: metadata.reviewStatus, replacedBy: metadata.replacedBy, deprecatedOn: metadata.deprecatedOn, replacement: metadata.replacement }} t={t} onOpen={onOpenReplacement} />
+            ) : null}
             <button type="button" onClick={onOpenBuilder} style={{ display: 'inline-flex', alignItems: 'center', gap: 7, height: 32, padding: '0 14px', borderRadius: 8, border: 'none', background: t.accent, color: '#fff', fontSize: 12.5, fontWeight: 650, cursor: 'pointer', fontFamily: t.font, boxShadow: '0 1px 4px rgba(107,93,211,0.25)' }}>
               <Pencil size={13} strokeWidth={1.75} /> Open in builder
             </button>

@@ -399,6 +399,26 @@ export function pinnedRefsFor(question: string, vocabulary: VocabularyIndex): st
   return pinned;
 }
 
+/**
+ * The retired block a question names, when the answer comes from its
+ * replacement. Matching is on whole words of the retired block's name, so
+ * "claims summary" in a question finds a retired "Claims Summary".
+ */
+export function retiredBlockNamedBy(question: string, entry: VocabularyEntry | undefined): { name: string; deprecatedOn?: string } | undefined {
+  if (!entry?.supersedes?.length) return undefined;
+  const words = (value: string) => ` ${value.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()} `;
+  const asked = words(question);
+  return entry.supersedes.find((retired) => {
+    const name = words(retired.name);
+    return name.trim().length > 0 && asked.includes(name);
+  });
+}
+
+/** The sentence a run tells when it answers a retired block's question from its replacement. */
+export function retiredBlockSentence(retired: { name: string; deprecatedOn?: string }, replacement: string): string {
+  return `${retired.name} was retired${retired.deprecatedOn ? ` on ${retired.deprecatedOn}` : ''}; answered from ${replacement}`;
+}
+
 /** Guidance that carries a settled identity into the reading the interpreter writes. */
 function memberGuidance(input: RunAskPipelineInput): string | undefined {
   if (!input.memberSelection) return input.guidance;
@@ -1333,6 +1353,16 @@ export async function runAskPipeline(input: RunAskPipelineInput): Promise<Pipeli
   const excluded: PreparedCandidate['tier'][] = [];
   const beforeExecute = stopped('execute');
   if (beforeExecute) return { ...beforeExecute, intent } as PipelineOutcome;
+  // A question that named a retired block is answered from its replacement,
+  // and the run says so. The replacement carries its own trust; nothing of
+  // the retired block's is served.
+  const servedBlock = candidate.sourceRef ? input.vocabulary.get(candidate.sourceRef) : undefined;
+  const retired = retiredBlockNamedBy(input.question, servedBlock);
+  if (retired && servedBlock) {
+    const sentence = retiredBlockSentence(retired, servedBlock.name);
+    step('tier', sentence, 'done');
+    if (!candidate.proof.includes(sentence)) candidate = { ...candidate, proof: [...candidate.proof, sentence] };
+  }
   let executeStarted = now();
   let executed = await countedExecute(candidate, intent, input.executeDeps);
   mark('execute', executeStarted);

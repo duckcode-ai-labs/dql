@@ -1145,6 +1145,10 @@ export interface BlockStudioMetadata {
   importId?: string;
   candidateId?: string;
   lineage?: string[];
+  /** Retired blocks: the replacement as written, the date, and the active block it resolves to. */
+  replacedBy?: string;
+  deprecatedOn?: string;
+  replacement?: { name: string; path: string } | null;
 }
 
 export interface BlockStudioImportCandidate {

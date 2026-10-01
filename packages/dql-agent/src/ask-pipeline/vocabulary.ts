@@ -54,6 +54,12 @@ export interface VocabularyEntry {
    */
   columnNotes?: string[];
   examples?: string[];
+  /**
+   * For a block: the retired (deprecated) blocks whose `replacedBy` leads to
+   * this one. Their names are aliases of this entry, so a question that names
+   * a retired block reaches its replacement, and the run says so.
+   */
+  supersedes?: Array<{ name: string; deprecatedOn?: string }>;
   /** The id the host's existing compilers know this object by (semantic runtime name, catalog key). */
   sourceId?: string;
   /**
@@ -441,15 +447,18 @@ export function renderCard(entry: VocabularyEntry, options: { preferColumn?: (co
   const groupBy = entry.contract?.groupBy.length ? ` grouped by: ${entry.contract.groupBy.join(', ')}` : '';
   const limit = entry.contract?.limit ? ` limit ${entry.contract.limit}` : '';
   const examples = entry.examples?.length ? ` e.g. "${entry.examples[0]}"` : '';
-  const aliases = entry.aliases.filter((alias) => normalizeVocabularyText(alias) !== normalizeVocabularyText(entry.name)).slice(0, 4);
+  const retiredNames = new Set((entry.supersedes ?? []).map((retired) => normalizeVocabularyText(retired.name)));
+  const aliases = entry.aliases.filter((alias) => normalizeVocabularyText(alias) !== normalizeVocabularyText(entry.name) && !retiredNames.has(normalizeVocabularyText(alias))).slice(0, 4);
   const aka = aliases.length ? ` aka ${aliases.join(', ')}` : '';
+  // A question that still names a retired block reads this block instead.
+  const replaces = entry.supersedes?.length ? ` replaces retired ${entry.supersedes.slice(0, 4).map((retired) => `"${retired.name}"`).join(', ')}` : '';
   // What a modeled thing IS, and the grain its rows carry: authored context
   // the raw column list cannot say.
   const meaning = entry.businessContext ? ` is: ${entry.businessContext.replace(/\s+/g, ' ').slice(0, 160)}` : '';
   const grain = entry.grain ? ` one row per ${entry.grain}` : '';
   const rules = entry.rules?.length ? ` rules: ${entry.rules.join(' ').replace(/\s+/g, ' ').slice(0, 220)}` : '';
   const preferred = entry.preferredBy?.length ? ` preferred by ${entry.preferredBy.slice(0, 2).join(', ')}` : '';
-  return `- ${entry.ref} [${bits.join('; ')}]${formula}${description}${meaning}${grain}${rules}${aka}${preferred}${columns}${notes}${groupBy}${scope}${limit}${examples}`;
+  return `- ${entry.ref} [${bits.join('; ')}]${formula}${description}${meaning}${grain}${rules}${aka}${replaces}${preferred}${columns}${notes}${groupBy}${scope}${limit}${examples}`;
 }
 
 function renderRelationshipCard(entry: VocabularyEntry): string {
@@ -516,7 +525,7 @@ export interface VocabularySource {
   dimensions?: Array<{ name: string; model: string; label?: string; description?: string; dataType?: string; isTime?: boolean; timeGrains?: string[]; sourceId?: string; aliases?: string[]; reachableFrom?: string[]; physical?: VocabularyEntry['physical']; inventory?: boolean }>;
   entities?: Array<{ name: string; model: string; type: string; label?: string; description?: string; sourceId?: string; reachableFrom?: string[]; physical?: VocabularyEntry['physical']; inventory?: boolean }>;
   models?: Array<{ name: string; label?: string; description?: string; relation?: string }>;
-  blocks?: Array<{ name: string; domain?: string; description?: string; certified: boolean; status?: string; contract: BlockContractV1; examples?: string[]; tags?: string[]; sourceId?: string; sql?: string; sourcePath?: string }>;
+  blocks?: Array<{ name: string; domain?: string; description?: string; certified: boolean; status?: string; contract: BlockContractV1; examples?: string[]; tags?: string[]; sourceId?: string; sql?: string; sourcePath?: string; supersedes?: Array<{ name: string; deprecatedOn?: string }> }>;
   relations?: Array<{ database?: string; schema?: string; name: string; description?: string; columns: Array<{ name: string; dataType?: string; description?: string }>; /** Bounded dbt-manifest metadata used to choose a relation before its physical columns are hydrated. It never becomes individual vocabulary entries on its own. */ embeddedColumns?: Array<{ name: string; dataType?: string; description?: string }>; sourceId?: string; /** The domain whose entity binds this relation, when one does (physical ownership). */ domain?: string; /** Every domain with an entity bound to this relation — ownership is a set, never the first entity seen. */ domains?: string[]; /** What each column is computed from, by column name (lowercased), from the model's SQL. */ columnLineage?: Record<string, string[]>; /** Exact runtime/dbt identity shared by discovery, drafting, validation and execution. */ binding?: PhysicalRelationBindingV1; /** Manifest descriptions are partial unless a catalog/runtime observation proves otherwise. */ columnCompleteness?: PhysicalColumnCompleteness; observedAt?: string; truncated?: boolean }>;
   terms?: Array<{ name: string; synonyms?: string[]; description?: string; metricRefs?: string[]; rules?: string[]; domain?: string }>;
   /** Declared relationships between modeled things, with their authority to join. */
@@ -714,7 +723,7 @@ export function buildVocabularyIndex(source: VocabularySource): VocabularyIndex 
       ref: `block:${block.domain ?? 'global'}.${block.name}`,
       kind: 'block',
       name: block.name,
-      aliases: [block.name.replace(/_/g, ' '), ...(block.tags ?? [])],
+      aliases: [block.name.replace(/_/g, ' '), ...(block.tags ?? []), ...(block.supersedes ?? []).map((retired) => retired.name)],
       ...(block.description ? { description: block.description } : {}),
       ...(block.domain ? { model: block.domain } : {}),
       roles: block.certified ? ['certified'] : [],
@@ -726,6 +735,7 @@ export function buildVocabularyIndex(source: VocabularySource): VocabularyIndex 
       ...(block.sourceId ? { sourceId: block.sourceId } : {}),
       ...(block.sql ? { sql: block.sql } : {}),
       ...(block.sourcePath ? { sourcePath: block.sourcePath } : {}),
+      ...(block.supersedes?.length ? { supersedes: block.supersedes } : {}),
     });
   }
   // A legacy two-part alias is safe only when one physical binding owns it in

@@ -2652,6 +2652,8 @@ export interface DashboardRunResponse {
     blockId?: string;
     blockPath?: string;
     certificationStatus?: string | null;
+    /** Bound to a retired block: what replaces it, for App Studio authors only. */
+    retirement?: { replacedBy?: string; replacementPath?: string; deprecatedOn?: string };
     title?: string;
     viz?: { type: string; options?: Record<string, unknown> };
     chartConfig?: Record<string, unknown>;
@@ -5567,6 +5569,9 @@ export const api = {
       lastModified: string; description: string;
       llmContext?: string | null;
       visibility?: 'private' | 'shared';
+      replacedBy?: string;
+      deprecatedOn?: string;
+      replacement?: { name: string; path: string } | null;
     }>;
     /** Why the library could not be read; an empty library is not the same as a failed one. */
     error?: string;

@@ -195,7 +195,10 @@ export async function runValidate(path: string | null, flags: CLIFlags): Promise
         datalexManifestPath,
       });
       for (const diag of manifest.diagnostics ?? []) {
-        if (diag.kind !== 'resolve' || (!diag.message.includes('business_view') && !diag.message.includes('term refs'))) continue;
+        // Retirement: a missing or cyclic replacement fails; a chain, or a block
+        // or App page still using a deprecated block, warns.
+        const retirement = diag.kind === 'retirement';
+        if (!retirement && (diag.kind !== 'resolve' || (!diag.message.includes('business_view') && !diag.message.includes('term refs')))) continue;
         diagnostics.push({
           file: diag.filePath ?? 'dql-manifest.json',
           severity: diag.severity,

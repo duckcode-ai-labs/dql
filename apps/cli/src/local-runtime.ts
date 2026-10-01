@@ -219,6 +219,7 @@ import {
   validateDatasetGrainProof,
   checkTileCalculations,
   renderTableDatasetBlock,
+  resolveBlockReplacement,
 } from '@duckcodeailabs/dql-core';
 import {
   prepareDatasetDeclarationPatch,
@@ -20996,6 +20997,7 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
                 blockId: block.name,
                 blockPath: block.filePath,
                 certificationStatus: block.status ?? null,
+                ...dashboardTileRetirement(block, manifest),
                 title: item.title ?? block.name,
                 trustState: 'review_required',
                 error: 'This App source changed after it was selected. Refresh the source binding and rerun preview.',
@@ -21086,6 +21088,7 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
               blockId: block.name,
               blockPath: block.filePath,
               certificationStatus: block.status ?? null,
+              ...dashboardTileRetirement(block, manifest),
               title: item.title ?? block.name,
               viz: item.viz,
               chartConfig: mergeDashboardChartConfig(blockPlan?.chartConfig, item),
@@ -21155,6 +21158,7 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
                   blockId: block.name,
                   blockPath: block.filePath,
                   certificationStatus: block.status ?? null,
+                  ...dashboardTileRetirement(block, manifest),
                   title: item.title ?? block.name,
                   viz: item.viz,
                   chartConfig: mergeDashboardChartConfig(blockPlan?.chartConfig, item),
@@ -23601,6 +23605,10 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
           lastModified: string; description: string;
           llmContext: string | null;
           visibility: 'private' | 'shared';
+          replacedBy?: string;
+          deprecatedOn?: string;
+          /** The active block a deprecated block's replacedBy leads to; null when it resolves to none. */
+          replacement?: { name: string; path: string } | null;
         }> = [];
         const seen = new Set<string>();
         const scanDir = (dir: string) => {
@@ -23632,6 +23640,8 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
                   ? tagsMatch[1].split(',').map((tag) => tag.trim().replace(/^"|"$/g, '')).filter(Boolean)
                   : [];
                 const llmMatch = /^\s*llmContext\s*=\s*"((?:[^"\\]|\\.)*)"/m.exec(source);
+                const replacedByMatch = /^\s*replacedBy\s*=\s*"([^"]+)"/m.exec(source);
+                const deprecatedOnMatch = /^\s*deprecatedOn\s*=\s*"([^"]+)"/m.exec(source);
                 blocks.push({
                   name: nameMatch?.[1] ?? entry.name.replace('.dql', ''),
                   domain: (domainMatch?.[1] ?? inferBlockStudioPathDomain(projectRoot, relPath)) || 'uncategorized',
@@ -23643,6 +23653,8 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
                   description: descMatch?.[1] ?? '',
                   llmContext: llmMatch?.[1] ?? null,
                   visibility: isPrivateBlockPath(relPath) ? 'private' : 'shared',
+                  ...(replacedByMatch ? { replacedBy: replacedByMatch[1] } : {}),
+                  ...(deprecatedOnMatch ? { deprecatedOn: deprecatedOnMatch[1] } : {}),
                 });
               } catch { /* skip unreadable files */ }
             }
@@ -23653,6 +23665,14 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
         // Private blocks are listed like any other: hiding them would lose the
         // author's work behind a folder they never open.
         scanDir(privateBlockDir(projectRoot));
+        // A retired block points at the active block that replaces it, following
+        // a chain of retirements; a cycle or a missing block resolves to none.
+        const retirementRefs = blocks.map((block) => ({ ...block, filePath: block.path }));
+        for (const [index, block] of blocks.entries()) {
+          if (block.status !== 'deprecated' || !block.replacedBy) continue;
+          const replacement = resolveBlockReplacement(retirementRefs, retirementRefs[index]!)?.replacement;
+          block.replacement = replacement ? { name: replacement.name, path: replacement.path } : null;
+        }
         blocks.sort((a, b) => new Date(b.lastModified).getTime() - new Date(a.lastModified).getTime());
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(serializeJSON({ blocks }));
@@ -29611,6 +29631,25 @@ function findAppById(projectRoot: string, appId: string): { app: AppDocument; ap
     return { app, appDir: path.slice(0, -'/dql.app.json'.length) };
   }
   return null;
+}
+
+/**
+ * A tile bound to a retired block carries the replacement for its authors
+ * ("Retired — replaced by <new>"). Readers keep the tile's normal trust state;
+ * a deprecated block is never certified, so the publish gate already refuses it.
+ */
+function dashboardTileRetirement(
+  block: ManifestBlock,
+  manifest: DQLManifest,
+): { retirement?: { replacedBy?: string; replacementPath?: string; deprecatedOn?: string } } {
+  if ((block.status ?? '').toLowerCase() !== 'deprecated') return {};
+  const replacement = resolveBlockReplacement(Object.values(manifest.blocks), block)?.replacement;
+  return {
+    retirement: {
+      ...(replacement ? { replacedBy: replacement.name, replacementPath: replacement.filePath } : block.replacedBy ? { replacedBy: block.replacedBy } : {}),
+      ...(block.deprecatedOn ? { deprecatedOn: block.deprecatedOn } : {}),
+    },
+  };
 }
 
 function resolveDashboardItemBlock(
@@ -37344,6 +37383,11 @@ export function openBlockStudioDocument(
     tags: string[];
     reviewStatus?: string;
     sourceFingerprint: string;
+    /** Retired blocks: the block named as the replacement, and the retirement date. */
+    replacedBy?: string;
+    deprecatedOn?: string;
+    /** The active block replacedBy leads to (following retirements); null when none resolves. */
+    replacement?: { name: string; path: string } | null;
   };
   companionPath: string | null;
   validation: ReturnType<typeof validateBlockStudioSource>;
@@ -37372,6 +37416,7 @@ export function openBlockStudioDocument(
     tags: parsedMetadata.tags.length > 0 ? parsedMetadata.tags : companion?.tags ?? [],
     reviewStatus: parsedMetadata.status || companion?.reviewStatus || 'draft',
     sourceFingerprint: createHash('sha256').update(source).digest('hex'),
+    ...blockStudioRetirement(projectRoot, normalizedPath, parsedMetadata),
   };
   return {
     path: normalizedPath,
@@ -37381,6 +37426,55 @@ export function openBlockStudioDocument(
     validation: validateBlockStudioSource(source, semanticLayer),
     lastRun: readBlockStudioRunSummary(projectRoot, normalizedPath, source) ?? undefined,
   };
+}
+
+/** Name, status and retirement fields of every block file Block Studio can open. */
+function collectBlockRetirementRefs(projectRoot: string): Array<{ name: string; status: string; replacedBy?: string; deprecatedOn?: string; filePath: string }> {
+  const out: Array<{ name: string; status: string; replacedBy?: string; deprecatedOn?: string; filePath: string }> = [];
+  const stack = [join(projectRoot, 'blocks'), join(projectRoot, 'domains'), privateBlockDir(projectRoot)];
+  while (stack.length > 0) {
+    const dir = stack.pop()!;
+    if (!existsSync(dir)) continue;
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const filePath = join(dir, entry.name);
+      if (entry.isDirectory()) { stack.push(filePath); continue; }
+      if (!entry.name.endsWith('.dql')) continue;
+      let meta: ReturnType<typeof parseBlockSourceMetadata>;
+      try { meta = parseBlockSourceMetadata(readFileSync(filePath, 'utf-8')); } catch { continue; }
+      if (!meta.name) continue;
+      out.push({
+        name: meta.name,
+        status: meta.status || 'draft',
+        ...(meta.replacedBy ? { replacedBy: meta.replacedBy } : {}),
+        ...(meta.deprecatedOn ? { deprecatedOn: meta.deprecatedOn } : {}),
+        filePath: relative(projectRoot, filePath).replaceAll('\\', '/'),
+      });
+    }
+  }
+  return out;
+}
+
+/**
+ * Retirement view of one block for Block Studio: `replacedBy` and
+ * `deprecatedOn` as written, and the active block the replacement resolves to
+ * (null when it names no block, or the chain loops).
+ */
+function blockStudioRetirement(
+  projectRoot: string,
+  relativePath: string,
+  parsed: Pick<ReturnType<typeof parseBlockSourceMetadata>, 'name' | 'status' | 'replacedBy' | 'deprecatedOn'>,
+): { replacedBy?: string; deprecatedOn?: string; replacement?: { name: string; path: string } | null } {
+  if (parsed.status !== 'deprecated') return {};
+  const fields = {
+    ...(parsed.replacedBy ? { replacedBy: parsed.replacedBy } : {}),
+    ...(parsed.deprecatedOn ? { deprecatedOn: parsed.deprecatedOn } : {}),
+  };
+  if (!parsed.replacedBy) return fields;
+  const refs = collectBlockRetirementRefs(projectRoot);
+  const self = refs.find((ref) => ref.filePath === relativePath)
+    ?? { name: parsed.name, status: parsed.status, replacedBy: parsed.replacedBy, filePath: relativePath };
+  const replacement = resolveBlockReplacement(refs, self)?.replacement;
+  return { ...fields, replacement: replacement ? { name: replacement.name, path: replacement.filePath } : null };
 }
 
 interface BlockStudioRunSummary {
@@ -39587,6 +39681,8 @@ export function parseBlockSourceMetadata(source: string): {
   filterBindings: Array<{ filter: string; binding: string }>;
   sourceSystems: string[];
   replacementFor: string[];
+  replacedBy: string;
+  deprecatedOn: string;
   reviewCadence: string;
   metricRef: string;
   metricsRef: string[];
@@ -39634,6 +39730,8 @@ export function parseBlockSourceMetadata(source: string): {
     filterBindings,
     sourceSystems: extractStringArray('sourceSystems'),
     replacementFor: extractStringArray('replacementFor'),
+    replacedBy: extractString('replacedBy'),
+    deprecatedOn: extractString('deprecatedOn'),
     reviewCadence: extractString('reviewCadence'),
     metricRef: extractString('metric'),
     metricsRef: extractStringArray('metrics'),

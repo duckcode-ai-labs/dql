@@ -14,6 +14,17 @@ export {
 
 export { detectOutputDrift } from './output-drift.js';
 export {
+  DEPRECATED_ON_PATTERN,
+  isDeprecatedStatus,
+  resolveBlockReference,
+  resolveBlockReplacement,
+  retirementNotice,
+  validateBlockRetirements,
+  type BlockReplacementResolution,
+  type RetirementBlockLike,
+  type RetirementValidationInput,
+} from './retirement.js';
+export {
   WAREHOUSE_CATALOG_PATH,
   diffWarehouseCatalogs,
   normalizeWarehouseCatalog,

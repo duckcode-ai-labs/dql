@@ -147,6 +147,36 @@ describe('Block Studio library, validation and block body', () => {
     });
   });
 
+  it('a retired block names its replacement in the library and when opened', async () => {
+    await withProject(async (base, projectRoot) => {
+      writeFileSync(join(projectRoot, 'domains/finance/blocks/revenue_legacy.dql'), `block "Revenue Legacy" {
+  status = "deprecated"
+  replacedBy = "domains/finance/blocks/revenue.dql"
+  deprecatedOn = "2026-09-30"
+  domain = "finance"
+  type = "custom"
+  query = """SELECT 1 AS value"""
+}
+`);
+      const library = await fetch(`${base}/api/blocks/library`).then((response) => response.json()) as { blocks: Array<Record<string, unknown>> };
+      expect(library.blocks.find((block) => block.name === 'Revenue Legacy')).toMatchObject({
+        status: 'deprecated',
+        replacedBy: 'domains/finance/blocks/revenue.dql',
+        deprecatedOn: '2026-09-30',
+        replacement: { name: 'Revenue', path: currentPath },
+      });
+      expect(library.blocks.find((block) => block.name === 'Revenue')).not.toHaveProperty('replacement');
+
+      const opened = await fetch(`${base}/api/block-studio/open?path=${encodeURIComponent('domains/finance/blocks/revenue_legacy.dql')}`).then((response) => response.json()) as { metadata: Record<string, unknown> };
+      expect(opened.metadata).toMatchObject({
+        reviewStatus: 'deprecated',
+        replacedBy: 'domains/finance/blocks/revenue.dql',
+        deprecatedOn: '2026-09-30',
+        replacement: { name: 'Revenue', path: currentPath },
+      });
+    });
+  });
+
   it('a syntax error names its line and column', async () => {
     await withProject(async (base) => {
       const broken = certifiedSource.replace('  owner = "analytics"', '  owner = "analytics",....');

@@ -106,6 +106,8 @@ Canonical block fields:
 | `filterBindings` | Mapping from app/business filters to physical columns or expressions used by the block |
 | `sourceSystems` | Business source-system hints used in lineage and AI context |
 | `replacementFor` | Prior blocks or business questions this block replaces |
+| `replacedBy` | Deprecated blocks only: the block that replaces this one, by name or project-relative `.dql` path |
+| `deprecatedOn` | Deprecated blocks only: the date the block was retired, `YYYY-MM-DD` |
 | `query` | SQL for `type = "custom"` blocks |
 | `metric` / `metrics` | Metric refs for `type = "semantic"` blocks |
 | `visualization` | Compatibility display hint, not fixed presentation |
@@ -162,6 +164,44 @@ block "Card approval rate" {
   }
 }
 ```
+
+## Retired Block
+
+When a certified block is replaced, keep the old file and mark it retired so
+everything that still uses it can say what to use instead:
+
+```dql
+block "Claims Summary" {
+  domain = "claims"
+  type = "custom"
+  status = "deprecated"
+  replacedBy = "Claims Dataset"
+  deprecatedOn = "2026-09-30"
+  query = """SELECT ..."""
+}
+```
+
+- `replacedBy` and `deprecatedOn` only apply when `status = "deprecated"`;
+  `dql validate` warns when they are set on any other status.
+- The replacement must be a block in the project (an error otherwise). If it
+  is itself deprecated, DQL warns and follows the chain to the first active
+  block; a chain that loops is an error.
+- Block Studio and the block library show **Replaced by `<name>`** next to the
+  Deprecated badge, with a link to open the replacement.
+- Ask never answers from a deprecated block. A question that names it is
+  answered from the replacement when the replacement fits the question, under
+  the replacement's own trust, and **How it answered** says
+  "`<old>` was retired on `<date>`; answered from `<new>`".
+- App tiles still bound to a retired block show authors
+  "Retired — replaced by `<new>`". A retired block is not certified, so a new
+  publish refuses the tile until it is rebound.
+- Lineage draws a dashed **replaced by** edge from the old block to the new
+  one. It is not a data-flow edge: impact analysis does not follow it.
+- `dql validate` warns about blocks (`ref("...")`) and App pages that still
+  use a deprecated block.
+
+`replacementFor` is the other direction — the new block naming what it
+replaces. Either is enough for lineage to link the two.
 
 ## Semantic Block
 

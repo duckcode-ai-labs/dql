@@ -64,6 +64,7 @@ import {
   tileQueryOutputAliases,
   tileQueryValidationRuns,
   validateTileQuery,
+  resolveBlockReplacement,
 } from '@duckcodeailabs/dql-core';
 import {
   defaultPersonaRegistry,
@@ -2311,6 +2312,8 @@ interface BlockCandidate {
   lastModified: string;
   description: string;
   llmContext: string | null;
+  /** Retired blocks: the replacement as written in source. */
+  replacedBy?: string;
   chartType?: string;
   /** Stable App-filter ids declared by block filter/parameter bindings. */
   filterIds: string[];
@@ -5833,7 +5836,16 @@ function appPublicationReadiness(
             ? candidate.id === blockRef.blockId || candidate.name === blockRef.blockId
             : candidate.path === blockRef.ref
         ));
-        if (!block || block.status !== 'certified') {
+        if (block?.status === 'deprecated') {
+          // A retired block is never certified for a new publish; name what replaces it.
+          const replacement = resolveBlockReplacement(blocks.map((candidate) => ({ ...candidate, filePath: candidate.path })), { ...block, filePath: block.path })?.replacement;
+          blockers.push({
+            dashboardId: dashboard.id,
+            tileId: item.i,
+            code: 'block_not_certified',
+            message: `${dashboard.id}/${item.i} uses retired block ${block.name}${replacement ? `, replaced by ${replacement.name}` : ''}; it no longer resolves to a certified block.`,
+          });
+        } else if (!block || block.status !== 'certified') {
           blockers.push({
             dashboardId: dashboard.id,
             tileId: item.i,
@@ -9646,6 +9658,7 @@ function collectBlockCandidates(projectRoot: string, options: { preserveDuplicat
             lastModified: stat?.mtime.toISOString() ?? new Date(0).toISOString(),
             description: matchString(source, /description\s*=\s*"((?:[^"\\]|\\.)*)"/) ?? '',
             llmContext: matchString(source, /llmContext\s*=\s*"((?:[^"\\]|\\.)*)"/),
+            ...(matchString(source, /^\s*replacedBy\s*=\s*"([^"]+)"/m) ? { replacedBy: matchString(source, /^\s*replacedBy\s*=\s*"([^"]+)"/m)! } : {}),
             chartType: matchString(source, /chart\s*=\s*"([^"]+)"/) ?? matchString(source, /chart\.(\w+)\s*\(/) ?? undefined,
             filterIds: declaredAppFilterIds(source),
             dimensionIds: declaredAppDimensionIds(source),

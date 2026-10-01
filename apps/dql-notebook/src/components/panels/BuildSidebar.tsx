@@ -1016,7 +1016,7 @@ function BlockRow({ block, depth = 0, t, onOpen, onDelete, onPublish, publishing
         <Blocks size={14} color={t.textMuted} strokeWidth={1.75} style={{ flexShrink: 0 }} />
         <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 1 }}>
           <span style={{ fontSize: 12, fontWeight: 600, color: t.textPrimary, fontFamily: t.fontMono, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{block.name}</span>
-          <span style={{ fontSize: 10.5, color: t.textMuted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{[block.domain, editsCertified ? 'draft · edits to the certified block' : status].filter(Boolean).join(' · ')}</span>
+          <span style={{ fontSize: 10.5, color: t.textMuted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{[block.domain, editsCertified ? 'draft · edits to the certified block' : status, status === 'deprecated' && (block.replacement?.name ?? block.replacedBy) ? `replaced by ${block.replacement?.name ?? block.replacedBy}` : null].filter(Boolean).join(' · ')}</span>
         </span>
       </button>
       {isPrivate ? (

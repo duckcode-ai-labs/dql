@@ -665,6 +665,8 @@ export const APP_STUDIO_V2_STYLES = `
 .studio-tile-dql { margin:6px 0; max-height:260px; overflow:auto; border:1px solid var(--border-subtle); border-radius:8px; background:var(--bg-1); padding:8px; font-size:13px; }
 .studio-tile-dql pre { white-space:pre-wrap; word-break:break-word; font-size:13px; margin:4px 0 8px; }
 .tile-filter-notice.adapted { color:var(--text-secondary); }
+.tile-filter-notice.retired { color:var(--status-warning); }
+.tile-filter-notice.retired svg { color:var(--status-warning); }
 .studio-ai-scope { display:flex; gap:4px; margin:10px 12px 0; padding:3px; border:1px solid var(--border-subtle); border-radius:8px; background:var(--bg-1); }
 .studio-ai-scope button { flex:1; min-width:0; border:0; border-radius:8px; background:none; color:var(--text-secondary); font:inherit; font-size:14px; padding:6px 8px; cursor:pointer; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .studio-ai-scope button.on { background:var(--bg-2); color:var(--text-primary); font-weight:600; box-shadow:0 1px 2px color-mix(in srgb,var(--text-primary) 12%,transparent); }

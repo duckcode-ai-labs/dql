@@ -267,6 +267,8 @@ function formatBlock(node: BlockDeclNode, level: number, state: FormatState): st
   if (node.domain) lines.push(`${indent(level + 1, state)}domain = ${quote(node.domain)}`);
   if (node.blockType) lines.push(`${indent(level + 1, state)}type = ${quote(node.blockType)}`);
   if (node.status) lines.push(`${indent(level + 1, state)}status = ${quote(node.status)}`);
+  if (node.replacedBy) lines.push(`${indent(level + 1, state)}replacedBy = ${quote(node.replacedBy)}`);
+  if (node.deprecatedOn) lines.push(`${indent(level + 1, state)}deprecatedOn = ${quote(node.deprecatedOn)}`);
   if (node.datasetTileProvenance) lines.push(`${indent(level + 1, state)}dataset_tile_provenance = ${quote(JSON.stringify(node.datasetTileProvenance))}`);
   if (node.derivedFrom) lines.push(`${indent(level + 1, state)}derived_from = ${quote(JSON.stringify(node.derivedFrom))}`);
   if (node.semanticTileConversionProvenance) lines.push(`${indent(level + 1, state)}semantic_tile_conversion_provenance = ${quote(JSON.stringify(node.semanticTileConversionProvenance))}`);

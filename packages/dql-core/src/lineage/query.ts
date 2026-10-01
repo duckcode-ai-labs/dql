@@ -1,4 +1,4 @@
-import { LineageGraph, type LineageGraphJSON, type LineageNode, type LineageEdge, type LineageNodeType, type LineageLayer, getLayerForNodeType } from './lineage-graph.js';
+import { LineageGraph, type LineageGraphJSON, type LineageNode, type LineageEdge, type LineageNodeType, type LineageLayer, getLayerForNodeType, isDataFlowEdge } from './lineage-graph.js';
 
 export interface LineageQuery {
   focus?: string;
@@ -351,6 +351,11 @@ function buildFocusedSubgraph(
 
   walkDirection(graph, focusId, 'upstream', normalizeDepth(upstreamDepth), includedIds);
   walkDirection(graph, focusId, 'downstream', normalizeDepth(downstreamDepth), includedIds);
+  // A retired block and its replacement are shown side by side: the focus's
+  // own `replaced_by` neighbours join the view, without walking past them.
+  for (const edge of [...graph.getOutgoingEdges(focusId), ...graph.getIncomingEdges(focusId)]) {
+    if (edge.type === 'replaced_by') includedIds.add(edge.source === focusId ? edge.target : edge.source);
+  }
 
   return graph.subgraph((node) => includedIds.has(node.id));
 }
@@ -374,6 +379,7 @@ function walkDirection(
       : graph.getOutgoingEdges(current.id);
 
     for (const edge of edges) {
+      if (!isDataFlowEdge(edge)) continue;
       const nextId = direction === 'upstream' ? edge.source : edge.target;
       if (seen.has(nextId)) continue;
       seen.add(nextId);
@@ -423,6 +429,7 @@ function collectReachableNodes(
       : graph.getOutgoingEdges(current.id);
 
     for (const edge of edges) {
+      if (!isDataFlowEdge(edge)) continue;
       const nextId = direction === 'upstream' ? edge.source : edge.target;
       if (visited.has(nextId)) continue;
       visited.add(nextId);
@@ -544,19 +551,33 @@ function buildReplacementHistory(graph: LineageGraph, focus: LineageNode): {
   replacementRefs: string[];
 } {
   const refs = stringArray(focus.metadata?.replacementFor);
-  const replaces = uniqueNodes(refs
-    .map((ref) => resolveFocusNode(graph, ref))
-    .filter((node): node is LineageNode => Boolean(node)));
+  const replaces = uniqueNodes([
+    ...refs
+      .map((ref) => resolveFocusNode(graph, ref))
+      .filter((node): node is LineageNode => Boolean(node)),
+    ...graph.getIncomingEdges(focus.id)
+      .filter((edge) => edge.type === 'replaced_by')
+      .map((edge) => graph.getNode(edge.source))
+      .filter((node): node is LineageNode => Boolean(node)),
+  ]);
   const focusAliases = new Set([
     focus.id.toLowerCase(),
     focus.name.toLowerCase(),
     `${focus.type}:${focus.name}`.toLowerCase(),
   ]);
-  const replacedBy = uniqueNodes(graph.getAllNodes()
-    .filter((node) => node.type === 'block')
-    .filter((node) => node.id !== focus.id)
-    .filter((node) => stringArray(node.metadata?.replacementFor)
-      .some((ref) => focusAliases.has(ref.toLowerCase()))));
+  const replacedBy = uniqueNodes([
+    // Native retirement: the deprecated block names its replacement.
+    ...graph.getOutgoingEdges(focus.id)
+      .filter((edge) => edge.type === 'replaced_by')
+      .map((edge) => graph.getNode(edge.target))
+      .filter((node): node is LineageNode => Boolean(node)),
+    // The newer block names what it replaces.
+    ...graph.getAllNodes()
+      .filter((node) => node.type === 'block')
+      .filter((node) => node.id !== focus.id)
+      .filter((node) => stringArray(node.metadata?.replacementFor)
+        .some((ref) => focusAliases.has(ref.toLowerCase()))),
+  ]);
 
   return { replaces, replacedBy, replacementRefs: refs };
 }
@@ -954,6 +975,7 @@ function collectPaths(
 
     // Filter to non-visited neighbors
     const nextEdges = edges.filter((e) => {
+      if (!isDataFlowEdge(e)) return false;
       if (e.type === 'contains' && graph.getNode(e.source)?.type === 'domain') {
         return false;
       }

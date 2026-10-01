@@ -96,6 +96,22 @@ DQL:
 The certified tag appears in the block library; downstream notebooks see
 the new version on next open.
 
+### Retiring a block
+
+When a new block takes over from a certified one, set the old block's
+`status = "deprecated"` and name the replacement:
+
+```dql
+status = "deprecated"
+replacedBy = "Claims Dataset"
+deprecatedOn = "2026-09-30"
+```
+
+The old block's badge then reads **Replaced by Claims Dataset**, opening it
+offers **Open the replacement**, Ask answers its questions from the
+replacement, and `dql validate` lists every block and App page still using
+it. See [Retired Block](../reference/language.md#retired-block).
+
 ## 7. Use it in a notebook
 
 ```dql

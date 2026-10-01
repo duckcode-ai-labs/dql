@@ -298,6 +298,10 @@ export function explainAskRun(input: ExplainAskRunInput): RunExplanation | undef
       if (governedRounds.length === 0 && aiLaneActivity) {
         push({ id: 'governed', kind: 'semantic', title: 'Certified blocks and semantic layer', outcome: 'skipped', reason: 'The question is not about a certified block or a semantic metric, so the AI wrote the SQL.' });
       }
+      // A question that named a retired block was answered from its replacement.
+      const retiredNotes = story
+        .filter((entry) => entry.phase === 'tier' && / was retired\b.*; answered from /.test(entry.title))
+        .map((entry) => `${entry.title}.`);
       for (const tier of ['certified', 'semantic', 'relational']) {
         const attempts = governedRounds.filter((entry) => entry.tier === tier);
         if (attempts.length === 0) continue;
@@ -313,7 +317,10 @@ export function explainAskRun(input: ExplainAskRunInput): RunExplanation | undef
             : plainReason(str(refusal?.code), str(refusal?.message) ?? str(last.detail));
         push({
           id: `tier-${tier}`, kind: tier as RunStepKind, title: TIER_TITLES[tier]!, outcome, reason,
-          notes: attempts.some((entry) => Number(entry.round) === 9) ? ['Tried again after a query was not usable.'] : [],
+          notes: [
+            ...(answeredHere ? retiredNotes : []),
+            ...(attempts.some((entry) => Number(entry.round) === 9) ? ['Tried again after a query was not usable.'] : []),
+          ],
           story: story.filter((entry) => entry.phase === 'tier' && entry.title.toLowerCase().includes(tier)),
         });
       }

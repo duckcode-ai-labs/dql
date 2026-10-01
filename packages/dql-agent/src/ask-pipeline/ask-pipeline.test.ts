@@ -5,7 +5,7 @@ import { ANALYTICAL_INTENT_JSON_SCHEMA, describeIntent, intentExecutionFingerpri
 import { isGovernedEntry, readingLane, applyGovernedDefaults, applySelectedMeaning, auditLedger, bindExactNames, freezeSuperlativeShape, droppedChange, identityClauseWords, keepMembersApart, unmetFacets, preferGovernedDefinition, relativePeriodProblem, scopedColumnOf, buildIntentSystemPrompt, buildLedger, calendarBasisProblem, droppedGrain, droppedYears, proveClauseCoverage, proveTimeRoles, resolveIntent, widenedPopulation, unaccountedQuestionWords, uncoveredQuestionTerms, coverageStates, validateIntentRefs, facetStem, promoteSoleMeasureScope, timeAxesFor } from './resolve-intent.js';
 import { bindSemanticRequest } from './prepare/index.js';
 import { composeAnsweredText, describeResultColumns, formatValue } from './outcomes.js';
-import { applyMemberSelection, bindNamedSubject, memberOptionId, namesInQuestion, parseMemberOption, pinnedRefsFor, proveSubjectMatchesPopulation, runAskPipeline, unmetDisplayObligation } from './pipeline.js';
+import { applyMemberSelection, bindNamedSubject, memberOptionId, namesInQuestion, parseMemberOption, pinnedRefsFor, proveSubjectMatchesPopulation, retiredBlockNamedBy, runAskPipeline, unmetDisplayObligation } from './pipeline.js';
 import { fillPeriodGaps } from './execute.js';
 import { suggestSameGrainColumns, suggestSameRelationFields, buildVocabularyIndex, renderCard, trigramSimilarity, type VocabularySource } from './vocabulary.js';
 import type { AgentMessage, AgentProvider } from '../providers/types.js';
@@ -2944,5 +2944,51 @@ describe('two governed sources: certified blocks and authored semantics; everyth
     expect(previous).toHaveLength(2);
     expect(still.kind).toBe('gap');
     if (still.kind === 'gap') expect(still.gap).toBe('not_retrieved');
+  });
+});
+
+describe('a retired block is answered from its replacement, and the run says so', () => {
+  const source: VocabularySource = {
+    blocks: [{
+      name: 'Claims Dataset', domain: 'claims', certified: true, description: 'Paid claims, one figure.',
+      contract: extractBlockContract({ name: 'Claims Dataset', domain: 'claims', sql: 'SELECT SUM(paid_amount) AS paid_claims FROM dev.claims', declaredOutputs: ['paid_claims'] }),
+      sql: 'SELECT SUM(paid_amount) AS paid_claims FROM dev.claims',
+      supersedes: [{ name: 'Claims Summary', deprecatedOn: '2026-09-30' }],
+    }],
+    relations: [{ schema: 'dev', name: 'claims', columns: [{ name: 'claim_id', dataType: 'VARCHAR' }, { name: 'paid_amount', dataType: 'DOUBLE' }] }],
+  };
+  const vocabulary = buildVocabularyIndex(source);
+  const reading = JSON.stringify({ version: 1, kind: 'analytics', reading: 'Paid claims', measures: [{ ref: 'block:claims.Claims Dataset' }], groupBy: [], display: [], filters: [], unresolved: [], provenance: { 'block:claims.Claims Dataset': 'q:claims summary' }, expectedShape: 'scalar' });
+  const run = (question: string) => runAskPipeline({
+    question, vocabulary, provider: { name: 'ollama', available: async () => true, generate: async () => reading }, clauseCoverage: false, prepareDeps: {},
+    executeDeps: { run: async () => ({ columns: ['paid_claims'], rows: [{ paid_claims: 42 }], rowCount: 1, executionTimeMs: 1 }) },
+  });
+
+  it('the retired name is an alias of the replacement, so a question naming it pins the replacement', () => {
+    const entry = vocabulary.get('block:claims.Claims Dataset');
+    expect(entry?.aliases).toContain('Claims Summary');
+    expect(pinnedRefsFor('paid claims from the claims summary', vocabulary)).toContain('block:claims.Claims Dataset');
+    expect(retiredBlockNamedBy('what does Claims Summary say?', entry)).toEqual({ name: 'Claims Summary', deprecatedOn: '2026-09-30' });
+    expect(retiredBlockNamedBy('summary of claims', entry)).toBeUndefined();
+    // The card tells the model what the block replaces.
+    expect(renderCard(entry!)).toContain('replaces retired "Claims Summary"');
+    expect(renderCard(entry!)).not.toContain('aka Claims Summary');
+  });
+
+  it('answers from the replacement with its own certified trust and tells How it answered', async () => {
+    const outcome = await run('What are paid claims in the Claims Summary?');
+    expect(outcome.kind).toBe('answered');
+    if (outcome.kind !== 'answered') return;
+    expect(outcome.candidate.tier).toBe('certified');
+    expect(outcome.candidate.trust).toBe('certified');
+    expect(outcome.candidate.sourceRef).toBe('block:claims.Claims Dataset');
+    expect(outcome.candidate.proof).toContain('Claims Summary was retired on 2026-09-30; answered from Claims Dataset');
+    expect(outcome.receipt.story?.map((step) => step.title)).toContain('Claims Summary was retired on 2026-09-30; answered from Claims Dataset');
+  });
+
+  it('a question that does not name the retired block tells no retirement story', async () => {
+    const outcome = await run('What are paid claims?');
+    expect(outcome.kind).toBe('answered');
+    expect(outcome.receipt.story?.some((step) => /was retired/.test(step.title))).toBe(false);
   });
 });

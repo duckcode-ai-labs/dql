@@ -15,6 +15,7 @@ import { extractTablesFromSql } from '../lineage/sql-parser.js';
 import { parseDatasetAggregateExpression } from '../datasets/aggregate-expression.node.js';
 import { extractColumnLineage, type ColumnLineageResult } from '../lineage/column-lineage.js';
 import { detectOutputDrift } from './output-drift.js';
+import { validateBlockRetirements } from './retirement.js';
 import { buildLineageGraph } from '../lineage/builder.js';
 import { detectDomainFlows, getDomainTrustOverview } from '../lineage/domain-lineage.js';
 import { loadSemanticLayerFromDir } from '../semantic/index.js';
@@ -369,6 +370,15 @@ export function buildManifest(options: ManifestBuildOptions): DQLManifest {
   // Apps & dashboards (consumption layer). Scanned after blocks/notebooks
   // because dashboard refs are resolved against the block path → name map.
   const { apps, dashboards } = scanAppsAndDashboards(projectRoot, blocks, knowledgeBlocks, diagnostics);
+
+  // Retired blocks: replacedBy / deprecatedOn checks, and remaining uses of
+  // deprecated blocks by other blocks and App pages. Additive `kind: 'retirement'`.
+  const blocksByDatasetSource = new Map(Object.values(blocks).map((block) => [manifestDatasetBlockSourceId(block), block]));
+  diagnostics.push(...validateBlockRetirements({
+    blocks,
+    dashboards,
+    resolveDatasetSource: (sourceId) => blocksByDatasetSource.get(sourceId),
+  }));
 
   // Build lineage
   const lineage = buildManifestLineage(
@@ -2535,6 +2545,8 @@ function buildManifestLineage(
     filterBindings: b.filterBindings,
     sourceSystems: b.sourceSystems,
     replacementFor: b.replacementFor,
+    replacedBy: b.replacedBy,
+    deprecatedOn: b.deprecatedOn,
   }));
 
   const lineageDomains: LineageDomainInput[] = Object.values(manifestDomains ?? {}).map((domain) => ({
@@ -2969,6 +2981,8 @@ function blockDeclToManifestBlock(block: any, filePath: string): ManifestBlock {
       : undefined,
     sourceSystems: Array.isArray(block.sourceSystems) ? block.sourceSystems : undefined,
     replacementFor: Array.isArray(block.replacementFor) ? block.replacementFor : undefined,
+    replacedBy: typeof block.replacedBy === 'string' && block.replacedBy.trim() ? block.replacedBy.trim() : undefined,
+    deprecatedOn: typeof block.deprecatedOn === 'string' && block.deprecatedOn.trim() ? block.deprecatedOn.trim() : undefined,
     unresolvedTermRefs: [],
     llmContext: agent.llmContext,
     examples: agent.examples,

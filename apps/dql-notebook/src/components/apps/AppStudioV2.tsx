@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, PointerEvent as ReactPointerEvent, ReactNode } from 'react';
 import {
-  Activity, ArrowLeft, ArrowRight, BarChart3, Blocks, Bot, Check, ChevronDown, Code2, Copy, FileText, Filter,
+  Activity, Archive, ArrowLeft, ArrowRight, BarChart3, Blocks, Bot, Check, ChevronDown, Code2, Copy, FileText, Filter,
   Gauge, Heading, LayoutDashboard, LineChart, Monitor, MoreHorizontal, PanelRight,
   Play, Plus, Redo2, ScatterChart, Search, Settings2, ShieldCheck, Smartphone, Sparkles, Table2,
   Trash2, Type, Undo2, Upload, X,
@@ -140,6 +140,7 @@ import {
   type DatasetCrossFilterLinkProposal,
   type RuntimeDatasetHierarchyDrillCandidate,
 } from './app-dataset-interactions';
+import { retiredTileNotice } from './tile-retirement';
 import {
   datasetTileNotices,
   isCurrentDatasetTileEvidence,
@@ -3088,6 +3089,7 @@ export function AppStudioV2({
                     </div>
                   </header>
                   {unsupportedTileFilters(tile).map((binding) => <div key={binding.filter} className="tile-filter-notice"><Filter size={11} /><span>{binding.unsupportedReason ?? `${humanize(binding.filter)} does not affect this component.`}</span></div>)}
+                  {(() => { const retired = retiredTileNotice(previewRun?.tiles.find((item) => item.tileId === tile.i)); return retired ? <div className="tile-filter-notice retired" role="note" title={retired.detail}><Archive size={11} /><span><strong>{retired.label}</strong></span></div> : null; })()}
                   {datasetTileNotices(previewRun?.tiles.find((item) => item.tileId === tile.i)).map((notice) => <div key={notice.key} className={`tile-filter-notice ${notice.kind}`} title={notice.detail}><Filter size={11} /><span><strong>{notice.label}</strong> · {notice.detail}</span></div>)}
                   {dqlTileId === tile.i ? <div className="studio-tile-dql" onClick={(event) => event.stopPropagation()}>{(() => { const runTile = previewRun?.tiles.find((item) => item.tileId === tile.i); const evidence = runTile && tile.query && isCurrentDatasetTileEvidence(tile, runTile) ? presentDatasetTileEvidence(runTile) : undefined; return evidence ? <DatasetTileExecutionEvidence presentation={evidence} /> : <p>Run a preview to see the Dataset query and the SQL it compiled to.</p>; })()}</div> : null}
                   {tile.text ? <div className={tile.viz.type === 'heading' ? 'tile-heading' : 'tile-text'}>{tile.text.markdown.replace(/^#+\s*/, '')}</div> : <div className="studio-tile-preview-interactions" onClick={(event) => event.stopPropagation()}><StudioTilePreview tile={tile} run={previewRun?.tiles.find((item) => item.tileId === tile.i)} loading={previewing} themeMode={themeMode} chartHeight={placed ? tileBodyHeight(tile.h, rowPx) : undefined} crossFilterFields={datasetCrossFilterFields(activePage!, tile)} activeCrossFilters={previewCrossFilters} onSelectDatasetMark={(field, values) => applyDatasetCrossFilter(tile, field, values)} onDrillDatasetMark={(candidate, row) => exploreDatasetHierarchy(tile, candidate, row)} onDrillBack={() => returnFromDatasetHierarchy(tile.i)} onNavigate={() => navigateFromDatasetTile(tile)} hasNavigation={Boolean(activePage!.interactions?.navigate?.some((interaction) => interaction.fromTile === tile.i))} linkProposal={datasetLinkProposal(activePage!, tile)} onLinkField={() => linkDatasetTileField(tile)} onMark={(row, at, candidates) => openMarkMenu(tile, previewRun?.tiles.find((item) => item.tileId === tile.i), row, at, candidates)} /></div>}

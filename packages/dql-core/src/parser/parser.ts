@@ -1280,6 +1280,9 @@ export class Parser {
     // matcher; the parser just needs to accept it as a valid top-level
     // property. Recognised values: BlockStatus union from dql-project.
     let status: string | undefined;
+    // Retirement metadata for deprecated blocks (see BlockDeclNode).
+    let replacedBy: string | undefined;
+    let deprecatedOn: string | undefined;
     // v1.6 — DataLex contract reference. Identifier-keyed (no new lexer
     // keyword needed). The semantic analyzer resolves the value against
     // the project's DataLex manifest and emits diagnostics for unresolved
@@ -1480,6 +1483,25 @@ export class Parser {
         this.expect(TokenType.Equals);
         const val = this.expect(TokenType.StringLiteral);
         status = val.value;
+      } else if (
+        this.check(TokenType.Identifier)
+        && (this.current().value === 'replacedBy' || this.current().value === 'deprecatedOn')
+      ) {
+        // Retirement metadata. Identifier-keyed to avoid new lexer keywords.
+        const keyToken = this.advance();
+        this.expect(TokenType.Equals);
+        const val = this.expect(TokenType.StringLiteral);
+        if (keyToken.value === 'replacedBy') {
+          replacedBy = val.value.trim() || undefined;
+        } else {
+          if (!/^\d{4}-\d{2}-\d{2}$/.test(val.value.trim())) {
+            this.reporter.warning(
+              `deprecatedOn should be a date in YYYY-MM-DD form, got "${val.value}".`,
+              val.span,
+            );
+          }
+          deprecatedOn = val.value.trim() || undefined;
+        }
       } else if (
         this.check(TokenType.Identifier)
         && this.current().value === 'datalex_contract'
@@ -1719,7 +1741,7 @@ export class Parser {
           continue;
         }
         this.error(
-          `Unexpected token '${this.current().value}' inside block. Expected 'domain', 'type', 'status', 'datalex_contract', 'metric', 'metrics', 'dimensions', 'description', 'tags', 'owner', 'terms', 'pattern', 'grain', 'fields', 'measures', 'entities', 'outputs', 'allowedFilters', 'parameterPolicy', 'filterBindings', 'sourceSystems', 'replacementFor', 'params', 'query', 'visualization', 'tests', 'llmContext', 'invariants', 'examples', 'businessOutcome', 'businessOwner', 'decisionUse', 'reviewCadence', 'businessRules', 'caveats', Tier-2 draft metadata fields, or '}'.`,
+          `Unexpected token '${this.current().value}' inside block. Expected 'domain', 'type', 'status', 'datalex_contract', 'metric', 'metrics', 'dimensions', 'description', 'tags', 'owner', 'terms', 'pattern', 'grain', 'fields', 'measures', 'entities', 'outputs', 'allowedFilters', 'parameterPolicy', 'filterBindings', 'sourceSystems', 'replacementFor', 'params', 'query', 'visualization', 'tests', 'llmContext', 'invariants', 'examples', 'businessOutcome', 'businessOwner', 'decisionUse', 'reviewCadence', 'businessRules', 'caveats', 'replacedBy', 'deprecatedOn', Tier-2 draft metadata fields, or '}'.`,
         );
         this.advance();
       }
@@ -1775,6 +1797,8 @@ export class Parser {
       businessRules,
       caveats,
       status,
+      replacedBy,
+      deprecatedOn,
       datalexContract,
       askedTimes,
       firstAsked,

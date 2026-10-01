@@ -107,6 +107,7 @@ export const EDGE_TYPE_COLORS: Record<string, string> = {
   contains: '#d2a8ff',
   crosses_domain: '#d2a8ff',
   certified_by: '#56d364',
+  replaced_by: '#f85149',
 };
 
 // ---- Edge type titles ----
@@ -122,7 +123,16 @@ export const EDGE_TITLES: Record<string, string> = {
   contains: 'contains',
   crosses_domain: 'crosses domain',
   certified_by: 'certified by',
+  replaced_by: 'replaced by',
 };
+
+/**
+ * Edges drawn with a visible label and a dashed line: they record a
+ * relationship, not data flow. A retired block points at its replacement.
+ */
+export function lineageEdgeLabel(type: string): string | undefined {
+  return type === 'replaced_by' ? EDGE_TITLES.replaced_by : undefined;
+}
 
 // ---- Lineage layer constants ----
 

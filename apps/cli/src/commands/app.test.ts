@@ -168,3 +168,29 @@ describe('App files that do not load', () => {
     }
   });
 });
+
+describe('a tile bound to a retired block', () => {
+  it('is not certified for a new publish, and the check names the replacement', async () => {
+    const { checkAppPublication } = await import('../apps-api.js');
+    const root = mkdtempSync(join(tmpdir(), 'dql-app-retired-'));
+    tempDirs.push(root);
+    mkdirSync(join(root, 'blocks'), { recursive: true });
+    writeFileSync(join(root, 'dql.config.json'), JSON.stringify({ project: 'retired' }));
+    writeFileSync(join(root, 'blocks', 'claims_summary.dql'), 'block "Claims Summary" {\n  status = "deprecated"\n  replacedBy = "Claims Dataset"\n  deprecatedOn = "2026-09-30"\n  domain = "claims"\n  type = "custom"\n  query = """SELECT 1 AS claims"""\n}\n');
+    writeFileSync(join(root, 'blocks', 'claims_dataset.dql'), 'block "Claims Dataset" {\n  status = "certified"\n  domain = "claims"\n  type = "custom"\n  query = """SELECT 1 AS claims"""\n}\n');
+    const appDir = join(root, 'apps', 'claims-ops');
+    mkdirSync(join(appDir, 'dashboards'), { recursive: true });
+    writeFileSync(join(appDir, 'dql.app.json'), JSON.stringify({ version: 1, id: 'claims-ops', name: 'Claims Ops', domain: 'claims', owners: ['a@example.com'], members: [{ userId: 'a@example.com', roles: ['owner'] }], roles: [{ id: 'owner' }], policies: [] }));
+    writeFileSync(join(appDir, 'dashboards', 'overview.dqld'), JSON.stringify({
+      version: 1, id: 'overview', metadata: { title: 'Overview', domain: 'claims' },
+      layout: { kind: 'grid', cols: 12, rowHeight: 80, items: [{ i: 'kpi', x: 0, y: 0, w: 3, h: 2, block: { blockId: 'Claims Summary' }, viz: { type: 'single_value' } }] },
+    }));
+    const result = checkAppPublication(root, 'claims-ops')!;
+    expect(result.ready).toBe(false);
+    expect(result.blockers).toContainEqual(expect.objectContaining({
+      code: 'block_not_certified',
+      tileId: 'kpi',
+      message: 'overview/kpi uses retired block Claims Summary, replaced by Claims Dataset; it no longer resolves to a certified block.',
+    }));
+  });
+});
