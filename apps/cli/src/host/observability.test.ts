@@ -1,4 +1,5 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import type { Server } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -15,7 +16,7 @@ vi.mock('@duckcodeailabs/dql-agent', async (importOriginal) => {
 });
 
 const { startLocalServer } = await import('../local-runtime.js');
-const { answerAuditEvent, auditModelUsage, observabilityFailures, otlpHeadersFromEnv, withAnswerAudit, withTraceExport } = await import('./observability.js');
+const { answerAuditEvent, auditModelUsage, keyQuestionFingerprints, observabilityFailures, otlpHeadersFromEnv, traceQuestionKey, withAnswerAudit, withTraceExport } = await import('./observability.js');
 const { withRequestContext } = await import('./request-context.js');
 type DqlAuditEvent = import('./observability.js').DqlAuditEvent;
 type DqlPrincipal = import('./request-context.js').DqlPrincipal;
@@ -70,7 +71,7 @@ describe('audit (RFC 0010 HH-6)', () => {
     expect(events.map((event) => event.kind === 'request' ? [event.method, event.path, event.status, event.outcome, event.action, event.actor] : event.kind)).toEqual([
       ['GET', '/api/identity', 401, 'refused', 'project.read', null],
       ['PUT', '/api/connections', 403, 'refused', 'connection.manage', 'Dev'],
-      ['POST', '/api/agent/learnings/correction', 200, 'ok', 'ask', 'maria@insurer.example'],
+      ['POST', '/api/agent/learnings/correction', 200, 'ok', 'project.write', 'maria@insurer.example'],
     ]);
     const change = events[2] as Extract<DqlAuditEvent, { kind: 'request' }>;
     expect(change).toMatchObject({ principalId: 'u-maria', resource: { type: 'project' }, requestId: expect.any(String) });
@@ -145,5 +146,41 @@ describe('trace export (RFC 0010 HH-6)', () => {
   it('leaves the store as it is with nowhere to send traces', () => {
     const store = makeStore();
     expect(withTraceExport(store, {})).toBe(store);
+  });
+
+  it('sends question fingerprints keyed, never as the bare hash of the question: stable on one install, different on another', async () => {
+    const asked = `sha256:${createHash('sha256').update('How many claims were filed in the West?').digest('hex')}`;
+    const withQuestion = { envelope: { traceId: 'b'.repeat(32), runId: 'run-2', questionFingerprint: asked }, spans: [{ payload: { kind: 'stage', requestedMode: 'auto', fingerprint: asked } }, { payload: { kind: 'sql', execution: { sqlFingerprint: 'sha256:abc' } } }] };
+    const sent: Array<{ bundle: unknown; otlp: unknown }> = [];
+    const store = (key: string) => withTraceExport({ finalize: vi.fn((_envelope: unknown) => ({ ok: true })), get: vi.fn(() => withQuestion as never) }, { sink: (trace) => { sent.push(trace); }, questionKey: () => key });
+    store('install-one').finalize(withQuestion.envelope);
+    store('install-one').finalize(withQuestion.envelope);
+    store('install-two').finalize(withQuestion.envelope);
+    await vi.waitFor(() => expect(sent).toHaveLength(3));
+    const texts = sent.map((trace) => JSON.stringify(trace));
+    for (const text of texts) expect(text).not.toContain(asked.slice('sha256:'.length));
+    const fingerprint = (index: number) => (sent[index]!.bundle as { trace: { envelope: { questionFingerprint: string }; spans: Array<{ payload: { fingerprint?: string } }> } }).trace;
+    expect(fingerprint(0).envelope.questionFingerprint).toMatch(/^sha256:[0-9a-f]{64}$/);
+    expect(fingerprint(0).spans[0]!.payload.fingerprint).toBe(fingerprint(0).envelope.questionFingerprint);
+    expect(fingerprint(1).envelope.questionFingerprint).toBe(fingerprint(0).envelope.questionFingerprint);
+    expect(fingerprint(2).envelope.questionFingerprint).not.toBe(fingerprint(0).envelope.questionFingerprint);
+    // Other fingerprints are left as they are.
+    expect(texts[0]).toContain('sha256:abc');
+    expect(keyQuestionFingerprints({ questionFingerprint: asked }, 'k').questionFingerprint).not.toBe(asked);
+  });
+
+  it('keys them with the host\'s secret, or one kept in the project\'s private folder', () => {
+    const projectRoot = mkdtempSync(join(tmpdir(), 'dql-trace-salt-'));
+    roots.push(projectRoot);
+    expect(traceQuestionKey(projectRoot, 'host-secret-for-claims')).toBe('host-secret-for-claims');
+    const made = traceQuestionKey(projectRoot);
+    expect(made).toMatch(/^[0-9a-f]{64}$/);
+    expect(traceQuestionKey(projectRoot)).toBe(made);
+    const file = join(projectRoot, '.dql', 'local', 'private', 'trace-salt');
+    expect(readFileSync(file, 'utf8').trim()).toBe(made);
+    if (process.platform !== 'win32') expect(statSync(file).mode & 0o077).toBe(0);
+    const other = mkdtempSync(join(tmpdir(), 'dql-trace-salt-'));
+    roots.push(other);
+    expect(traceQuestionKey(other)).not.toBe(made);
   });
 });

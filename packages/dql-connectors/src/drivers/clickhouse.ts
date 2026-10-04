@@ -126,10 +126,12 @@ export class ClickHouseConnector implements DatabaseConnector {
   async listColumns(schema?: string, table?: string): Promise<ColumnInfo[]> {
     let sql = `SELECT database, table, name, type, position FROM system.columns
        WHERE database NOT IN ('system', 'information_schema', 'INFORMATION_SCHEMA')`;
-    if (schema) sql += ` AND database = ${sqlLiteral(schema, 'backslash')}`;
-    if (table) sql += ` AND table = ${sqlLiteral(table, 'backslash')}`;
+    // Names travel as values the driver binds (with ClickHouse's backslash escapes), never in the statement's text.
+    const params: unknown[] = [];
+    if (schema) { params.push(schema); sql += ` AND database = ?`; }
+    if (table) { params.push(table); sql += ` AND table = ?`; }
     sql += ` ORDER BY database, table, position`;
-    const result = await this.execute(sql);
+    const result = await this.execute(sql, params);
     return result.rows.map((row) => ({
       schema: String(row['database'] ?? ''),
       table: String(row['table'] ?? ''),

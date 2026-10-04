@@ -22,33 +22,55 @@ export function ollamaContextWindow(messages: AgentMessage[], numPredict: number
   return Math.min(ceiling, Math.max(8192, Math.ceil(needed / 4096) * 4096));
 }
 
+/** Where Ollama listens when nothing else is configured: this machine. */
+export const DEFAULT_OLLAMA_BASE_URL = 'http://127.0.0.1:11434';
+
 /**
- * Local Ollama provider — talks to a local Ollama daemon on
- * http://127.0.0.1:11434 (overridable via OLLAMA_BASE_URL).
+ * The one base URL an Ollama provider talks to: the configured one (the
+ * provider's setting, else OLLAMA_BASE_URL), else this machine's default.
+ */
+export function ollamaBaseUrl(configured?: string): string {
+  return (configured?.trim() || DEFAULT_OLLAMA_BASE_URL).replace(/\/+$/, '');
+}
+
+/**
+ * Local Ollama provider — talks to ONE Ollama daemon: the configured base URL
+ * (the provider setting, else OLLAMA_BASE_URL), else http://127.0.0.1:11434.
+ * It never tries another address on its own: whether result values may reach
+ * this model is decided from `baseUrl` (DQL's local-model rule: only a
+ * loopback URL is "this machine"), so the provider must contact that URL and
+ * no other. A container that runs Ollama elsewhere names it in
+ * OLLAMA_BASE_URL (Docker Compose does), and is then a model off this machine.
  *
- * `available()` does a HEAD request and returns true on any 2xx/4xx — a
- * 4xx still means a daemon is listening. Use OLLAMA_MODEL or pass `model`
- * to pin the served model.
+ * `available()` asks `/api/tags` and returns true on any 2xx/4xx — a 4xx
+ * still means a daemon is listening. Use OLLAMA_MODEL or pass `model` to pin
+ * the served model.
  */
 export class OllamaProvider implements AgentProvider {
   readonly name = 'ollama' as const;
-  private readonly baseUrls: string[];
+  /** The only base URL this provider contacts. */
+  readonly baseUrl: string;
   private readonly defaultModel: string;
-  private resolvedBaseUrl?: string;
 
   constructor(opts: { baseUrl?: string; model?: string } = {}) {
-    this.baseUrls = buildOllamaBaseUrlCandidates(opts.baseUrl ?? process.env.OLLAMA_BASE_URL);
+    this.baseUrl = ollamaBaseUrl(opts.baseUrl ?? process.env.OLLAMA_BASE_URL);
     this.defaultModel = opts.model ?? process.env.OLLAMA_MODEL ?? 'qwen3.6:latest';
   }
 
+  /** Every URL this provider can contact (one): for the local-model rule. */
+  endpoints(): string[] {
+    return [this.baseUrl];
+  }
+
   async available(): Promise<boolean> {
-    return Boolean(await this.resolveBaseUrl());
+    return canReachOllama(this.baseUrl);
   }
 
   async generate(messages: AgentMessage[], options: ProviderRunOptions = {}): Promise<string> {
     const errors: string[] = [];
     let attemptIndex = 0;
-    for (const baseUrl of await this.orderedBaseUrls()) {
+    // The one configured URL, tried once more after a failed answer (a daemon that is loading a model); never another host.
+    for (const baseUrl of [this.baseUrl, this.baseUrl]) {
       try {
         attemptIndex += 1;
         const res = await fetchProviderHttpDispatch({
@@ -79,18 +101,19 @@ export class OllamaProvider implements AgentProvider {
         });
         if (!res.ok) {
           const body = await res.text().catch(() => res.statusText);
-          errors.push(`${baseUrl}: ${res.status} ${body}`);
+          errors.push(`${res.status} ${body}`);
           continue;
         }
-        this.resolvedBaseUrl = baseUrl;
         const json = (await res.json()) as { message?: { content?: string } };
         return json.message?.content ?? '';
       } catch (err) {
         if (options.signal?.aborted) throw err;
-        errors.push(`${baseUrl}: ${err instanceof Error ? err.message : String(err)}`);
+        if (isDispatchBudgetError(err)) throw err;
+        // Nothing listens there: say so plainly, and try nowhere else.
+        throw new Error(ollamaNotRunning(this.baseUrl));
       }
     }
-    throw new Error(`ollama: no reachable endpoint. Tried ${this.baseUrls.join(', ')}. ${errors.join(' | ')}`);
+    throw new Error(`Ollama at ${this.baseUrl} could not answer: ${errors.join(' | ')}`);
   }
 
   async generateStream(
@@ -100,7 +123,7 @@ export class OllamaProvider implements AgentProvider {
   ): Promise<string> {
     const errors: string[] = [];
     let attemptIndex = 0;
-    for (const baseUrl of await this.orderedBaseUrls()) {
+    for (const baseUrl of [this.baseUrl, this.baseUrl]) {
       try {
         attemptIndex += 1;
         const res = await fetchProviderHttpDispatch({
@@ -124,10 +147,9 @@ export class OllamaProvider implements AgentProvider {
         });
         if (!res.ok || !res.body) {
           const body = await res.text().catch(() => res.statusText);
-          errors.push(`${baseUrl}: ${res.status} ${body}`);
+          errors.push(`${res.status} ${body}`);
           continue;
         }
-        this.resolvedBaseUrl = baseUrl;
         // Ollama streams newline-delimited JSON, one object per chunk.
         const reader = res.body.getReader();
         const decoder = new TextDecoder();
@@ -156,45 +178,22 @@ export class OllamaProvider implements AgentProvider {
         return full;
       } catch (err) {
         if (options.signal?.aborted) throw err;
-        errors.push(`${baseUrl}: ${err instanceof Error ? err.message : String(err)}`);
+        if (isDispatchBudgetError(err)) throw err;
+        throw new Error(ollamaNotRunning(this.baseUrl));
       }
     }
-    throw new Error(`ollama: no reachable endpoint. Tried ${this.baseUrls.join(', ')}. ${errors.join(' | ')}`);
-  }
-
-  private async resolveBaseUrl(): Promise<string | null> {
-    if (this.resolvedBaseUrl && await canReachOllama(this.resolvedBaseUrl)) {
-      return this.resolvedBaseUrl;
-    }
-    for (const baseUrl of this.baseUrls) {
-      if (await canReachOllama(baseUrl)) {
-        this.resolvedBaseUrl = baseUrl;
-        return baseUrl;
-      }
-    }
-    return null;
-  }
-
-  private async orderedBaseUrls(): Promise<string[]> {
-    const resolved = await this.resolveBaseUrl();
-    if (!resolved) return this.baseUrls;
-    return [resolved, ...this.baseUrls.filter((url) => url !== resolved)];
+    throw new Error(`Ollama at ${this.baseUrl} could not answer: ${errors.join(' | ')}`);
   }
 }
 
-function buildOllamaBaseUrlCandidates(configured?: string): string[] {
-  const primary = (configured?.trim() || 'http://127.0.0.1:11434').replace(/\/+$/, '');
-  const candidates = [
-    primary,
-    // Docker Desktop exposes host-local services through this hostname. This
-    // lets the Dockerized notebook use a host Ollama daemon without requiring
-    // users to know container networking details.
-    'http://host.docker.internal:11434',
-    // Compose profile `ollama` exposes the daemon as service name `ollama`.
-    'http://ollama:11434',
-    'http://127.0.0.1:11434',
-  ];
-  return Array.from(new Set(candidates.map((url) => url.replace(/\/+$/, ''))));
+/** What a person reads when nothing answers at the configured Ollama. */
+export function ollamaNotRunning(baseUrl: string): string {
+  return `Ollama is not running at ${baseUrl}. Start it there, or set the Ollama base URL in Settings.`;
+}
+
+/** DQL's own stop for a run's provider calls (its dispatch budget): passed on as it is. */
+function isDispatchBudgetError(error: unknown): boolean {
+  return error instanceof Error && /dispatch budget exhausted/i.test(error.message);
 }
 
 async function canReachOllama(baseUrl: string): Promise<boolean> {

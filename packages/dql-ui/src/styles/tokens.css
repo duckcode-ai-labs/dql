@@ -46,7 +46,7 @@
 
   --text-primary: #e6e8ee;
   --text-secondary: #9aa0ae;
-  --text-tertiary: #626878;
+  --text-tertiary: #8d93a3;   /* 5.7:1 on --bg-2, 4.7:1 on --bg-4 (WCAG AA); #626878 was 3.1:1 */
   --text-muted: #4a5060;
 
   --accent: #2bb3a9;             /* DuckCode deep teal, lifted for dark */
@@ -193,7 +193,7 @@
 
   --text-primary: #1a1a1a;
   --text-secondary: #4a4a52;
-  --text-tertiary: #6b6e76;      /* 5:1 on white; #8a8d96 was 3.4:1 */
+  --text-tertiary: #64676e;      /* 5.7:1 on white, 5:1 on --bg-0; #6b6e76 was 4.5:1 there */
   --text-muted: #b0b2ba;
 
   --accent: #0b7a75;            /* DuckCode deep teal; also the certified colour */
@@ -313,7 +313,7 @@
 
   --text-primary: #0f172a;
   --text-secondary: #475569;
-  --text-tertiary: #64748b;
+  --text-tertiary: #56657a;      /* 5.9:1 on white, 5.5:1 on --bg-canvas; #64748b was 4.5:1 there */
   --text-muted: #94a3b8;
 
   --accent: #0b7a75;

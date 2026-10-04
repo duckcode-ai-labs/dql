@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { extractBlockContract } from './block-contract.js';
-import { applyDerivedColumns, classifyWarehouseError, executeCandidate } from './execute.js';
+import { applyDerivedColumns, classifyWarehouseError, executeCandidate, statementFailure, warehouseDiagnosis, type WarehouseFailure } from './execute.js';
 import { ANALYTICAL_INTENT_JSON_SCHEMA, describeIntent, intentExecutionFingerprint, intentRefs, parseIntent, unaccountedInheritedRefs, type AnalyticalIntentV1 } from './intent.js';
 import { isGovernedEntry, readingLane, applyGovernedDefaults, applySelectedMeaning, auditLedger, bindExactNames, freezeSuperlativeShape, droppedChange, identityClauseWords, keepMembersApart, unmetFacets, preferGovernedDefinition, relativePeriodProblem, scopedColumnOf, buildIntentSystemPrompt, buildLedger, calendarBasisProblem, droppedGrain, droppedYears, proveClauseCoverage, proveTimeRoles, resolveIntent, widenedPopulation, unaccountedQuestionWords, uncoveredQuestionTerms, coverageStates, validateIntentRefs, facetStem, promoteSoleMeasureScope, timeAxesFor } from './resolve-intent.js';
 import { bindSemanticRequest } from './prepare/index.js';
-import { composeAnsweredText, describeResultColumns, formatValue } from './outcomes.js';
+import { composeAnsweredText, composeFailedText, describeResultColumns, formatValue } from './outcomes.js';
 import { applyMemberSelection, bindNamedSubject, memberOptionId, namesInQuestion, parseMemberOption, pinnedRefsFor, proveSubjectMatchesPopulation, retiredBlockNamedBy, runAskPipeline, unmetDisplayObligation } from './pipeline.js';
 import { fillPeriodGaps } from './execute.js';
 import { suggestSameGrainColumns, suggestSameRelationFields, buildVocabularyIndex, renderCard, trigramSimilarity, type VocabularySource } from './vocabulary.js';
@@ -1541,6 +1541,97 @@ describe('a warehouse failure says which kind it was', () => {
     expect(outcome.kind).toBe('failed');
     expect(outcome.receipt.failure?.stage).toBe('resolve');
     expect(outcome.receipt.warehouse).toBeUndefined();
+  });
+});
+
+describe('a warehouse failure names only what the statement wrote', () => {
+  // A certified statement over an insurer's claims table, as DQL wrote it, and the warehouse's words when the host's row
+  // rule had rewritten it (the excerpt quotes the rewrite: the rule's predicate and the person's region).
+  const written = 'SELECT region, COUNT(*) AS open_claims FROM "harbor"."main"."claims" WHERE status = \'open\' GROUP BY region';
+  const drift = 'DuckDB query failed: Binder Error: Referenced column "status" not found in FROM clause!\nCandidate bindings: "claims.loss_date", "claims.claim_type"\nLINE 1: ... OR \'West\' = \'All\')) AS "claims" WHERE status = \'open\' GROUP BY region...\n                                                  ^';
+  const aiSql = 'SELECT a.adjuster_id, COUNT(*) AS open_claims FROM "harbor"."main"."claims" c JOIN "harbor"."main"."adjusters" a ON a.adjuster_id = c.adjuster_id WHERE ISNULL(c.status, \'\') = \'open\' GROUP BY 1';
+  const unknownFunction = 'DuckDB query failed: Catalog Error: Scalar Function with name isnull does not exist!\nDid you mean "isnan"?\nLINE 1: ...a".adjuster_id = "c".adjuster_id WHERE ISNULL("c".status, \'\') = \'open\' GROUP B...\n                                                  ^\nHint: that table isn\'t in this database — it may be empty or the connection may point at the wrong .duckdb file. Build your dbt models (e.g. `dbt build`) to populate it, then retry.';
+  const NOT_TABLES = /\b(West|All|open|status|isnull|isnan|c|a)\b/;
+
+  it('classifies a column or a function the warehouse lacks apart from a missing table, on every engine, naming only the statement\'s own tables', () => {
+    expect(classifyWarehouseError(drift, { sql: written })).toEqual({ class: 'column_missing', relations: ['"harbor"."main"."claims"'], column: 'status' });
+    expect(classifyWarehouseError(unknownFunction, { sql: aiSql })).toEqual({ class: 'function_missing', relations: [], function: 'isnull' });
+    expect(classifyWarehouseError('Binder Error: Values list "c" does not have a column named "status"', { sql: 'SELECT c.status FROM main.claims c' })).toEqual({ class: 'column_missing', relations: ['main.claims'], column: 'status' });
+    const cases: Array<[string, string, WarehouseFailure['class'], string[]]> = [
+      ['Catalog Error: Table with name claimz does not exist!\nDid you mean "claims"?', 'SELECT * FROM main.claimz', 'relation_missing', ['main.claimz']],
+      ['Binder Error: Referenced table "x" not found!\nCandidate tables: "c"', 'SELECT x.region FROM main.claims c', 'sql_error', []],
+      // DuckDB, when the table is a subquery (a host's row rule put one in its place).
+      ['Binder Error: Values list "c" does not have a column named "status"\nLINE 1: ...WHERE lower("c".status) = \'open\'', 'SELECT a.adjuster_id FROM main.claims c JOIN main.adjusters a ON a.adjuster_id = c.adjuster_id WHERE lower(c.status) = \'open\'', 'column_missing', []],
+      ['column "status" does not exist', 'SELECT status FROM public.claims', 'column_missing', ['public.claims']],
+      ['function isnull(text, unknown) does not exist', 'SELECT isnull(status, \'\') FROM public.claims', 'function_missing', []],
+      ['relation "public.claimz" does not exist', 'SELECT * FROM public.claimz', 'relation_missing', ['public.claimz']],
+      ['SQL compilation error:\nerror line 1 at position 7\ninvalid identifier \'C.STATUS\'', 'SELECT c.status FROM claims c', 'column_missing', ['claims']],
+      ['SQL compilation error:\nUnknown function ISNULL', 'SELECT ISNULL(status) FROM claims', 'function_missing', []],
+      ["SQL compilation error:\nObject 'HARBOR.MAIN.CLAIMZ' does not exist or not authorized.", 'SELECT * FROM harbor.main.claimz JOIN harbor.main.adjusters a ON TRUE', 'relation_missing', ['HARBOR.MAIN.CLAIMZ']],
+      ['Unrecognized name: status at [1:40]', 'SELECT status FROM `p.harbor.claims`', 'column_missing', ['`p.harbor.claims`']],
+      ['Function not found: isnull at [1:8]', 'SELECT isnull(status) FROM `p.harbor.claims`', 'function_missing', []],
+      ['[UNRESOLVED_COLUMN.WITH_SUGGESTION] A column, variable, or function parameter with name `status` cannot be resolved. Did you mean one of the following? [`claim_status`]. SQLSTATE: 42703; line 1 pos 40;\n\'Aggregate [region#1], [region#1, count(1) AS n#2L]\n+- \'Filter (\'status = open)\n   +- SubqueryAlias claims\n      +- Filter ((region#1 = West) OR (West = All))', 'SELECT region, COUNT(*) AS n FROM harbor.claims WHERE status = \'open\' GROUP BY region', 'column_missing', ['harbor.claims']],
+    ];
+    for (const [message, sql, kind, relations] of cases) {
+      const failure = classifyWarehouseError(message, { sql });
+      expect(failure.class, message).toBe(kind);
+      expect(failure.relations, message).toEqual(relations);
+    }
+    // Never a literal, an alias, a column or a function named as a table.
+    for (const [message, sql] of [[drift, written], [unknownFunction, aiSql], [cases[9]![0], cases[9]![1]]] as const) {
+      for (const relation of classifyWarehouseError(message, { sql }).relations) expect(relation).not.toMatch(NOT_TABLES);
+    }
+    // BigQuery's backquoted path is named by its table.
+    const bigquery = classifyWarehouseError('Unrecognized name: status at [1:40]', { sql: 'SELECT status FROM `p.harbor.claims`' });
+    expect(composeFailedText('execute', 'Unrecognized name: status at [1:40]', bigquery)).toMatch(/^A column this answer reads \(status\) is not in the claims table on the warehouse\./);
+    // A column the warehouse names that the statement does not (a rewrite's own column) is not named.
+    expect(classifyWarehouseError('Binder Error: Referenced column "region" not found in FROM clause!', { sql: 'SELECT COUNT(*) FROM main.claims' }).column).toBeUndefined();
+  });
+
+  it('without a host the warehouse\'s words follow; with one the answer gives a plain sentence and a reference, never the warehouse\'s words', () => {
+    const local = composeFailedText('execute', drift, classifyWarehouseError(drift, { sql: written }));
+    expect(local).toMatch(/^A column this answer reads \(status\) is not in the claims table on the warehouse\./);
+    expect(local).not.toMatch(/cannot see/);
+    expect(local).toContain('The warehouse said: DuckDB query failed');
+    const hosted = Object.assign(new Error('Binder Error: Referenced column "status" not found in FROM clause! (reference 0a1b2c3d)'), { warehouseReference: '0a1b2c3d', warehouseDiagnosis: 'DuckDB query failed: Binder Error: Referenced column "status" not found in FROM clause!' });
+    const failed = statementFailure(hosted, { sql: written });
+    expect(failed.message).toBe('a column this statement reads (status) is not in the claims table on the warehouse (reference 0a1b2c3d)');
+    expect(failed.repair).toBe(hosted.warehouseDiagnosis);
+    expect(failed.warehouse.reference).toBe('0a1b2c3d');
+    const said = composeFailedText('execute', failed.message, failed.warehouse);
+    expect(said).toBe('A column this answer reads (status) is not in the claims table on the warehouse. The table may have changed since the answer was defined. Ask your administrator about reference 0a1b2c3d.');
+    const fn = statementFailure(Object.assign(new Error('x'), { warehouseReference: 'ffff0000', warehouseDiagnosis: warehouseDiagnosis(unknownFunction) }), { sql: aiSql });
+    expect(composeFailedText('execute', fn.message, fn.warehouse)).toBe('The statement calls a function (isnull) that this warehouse does not have. Rephrase the question. Ask your administrator about reference ffff0000.');
+    for (const [diagnosis, sql] of [['Catalog Error: Table with name claimz does not exist!', 'SELECT * FROM main.claimz'], ['Parser Error: syntax error at or near "SELEC"', 'SELEC 1'], ["Insufficient privileges to operate on table 'CLAIMS'", 'SELECT * FROM harbor.main.claims'], ["Warehouse 'WH' is suspended.", 'SELECT 1']] as const) {
+      const out = statementFailure(Object.assign(new Error('x'), { warehouseReference: '12345678', warehouseDiagnosis: diagnosis }), { sql });
+      const text = composeFailedText('execute', out.message, out.warehouse);
+      expect(text, diagnosis).toMatch(/Ask your administrator about reference 12345678\.$/);
+      expect(text, diagnosis).not.toMatch(/Error|LINE \d|\^|warehouse said|SELEC|dbt build/);
+    }
+    // The diagnosis stops before the statement excerpt and DQL's single-user advice.
+    expect(warehouseDiagnosis(unknownFunction)).toBe('DuckDB query failed: Catalog Error: Scalar Function with name isnull does not exist!\nDid you mean "isnan"?');
+  });
+
+  it('a drafted statement the warehouse refuses twice, with a host: the corrective draft gets the diagnosis, the answer and its receipt only the plain sentence', async () => {
+    const vocabulary = buildVocabularyIndex({
+      metrics: [{ name: 'open_claims', label: 'Open claims', metricType: 'derived', engineOnly: 'a derived metric the relational tier cannot compose' }],
+    });
+    const reading = JSON.stringify({ version: 1, kind: 'analytics', reading: 'Open claims per adjuster.', measures: [{ ref: 'metric:open_claims' }], groupBy: [], display: [], filters: [], unresolved: [], provenance: {}, expectedShape: 'table' });
+    const previous: Array<{ sql: string; error: string } | undefined> = [];
+    let reference = 0;
+    const outcome = await runAskPipeline({
+      question: 'Which adjusters have the most open claims?', vocabulary, explorationAuto: true,
+      provider: { name: 'ollama', available: async () => true, generate: async () => reading },
+      prepareDeps: { draftSql: async (input) => { previous.push(input.previous); return { sql: aiSql, relations: ['harbor.main.claims', 'harbor.main.adjusters'], proof: [] }; } },
+      executeDeps: { run: async () => { reference += 1; throw Object.assign(new Error('raw words that must not travel'), { warehouseReference: `0000000${reference}`, warehouseDiagnosis: warehouseDiagnosis(unknownFunction) }); } },
+    });
+    expect(outcome.kind).toBe('failed');
+    if (outcome.kind !== 'failed') return;
+    expect(previous[1]?.error).toBe('DuckDB query failed: Catalog Error: Scalar Function with name isnull does not exist!\nDid you mean "isnan"?');
+    expect(outcome.text).toBe('The statement calls a function (isnull) that this warehouse does not have. Rephrase the question. Ask your administrator about reference 00000002.');
+    const everything = JSON.stringify(outcome);
+    expect(everything).not.toMatch(/Catalog Error|DuckDB query failed|isnan|LINE \d|raw words|dbt build/);
+    expect(outcome.receipt.failure?.warehouse).toMatchObject({ class: 'function_missing', reference: '00000002' });
   });
 });
 

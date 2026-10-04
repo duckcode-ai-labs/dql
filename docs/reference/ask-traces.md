@@ -85,6 +85,14 @@ redaction-receipt.json
 secrets, SQL, URLs, and paths. DQL also offers an OpenTelemetry/OpenInference
 JSON mapper for a reviewed local artifact; it does not ship a network exporter.
 
+When traces are sent on (to a host's sink, or as OTLP when
+`OTEL_EXPORTER_OTLP_ENDPOINT` is set, also on a single-user install), the
+question's fingerprint leaves keyed: HMAC-SHA256 under the host's `traceSalt`,
+or under a key DQL makes once in `.dql/local/private/trace-salt`. The same
+question keys the same way on one install, and the value cannot be checked
+against a list of likely questions anywhere else. Fingerprints in the local
+trace store are unchanged.
+
 ## UI
 
 Open **Open full trace** from an Ask result, or navigate to

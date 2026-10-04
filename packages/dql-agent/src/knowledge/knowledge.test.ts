@@ -13,6 +13,7 @@ import {
   type KnowledgeSource,
 } from './index.js';
 import { setAgentToolGate } from '../agentic/tool-gate.js';
+import { foldFigures } from './figures.js';
 import { AgentRunEngine } from '../agent-run-engine.js';
 import type { AgentMessage, AgentProvider } from '../providers/types.js';
 
@@ -154,6 +155,21 @@ describe('figures', () => {
     expect(withoutFigures('Paid means cleared. About $4.2M paid. Paid in 12% of cases. Since 2024, 3 teams agree.')).toEqual({ text: 'Paid means cleared. Since 2024, 3 teams agree.', removed: 2 });
   });
 
+  it('reads a figure however it is written: words, other scripts\' digits, full-width, circled or spaced digits, fractions', () => {
+    for (const sentence of [
+      'That is ninety-nine thousand nine hundred ninety-nine claims.', 'About twelve thousand claims were reopened.', 'Roughly three hundred and forty claims.',
+      'A million claims.', 'Roughly \uff13\uff14\uff10\uff10 more claims.', 'Roughly \u0663\u0664\u0660\u0660 more claims.', 'Roughly \u0969\u096a\u0966\u0966 claims.',
+      'About 1 2 0 0 0 claims.', 'About \u2157 of claims.', 'Roughly \u2460\u2461\u2462 claims.', 'Two dozen claims.', 'Fifty percent of claims.',
+    ]) {
+      expect(withoutFigures(sentence).removed, sentence).toBe(1);
+    }
+    // Still kept: one-digit counts in words or digits, years, and words that only contain a number word.
+    expect(withoutFigures('One team owns this. Since 2024, three teams agree. Someone often reviews it.')).toEqual({ text: 'One team owns this. Since 2024, three teams agree. Someone often reviews it.', removed: 0 });
+    expect(foldFigures('twelve thousand, \u0663\u0664 and \uff15\uff10')).toBe('12000, 34 and 50');
+    // An answer that repeats a document's figure in words is caught too.
+    expect(knowledgeOnlyFigures('The handbook average is one thousand two hundred thirty-four.', [HANDBOOK], [412])).toEqual(['1234']);
+  });
+
   it('finds answer figures that only a document holds, and removes their sentences', () => {
     const docs = [HANDBOOK];
     expect(knowledgeOnlyFigures('Paid claims last week: 412. The handbook average is 1,234.', docs, [412])).toEqual(['1234']);
@@ -161,6 +177,39 @@ describe('figures', () => {
     expect(withoutKnowledgeOnlyFigures('Paid claims last week: 412. The handbook average is 1,234.', ['1234'])).toBe(
       'Paid claims last week: 412. A figure taken from a document was left out: answer figures come only from governed queries.',
     );
+  });
+});
+
+describe('the governed answer\'s own reading', () => {
+  const handbook = 'A paid claim is a claim with at least one payment that has cleared. In 2025 the team paid 1,250 claims. Payments clear within 20 days.';
+  const sql = "SELECT COUNT(*) FROM claim_payments WHERE paid_date >= '2026-09-14' AND paid_date < '2026-09-21'";
+  const answer = 'I read this as: claims paid in the last full week (14–20 September 2026). paid claims: 11. Source: the semantic layer.';
+
+  it('a reading whose dates share a number with a document keeps every word, and nothing is said to be left out', () => {
+    expect(knowledgeOnlyFigures(answer, [handbook], [11, sql])).toEqual([]);
+    expect(knowledgeOnlyFigures(answer, [handbook], [11, sql], { reading: 'claims paid in the last full week (14–20 September 2026)' })).toEqual([]);
+    // Even handed the number, the reading stays and no note claims a removal.
+    expect(withoutKnowledgeOnlyFigures(answer, ['20'])).toBe(answer);
+  });
+
+  it('a reading with full stops in it is the reading as a whole when the caller names it', () => {
+    const reading = 'Claims paid. Week of 14–20 September 2026';
+    const text = `I read this as: ${reading}. paid claims: 11. Source: the semantic layer.`;
+    expect(knowledgeOnlyFigures(text, [handbook], [11, sql], { reading })).toEqual([]);
+    const withDocumentFigure = `${text} The handbook counts 1,250 paid claims a year.`;
+    const figures = knowledgeOnlyFigures(withDocumentFigure, [handbook], [11, sql], { reading });
+    expect(figures).toEqual(['1250']);
+    expect(withoutKnowledgeOnlyFigures(withDocumentFigure, figures, { reading })).toBe(`${text} A figure taken from a document was left out: answer figures come only from governed queries.`);
+  });
+
+  it('a document figure outside the reading still goes, in digits or in words, with the reading kept', () => {
+    for (const sentence of ['The handbook counts 1,250 paid claims a year.', 'The handbook counts twelve hundred and fifty paid claims a year.', 'Payments clear within 20 days.']) {
+      const text = `${answer} ${sentence}`;
+      const figures = knowledgeOnlyFigures(text, [handbook], [11, sql]);
+      expect(figures.length, sentence).toBe(1);
+      const stripped = withoutKnowledgeOnlyFigures(text, figures);
+      expect(stripped, sentence).toBe(`${answer} A figure taken from a document was left out: answer figures come only from governed queries.`);
+    }
   });
 });
 

@@ -46,8 +46,8 @@ export function AskScopePicker({ scope, onChange, t }: { scope: DomainScope | un
 
   return (
     <div ref={rootRef} style={{ position: 'relative', width: 'fit-content', maxWidth: '100%' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '4px 7px 4px 9px', border: `1px solid ${problem ? 'var(--status-warning)' : 'var(--border-default)'}`, borderRadius: 999, background: 'var(--bg-2)', color: problem ? 'var(--status-warning)' : t.textMuted, fontSize: 10.5 }}>
-        <button type="button" onClick={() => setOpen((value) => !value)} aria-expanded={open} aria-label="Ask scope" style={{ display: 'inline-flex', alignItems: 'center', gap: 5, border: 0, background: 'transparent', color: 'inherit', cursor: 'pointer', padding: 0, fontSize: 10.5, maxWidth: 420 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '4px 7px 4px 9px', border: `1px solid ${problem ? 'var(--status-warning)' : 'var(--border-default)'}`, borderRadius: 999, background: 'var(--bg-2)', color: problem ? 'var(--status-warning)' : t.textMuted, fontSize: 11 }}>
+        <button type="button" onClick={() => setOpen((value) => !value)} aria-expanded={open} aria-label="Ask scope" style={{ display: 'inline-flex', alignItems: 'center', gap: 5, border: 0, background: 'transparent', color: 'inherit', cursor: 'pointer', padding: 0, fontSize: 11, maxWidth: 420 }}>
           {problem ? <AlertTriangle size={12} /> : <Boxes size={12} />}
           <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{problem ?? `Scope: ${scopeLabel(scope, options)}`}</span>
           <ChevronDown size={12} />
@@ -94,6 +94,6 @@ export function AskScopePicker({ scope, onChange, t }: { scope: DomainScope | un
   );
 }
 
-const labelStyle = (t: Theme): React.CSSProperties => ({ display: 'grid', gap: 4, fontSize: 10.5, fontWeight: 650, color: t.textSecondary });
+const labelStyle = (t: Theme): React.CSSProperties => ({ display: 'grid', gap: 4, fontSize: 11, fontWeight: 650, color: t.textSecondary });
 const selectStyle = (t: Theme): React.CSSProperties => ({ width: '100%', border: `1px solid ${t.headerBorder}`, borderRadius: 6, background: t.appBg, color: t.textPrimary, fontSize: 11.5, padding: '6px 7px' });
 const buttonStyle = (t: Theme): React.CSSProperties => ({ border: `1px solid ${t.headerBorder}`, borderRadius: 6, background: t.appBg, color: t.textPrimary, fontSize: 11, fontWeight: 650, padding: '5px 10px', cursor: 'pointer' });

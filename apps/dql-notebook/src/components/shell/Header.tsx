@@ -4,6 +4,7 @@ import { notebookStoreApi, useDispatch, useNotebookStore } from '../../store/Not
 import { themes } from '../../themes/notebook-theme';
 import type { Theme } from '../../themes/notebook-theme';
 import { HostPersonMenu } from './HostPersonMenu';
+import { hostReader, useHostUi } from '../../host/host-ui';
 import { api } from '../../api/client';
 import { serializeDqlNotebook } from '../../utils/parse-workbook';
 import { useQueryExecution } from '../../hooks/useQueryExecution';
@@ -94,6 +95,8 @@ function DQLLogo({ t }: { t: Theme }) {
 }
 
 export function Header() {
+  // A hosted reader is not using a workbench: the product is just DQL to them (RFC 0010 HH-9 `audience`).
+  const productName = hostReader(useHostUi()) ? 'DQL' : 'DQL Workbench';
   const state = useNotebookStore(useShallow((store) => ({
     activeBlockPath: store.activeBlockPath,
     activeFile: store.activeFile,
@@ -153,7 +156,7 @@ export function Header() {
       : state.mainView === 'block_studio'
         ? 'Blocks'
         : 'Notebooks'
-    : VIEW_TITLES[state.mainView] ?? 'DQL Workbench';
+    : VIEW_TITLES[state.mainView] ?? productName;
 
   useEffect(() => {
     if (editingTitle && titleInputRef.current) {
@@ -418,7 +421,7 @@ export function Header() {
               padding: '2px 4px',
             }}
           >
-            {headerTitle || 'DQL Workbench'}
+            {headerTitle || productName}
           </span>
         )}
       </div>

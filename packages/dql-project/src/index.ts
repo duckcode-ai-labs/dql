@@ -46,6 +46,7 @@ export type {
   LocalAppPreviewEvidence,
   LocalAppPreviewDatasetBindingEvidence,
   LocalAppVisibility,
+  LocalAppRecordOwner,
 } from './local-app-storage.js';
 export {
   LocalNotebookResearchStorage,

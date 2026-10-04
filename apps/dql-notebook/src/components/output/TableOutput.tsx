@@ -347,7 +347,7 @@ export function TableOutput({ result, themeMode, maxHeight = 440, initialPageSiz
                               fontSize: 11,
                               fontFamily: t.fontMono,
                               fontWeight: 700,
-                              color: badge.color,
+                              color: `color-mix(in srgb, ${badge.color} 45%, var(--text-primary, currentColor))`,
                               background: `${badge.color}15`,
                               border: `1px solid ${badge.color}40`,
                               borderRadius: 3,

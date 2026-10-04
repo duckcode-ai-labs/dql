@@ -1226,7 +1226,8 @@ function ConversationSidebar({
               flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 8,
               padding: '8px 10px', borderRadius: 7, border: 'none',
               background: active ? `${t.accent}1f` : hovered ? `${t.textPrimary}0d` : 'transparent',
-              color: active ? t.accent : t.textSecondary,
+              // The current chat's words in the accent's ink (the accent mixed toward the text): 4.5:1 on its tint.
+              color: active ? `color-mix(in srgb, ${t.accent} 80%, ${t.textPrimary})` : t.textSecondary,
               cursor: busy && !active ? 'not-allowed' : 'pointer',
               opacity: busy && !active ? 0.5 : 1,
               textAlign: 'left', fontSize: 12.5, fontWeight: active ? 600 : 500,
@@ -1242,7 +1243,7 @@ function ConversationSidebar({
               {active && busy ? 'Working…' : conv.title}
             </span>
             {!hovered ? (
-              <span style={{ flexShrink: 0, fontSize: 10, color: active && busy ? t.accent : t.textMuted, fontWeight: active && busy ? 650 : 400 }}>
+              <span style={{ flexShrink: 0, fontSize: 11, color: active && busy ? t.accent : t.textMuted, fontWeight: active && busy ? 650 : 400 }}>
                 {active && busy ? 'Live' : relativeTime(conv.updatedAt)}
               </span>
             ) : null}
@@ -1338,7 +1339,7 @@ function ConversationSidebar({
 /** Section heading in the conversation sidebar. */
 function GroupLabel({ t, children }: { t: Theme; children: React.ReactNode }): JSX.Element {
   return (
-    <div style={{ padding: '8px 8px 4px', fontSize: 10, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', color: t.textMuted }}>
+    <div style={{ padding: '8px 8px 4px', fontSize: 11, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', color: t.textMuted }}>
       {children}
     </div>
   );

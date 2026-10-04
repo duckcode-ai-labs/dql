@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { defaultPersonaRegistry } from '@duckcodeailabs/dql-project';
 import { activePersonaPolicyFingerprint, assertAppAccess, DQLAccessDeniedError, runtimeVariables } from './governance-runtime.js';
-import { installHostPersonaSlots, withRequestContext, type DqlPrincipal } from './host/request-context.js';
+import { installHostPersonaSlots, PERSONA_SLOT_LIMIT, personaSlotCount, withRequestContext, type DqlPrincipal } from './host/request-context.js';
 
 const persona = (overrides: Record<string, unknown> = {}) => ({
   userId: 'ana@example.test', roles: ['analyst'], attributes: {}, rlsContext: { region: 'EU' }, appId: 'sales', ...overrides,
@@ -55,6 +55,21 @@ describe('a signed-in person from a host (RFC 0010 HH-2)', () => {
     expect(defaultPersonaRegistry.active).toBeNull();
     as(dev, () => defaultPersonaRegistry.clear());
     expect(as(maria, () => defaultPersonaRegistry.active?.userId)).toBe('maria@insurer.example');
+  });
+
+  it('keeps persona slots for at most a set number of people, letting the least recently used go first', () => {
+    expect(PERSONA_SLOT_LIMIT).toBe(5_000);
+    installHostPersonaSlots(defaultPersonaRegistry, { limit: 3 });
+    const person = (id: string): DqlPrincipal => ({ id, kind: 'person', email: `${id}@insurer.example`, source: 'host' });
+    for (const id of ['p1', 'p2', 'p3']) as(person(id), () => defaultPersonaRegistry.set(persona({ userId: `${id}@insurer.example` }) as never));
+    // p1 is used again, so p2 is now the least recently used.
+    expect(as(person('p1'), () => defaultPersonaRegistry.active?.userId)).toBe('p1@insurer.example');
+    for (let index = 4; index <= 40; index += 1) as(person(`p${index}`), () => defaultPersonaRegistry.active);
+    expect(personaSlotCount()).toBeLessThanOrEqual(3);
+    // An evicted person sees Apps as themselves again, never as anyone else.
+    expect(as(person('p2'), () => defaultPersonaRegistry.active)).toBeNull();
+    expect(as(person('p3'), () => defaultPersonaRegistry.active)).toBeNull();
+    installHostPersonaSlots(defaultPersonaRegistry);
   });
 
   it('narrows rows by the person\'s own values, which a request cannot override', () => {

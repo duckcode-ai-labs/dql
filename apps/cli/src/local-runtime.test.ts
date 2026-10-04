@@ -9489,9 +9489,10 @@ describe('buildAgentValueProbeSql', () => {
     );
 
     expect(sql).toContain("= 'enterprise'");
-    expect(sql).toContain("LIKE 'enterprise%' ESCAPE '\\'");
+    // `!` escapes the pattern: a backslash in a string reads differently on different engines (and settings).
+    expect(sql).toContain("LIKE 'enterprise%' ESCAPE '!'");
     expect(sql).not.toContain("LIKE '%enterprise");
-    expect(sql).not.toContain("ESCAPE '\\\\'");
+    expect(sql).not.toContain('\\');
     expect(sql).toContain('LIMIT 25');
   });
 });

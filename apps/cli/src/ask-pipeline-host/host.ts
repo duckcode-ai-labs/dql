@@ -12,6 +12,7 @@ import {
   askScopeFromWorkspace,
   buildVocabularyIndex,
   classifyWarehouseError,
+  hostedWarehouseError,
   assessAnalyticalRelationship,
   parseMemberOption,
   projectVocabularySource,
@@ -69,6 +70,8 @@ import {
   validateSqlAgainstLocalContext,
   type AgentMessage,
   type RuntimeSchemaTable,
+  priorWithoutValues,
+  sqlStringValues,
 } from '@duckcodeailabs/dql-agent';
 import { buildProjectVocabulary, buildVocabularySource, embeddedManifestRelations, normalizeRelationName, type VocabularySourceInput } from './vocabulary-source.js';
 import { businessIdentifierLine, businessIdentifiers, modelingEntityTexts, certifiedJoinViolations, classifySqlJoins, ledgerJoins, markerTableLine, markerTables, modeledJoinPaths, modelingRelationshipEdges, sameRelation, sharedParentShortcuts, type LedgerJoin } from './join-relationships.js';
@@ -116,6 +119,11 @@ export interface AskPipelineHostDeps {
   getSemanticLayer(): SemanticLayer | undefined;
   getManifest(): { manifest: DQLManifest | undefined; snapshotId: string };
   selectProvider(request: AgentRunRequest): Promise<AgentProvider | undefined>;
+  /**
+   * RFC 0010 HH-5: whether result values (an earlier answer's text, the thread's memory) may reach this model.
+   * Without it, they may (single-user, the person's chosen model).
+   */
+  valuesMayReachModel?(request: AgentRunRequest, provider: AgentProvider): boolean | Promise<boolean>;
   /** Compile on the project's active semantic engine; throws with the engine's message. */
   compileSemantic(request: SemanticCompileRequest, connection: ConnectionConfig, context?: AskSemanticCompileContext): Promise<SemanticCompileOutput>;
   /** The engine `compileSemantic` will use, known before preparation so the binder can speak its dialect. */
@@ -1779,9 +1787,21 @@ export function createAskPipelineHost(deps: AskPipelineHostDeps): AskPipelineHos
     // validation, execution evidence and receipt) reads the same bindings.
     let requestVocabulary = vocabulary;
     const currentVocabulary = () => requestVocabulary;
-    const prior = request.threadId ? await deps.priorIntent(request) : undefined;
+    const priorTurn = request.threadId ? await deps.priorIntent(request) : undefined;
     // The thread's compacted memory, read once for this run (a host store answers with a Promise).
-    const conversationMemory = await deps.conversation?.(request);
+    const threadMemory = await deps.conversation?.(request);
+    // RFC 0010 HH-5: an earlier answer's text and the thread's memory carry its figures. They reach this model only
+    // inside the privacy boundary; otherwise the reading and the drafter get the earlier reading and its SQL (what
+    // was asked and how it was answered), never what it found.
+    const valuesAllowed = deps.valuesMayReachModel
+      ? await Promise.resolve().then(() => deps.valuesMayReachModel!(request, provider)).then((allowed) => allowed === true, () => false)
+      : true;
+    const prior = valuesAllowed || !priorTurn ? priorTurn : { ...priorTurn, summary: undefined };
+    const conversationMemory = valuesAllowed ? threadMemory : undefined;
+    // Outside the boundary, the earlier reading's values (a member as typed, or as the warehouse stores it) and its
+    // SQL's literals are values too: the model reads them named by position, and gets them back in what it writes.
+    const priorMask = !valuesAllowed && priorTurn ? priorWithoutValues(priorTurn.intent, priorTurn.sql ? sqlStringValues(priorTurn.sql) : []) : undefined;
+    const shownToModel = (text: string): string => (priorMask ? priorMask.maskText(text) : text);
     let engine: PrepareDeps['engine'];
     try { engine = await deps.semanticEngine?.(); } catch { engine = undefined; }
     // The context is assembled BEFORE the first model call; a run that ends
@@ -2035,8 +2055,8 @@ export function createAskPipelineHost(deps: AskPipelineHostDeps): AskPipelineHos
         .map((entry) => `- project skill ${entry.label ?? entry.name}: ${(entry.skill?.guidance ?? entry.description ?? '').replace(/\s+/g, ' ').slice(0, 1500)}`);
       const contextLines = [
         ...(contextText ? [`- conversation so far: ${contextText.slice(0, 600)}`] : []),
-        ...(prior?.intent.reading ? [`- previous reading: ${prior.intent.reading.slice(0, 300)}${prior.summary ? `; its answer: ${prior.summary.slice(0, 300)}` : ''}`] : []),
-        ...(prior?.drafted && prior.sql ? [`- previous AI-drafted SQL in this conversation (this question follows up on it: edit it, and keep every restriction it applies unless the question changes it): ${prior.sql.replace(/\s+/g, ' ').slice(0, 1500)}`] : []),
+        ...(prior?.intent.reading ? [`- previous reading: ${shownToModel(prior.intent.reading).slice(0, 300)}${prior.summary ? `; its answer: ${prior.summary.slice(0, 300)}` : ''}`] : []),
+        ...(prior?.drafted && prior.sql ? [`- previous AI-drafted SQL in this conversation (this question follows up on it: edit it, and keep every restriction it applies unless the question changes it): ${shownToModel(prior.sql.replace(/\s+/g, ' ')).slice(0, 1500)}`] : []),
         ...(briefing ? [`- domain ${briefing.name}${briefing.description ? `: ${briefing.description.slice(0, 300)}` : ''}${briefing.caveats.length ? `; caveats: ${briefing.caveats.slice(0, 3).join('; ')}` : ''}${briefing.requiredFilters.length ? `; required filters: ${briefing.requiredFilters.slice(0, 3).join('; ')}` : ''}`] : []),
         ...termLines,
         ...metricLines,
@@ -2073,7 +2093,7 @@ export function createAskPipelineHost(deps: AskPipelineHostDeps): AskPipelineHos
         const dialect = connection?.driver ?? 'duckdb';
         const messages: AgentMessage[] = [
           { role: 'system', content: `You write exactly ONE read-only SQL statement for ${dialect} that answers the question from the tables below. No certified block or semantic metric answers it, so you choose the tables, columns, joins and filters. Use ONLY the executable physical relations and columns listed below, spelled exactly as listed (including database and quoting where shown). Join two relations only on columns that exist in both. Apply every restriction the question states; when unsure how a text value is stored, match it case-insensitively; aggregate at the grain the question asks for; when the answer lists people or things, select and group by their id column beside the name (two can share a name); a term with a standard definition (a double-double, a win rate, a repeat customer) is computed from the listed columns that define it, and the definition is not a missing field; order and limit as it asks; never return more than 500 rows. No DDL or DML, no comments, no explanation. The CONTEXT lines are what the user and the project have said about this data (definitions, rules, where values are kept): follow them, and use a table or field the user names as named. A semantic metric listed in CONTEXT is computed exactly as it is defined there. A preferred join listed in CONTEXT is how those tables join unless the question needs another. When no column is dedicated to a restriction the question states, apply it to the text, tag, category or custom field that most plausibly holds that value, matched case-insensitively (a partial match is allowed). Reply exactly NO_SQL: followed by one sentence naming what is missing only when no listed column could hold a measure or a restriction the question asks for, and never substitute a different measure for the one asked. Otherwise return the SQL only.` },
-          { role: 'user', content: `QUESTION: ${question}\n${reason ? `WHY NO GOVERNED ANSWER: ${reason.slice(0, 600)}\n` : ''}${intent ? `READING: ${intent.reading}\nINTENT: ${JSON.stringify({ measures: intent.measures, groupBy: intent.groupBy, display: intent.display, filters: intent.filters, time: intent.time ?? null, ordering: intent.ordering ?? null, limit: intent.limit ?? null })}\n` : ''}${contextLines.length ? `CONTEXT:\n${contextLines.join('\n')}\n` : ''}${note ? `NOTE: ${note}\n` : ''}${previous ? `PREVIOUS SQL (the warehouse rejected it; fix it):\n${previous.sql}\nWAREHOUSE ERROR: ${previous.error.slice(0, 600)}\n` : ''}RELATIONS AND COLUMNS:\n${cards.join('\n')}` },
+          { role: 'user', content: `QUESTION: ${question}\n${reason ? `WHY NO GOVERNED ANSWER: ${reason.slice(0, 600)}\n` : ''}${intent ? `READING: ${shownToModel(intent.reading)}\nINTENT: ${shownToModel(JSON.stringify({ measures: intent.measures, groupBy: intent.groupBy, display: intent.display, filters: intent.filters, time: intent.time ?? null, ordering: intent.ordering ?? null, limit: intent.limit ?? null }))}\n` : ''}${contextLines.length ? `CONTEXT:\n${contextLines.join('\n')}\n` : ''}${note ? `NOTE: ${note}\n` : ''}${previous ? `PREVIOUS SQL (the warehouse rejected it; fix it):\n${shownToModel(previous.sql)}\nWAREHOUSE ERROR: ${shownToModel(previous.error.slice(0, 600))}\n` : ''}RELATIONS AND COLUMNS:\n${cards.join('\n')}` },
         ];
         const draftStarted = Date.now();
         const trace = deps.dispatchOptions?.('draft', request);
@@ -2104,7 +2124,9 @@ export function createAskPipelineHost(deps: AskPipelineHostDeps): AskPipelineHos
         const declined = /^\s*NO_SQL\s*:?\s*([\s\S]*)$/i.exec(raw.trim());
         if (declined) { dispatch.outcome = 'declined'; return { declined: declined[1]!.trim() || 'the available tables do not hold what the question asks for' }; }
         const fenced = /```(?:sql)?\s*([\s\S]*?)```/i.exec(raw);
-        const sql = (fenced ? fenced[1]! : raw).trim();
+        // The earlier values the model read by position are the real ones again in what it drafted.
+        const drafted = (fenced ? fenced[1]! : raw).trim();
+        const sql = priorMask ? priorMask.restoreText(drafted) : drafted;
         if (!sql) { dispatch.outcome = 'error'; return { error: 'the provider returned no SQL' }; }
         dispatch.outcome = 'sql';
         const runtimeSchema = runtimeSchemaForVocabulary(current)
@@ -2435,8 +2457,9 @@ export function createAskPipelineHost(deps: AskPipelineHostDeps): AskPipelineHos
           } catch (error) {
             options.onWarehouseResult?.('failed');
             span?.finish('error', { safeErrorCode: 'sql_failure' });
-            const message = error instanceof Error ? error.message : String(error);
-            recordRelationEvidence(cacheKey, sql, classifyWarehouseError(message), message);
+            // With a host, the warehouse's diagnosis (its own words stay in the host's log).
+            const message = hostedWarehouseError(error)?.warehouseDiagnosis ?? (error instanceof Error ? error.message : String(error));
+            recordRelationEvidence(cacheKey, sql, classifyWarehouseError(message, { sql }), message);
             throw error;
           }
           options.onWarehouseResult?.('succeeded');
@@ -2453,12 +2476,14 @@ export function createAskPipelineHost(deps: AskPipelineHostDeps): AskPipelineHos
           return { columns, rows, rowCount: result.rowCount, executionTimeMs: result.executionTimeMs ?? Date.now() - started, ...(result.truncated ? { truncated: true } : {}) };
         },
       },
-      ...(prior ? { prior: prior.intent, ...(prior.executed === false ? { priorExecuted: false } : {}), ...(prior.summary ? { priorAnswerSummary: prior.summary } : {}) } : {}),
+      ...(prior ? { prior: prior.intent, ...(prior.executed === false ? { priorExecuted: false } : {}), ...(prior.summary ? { priorAnswerSummary: prior.summary } : {}), ...(priorMask ? { hidePriorValues: true } : {}) } : {}),
       ...(deps.guidance?.(request) ? { guidance: deps.guidance(request) } : {}),
-      ...(connection && deps.probeLiteral && deps.literalProbeAllowed ? { groundLiterals: (intent: AnalyticalIntentV1) => groundIntentLiterals(intent, currentVocabulary(), connection, tracedProbes(deps, request)) } : {}),
+      // Member spellings the warehouse holds are values: looked up only where values may reach this model.
+      ...(valuesAllowed && connection && deps.probeLiteral && deps.literalProbeAllowed ? { groundLiterals: (intent: AnalyticalIntentV1) => groundIntentLiterals(intent, currentVocabulary(), connection, tracedProbes(deps, request)) } : {}),
       // A name that matched nothing exactly may still name members of the same
       // column the query already read.
       suggestMembers: async (ref: string, literal: string) => {
+        if (!valuesAllowed) return [];
         const entry = currentVocabulary().get(ref);
         const relation = entryPhysicalRelation(entry);
         const column = entry?.physical?.column;

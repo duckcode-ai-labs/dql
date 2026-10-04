@@ -11,8 +11,12 @@ export type Row = Record<string, unknown>;
 /**
  * What a statement is for: reading rows (`data`) or only the warehouse's
  * schema (`metadata`). A host's row policy (RFC 0010) can treat them apart.
+ * `platform` marks a statement DQL itself issues to keep its own objects (a
+ * project's data-file views): with a host, statements a person or a model
+ * writes only read, and DQL's own keep their shapes. It is never taken from
+ * a request.
  */
-export type QueryPurpose = 'data' | 'metadata';
+export type QueryPurpose = 'data' | 'metadata' | 'platform';
 
 export interface QueryExecutionOptions {
   signal?: AbortSignal;

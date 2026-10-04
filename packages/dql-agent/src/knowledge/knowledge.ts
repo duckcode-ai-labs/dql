@@ -17,6 +17,7 @@
  *      the search words or document text.
  */
 import type { AgentToolDefinition } from '../providers/types.js';
+import { foldFigures } from './figures.js';
 
 export interface KnowledgeHit {
   /** The source's own id for the page (what `fetch` takes). */
@@ -228,14 +229,48 @@ export function createKnowledgeSession(sources: readonly KnowledgeSource[], opti
   };
 }
 
+/** What the governed answer said about itself: its reading ("I read this as: …"), as the interpreter wrote it. */
+export interface GovernedAnswerOwn {
+  reading?: string;
+}
+
+const READING_LEAD = 'I read this as: ';
+
+/**
+ * Where the governed answer's own reading sits in its text: the line
+ * `I read this as: <reading>.` that the answer opens with. With the reading
+ * known, exactly that line (a reading may hold full stops); without it, the
+ * first sentence after the lead. Its numbers (a week's dates, a top-N) are
+ * the answer's own, never a document's.
+ */
+function readingSpan(answerText: string, own: GovernedAnswerOwn): { start: number; end: number } | undefined {
+  const reading = own.reading?.trim().replace(/[.\s]+$/, '');
+  if (reading) {
+    const line = `${READING_LEAD}${reading}.`;
+    const start = answerText.indexOf(line);
+    if (start >= 0) return { start, end: start + line.length };
+  }
+  if (!answerText.startsWith(READING_LEAD)) return undefined;
+  const end = /[.!?](?=\s|$)/.exec(answerText.slice(READING_LEAD.length));
+  return { start: 0, end: end ? READING_LEAD.length + end.index + 1 : answerText.length };
+}
+
+/** The answer's text without its own reading (the part a document could ever have reached). */
+function beyondReading(answerText: string, own: GovernedAnswerOwn): string {
+  const span = readingSpan(answerText, own);
+  return span ? `${answerText.slice(0, span.start)} ${answerText.slice(span.end)}` : answerText;
+}
+
 /**
  * NUMBERS COME ONLY FROM GOVERNED QUERIES. Returns the numbers an answer
  * states that appear in a document it read but in none of the governed
  * values (result cells, row counts, SQL literals the caller passes). Years
  * and one-digit counts are ignored — "2026" or "3 regions" are not figures a
- * document can smuggle in. An empty list means the answer keeps its text.
+ * document can smuggle in. The governed answer's own reading is never read
+ * for them: its dates and counts are its own, whatever a document happens to
+ * say. An empty list means the answer keeps its text.
  */
-export function knowledgeOnlyFigures(answerText: string, documentTexts: readonly string[], governedValues: Iterable<unknown>): string[] {
+export function knowledgeOnlyFigures(answerText: string, documentTexts: readonly string[], governedValues: Iterable<unknown>, own: GovernedAnswerOwn = {}): string[] {
   if (!answerText || !documentTexts.length) return [];
   const governed = new Set<string>();
   for (const value of governedValues) {
@@ -244,7 +279,7 @@ export function knowledgeOnlyFigures(answerText: string, documentTexts: readonly
   const inDocuments = new Set<string>();
   for (const text of documentTexts) for (const token of numberTokens(text)) inDocuments.add(token);
   const out: string[] = [];
-  for (const token of numberTokens(answerText)) {
+  for (const token of numberTokens(beyondReading(answerText, own))) {
     if (!inDocuments.has(token) || governed.has(token)) continue;
     if (isIncidental(token)) continue;
     if (!out.includes(token)) out.push(token);
@@ -254,18 +289,23 @@ export function knowledgeOnlyFigures(answerText: string, documentTexts: readonly
 
 /**
  * Remove sentences that state a document-only figure, and say why. The rest
- * of the answer — the governed figures and the citation — stays.
+ * of the answer — its own reading, the governed figures and the citation —
+ * stays; the note is added only when a sentence was removed.
  */
-export function withoutKnowledgeOnlyFigures(answerText: string, figures: readonly string[]): string {
+export function withoutKnowledgeOnlyFigures(answerText: string, figures: readonly string[], own: GovernedAnswerOwn = {}): string {
   if (!figures.length) return answerText;
-  const sentences = answerText.split(/(?<=[.!?])\s+/);
+  const span = readingSpan(answerText, own);
+  const reading = span ? answerText.slice(span.start, span.end) : '';
+  const rest = span ? `${answerText.slice(0, span.start)} ${answerText.slice(span.end)}`.trim() : answerText;
+  const sentences = rest ? rest.split(/(?<=[.!?])\s+/) : [];
   const kept = sentences.filter((sentence) => !numberTokens(sentence).some((token) => figures.includes(token)));
+  if (kept.length === sentences.length) return answerText;
   const note = 'A figure taken from a document was left out: answer figures come only from governed queries.';
-  return [...kept, note].join(' ').trim();
+  return [...(reading ? [reading] : []), ...kept, note].join(' ').trim();
 }
 
 function numberTokens(text: string): string[] {
-  const matches = String(text).match(/-?\d(?:[\d,]*\d)?(?:\.\d+)?%?/g) ?? [];
+  const matches = foldFigures(String(text)).match(/-?\d(?:[\d,]*\d)?(?:\.\d+)?%?/g) ?? [];
   return matches.map((raw) => {
     const percent = raw.endsWith('%');
     const plain = raw.replace(/[,%]/g, '');

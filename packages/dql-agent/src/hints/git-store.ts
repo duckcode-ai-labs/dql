@@ -110,12 +110,19 @@ export interface RecordCorrectionTraceResult {
   hint: Hint;
 }
 
+/** An id DQL made (`trace_…`, `hint_…`): one file name in its folder, never a path. */
+function fileId(id: string): string {
+  if (typeof id !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9_.:-]{0,199}$/.test(id) || id.includes('..')) throw new Error('Not an id DQL made.');
+  return id;
+}
+
 export function correctionTraceFilePath(projectRoot: string, traceId: string): string {
-  return join(tracesDir(projectRoot), `${traceId}.trace.json`);
+  return join(tracesDir(projectRoot), `${fileId(traceId)}.trace.json`);
 }
 
 export function getCorrectionTraceFromGit(projectRoot: string, traceId: string): CorrectionTrace | null {
-  const path = correctionTraceFilePath(projectRoot, traceId);
+  let path: string;
+  try { path = correctionTraceFilePath(projectRoot, traceId); } catch { return null; }
   if (!existsSync(path)) return null;
   try {
     const raw = JSON.parse(readFileSync(path, 'utf-8')) as CorrectionTrace;
@@ -216,7 +223,7 @@ export function recordCorrectionTrace(
 // --- Hints ------------------------------------------------------------------
 
 export function hintFilePath(projectRoot: string, hintId: string): string {
-  return join(hintsDir(projectRoot), `${hintId}.hint.yaml`);
+  return join(hintsDir(projectRoot), `${fileId(hintId)}.hint.yaml`);
 }
 
 export function writeHintFile(projectRoot: string, hint: Hint): void {
@@ -306,7 +313,8 @@ export function listHintsFromGit(projectRoot: string): Hint[] {
 }
 
 export function getHintFromGit(projectRoot: string, hintId: string): Hint | null {
-  const path = hintFilePath(projectRoot, hintId);
+  let path: string;
+  try { path = hintFilePath(projectRoot, hintId); } catch { return null; }
   return existsSync(path) ? readHintFile(path, path) : null;
 }
 

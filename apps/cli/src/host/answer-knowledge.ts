@@ -63,6 +63,15 @@ export function governedValuesOf(result: AgentRouteExecutorResult): unknown[] {
   return values;
 }
 
+/** The governed answer's own reading (`askIntentV1.reading`), which a document never reached. */
+export function readingOf(result: AgentRouteExecutorResult): string | undefined {
+  for (const artifact of result.artifacts ?? []) {
+    const intent = (artifact.payload as { askIntentV1?: { reading?: unknown } } | undefined)?.askIntentV1;
+    if (typeof intent?.reading === 'string' && intent.reading.trim()) return intent.reading;
+  }
+  return undefined;
+}
+
 export async function withAnswerKnowledge(input: {
   result: AgentRouteExecutorResult;
   question: string;
@@ -88,12 +97,14 @@ export async function withAnswerKnowledge(input: {
   };
   input.onStep?.(step);
   // Defence in depth: the governed answer never saw a document, but if it
-  // states a figure only a document holds, that sentence goes.
-  const figures = typeof result.answer === 'string' ? knowledgeOnlyFigures(result.answer, session.documentTexts(), governedValuesOf(result)) : [];
+  // states a figure only a document holds, that sentence goes. Its own
+  // reading (the period it read, say) is never touched.
+  const own = { reading: readingOf(result) };
+  const figures = typeof result.answer === 'string' ? knowledgeOnlyFigures(result.answer, session.documentTexts(), governedValuesOf(result), own) : [];
   const receipt = result.askPipelineReceipt as { story?: AskStoryStepV1[] } | undefined;
   return {
     ...result,
-    ...(figures.length && typeof result.answer === 'string' ? { answer: withoutKnowledgeOnlyFigures(result.answer, figures) } : {}),
+    ...(figures.length && typeof result.answer === 'string' ? { answer: withoutKnowledgeOnlyFigures(result.answer, figures, own) } : {}),
     ...(receipt ? { askPipelineReceipt: { ...receipt, story: [...(receipt.story ?? []), step] } as AgentRouteExecutorResult['askPipelineReceipt'] } : {}),
     knowledge,
   };

@@ -50,12 +50,13 @@ function appFile(projectRoot: string, appId: string): string {
 }
 
 /** Schedules that run this page, with their monitors and last run. */
-export function listPageMonitors(projectRoot: string, appId: string, dashboardId: string): PageMonitorSchedule[] {
+export function listPageMonitors(projectRoot: string, appId: string, dashboardId: string, baselineOwner?: string): PageMonitorSchedule[] {
   const document = loadAppDocument(appFile(projectRoot, appId)).document;
   return (document?.schedules ?? [])
     .filter((schedule) => schedule.dashboard === dashboardId)
     .map((schedule) => {
-      const state = readDigestState(projectRoot, appId, schedule.id);
+      // With a host, the last run and firing monitors as the person asking ran it (their figures decided them).
+      const state = readDigestState(projectRoot, appId, baselineOwner ? `${schedule.id}~${baselineOwner}` : schedule.id);
       return {
         id: schedule.id,
         cron: schedule.cron,

@@ -113,7 +113,7 @@ const FALLBACK: Record<keyof Theme, string> = {
   cellBorderRunning: '#2e8b57',
   textPrimary: '#1a1a1a',
   textSecondary: '#4a4a52',
-  textMuted: '#6b6e76',
+  textMuted: '#64676e',
   editorBg: '#fbfaf7',
   editorBorder: '#e9e6e0',
   tableBorder: '#f0eee9',

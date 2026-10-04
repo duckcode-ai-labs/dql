@@ -42,6 +42,39 @@ pnpm test
 
 The repo uses [Turborepo](https://turbo.build/) for incremental builds. After the first full build, `pnpm build` only rebuilds changed packages.
 
+Build through `pnpm build` (or each package's own `build` script, in dependency
+order), not with `npx tsc -b` in `apps/cli` alone: TypeScript's project
+references there do not build the UI packages (`@duckcodeailabs/dql-ui`,
+`@duckcodeailabs/dql-charts`), so the notebook build then fails with
+`TS2307: Cannot find module '@duckcodeailabs/dql-ui'`. To build only what the
+CLI and the notebook need, dependencies first:
+
+```bash
+pnpm -r --filter "@duckcodeailabs/dql-cli..." --filter "@duckcodeailabs/dql-notebook-app..." run build
+```
+
+### Checks for hosted servers and the single-user product
+
+`scripts/hardening-checks/` holds three helpers for checking a change to the
+hosted (RFC 0010) paths against the single-user product. Nothing in `pnpm test`
+runs them.
+
+- `standalone-diff.mjs --baseline <checkout> --candidate <checkout> --out <dir>`
+  starts `dql notebook` from two built checkouts on two copies of one scratch
+  project, sends both the same requests (notebook, Ask, Apps, Block Studio, git,
+  connectors, export, MCP) and lists every step whose answer differs.
+  `HOST_CHECK_NETWORK_LOG=1` records what each server tries to reach off this
+  machine; `HOST_CHECK_PG_NODE_MODULES` (a `node_modules` holding `pg`) adds a
+  throwaway PostgreSQL connection.
+- `run-oss-suites.sh <checkout> <dir>` runs the packages' suites one after
+  another, the CLI suite with its network record and with its sockets sampled
+  (`sample-sockets.sh`).
+
+`pnpm --filter @duckcodeailabs/dql-cli test:offline` runs the CLI suite and fails
+on any lookup or connection off this machine. Set `HOST_CHECK_EVIDENCE_DIR` to
+keep the records the host-hook fault, concurrency and model-boundary tests
+write.
+
 ### Running a single package
 
 ```bash

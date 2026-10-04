@@ -284,6 +284,7 @@ import {
   GeminiProvider,
   MemoryStore,
   OllamaProvider,
+  ollamaBaseUrl,
   OpenAIProvider,
   buildBlockBusinessFingerprint,
   buildBlockSqlFingerprints,
@@ -541,6 +542,7 @@ import {
   applyAppAutopilotChange,
   handleAppsApi,
   loadStoredAppBuildDraft,
+  pageForReader,
   prepareAppAutopilotChange,
   proposeAppAiBuild,
   recommendVisualization,
@@ -561,7 +563,7 @@ import {
 import { listStoryEditions, recordStoryEdition, storyEditionScope } from './story/story-editions.js';
 import { editionFingerprint, followsPage, homePersonKey, movedOnPage, pageFiguresFrom, readHomeState, readPublishedEdition, recordPageVisit, recordPublishedEdition, setLocalFollow } from './home/home-state.js';
 import { addPageMonitor, listPageMonitors, MonitorStoreError, removePageMonitor } from './schedule/app-monitor-store.js';
-import { loadOrCreateSnapshotKey, localSnapshotSigner, readSnapshotPublicKey, signSnapshotWith, snapshotBodyIssues, snapshotFigures, snapshotFileName } from './snapshot/app-snapshot.js';
+import { loadOrCreateSnapshotKey, localSnapshotSigner, readSnapshotPublicKey, signSnapshotWith, snapshotBodyIssues, snapshotFigures, snapshotFileName, verifySnapshot } from './snapshot/app-snapshot.js';
 import { dashboardDriverProbeItem, dashboardExploreProbeItem, expandDashboardDriverItems, foldDashboardDriverTiles, withDriverFilterScopes } from './datasets/dashboard-drivers.js';
 import { compileDatasetTileQuery, type CompiledDatasetTileQuery } from './datasets/tile-query-compiler.js';
 import { summarizeDatasetChartFacts } from './datasets/dataset-chart-fact-summary.js';
@@ -586,7 +588,10 @@ import {
 } from './datasets/grain-proof-execution.js';
 import {
   datasetGrainProofFromRuntime,
+  loadPersonDatasetGrainProofs,
+  personDatasetProofPath,
   persistLocalDatasetGrainProof,
+  retireSharedLocalDatasetProofs,
 } from './datasets/grain-proof-registry.js';
 import { planSemanticDatasetTileQuery } from './datasets/semantic-tile-query.js';
 import { planSemanticTileConversion } from './datasets/semantic-tile-conversion.js';
@@ -619,6 +624,7 @@ import {
   DQLAccessDeniedError,
   activePersonaAppId,
   activePersonaPolicyFingerprint,
+  activePersonaRunOwnerFingerprint,
   appAudienceDecision,
   assertAppAccess,
   loadRuntimeApp,
@@ -672,6 +678,7 @@ import {
   hasDbtSemanticManifest,
   resolveSemanticManifestPath,
   hasMetricFlowCli,
+  setMetricFlowChildEnvironment,
 } from "./metricflow.js";
 import {
   ManagedMetricFlowInstaller,
@@ -744,23 +751,29 @@ import {
 } from "./notebook-datasets.js";
 import { prepareBlockInvocation } from './block-invocation.js';
 import { readPrivateConnections, redactConnections, resolveSecretReferences, storeConnectionSecrets } from './connection-secrets.js';
-import { authorizeHostRequest, currentHostGitHooks, currentPrincipal, currentRequestContext, destinationForRequest, hostActor, hostAllowedSources, hostGitAuthor, hostModelProvider, installHostPersonaSlots, resolveHostPrincipal, resultValuesMayReachModel, safeHomeCards, safeHostBanner, safeNextLink, setHostGitHooks, setHostModelHooks, withRequestContext, type DqlFollow, type DqlHostHooks, type DqlRunStoreLike } from './host/request-context.js';
+import { authorizeHostRequest, currentHostGitHooks, currentHostHooks, currentPrincipal, currentRequestContext, destinationForRequest, hostActor, hostAllowedSources, hostFiguresDependOnReader, hostGitAuthor, anyHostedServer, hostModelProvider, HOST_IDENTITY_UNAVAILABLE, installHostPersonaSlots, processHostHooks, registerServerHooks, resolveHostPrincipal, resolveHostPrincipalOutcome, resultValuesMayReachModel, safeAppNotFound, safeHomeCards, safeHostBanner, safeNextLink, scopedHostHooks, setHostGitHooks, setHostModelHooks, setProcessToolHooks, currentToolHooks, unregisterServerHooks, withRequestContext, withServerScope, type DqlServerScope, type DqlFollow, type DqlHostHooks, type DqlRunStoreLike } from './host/request-context.js';
 import { isRunPass, issueRunPass, redeemRunPass, revokeRunPass } from './host/schedule-runs.js';
 import { setDeliverySink } from './schedule/notifiers/index.js';
 import { routeAction, type DqlAction } from './host/route-actions.js';
 import { relationsOfStatements, withHostQueryHooks } from './host/row-policy.js';
 import { exportFile, exportFormat, type ExportFile } from './export/result-file.js';
-import { auditActor, auditModelUsage, auditRequest, otlpHeadersFromEnv, withAnswerAudit, withTraceExport } from './host/observability.js';
-import { shouldWithhold, withholdRunFigures } from './host/answer-figures.js';
+import { auditActor, auditModelUsage, auditRequest, otlpHeadersFromEnv, traceQuestionKey, withAnswerAudit, withTraceExport } from './host/observability.js';
+import { isProgramError, logUnderReference, plainFailureMessage } from './host/plain-errors.js';
+import { guardHostStore, HostStoreError, openHostStore } from './host/host-stores.js';
+import { hookDeadline, hooksWithDeadlines, hostHookTimeoutMs } from './host/hook-deadline.js';
+import { eventWithoutFigures, figuresRuleFrom, pinForReader, previewWithoutFigures, progressWithoutFigures, runForPerson, WITHHELD_ANSWER } from './host/answer-figures.js';
+import { currentRecordOwner } from './host/record-owner.js';
 import { PersonScopedMap } from './host/person-scoped-map.js';
 import { withRunOwnership } from './host/run-ownership.js';
-import { answerFactsFromRun, answerValuesFromRun } from './host/answer-facts.js';
+import { answerFactsFromRun, answerSql, answerValuesFromRun } from './host/answer-facts.js';
 const HOST_ICONS = new Set(['inbox', 'requests', 'review', 'work', 'health', 'admin', 'people', 'git', 'link']);
 import { isViewerToken, mintViewerToken, readViewerToken, viewerDecision, viewerLinkBlockedReason, viewerPrincipal } from './host/viewer-links.js';
 import { boundAgentSchemaColumns, mergeAgentSchemaCompleteness } from './ask-schema-context.js';
 
 export const APP_SOURCE_REUSABLE_TAG = 'app-source';
 const NOTEBOOK_EXECUTE_PREVIEW_ROW_LIMIT = 500;
+/** A file from an export holds the whole result up to this many rows; a larger one is refused, never cut without a word. */
+export const EXPORT_MAX_ROWS = 100_000;
 const NOTEBOOK_FAVICON_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="7" fill="#6d5dfc"/><path d="M9 9h14v14H9z" fill="none" stroke="#fff" stroke-width="2"/><path d="M13 13h6M13 17h6M13 21h4" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg>';
 
 /** The exact server-held preview evidence an App Autopilot request needs. */
@@ -1036,6 +1049,12 @@ export interface LocalServerOptions {
    * the person it returns, and it replaces the shared-token check.
    */
   hostHooks?: DqlHostHooks;
+  /**
+   * RFC 0010 rule 1: how long DQL waits for a host hook before treating it as
+   * failed (and failing closed). Decisions and stores: this (default 10 s);
+   * delivery, signing and git: six times this. See host/hook-deadline.ts.
+   */
+  hostHookTimeoutMs?: number;
   /** Exact browser origins allowed for non-loopback API access. */
   allowedOrigins?: string[];
   /**
@@ -3205,15 +3224,27 @@ function humanizePriorMemberDimension(dimension: string): string {
  * person, each sees and continues only their own threads. The local
  * single-user notebook has no owner and sees every thread, as before.
  */
-function conversationOwnerId(): string | undefined {
-  const principal = currentPrincipal();
-  return principal && principal.source !== 'local' ? principal.id : undefined;
+/** Whose conversations this request reads (see RecordOwner): null when a host names no one for it. */
+function conversationOwnerId(): string | null | undefined {
+  return currentRecordOwner();
 }
 
 function conversationVisibleToCaller(thread: { ownerId?: string } | null | undefined): boolean {
   if (!thread) return false;
   const owner = conversationOwnerId();
-  return owner === undefined || thread.ownerId === owner;
+  return owner === undefined || (owner !== null && thread.ownerId === owner);
+}
+
+/** Search hits from a host's own store, kept only where the caller may see the thread. */
+async function visibleTurns<T extends { threadId: string }>(store: { getThread(id: string): unknown }, turns: T[]): Promise<T[]> {
+  if (conversationOwnerId() === undefined) return turns;
+  const kept: T[] = [];
+  const seen = new Map<string, boolean>();
+  for (const turn of turns) {
+    if (!seen.has(turn.threadId)) seen.set(turn.threadId, conversationVisibleToCaller(await store.getThread(turn.threadId) as { ownerId?: string } | null));
+    if (seen.get(turn.threadId)) kept.push(turn);
+  }
+  return kept;
 }
 
 /** Best-effort: persist a completed run as a conversation turn (never throws). */
@@ -3646,6 +3677,87 @@ function isLoopbackUrl(value: string): boolean {
   } catch {
     return false;
   }
+}
+
+/**
+ * DQL's local-model rule (RFC 0010 HH-5, without a host's boundary): a model runs on this machine only when it is
+ * Ollama and EVERY address the provider can contact is a loopback URL. The addresses come from the provider itself
+ * (`endpoints()`, the one base URL an Ollama provider talks to); a provider that does not say (a recording replay,
+ * a wrapper) is judged by the base URL it was configured with, which is the one an Ollama provider uses.
+ */
+function ollamaOnThisMachine(selected: { id: string; provider?: unknown } | null | undefined, configuredBaseUrl?: string): boolean {
+  if (!selected || selected.id !== 'ollama') return false;
+  const declared = (selected.provider as { endpoints?: () => unknown } | undefined)?.endpoints?.();
+  const urls = Array.isArray(declared) && declared.length > 0 ? declared : [ollamaBaseUrl(configuredBaseUrl)];
+  return urls.every((url) => typeof url === 'string' && isLoopbackUrl(url));
+}
+
+/**
+ * The process-wide hooks (for work outside every server) follow the servers running now: a host's while every
+ * server here shares the same hooks, none otherwise (host/request-context.ts `processHostHooks`).
+ */
+function syncProcessHostHooks(): void {
+  const shared = processHostHooks();
+  setHostModelHooks(shared);
+  setDeliverySink(shared?.delivery ?? null);
+  setHostGitHooks(shared?.git);
+  setProcessToolHooks(shared?.tools);
+}
+
+/** HH-7: the one tool gate of the process. It asks the current work's own server's `tools` hook (none: the tool runs). */
+const hostToolGate: Parameters<typeof setAgentToolGate>[0] = (call, next) => {
+  const tools = currentToolHooks();
+  return tools ? tools({ ...call, principal: currentPrincipal() ?? null }, next) : next();
+};
+
+/** App Autopilot's context without the preview's values: its columns, row count and filter names only. */
+export function appAutopilotContextWithoutValues(promptContext: string): string {
+  const context = JSON.parse(promptContext) as Record<string, unknown>;
+  const preview = context.currentPreview && typeof context.currentPreview === 'object' ? context.currentPreview as Record<string, unknown> : undefined;
+  if (!preview || preview.kind !== 'fresh_server_held_result') return promptContext;
+  const { summary: _summary, effectiveFilters, ...shape } = preview;
+  return JSON.stringify({
+    ...context,
+    currentPreview: {
+      ...shape,
+      ...(effectiveFilters && typeof effectiveFilters === 'object' ? { filteredBy: Object.keys(effectiveFilters as Record<string, unknown>) } : {}),
+      valuesWithheld: 'The preview\'s values stay out of this model (outside the privacy boundary): only its columns, row count and filter names are given.',
+    },
+  });
+}
+
+/**
+ * THE PRIVACY BOUNDARY FOR A PROMPT (RFC 0010 HH-5). Every model prompt that can carry result values — a chart's
+ * rows, a story's figures, a grouped tile's members, an earlier answer's text, conversation memory, a preview's
+ * grouped facts, Research's computed facts — asks here, once, whether those values may reach this model:
+ *
+ * - with a host: the host's `isInBoundary` (told every table the values came from, when DQL knows them all; an
+ *   error or anything but `true` is no); a host without that rule: only a model on this machine;
+ * - without a host: a model on this machine (`this-machine`), or — for the prompts the single-user product has
+ *   always sent to the model the person chose (a conversation's memory, a follow-up's earlier answer, App
+ *   Autopilot's preview, the Research narration they asked for) — that model (`chosen-model`).
+ *
+ * When it says no, the prompt is built without values (names, columns and shapes only) or the step is answered
+ * without a model.
+ */
+function valuesMayReachProvider(input: {
+  selected: { id: string; provider: AgentProvider } | null | undefined;
+  projectRoot: string;
+  hosted: boolean;
+  relations?: string[];
+  withoutHost: 'this-machine' | 'chosen-model';
+}): boolean {
+  const { selected } = input;
+  if (!selected) return false;
+  if (!input.hosted && input.withoutHost === 'chosen-model') return true;
+  const config = getEffectiveProviderConfig(input.projectRoot, selected.id as ProviderSettingsId);
+  const declared = (selected.provider as { baseUrl?: unknown }).baseUrl;
+  const baseUrl = typeof declared === 'string' ? declared : config?.baseUrl;
+  return resultValuesMayReachModel(
+    { id: selected.id, name: selected.provider.name, ...(config?.model ? { model: config.model } : {}), ...(baseUrl ? { baseUrl } : {}) },
+    () => ollamaOnThisMachine(selected, config?.baseUrl),
+    input.relations ? { relations: input.relations } : undefined,
+  );
 }
 
 function isLoopbackOrigin(value: string): boolean {
@@ -4879,11 +4991,27 @@ async function executePreparedArtifactTraceBoundary<T>(input: {
 
 
 export async function startLocalServer(opts: LocalServerOptions): Promise<number> {
+  // RFC 0010: everything this server does — each request it answers and the work its startup begins — runs as its
+  // own, so a host that runs several servers in one process never has one server's hooks used for another's.
+  const scope: DqlServerScope = { id: randomUUID() };
+  return withServerScope(scope, () => startLocalServerInScope(opts, scope));
+}
+
+async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServerScope): Promise<number> {
   const { rootDir, executor: rawExecutor, connection: rawConnection, preferredPort, projectRoot = process.cwd() } = opts;
   // RFC 0010 HH-3/HH-4: with host query hooks, every statement the server
   // sends to a warehouse runs as the person's connection and passes the row
-  // policy first — this one executor is the only path.
-  const executor = withHostQueryHooks(rawExecutor, { rowPolicy: opts.hostHooks?.rowPolicy, credentials: opts.hostHooks?.credentials, statements: opts.hostHooks?.statements });
+  // policy first — this one executor is the only path. With any host, a
+  // statement the warehouse refuses is told by its diagnosis and a reference;
+  // the warehouse's own words (which can quote the host's rewrite) go to the log.
+  // With a host, the engine also reaches the connection's database only: DuckDB opens restricted, and a
+  // statement that reads a file, the environment or a setting is refused (host/engine-guard.ts).
+  // RFC 0010 rule 1: every hook DQL waits for answers within a time limit, or counts as failed (host/hook-deadline.ts).
+  const hookTimeoutMs = hostHookTimeoutMs(opts.hostHookTimeoutMs);
+  const hostHooks = opts.hostHooks ? hooksWithDeadlines(opts.hostHooks, hookTimeoutMs) : undefined;
+  scope.hooks = hostHooks;
+  const storeDeadline = hookDeadline(hookTimeoutMs);
+  const executor = withHostQueryHooks(rawExecutor, { rowPolicy: hostHooks?.rowPolicy, credentials: hostHooks?.credentials, statements: hostHooks?.statements, hosted: Boolean(hostHooks), engine: Boolean(hostHooks) });
   // Validate before creating listeners, project state, or a connection.  A
   // malformed embedding/CLI option must fail safely rather than silently
   // starting an ambiguous rollout mode.
@@ -4913,23 +5041,28 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
   const allowedOrigins = new Set((opts.allowedOrigins ?? (process.env.DQL_ALLOWED_ORIGINS ?? '').split(','))
     .map((value) => value.trim().replace(/\/$/, ''))
     .filter(Boolean));
-  const hostHooks = opts.hostHooks;
-  // RFC 0010 HH-5: the host's model and privacy boundary, for provider selection.
-  setHostModelHooks(hostHooks);
-  // HH-8: the host's delivery, and its git host for review requests.
-  setDeliverySink(hostHooks?.delivery ?? null);
-  setHostGitHooks(hostHooks?.git);
-  // HH-7: every tool an agent runs in this process passes the host's gate.
-  // The gate follows the request's own server when several run in one process.
+  // RFC 0010: with a host, Dataset grain proofs are each person's (their row rules decided them); none stays shared.
   if (hostHooks) {
-    setAgentToolGate((call, next) => {
-      const scoped = currentRequestContext()?.hooks;
-      const tools = scoped ? scoped.tools : hostHooks.tools;
-      return tools ? tools({ ...call, principal: currentPrincipal() ?? null }, next) : next();
-    });
-  } else {
-    setAgentToolGate(null);
+    try {
+      if (retireSharedLocalDatasetProofs(projectRoot)) console.log('[dql] Dataset grain proofs are kept per person with a host: the shared local proofs file was moved aside.');
+    } catch (error) {
+      console.warn(`[dql] Could not move the shared local Dataset proofs aside: ${error instanceof Error ? error.message : String(error)}`);
+    }
   }
+  // RFC 0010 HH-5, HH-7, HH-8: each request (and this server's own work) uses this server's model, privacy boundary,
+  // delivery, git and tool gate — through its scope. The process-wide values serve only work outside every server,
+  // and are a host's only while every server in the process shares the same hooks.
+  registerServerHooks(scope.id, hostHooks);
+  syncProcessHostHooks();
+  // MetricFlow reads the project's dbt files: with a host, it runs with dbt's own settings only, never the server's secrets.
+  // The current work's server decides; work outside every server takes the safe side while any hosted server runs here.
+  setMetricFlowChildEnvironment(() => {
+    const scoped = scopedHostHooks();
+    const hosted = Boolean(currentPrincipal()) || (scoped ? Boolean(scoped.hooks) : anyHostedServer());
+    return hosted ? metricFlowEnvironment() : undefined;
+  });
+  // HH-7: every tool an agent runs in this process passes one gate, which asks the current work's own server.
+  setAgentToolGate(hostToolGate);
   const hostIdentity = typeof hostHooks?.resolvePrincipal === 'function';
   // HH-16: page runs a schedule made (under its run pass), so a new edition can be told to followers.
   const scheduledPageRuns = new WeakMap<IncomingMessage, { scheduleId?: string }>();
@@ -5128,6 +5261,8 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
     failedTileContexts: DatasetChartFailedTileEvidence[];
     /** The tables each finished tile read (null: DQL cannot list them), for the model boundary (HH-5). */
     tileRelations?: Record<string, string[] | null>;
+    /** Who ran it (`activePersonaRunOwnerFingerprint`): a question about the chart is theirs alone. */
+    ownerFingerprint: string;
     expiresAt: number;
   };
   /**
@@ -5136,7 +5271,9 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
    * registry separate from dashboardRunEvidence preserves the publication gate
    * and means a process restart always requires a fresh preview.
    */
-  const datasetChartRunEvidence = new PersonScopedMap<string, DatasetChartRunEvidence>(activePersonaPolicyFingerprint);
+  // Found again by who ran it, not where a request's values go: a question about the chart puts them in front of
+  // the model, and its rows reach the model only through the boundary (answerDatasetChart).
+  const datasetChartRunEvidence = new PersonScopedMap<string, DatasetChartRunEvidence>(activePersonaRunOwnerFingerprint);
   /**
    * A settled run no longer occupies `activeDashboardRuns`, but its chart
    * context must still become stale when this same mounted viewer starts a
@@ -5176,7 +5313,7 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
     const memoryEvidence = dashboardRunEvidence.get(runId);
     if (memoryEvidence && memoryEvidence.expiresAt >= Date.now()) return memoryEvidence;
     if (memoryEvidence) dashboardRunEvidence.delete(runId);
-    const storage = new LocalAppStorage(defaultLocalAppsDbPath(projectRoot));
+    const storage = new LocalAppStorage(defaultLocalAppsDbPath(projectRoot), { owner: currentRecordOwner() });
     try {
       const persisted = storage.getAppPreviewEvidence(runId);
       if (!persisted) return null;
@@ -5369,6 +5506,18 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
     }, projectRoot) : undefined;
     const projectDirInput = repo?.localPath ?? (typeof body.projectDir === 'string' ? body.projectDir : projectConfig.dbt?.projectDir ?? '.');
     const dbtProjectDir = resolve(projectRoot, projectDirInput);
+    // With a host, the dbt project (and its profiles) are inside this project, judged where they really are.
+    if (hostedRequest()) {
+      const inside = (candidate: string) => {
+        const root = realpathSync(projectRoot);
+        let real = candidate;
+        try { real = realpathSync(candidate); } catch { real = resolve(candidate); }
+        return real === root || real.startsWith(`${root}${sep}`);
+      };
+      if (!inside(dbtProjectDir) || (typeof body.profilesDir === 'string' && !inside(resolve(projectRoot, body.profilesDir)))) {
+        throw Object.assign(new Error('The dbt project must be inside this DQL project.'), { code: 'DBT_ARTIFACT_INVALID' });
+      }
+    }
     const manifestInput = typeof body.manifestPath === 'string' ? body.manifestPath : projectConfig.dbt?.manifestPath ?? 'target/manifest.json';
     const manifestPath = resolve(dbtProjectDir, manifestInput);
     if (!(manifestPath === dbtProjectDir || manifestPath.startsWith(`${dbtProjectDir}/`))) {
@@ -5413,10 +5562,13 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
       },
     };
   };
+  // With a host, the workspace reads its own uploads privately and keeps their rows in tables: no
+  // statement a person writes reads a file (host/engine-guard.ts).
   const datasetWorkspace = new NotebookDatasetWorkspace(
     projectRoot,
     executor,
     connectorModuleSearchPaths(projectRoot),
+    hostHooks ? { privateReads: { platform: rawExecutor } } : {},
   );
   let localWorkspaceReady = false;
   const ensureLocalWorkspaceReady = async (): Promise<ConnectionConfig> => {
@@ -5437,6 +5589,154 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
     // APIs instead of looking only in the newer named `connections` map.
     return projectConnectionById(projectRoot, projectConfig, name);
   };
+  /**
+   * RFC 0010: WHO CHOOSES THE CONNECTION. With a host (or for anyone the
+   * server placed: a host's person, a read-only link, a scheduled run's
+   * pass), the server does. A request may pick one of the project's own
+   * connections by name; a connection object in a request is never used
+   * (its `${ENV}` and `${secret:}` references are never expanded), and the
+   * server's own local DuckDB workspace, which everyone it serves shares, only
+   * where the host allows it. Single-user `dql notebook` is unchanged: its
+   * own UI picks connections.
+   */
+  const hostedRequest = (): boolean => Boolean(hostHooks) || Boolean(currentPrincipal());
+  /**
+   * HH-13: a certified block run by name, by file or from a notebook cell is its Dataset, so the host's
+   * `sourceAccess` decides who may run it, as it does for the Dataset's own runs and App tiles.
+   */
+  const restrictedBlockRefusal = async (block: { name: string; filePath: string; domain?: string }): Promise<{ error: string; code: 'PERMISSION_DENIED'; resource: { type: 'dataset'; id: string } } | null> => {
+    if (!hostHooks?.sourceAccess) return null;
+    const datasetId = `app:block:${block.domain || 'global'}:${createHash('sha256').update(`${block.filePath}\u0000${block.name}`).digest('hex').slice(0, 20)}`;
+    const allowed = await hostAllowedSources(hostHooks, currentPrincipal(), [{ id: datasetId, kind: 'dataset', name: block.name, ...(block.domain ? { domain: block.domain } : {}) }]);
+    return allowed && !allowed.has(datasetId)
+      ? { error: `You don't have access to the Dataset ${block.name}. Ask a steward of this workspace for it.`, code: 'PERMISSION_DENIED', resource: { type: 'dataset', id: datasetId } }
+      : null;
+  };
+  /**
+   * With a host, whether this person may do an action that sees the server's own configuration
+   * (`connection.manage`, `settings.manage`); without a host, the one user may.
+   */
+  const hostedMay = async (action: 'connection.manage' | 'settings.manage'): Promise<boolean> => {
+    if (!hostedRequest()) return true;
+    const principal = currentPrincipal();
+    if (!principal || !hostHooks) return false;
+    return (await authorizeHostRequest(hostHooks, principal, { action, resource: { type: 'project' } })).allow;
+  };
+  /**
+   * RFC 0010: agent memory with a host. A person's own notes (scope `user`) are keyed by who they are and shown to
+   * them alone; notes for everyone (project, notebook, artifact, thread) change what the model is told for
+   * everyone, so writing or removing one is a change to the project (`project.write`).
+   */
+  const memoryVisible = (item: { scope?: string; scopeId?: string }): boolean => {
+    if (!hostedRequest()) return true;
+    return item.scope !== 'user' || (!!item.scopeId && item.scopeId === currentPrincipal()?.id);
+  };
+  const memoryWriteRefusal = async (scope: unknown, existing: { scope?: string; scopeId?: string } | null): Promise<{ status: number; error: string } | null> => {
+    if (!hostedRequest()) return null;
+    const principal = currentPrincipal();
+    if (!principal) return { status: 401, error: 'Sign in to keep notes.' };
+    if (existing && !memoryVisible(existing)) return { status: 404, error: 'Note not found.' };
+    const shared = scope !== 'user' || (existing !== null && existing.scope !== 'user');
+    if (!shared) return null;
+    const decision = hostHooks?.authorize ? await authorizeHostRequest(hostHooks, principal, { action: 'project.write', resource: { type: 'project' } }) : { allow: true };
+    return decision.allow ? null : { status: 403, error: 'Notes for everyone change what the assistant is told for everyone, so they are part of the project: add them through a reviewed change. Keep a note for yourself instead.' };
+  };
+  /** Private notebook drafts sit in one folder of the server: only where one person uses it (or without a host). */
+  /** An import session or candidate that is not found (or is someone else's, with a host) answers 404. */
+  const importErrorStatus = (error: unknown): number => (/^(Import session not found|Import candidate not found|Invalid import session id)/.test(error instanceof Error ? error.message : '') ? 404 : 500);
+  const privateDraftsAllowed = (): boolean => !hostedRequest() || hostHooks?.onePerson === true;
+  const PRIVATE_DRAFTS_ELSEWHERE = 'A private draft is kept where one person works: make it in your private workspace, or as a shared notebook.';
+  /**
+   * The key of this request's own per-person files (Home, follows, story editions, a notebook's last run): the
+   * signed-in person's with a host, the one local user's without; null when a host names no one for this request,
+   * which then reads and keeps none (NOBODY_FILES is never written).
+   */
+  const NOBODY_FILES = 'nobody';
+  /**
+   * HH-14, the one decision every asking surface uses: whether the host keeps needs-review figures from the person
+   * asking. Only a clear `show` shows: a hook that fails or answers anything else withholds. Without a host (or a
+   * host without the hook) figures are shown.
+   */
+  /** HH-14: a finished run as the person asking may see it (the same decision as everywhere else). */
+  const runForReader = async (run: AgentRun): Promise<AgentRun> => runForPerson(await figuresRuleForRequest(), run);
+  /** Who may keep reading an earlier static answer tile's text on an App: those who replace it (its authors, stewards). */
+  const mayKeepAnswerText = async (appId: string): Promise<boolean> => {
+    const principal = currentPrincipal();
+    if (!hostHooks || !principal) return false;
+    const hooks = currentHostHooks() ?? hostHooks;
+    if (hooks.keepsAnswerText) {
+      return Promise.resolve().then(() => hooks.keepsAnswerText!(principal, { appId })).then((keep) => keep === true, () => false);
+    }
+    if ((await authorizeHostRequest(hostHooks, principal, { action: 'app.author', resource: { type: 'app', id: appId } })).allow) return true;
+    return (await authorizeHostRequest(hostHooks, principal, { action: 'dataset.certify', resource: { type: 'project' } })).allow;
+  };
+  /** A published App page as this reader may see it (apps-api pageForReader); unchanged without a host. */
+  const readerPage = <T extends { layout: { items: unknown[] } }>(appId: string, page: T): Promise<T> => (hostHooks
+    ? pageForReader(page, (relations) => hostFiguresDependOnReader(currentHostHooks() ?? hostHooks, relations), () => mayKeepAnswerText(appId))
+    : Promise.resolve(page));
+  /**
+   * What a person reads for a failure: its own text without a host. With a host, a failure DQL did not expect (a
+   * JavaScript runtime error, whose text names code or quotes a value it met) is a plain sentence and a reference;
+   * its own text goes to the server's log under that reference (RFC 0010 rule 1).
+   */
+  const personErrorText = (error: unknown, what = 'A request failed'): string => {
+    const raw = error instanceof Error ? error.message : String(error);
+    if (!hostHooks || !isProgramError(error)) return raw;
+    return plainFailureMessage(logUnderReference(what, error));
+  };
+  const figuresRuleForRequest = async (): Promise<'show' | 'withhold_review'> => {
+    const principal = currentPrincipal();
+    if (!hostIdentity || !hostHooks?.answerFigures || !principal) return 'show';
+    // Only a clear "show" shows; an error or any other answer withholds (fail closed).
+    return Promise.resolve().then(() => hostHooks.answerFigures!(principal)).then(figuresRuleFrom, () => 'withhold_review' as const);
+  };
+  const ownFilesKey = (): string | null => (currentRecordOwner() === null ? null : homePersonKey(currentPrincipal()));
+  /**
+   * RFC 0010 rule 8 for imports read from a path: with a host, the path is project content (a `.sql` file or a
+   * folder of them under the file rule), and only such files are read from a folder. Uploaded or pasted SQL is not
+   * read from the server at all.
+   */
+  const hostedImportRefused = (body: Record<string, unknown>): boolean => {
+    if (!hostedRequest()) return false;
+    const uploaded = Array.isArray(body.sources) && body.sources.length > 0;
+    if (uploaded) return false;
+    // Nothing named, nothing read: the route says a path is required.
+    const named = typeof body.path === 'string' ? body.path : '';
+    if (!named.trim()) return false;
+    return hostedProjectPath(projectRoot, named, { privateDrafts: privateDraftsAllowed() }) === null;
+  };
+  const hostedImportFiles = (): { fileAllowed?: (absolutePath: string) => boolean } => hostedRequest()
+    ? { fileAllowed: (absolutePath: string) => hostedProjectFile(projectRoot, relative(resolve(projectRoot), absolutePath).split(sep).join('/'), { privateDrafts: privateDraftsAllowed() }) !== null }
+    : {};
+  /** A dbt profiles file or folder a hosted request names: inside the project (real path), in no dot folder. */
+  const hostedProfilesPath = (requested: string): boolean => {
+    if (!requested || requested.startsWith('~') || /[\u0000-\u001f]/.test(requested)) return false;
+    const root = resolve(projectRoot);
+    const absolute = resolve(root, requested);
+    const inside = (target: string, base: string) => target === base || target.startsWith(`${base}${sep}`);
+    const dotted = (target: string, base: string) => relative(base, target).split(sep).some((segment) => segment.startsWith('.'));
+    if (!inside(absolute, root) || dotted(absolute, root)) return false;
+    if (!existsSync(absolute)) return true;
+    try {
+      const realRoot = realpathSync(root);
+      const real = realpathSync(absolute);
+      return inside(real, realRoot) && !dotted(real, realRoot);
+    } catch {
+      return false;
+    }
+  };
+  /** Whose Dataset grain proofs a hosted request writes and reads: the identity that decides their rows. */
+  const proofPersonKey = (): string => `pp-${activePersonaPolicyFingerprint().slice(0, 32)}`;
+  /** The grain proofs this request may go on: with a host, the project's checked-in ones and the person's own. */
+  const datasetProofsForRequest = () => (hostedRequest() ? loadPersonDatasetGrainProofs(projectRoot, proofPersonKey()) : loadDatasetGrainProofs(projectRoot));
+  /** A block file a hosted request names (a `.dql` file under the project-content rule), or null. */
+  const hostedBlockFile = (requested: unknown): string | null =>
+    typeof requested === 'string' && requested.trim() !== '' && extname(requested.trim()).toLowerCase() === '.dql'
+      ? hostedProjectFile(projectRoot, requested.trim(), { privateDrafts: privateDraftsAllowed() })
+      : null;
+  /** The request's own connection object, only where the request may choose one (no host, the server's owner). */
+  const requestConnection = (body: Record<string, unknown>): ConnectionConfig | undefined =>
+    !hostedRequest() && isConnectionConfig(body.connection) ? body.connection : undefined;
   const resolveExecutionConnection = async (
     body: Record<string, unknown>,
   ): Promise<ConnectionConfig> => {
@@ -5444,19 +5744,24 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
       body.executionTarget && typeof body.executionTarget === "object"
         ? (body.executionTarget as Record<string, unknown>)
         : null;
-    if (target?.target === "local") return ensureLocalWorkspaceReady();
+    const hosted = hostedRequest();
+    if (target?.target === "local") {
+      if (hosted && hostHooks?.onePerson !== true) throw new ConnectionChoiceRefusedError(LOCAL_EXECUTION_REFUSED);
+      return ensureLocalWorkspaceReady();
+    }
     if (
       target?.target === "connection" &&
       typeof target.connectionName === "string"
     ) {
       const named = resolveNamedConnection(target.connectionName);
-      if (!named)
+      if (!named) {
+        if (hosted) throw new ConnectionChoiceRefusedError(UNKNOWN_CONNECTION_REFUSED);
         throw new Error(`Connection not found: ${target.connectionName}`);
-      return named;
+      }
+      // The host's hooks (row rules, whose credentials) see the name the server resolved.
+      return hosted ? namedConnection(named, target.connectionName) : named;
     }
-    return requireActiveConnection(
-      isConnectionConfig(body.connection) ? body.connection : connection,
-    );
+    return requireActiveConnection(requestConnection(body) ?? connection);
   };
   const resolveAgentRunExecutionConnection = (
     request: AgentRunRequest,
@@ -5470,7 +5775,10 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
       body.executionTarget && typeof body.executionTarget === 'object'
         ? body.executionTarget as Record<string, unknown>
         : null;
-    if (target?.target === 'local') return { target: 'local' };
+    const hosted = hostedRequest();
+    if (target?.target === 'local') return hosted && hostHooks?.onePerson !== true ? { target: 'connection' } : { target: 'local' };
+    // With a host, only a name the project has is described back (never one the request made up).
+    if (hosted && target?.target === 'connection' && typeof target.connectionName === 'string' && !resolveNamedConnection(target.connectionName)) return { target: 'connection' };
     const storedConnections = getStoredConnections(
       projectConfig as unknown as Record<string, unknown>,
     );
@@ -5521,7 +5829,14 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
   let semanticDetectedProvider: string | undefined;
   const semanticLayerDir = join(projectRoot, 'semantic-layer');
   let semanticImportManifest = loadSemanticImportManifest(projectRoot);
-  const userPrefsPath = join(projectRoot, '.dql-user-prefs.json');
+  const singleUserPrefsPath = join(projectRoot, '.dql-user-prefs.json');
+  // With a host, favorites and recent items are each person's own, kept with their other private state (never a
+  // file at the project's root that everyone shares).
+  const userPrefsPathFor = (): string | null => {
+    if (!hostedRequest()) return singleUserPrefsPath;
+    const principal = currentPrincipal();
+    return principal ? join(projectRoot, '.dql', 'local', 'private', 'prefs', `${homePersonKey(principal)}.json`) : null;
+  };
   let semanticConfig = resolveProjectSemanticConfig(projectConfig, projectRoot);
   let semanticLastSyncTime: string | null = null;
   const reloadSemanticLayer = async (): Promise<SemanticLayerResult> => {
@@ -5559,10 +5874,25 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
   // PERF-001 / API-001: project mutations acknowledge after their source file
   // is durable. Rebuildable manifest, lineage, metadata, and KG projections run
   // in one coalesced worker lane and remain observable across page navigation.
+  // RFC 0010: an operation (an Ask in progress, a page run, a refresh) belongs
+  // to whoever the server placed when it started; with a principal, a person
+  // sees, follows and cancels only their own. Without one (`dql notebook`),
+  // the one user sees everything, as before.
+  const operationViewer = (): string | undefined => currentPrincipal()?.id;
   const operationCoordinator = new LocalOperationCoordinator(
     join(projectRoot, '.dql', 'cache', 'operations.sqlite'),
+    { ownerOf: operationViewer },
   );
-  const operationSseClients = new Set<ServerResponse>();
+  const operationVisible = (operation: LocalOperation | null, viewer: string | undefined): LocalOperation | null =>
+    operation && (viewer === undefined || operation.ownerId === viewer) ? operation : null;
+  /**
+   * Whose operations a request may see: its principal's. With host hooks and nobody signed in (a host without
+   * `resolvePrincipal`), none: an operation's question is someone's (RFC 0010 rule 6). Without hooks, every one.
+   */
+  const NO_OPERATIONS = '\u0000nobody';
+  const operationReader = (): string | undefined => currentPrincipal()?.id ?? (hostHooks ? NO_OPERATIONS : undefined);
+  /** Each open operations stream, and whose operations it may carry (undefined: every one, without a principal). */
+  const operationSseClients = new Map<ServerResponse, string | undefined>();
   const operationIdempotency = new Map<string, string>();
   const projectRefreshCoordinator = new ProjectRefreshCoordinator(
     operationCoordinator,
@@ -5583,7 +5913,8 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
   );
   const unsubscribeOperationEvents = operationCoordinator.subscribe((operation) => {
     const payload = serializeJSON(operation);
-    for (const client of operationSseClients) {
+    for (const [client, viewer] of operationSseClients) {
+      if (!operationVisible(operation, viewer)) continue;
       try {
         client.write(`event: operation\ndata: ${payload}\n\n`);
       } catch {
@@ -5665,7 +5996,8 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
           const absPath = join(dataDir, file.name).replaceAll('\\', '/');
           const reader = file.name.endsWith('.parquet') ? 'read_parquet' : 'read_csv_auto';
           const ddl = `CREATE OR REPLACE VIEW "${tableName}" AS SELECT * FROM ${reader}('${absPath}')`;
-          try { await executor.executeQuery(ddl, [], {}, connection); } catch { /* non-fatal */ }
+          // DQL's own view over the project's data file (purpose `platform`): not a statement a person wrote.
+          try { await executor.executeQuery(ddl, [], {}, connection, { purpose: 'platform' }); } catch { /* non-fatal */ }
         }
       } catch { /* non-fatal */ }
     }
@@ -6198,12 +6530,21 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
           : 'APP_AUTOPILOT_PREVIEW_RESULT_REQUIRED'),
       };
     }
-    const provider = opts.appAutopilotProviderFactory
-      ? await opts.appAutopilotProviderFactory({ projectRoot, request, promptContext: context.promptContext })
-      : await createBlockStudioAssistProvider(projectRoot);
+    const selected = opts.appAutopilotProviderFactory
+      ? await (async () => {
+        const injected = await opts.appAutopilotProviderFactory!({ projectRoot, request, promptContext: context.promptContext });
+        return injected ? { id: injected.name, provider: injected } : null;
+      })()
+      : await selectAssistProvider(projectRoot);
+    const provider = selected?.provider;
     if (!provider) {
       throw new Error('APP_AUTOPILOT_PROVIDER_UNAVAILABLE: configure a supported AI provider before using App Autopilot.');
     }
+    // The preview's grouped facts and filter values are results: they reach this model only inside the privacy
+    // boundary; otherwise App Autopilot reads the preview's shape (columns, row count, which filters apply).
+    const promptContext = valuesMayReachProvider({ selected, projectRoot, hosted: Boolean(hostHooks), withoutHost: 'chosen-model' })
+      ? context.promptContext
+      : appAutopilotContextWithoutValues(context.promptContext);
     const dispatchTrace = createProviderDispatchTrace({
       observer: askTraceObserverForV1(request),
       phase: 'generation',
@@ -6281,7 +6622,7 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
           role: 'user',
           content: JSON.stringify({
             request: request.question,
-            appContext: JSON.parse(context.promptContext),
+            appContext: JSON.parse(promptContext),
           }),
         },
       ], {
@@ -7004,6 +7345,13 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
       return { manifest: snapshot.manifest, snapshotId: snapshot.snapshotId };
     },
     selectProvider: selectAskProvider,
+    // HH-5: a follow-up's earlier answer and the thread's memory reach the model only inside the privacy boundary.
+    valuesMayReachModel: (request, provider) => valuesMayReachProvider({
+      selected: { id: askRequestProviders.get(request) ?? provider.name, provider },
+      projectRoot,
+      hosted: Boolean(hostHooks),
+      withoutHost: 'chosen-model',
+    }),
     // The engine the semantic candidate will compile on, decided the same
     // way `compileSemantic` decides it, so the binder speaks its dialect.
     semanticEngine: async () => plannedAskEngine().then((planned) => planned.engine),
@@ -7161,9 +7509,9 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
       const dialect = getDialect(connection.driver);
       const quotedRelation = parsePhysicalIdentifier(relation).map((part) => part.quoted ? `"${part.value.replace(/"/g, '""')}"` : dialect.quoteIdentifier(part.value)).join('.');
       const quotedColumn = dialect.quoteIdentifier(column);
-      const literal = value.replace(/'/g, "''");
-      const sql = `SELECT DISTINCT ${quotedColumn} AS stored_value FROM ${quotedRelation} WHERE LOWER(CAST(${quotedColumn} AS VARCHAR)) = LOWER('${literal}') LIMIT 5`;
-      const result = await executor.executeQuery(sql, [], {}, connection);
+      // The value is a bound parameter, never part of the statement's text.
+      const sql = `SELECT DISTINCT ${quotedColumn} AS stored_value FROM ${quotedRelation} WHERE LOWER(CAST(${quotedColumn} AS VARCHAR)) = LOWER($1) LIMIT 5`;
+      const result = await executor.executeQuery(sql, [{ name: 'value', position: 1 }], { value }, connection);
       return result.rows.map((row) => String((row as Record<string, unknown>).stored_value ?? (row as Record<string, unknown>).STORED_VALUE ?? '')).filter(Boolean);
     },
     // Physical spans for the pipeline's statements and probes: the trace
@@ -7193,9 +7541,9 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
       const quotedRelation = parsePhysicalIdentifier(relation).map((part) => part.quoted ? `"${part.value.replace(/"/g, '""')}"` : dialect.quoteIdentifier(part.value)).join('.');
       const quotedKey = dialect.quoteIdentifier(keyColumn);
       const quotedLabel = dialect.quoteIdentifier(labelColumn);
-      const literal = value.replace(/'/g, "''");
-      const sql = `SELECT DISTINCT ${quotedKey} AS member_key, ${quotedLabel} AS member_label FROM ${quotedRelation} WHERE LOWER(CAST(${quotedLabel} AS VARCHAR)) = LOWER('${literal}') LIMIT 6`;
-      const result = await executor.executeQuery(sql, [], {}, connection);
+      // The value is a bound parameter, never part of the statement's text.
+      const sql = `SELECT DISTINCT ${quotedKey} AS member_key, ${quotedLabel} AS member_label FROM ${quotedRelation} WHERE LOWER(CAST(${quotedLabel} AS VARCHAR)) = LOWER($1) LIMIT 6`;
+      const result = await executor.executeQuery(sql, [{ name: 'value', position: 1 }], { value }, connection);
       return result.rows.map((row) => {
         const record = row as Record<string, unknown>;
         return { key: String(record.member_key ?? record.MEMBER_KEY ?? ''), label: String(record.member_label ?? record.MEMBER_LABEL ?? '') };
@@ -7213,7 +7561,7 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
     await selectAskProvider(request).catch(() => undefined);
     const id = askRequestProviders.get(request);
     if (id !== 'ollama') return false;
-    return isLoopbackUrl(getEffectiveProviderConfig(projectRoot, id)?.baseUrl ?? 'http://127.0.0.1:11434');
+    return ollamaOnThisMachine({ id }, getEffectiveProviderConfig(projectRoot, id)?.baseUrl);
   };
   const knowledgeSessionForRun = (runId: string, request: AgentRunRequest, onWithheld?: (labels: string[]) => void) => {
     const context = currentRequestContext();
@@ -7319,14 +7667,20 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
       emitAnswerDelta?.(text);
     } else {
       try {
-        const provider = await createBlockStudioAssistProvider(projectRoot);
+        const selected = await selectAssistProvider(projectRoot);
+        const provider = selected?.provider;
         if (provider) {
           const system = buildConversationSystemPrompt(kind, isGeneralKnowledge, catalogContext, request.audience ?? 'analyst');
-          const conversationMemory = renderConversationMemoryForPrompt(request.conversationContext);
+          // Earlier answers, rows and values in this thread reach the model only inside the privacy boundary;
+          // otherwise it reads what was asked and the shape of what came back, and the person's own messages.
+          const withValues = valuesMayReachProvider({ selected, projectRoot, hosted: Boolean(hostHooks), withoutHost: 'chosen-model' });
+          const conversationMemory = withValues
+            ? renderConversationMemoryForPrompt(request.conversationContext)
+            : renderConversationShapeForPrompt(request.conversationContext);
           const messages = [
             { role: 'system' as const, content: system },
             ...(conversationMemory ? [{ role: 'system' as const, content: conversationMemory }] : []),
-            ...(request.history ?? []).slice(-6).map((message) => ({ role: message.role, content: message.text })),
+            ...(request.history ?? []).filter((message) => withValues || message.role === 'user').slice(-6).map((message) => ({ role: message.role, content: message.text })),
             { role: 'user' as const, content: request.question },
           ];
           // Conversation generation is a physical provider transport too.
@@ -7915,6 +8269,18 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
   const investigationExecutor = createInvestigationExecutor({
     host: askPipelineHost,
     loadRun: async (runId) => agentRunStore.get(runId),
+    // HH-5: Research words its summary from computed facts only where those may reach the model: the project's
+    // row-egress switch is not off, and the privacy boundary (with a host) allows this model.
+    narrationMayCarryValues: async (request) => {
+      if (projectConfig?.agent?.providerResultRowEgress?.mode === 'disabled') return false;
+      const provider = await selectAskProvider(request).catch(() => undefined);
+      return valuesMayReachProvider({
+        selected: provider ? { id: askRequestProviders.get(request) ?? provider.name, provider } : null,
+        projectRoot,
+        hosted: Boolean(hostHooks),
+        withoutHost: 'chosen-model',
+      });
+    },
     contextSources: (context) => {
       const session = researchKnowledge.get(context.runId);
       return session ? [knowledgeContextSource(session)] : undefined;
@@ -8892,13 +9258,18 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
   // existing history is imported once and the JSON renamed to *.migrated.
   // RFC 0010 HH-6: a host may keep runs elsewhere and hear of each finished answer.
   // HH-6: a host's stores answer with Promises; every call below is awaited.
-  const openMemoryStore = (): MemoryStoreLike => hostHooks?.stores?.memory?.(projectRoot) ?? new MemoryStore(defaultMemoryPath(projectRoot));
-  const storedAgentRuns: DqlRunStoreLike = hostHooks?.stores?.runs ?? new SqliteAgentRunStore({
+  // A host's store that fails, or answers in a shape DQL cannot read, is a plain message with a reference; its own
+  // words go to the log (host/host-stores.ts).
+  const hostMemoryStore = hostHooks?.stores?.memory;
+  const openMemoryStore = (): MemoryStoreLike => (hostMemoryStore
+    ? openHostStore('memory', () => hostMemoryStore(projectRoot), storeDeadline)
+    : new MemoryStore(defaultMemoryPath(projectRoot)));
+  const storedAgentRuns: DqlRunStoreLike = hostHooks?.stores?.runs ? guardHostStore('runs', hostHooks.stores.runs, storeDeadline) : new SqliteAgentRunStore({
     path: defaultAgentRunSqlitePath(projectRoot),
     legacyJsonPath: defaultAgentRunStorePath(projectRoot),
   });
   // With a host, each answer belongs to the person who asked; others' runs read as not found.
-  const baseAgentRunStore = hostIdentity ? withRunOwnership(storedAgentRuns, currentPrincipal) : storedAgentRuns;
+  const baseAgentRunStore = hostHooks ? withRunOwnership(storedAgentRuns, currentRecordOwner) : storedAgentRuns;
   const agentRunStore = hostHooks?.audit
     ? withAnswerAudit(baseAgentRunStore, hostHooks.audit, () => ({ principal: currentPrincipal() ?? null, actor: auditActor(currentPrincipal()) }))
     : baseAgentRunStore;
@@ -8906,7 +9277,11 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
   if (hostHooks?.audit) {
     const processAudit = hostHooks.audit;
     // Usage goes to the audit of the server whose request made the call.
-    auditModelUsage((event) => (currentRequestContext()?.hooks?.audit ?? processAudit)(event), setProviderUsageListener, () => {
+    auditModelUsage((event) => {
+      const scoped = scopedHostHooks();
+      const audit = scoped ? scoped.hooks?.audit : processAudit;
+      return audit ? audit(event) : undefined;
+    }, setProviderUsageListener, () => {
       const context = currentRequestContext();
       return { principal: context?.principal ?? null, actor: auditActor(context?.principal), ...(context?.requestId ? { requestId: context.requestId } : {}) };
     });
@@ -8915,9 +9290,12 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
   // oversized, or schema-newer trace store must not make Ask unavailable.
   // HH-6: each finished trace, strictly redacted, also goes to the host's
   // sink and/or an OpenTelemetry collector when one is configured.
+  // Question fingerprints leave keyed under the host's secret, or this project's own (never a bare hash).
+  let questionKey: string | undefined;
   const askTraceStore = withTraceExport(new AskTraceSqliteStoreV1({
     path: defaultAskTraceSqlitePath(projectRoot),
   }), {
+    questionKey: () => (questionKey ??= traceQuestionKey(projectRoot, hostHooks?.traceSalt)),
     ...(hostHooks?.traces ? { sink: hostHooks.traces } : {}),
     ...((process.env.OTEL_EXPORTER_OTLP_TRACES_ENDPOINT ?? process.env.OTEL_EXPORTER_OTLP_ENDPOINT)?.trim()
       ? { otlpEndpoint: (process.env.OTEL_EXPORTER_OTLP_TRACES_ENDPOINT ?? process.env.OTEL_EXPORTER_OTLP_ENDPOINT)!.trim(), otlpHeaders: otlpHeadersFromEnv(process.env.OTEL_EXPORTER_OTLP_HEADERS) }
@@ -8931,6 +9309,8 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
     const controller = activeAgentRunControllers.get(id);
     if (!controller) return false;
     const progress = await agentRunStore.getProgress(id);
+    // RFC 0010: only the person who asked may cancel their run (another person's run is "not found").
+    if (currentPrincipal() && !progress && !(await agentRunStore.get(id))) return false;
     if (progress) {
       await agentRunStore.saveProgress({
         ...progress,
@@ -8954,14 +9334,41 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
   const getConversationStore = (): ConversationStoreLike | null => {
     if (conversationStoreInstance !== undefined) return conversationStoreInstance;
     try {
-      conversationStoreInstance = hostHooks?.stores?.conversations?.(conversationStorePath) ?? new ConversationStore(conversationStorePath);
+      const hostConversations = hostHooks?.stores?.conversations;
+      conversationStoreInstance = hostConversations
+        ? openHostStore('conversations', () => hostConversations(conversationStorePath), storeDeadline)
+        : new ConversationStore(conversationStorePath);
     } catch {
       conversationStoreInstance = null;
     }
     return conversationStoreInstance;
   };
+  // HH-14: what the engine keeps for a person the host withholds needs-review figures from is kept withheld from the
+  // first write, and a run in progress is kept without anything that could hold a figure (one decision per request).
+  const figuresRuleByRequest = new WeakMap<object, Promise<'show' | 'withhold_review'>>();
+  const keptFiguresRule = (): Promise<'show' | 'withhold_review'> => {
+    const context = currentRequestContext();
+    if (!context) return figuresRuleForRequest();
+    let rule = figuresRuleByRequest.get(context);
+    if (!rule) figuresRuleByRequest.set(context, rule = figuresRuleForRequest());
+    return rule;
+  };
+  const engineRunStore: typeof agentRunStore = hostHooks?.answerFigures
+    ? new Proxy(agentRunStore, {
+      get(target, property) {
+        if (property === 'save') {
+          return async (run: AgentRun) => target.save(runForPerson(await keptFiguresRule(), run));
+        }
+        if (property === 'saveProgress' && typeof target.saveProgress === 'function') {
+          return async (progress: Parameters<NonNullable<typeof target.saveProgress>>[0]) => target.saveProgress!((await keptFiguresRule()) === 'withhold_review' ? progressWithoutFigures(progress) : progress);
+        }
+        const value = Reflect.get(target, property, target);
+        return typeof value === 'function' ? value.bind(target) : value;
+      },
+    })
+    : agentRunStore;
   const agentRunEngine = new AgentRunEngine({
-    store: agentRunStore,
+    store: engineRunStore,
     // HH-17: a host that refuses sensitive questions by column replaces the wording check.
     ...(hostHooks?.sensitiveQuestions === 'columns' ? { sensitiveQuestions: 'columns' as const } : {}),
     executors: {
@@ -9108,12 +9515,15 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
       }
     }
 
+    // A request a host names no one for keeps no run (ownFilesKey null).
+    const snapshotKey = ownFilesKey();
+    if (snapshotKey === null) return;
     writeRunSnapshot(projectRoot, notebookPath, {
       version: 1,
       notebookPath,
       capturedAt: new Date().toISOString(),
       cells: snapshotCells,
-    });
+    }, hostedRequest() ? snapshotKey : undefined);
   };
 
   const executeDqlArtifactSourceForAgent = async (
@@ -11016,7 +11426,15 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
     };
   };
 
-  const openNotebookResearchStorage = () => new LocalNotebookResearchStorage(defaultNotebookResearchDbPath(projectRoot));
+  const NOBODYS_RESEARCH = 'Research runs are each person\'s: sign in to use them.';
+  const openNotebookResearchStorage = () => {
+    const dbPath = notebookResearchDbPath(projectRoot, Boolean(hostHooks));
+    if (!dbPath) throw Object.assign(new Error(NOBODYS_RESEARCH), { code: 'PERMISSION_DENIED' });
+    return new LocalNotebookResearchStorage(dbPath);
+  };
+  /** With a host, a research run's owner is the person signed in, never a name in the request. */
+  const notebookResearchOwner = (requested: unknown): string | undefined =>
+    hostedRequest() ? hostActor() ?? currentPrincipal()?.id : notebookResearchString(requested);
   const notebookResearchStorageUnavailableMessage = 'Notebook research storage is unavailable because the local SQLite native bindings are not installed for this Node.js runtime.';
   const notebookResearchNextActionFilters: NotebookResearchNextActionFilter[] = [
     'fix_blockers',
@@ -12035,6 +12453,7 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
   const createDqlGenerationSessionFromBody = async (body: any): Promise<DqlGenerationSession> => {
     return createDqlGenerationSessionForProject(projectRoot, {
       inputPath: typeof body.path === 'string' ? body.path : '',
+      ...hostedImportFiles(),
       inputMode: body.inputMode === 'paste' || body.inputMode === 'upload' || body.inputMode === 'path' ? body.inputMode : undefined,
       sources: Array.isArray(body.sources)
         ? body.sources.map((source: any, index: number) => ({
@@ -12250,7 +12669,8 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
       snapshotId: input.snapshotId,
     });
     const proof = datasetGrainProofFromRuntime({ proofId, material: input.material, evidence });
-    const persisted = persistLocalDatasetGrainProof(projectRoot, proof);
+    // With a host, the proof is the asking person's (their row rules and credentials decided it).
+    const persisted = persistLocalDatasetGrainProof(projectRoot, proof, hostedRequest() ? { path: personDatasetProofPath(projectRoot, proofPersonKey()) } : {});
     return { probe: input.probe, evidence, proof, persisted };
   };
 
@@ -12395,7 +12815,7 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
       const sourceId = `app:block:${block.domain || 'global'}:${createHash('sha256').update(`${block.filePath}\u0000${block.name}`).digest('hex').slice(0, 20)}`;
       const base = { kind: 'dataset', name: block.name, filePath: block.filePath, sourceId, keys };
       try {
-        const validation = await validateDatasetSourceGrain({ sourceId, ...(body.connection ? { connection: body.connection } : {}) });
+        const validation = await validateDatasetSourceGrain({ sourceId, ...(requestConnection(body) ? { connection: body.connection } : {}) });
         datasets.push({ ...base, keys: validation.evidence.keyFields, status: validation.evidence.status, uniqueness: validation.evidence.uniqueness });
       } catch (error) {
         datasets.push({ ...base, status: 'error', message: error instanceof Error ? error.message : String(error) });
@@ -12571,7 +12991,7 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
       return refuse('DATASET_TILE_SAVE_NOT_SETTLED', 'This tile has no complete current Dataset execution evidence. Run the current tile again before saving it.');
     }
 
-    const storage = new LocalAppStorage(defaultLocalAppsDbPath(projectRoot));
+    const storage = new LocalAppStorage(defaultLocalAppsDbPath(projectRoot), { owner: currentRecordOwner() });
     let draft: AppBuildDraft | null;
     try {
       draft = storage.getAppBuildDraft(input.draftId);
@@ -12731,7 +13151,7 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
       return refuse('DATASET_TILE_REPLACE_BLOCK_MISSING', 'The saved review draft is no longer available at its governed project path. Save a new current review draft before replacing the tile.');
     }
 
-    const storage = new LocalAppStorage(defaultLocalAppsDbPath(projectRoot));
+    const storage = new LocalAppStorage(defaultLocalAppsDbPath(projectRoot), { owner: currentRecordOwner() });
     let draft: AppBuildDraft | null;
     try {
       draft = storage.getAppBuildDraft(input.draftId);
@@ -12854,7 +13274,7 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
         if (fingerprintDashboardRuntimeState({ driver: latestConnection.driver, filepath: latestConnection.filepath ?? null, schema: latestConnection.schema ?? null }) !== connectionFingerprint) return undefined;
         const latestTarget = await observeWarehouseTargetIdentity(executor, latestConnection);
         if (latestTarget.identityFingerprint !== execution.targetFingerprint) return undefined;
-        const latestStorage = new LocalAppStorage(defaultLocalAppsDbPath(projectRoot));
+        const latestStorage = new LocalAppStorage(defaultLocalAppsDbPath(projectRoot), { owner: currentRecordOwner() });
         let latestDraft: AppBuildDraft | null;
         try {
           latestDraft = latestStorage.getAppBuildDraft(input.draftId);
@@ -12954,7 +13374,7 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
         },
       });
       const next = applyAppBuildDraftOperations(draft, draft.revision, operations);
-      const mutationStorage = new LocalAppStorage(defaultLocalAppsDbPath(projectRoot));
+      const mutationStorage = new LocalAppStorage(defaultLocalAppsDbPath(projectRoot), { owner: currentRecordOwner() });
       try {
         mutationStorage.saveAppBuildDraft(next, { expectedRevision: draft.revision, operations });
       } finally {
@@ -12996,7 +13416,7 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
     if (!datasetsAppFeatureEnabled(projectConfig)) {
       return refuse('SEMANTIC_TILE_CONVERSION_DISABLED', 'Dataset tile authoring is disabled for this project. Enable apps.datasets before converting this semantic tile.');
     }
-    const storage = new LocalAppStorage(defaultLocalAppsDbPath(projectRoot));
+    const storage = new LocalAppStorage(defaultLocalAppsDbPath(projectRoot), { owner: currentRecordOwner() });
     let draft: AppBuildDraft | null;
     try {
       draft = storage.getAppBuildDraft(input.draftId);
@@ -13111,7 +13531,7 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
       if (latestConnection.driver !== currentConnection.driver || latestConnection.filepath !== currentConnection.filepath || latestConnection.schema !== currentConnection.schema) return undefined;
       const latestTarget = await observeWarehouseTargetIdentity(executor, latestConnection);
       if (latestTarget.identityFingerprint !== target.identityFingerprint) return undefined;
-      const latestStorage = new LocalAppStorage(defaultLocalAppsDbPath(projectRoot));
+      const latestStorage = new LocalAppStorage(defaultLocalAppsDbPath(projectRoot), { owner: currentRecordOwner() });
       let latestDraft: AppBuildDraft | null;
       try {
         latestDraft = latestStorage.getAppBuildDraft(input.draftId);
@@ -13378,7 +13798,7 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
     ];
     try {
       const next = applyAppBuildDraftOperations(prepared.draft, prepared.draft.revision, operations);
-      const storage = new LocalAppStorage(defaultLocalAppsDbPath(projectRoot));
+      const storage = new LocalAppStorage(defaultLocalAppsDbPath(projectRoot), { owner: currentRecordOwner() });
       try {
         storage.saveAppBuildDraft(next, { expectedRevision: prepared.draft.revision, operations });
       } finally {
@@ -13391,8 +13811,10 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
     }
   };
 
-  const server = createServer((req, res) => {
+  const server = createServer((req, res) => withServerScope(scope, () => {
     res = withCompression(req, res);
+    // Every answer of a hosted server says it is hosted, its refusals and failures too (RFC 0010 HH-9).
+    if (hostIdentity) res.setHeader('X-DQL-Hosted', '1');
     const requestUrl = req.url || '/';
     const url = new URL(requestUrl, 'http://127.0.0.1');
     const path = url.pathname || '/';
@@ -13464,10 +13886,16 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
       }
     }
     if (hostIdentity && path.startsWith('/api/') && path !== '/api/health') {
-      if (!runPass) requestPrincipal = await resolveHostPrincipal(hostHooks!, req);
+      let identityUnavailable = false;
+      if (!runPass) {
+        const outcome = await resolveHostPrincipalOutcome(hostHooks!, req);
+        requestPrincipal = outcome.principal;
+        identityUnavailable = outcome.unavailable === true;
+      }
       if (!requestPrincipal) {
-        res.writeHead(401, { 'Content-Type': 'application/json; charset=utf-8' });
-        res.end(serializeJSON({ error: 'Sign in to use DQL.' }));
+        // The host did not say in time who is asking: refused, in words that do not send them to sign in again.
+        res.writeHead(identityUnavailable ? 503 : 401, { 'Content-Type': 'application/json; charset=utf-8', ...(identityUnavailable ? { 'Retry-After': '5' } : {}) });
+        res.end(serializeJSON(identityUnavailable ? { error: HOST_IDENTITY_UNAVAILABLE, code: 'HOST_UNAVAILABLE' } : { error: 'Sign in to use DQL.' }));
         return;
       }
       Object.assign(auditWho, { principal: requestPrincipal, actor: auditActor(requestPrincipal) });
@@ -13504,13 +13932,15 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
     // (a scheduled run's pass: its delivery).
     const requestAction = path.startsWith('/api/') ? routeAction(req.method, path).action : undefined;
     const requestDestination = runPass ? 'delivery' as const : destinationForRequest(requestAction, path);
+    // With host hooks, every request runs in a context naming its server's hooks; one with nobody signed in (a host
+    // without resolvePrincipal) then reads and keeps no one's own content (RecordOwner null).
     return withRequestContext(requestPrincipal ? {
       principal: requestPrincipal,
       requestId,
       ...(requestAction ? { action: requestAction } : {}),
       ...(requestDestination ? { destination: requestDestination } : {}),
       ...(hostHooks ? { hooks: hostHooks } : {}),
-    } : undefined, async () => {
+    } : hostHooks ? { requestId, hooks: hostHooks } : undefined, async () => {
 
     // Existing `dql notebook` runtimes cannot hand their in-memory capability
     // to a later CLI process. A short-lived challenge is therefore issued only
@@ -13560,8 +13990,9 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
         'X-Accel-Buffering': 'no',
       });
       res.write(': connected\n\n');
-      operationSseClients.add(res as unknown as ServerResponse);
-      for (const operation of operationCoordinator.list(20).reverse()) {
+      const viewer = operationReader();
+      operationSseClients.set(res as unknown as ServerResponse, viewer);
+      for (const operation of operationCoordinator.list(20, viewer === undefined ? {} : { ownerId: viewer }).reverse()) {
         res.write(`event: operation\ndata: ${serializeJSON(operation)}\n\n`);
       }
       req.on('close', () => operationSseClients.delete(res as unknown as ServerResponse));
@@ -13570,21 +14001,28 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
 
     if (req.method === 'GET' && path === '/api/operations') {
       const limit = Number(url.searchParams.get('limit') ?? 50);
+      const viewer = operationReader();
       res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-      res.end(serializeJSON({ operations: operationCoordinator.list(limit) }));
+      res.end(serializeJSON({ operations: operationCoordinator.list(limit, viewer === undefined ? {} : { ownerId: viewer }) }));
       return;
     }
 
     const operationMatch = path.match(/^\/api\/operations\/([^/]+)$/);
     if (operationMatch && req.method === 'GET') {
-      const operation = operationCoordinator.get(decodeURIComponent(operationMatch[1]));
+      // Someone else's operation is "not found", as their runs are.
+      const operation = operationVisible(operationCoordinator.get(decodeURIComponent(operationMatch[1])), operationReader());
       res.writeHead(operation ? 200 : 404, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(serializeJSON(operation ?? { error: 'Operation not found.' }));
       return;
     }
     if (operationMatch && req.method === 'DELETE') {
       const operationId = decodeURIComponent(operationMatch[1]);
-      const existingOperation = operationCoordinator.get(operationId);
+      const existingOperation = operationVisible(operationCoordinator.get(operationId), operationReader());
+      if (!existingOperation) {
+        res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(serializeJSON({ error: 'Operation not found.' }));
+        return;
+      }
       if (existingOperation?.type === 'agent_run' && existingOperation.scope.startsWith('agent-run:')) {
         await cancelActiveAgentRun(existingOperation.scope.slice('agent-run:'.length));
       }
@@ -13596,7 +14034,7 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
 
     if (req.method === 'GET' && path === '/api/onboarding/launch') {
       const requestId = apiRequestId('onboarding-launch');
-      const prefs = readUserPrefs(userPrefsPath);
+      const prefs = readUserPrefs(singleUserPrefsPath);
       const acknowledgedVersion = prefs.setup?.acknowledgedVersion ?? null;
       const dbtAppliedVersion = prefs.setup?.dbtAppliedVersion ?? null;
       // With a host (RFC 0010 HH-9) the host sets up the project; the
@@ -13626,7 +14064,7 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
 
     if (req.method === 'POST' && path === '/api/onboarding/acknowledge') {
       const requestId = apiRequestId('onboarding-acknowledge');
-      const prefs = readUserPrefs(userPrefsPath);
+      const prefs = readUserPrefs(singleUserPrefsPath);
       const dbtConfigured = dbtProjectConfigured(projectRoot, projectConfig);
       const isVersionUpgrade = Boolean(
         prefs.setup?.acknowledgedVersion
@@ -13647,7 +14085,7 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
         acknowledgedVersion: runtimeVersion,
         acknowledgedAt: new Date().toISOString(),
       };
-      writeUserPrefs(userPrefsPath, prefs);
+      writeUserPrefs(singleUserPrefsPath, prefs);
       res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(serializeJSON({ requestId, version: runtimeVersion, acknowledged: true }));
       return;
@@ -13763,7 +14201,8 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
               maxBuffer: 1024 * 1024,
               encoding: 'utf8',
               stdio: ['ignore', 'pipe', 'pipe'],
-              env: { ...process.env, DBT_LOG_FORMAT: 'text' },
+              // With a host, dbt runs on project content with only what it needs, never the server's secrets.
+              env: hostedRequest() ? { ...minimalChildEnv(), ...dbtEnvironment(), DBT_LOG_FORMAT: 'text' } : { ...process.env, DBT_LOG_FORMAT: 'text' },
             });
           } catch (parseError) {
             throw Object.assign(new Error(`dbt parse failed. Run it in ${dbtProjectDir} to inspect the project error, then retry.`), { code: 'DBT_PARSE_FAILED', cause: parseError });
@@ -13829,13 +14268,13 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
         // An OSS version upgrade is acknowledged only after the user explicitly
         // previews and reapplies the saved dbt project. Record that successful
         // user-controlled compile without replacing their other preferences.
-        const prefs = readUserPrefs(userPrefsPath);
+        const prefs = readUserPrefs(singleUserPrefsPath);
         prefs.setup = {
           ...prefs.setup,
           dbtAppliedVersion: runtimeVersion,
           dbtAppliedAt: new Date().toISOString(),
         };
-        writeUserPrefs(userPrefsPath, prefs);
+        writeUserPrefs(singleUserPrefsPath, prefs);
         const preparation = startDbtPreparationJob({
           kind: 'dbt_prepare',
           snapshotId,
@@ -14358,7 +14797,11 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
       try {
         const body = await readJSON(req) as Record<string, unknown>;
         const source = body.source && typeof body.source === 'object' ? body.source as Record<string, unknown> : body;
-        const session = createModelingImportSession(projectRoot, gitRoot, loopback, source);
+        // With a host: a path names project content only, and only project content files are read (RFC 0010 rule 8).
+        const session = createModelingImportSession(projectRoot, gitRoot, loopback, source, hostedRequest() ? {
+          pathAllowed: (requested) => hostedProjectPath(projectRoot, requested, { privateDrafts: privateDraftsAllowed() }) !== null,
+          fileAllowed: (absolutePath) => hostedProjectFile(projectRoot, relative(resolve(projectRoot), absolutePath).split(sep).join('/'), { privateDrafts: privateDraftsAllowed() }) !== null,
+        } : undefined);
         res.writeHead(201, { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(serializeJSON({ requestId, session: publicModelingImportSession(session) }));
       } catch (error) {
@@ -14892,8 +15335,11 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
       // heap on a project with 300 runs of history (1.2 GB of JSON). The store
       // reads only the page, newest first.
       // `GET /api/agent-runs/:id` still serves the complete immutable record.
+      // HH-14: each run as this person may see it (one decision for the whole page).
+      const listRule = await figuresRuleForRequest();
       const runs = (await agentRunStore.list(limit))
         .sort((a: AgentRun, b: AgentRun) => b.startedAt.localeCompare(a.startedAt))
+        .map((run: AgentRun) => runForPerson(listRule, run))
         .map(agentRunListEntryForTransport);
       res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(serializeJSON({ runs, total: await agentRunStore.count(), limit }));
@@ -14942,10 +15388,25 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
         ...(url.searchParams.get('surface') ? { surface: url.searchParams.get('surface') as AskTraceListQueryV1['surface'] } : {}),
         ...(url.searchParams.get('recordingStatus') ? { recordingStatus: url.searchParams.get('recordingStatus') as AskTraceListQueryV1['recordingStatus'] } : {}),
       };
-      const page = askTraceStore.list(traceListInput);
-      const traces = await Promise.all(page.traces.map(async (trace) => {
+      // RFC 0010: with a host, a trace is listed only to the person whose run it is (runs are owner-scoped), and the
+      // page cursor names only a trace that person may see: pages are read until one holds enough of theirs.
+      const scoped = currentRecordOwner() !== undefined;
+      let page = askTraceStore.list(traceListInput);
+      const visibleRaw: typeof page.traces = [];
+      for (let reads = 0; ; reads += 1) {
+        for (const trace of page.traces) if (!scoped || await agentRunStore.get(trace.runId)) visibleRaw.push(trace);
+        if (!scoped || visibleRaw.length >= limit || !page.nextCursor || reads >= 20) break;
+        page = askTraceStore.list({ ...traceListInput, cursor: page.nextCursor });
+      }
+      const pageTraces = visibleRaw.slice(0, limit);
+      const lastVisible = pageTraces.at(-1);
+      if (scoped) {
+        const more = visibleRaw.length > limit || Boolean(page.nextCursor);
+        page = { ...page, traces: pageTraces, ...(more && lastVisible ? { nextCursor: Buffer.from(`${lastVisible.startedAt}\u0000${lastVisible.traceId}`, 'utf8').toString('base64url') } : { nextCursor: undefined }) };
+      }
+      const listed = await Promise.all(page.traces.map(async (trace) => {
         const run = await agentRunStore.get(trace.runId);
-        if (!run) return trace;
+        if (!run) return scoped ? null : trace;
         const questionPreview = askTraceQuestionPreview(run.question);
         return {
           ...projectAuthoritativeV8TraceEnvelope(trace, run),
@@ -14954,6 +15415,7 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
           ...(run.askAgentRuntimeMode ? { runtimeMode: run.askAgentRuntimeMode } : {}),
         };
       }));
+      const traces = listed.filter((trace): trace is NonNullable<typeof trace> => trace !== null);
       res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(serializeJSON({ ...page, traces }));
       return;
@@ -14966,7 +15428,8 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
         return;
       }
       const runId = decodeURIComponent(path.slice('/api/ask-traces/by-run/'.length));
-      const trace = askTraceStore.getByRun(runId);
+      // Someone else's run's trace is "not found", as the run is.
+      const trace = currentRecordOwner() !== undefined && !(await agentRunStore.get(runId)) ? null : askTraceStore.getByRun(runId);
       if (!trace) {
         res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(serializeJSON({ code: 'TRACE_NOT_FOUND', error: 'No local trace was found for this Ask run.' }));
@@ -15007,7 +15470,8 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
         return;
       }
       const traceId = path.split('/')[3] ?? '';
-      const trace = askTraceStore.get(traceId);
+      const stored = askTraceStore.get(traceId);
+      const trace = stored && currentRecordOwner() !== undefined && !(await agentRunStore.get(stored.envelope.runId)) ? null : stored;
       if (!trace) {
         res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(serializeJSON({ code: 'TRACE_NOT_FOUND', error: 'No local trace was found.' }));
@@ -15058,7 +15522,8 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
         return;
       }
       const traceId = path.split('/').at(-1) ?? '';
-      const trace = askTraceStore.get(traceId);
+      const stored = askTraceStore.get(traceId);
+      const trace = stored && currentRecordOwner() !== undefined && !(await agentRunStore.get(stored.envelope.runId)) ? null : stored;
       if (!trace) {
         res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(serializeJSON({ code: 'TRACE_NOT_FOUND', error: 'No local trace was found.' }));
@@ -15163,13 +15628,14 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
       if (existing) {
         const succeeded = existing.status === 'needs_review' && existing.trustState === 'review_required';
         res.writeHead(succeeded ? 200 : 409, { 'Content-Type': 'application/json; charset=utf-8' });
+        const shownExisting = await runForReader(existing);
         res.end(serializeJSON(succeeded
-          ? { run: existing }
+          ? { run: shownExisting }
           : {
               code: 'REPAIR_ATTEMPT_EXHAUSTED',
               error: 'The single permitted repair attempt was already consumed and did not complete successfully.',
               manualActions: capability.manualActions,
-              run: existing,
+              run: shownExisting,
             }));
         return;
       }
@@ -15705,10 +16171,13 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
         selectedTier: 'exploratory_sql',
       });
       if (repairTraceReference) derivedRun.traceReference = repairTraceReference;
-      await agentRunStore.save(derivedRun);
-      await recordConversationTurn(threadId ? getConversationStore() : null, threadId, derivedRun);
+      // HH-14: a repaired answer is review-required; its figures are withheld (and never stored) for a person the
+      // host keeps them from, as an Ask answer's are.
+      const storedRun = await runForReader(derivedRun);
+      await agentRunStore.save(storedRun);
+      await recordConversationTurn(threadId ? getConversationStore() : null, threadId, storedRun);
       res.writeHead(201, { 'Content-Type': 'application/json; charset=utf-8' });
-      res.end(serializeJSON({ run: derivedRun }));
+      res.end(serializeJSON({ run: storedRun }));
       return;
     }
 
@@ -15854,6 +16323,17 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
           res.end(serializeJSON({ error: parsed.error ?? 'Invalid agent run request.' }));
           return;
         }
+        // With a host, the server chooses the connection (RFC 0010 rule 7): an Ask that names a connection the
+        // project does not have, or the server's local files, is refused before a run records the choice.
+        const chosenTarget = parsed.request.executionTarget;
+        if (hostedRequest() && chosenTarget && (
+          (chosenTarget.target === 'local' && hostHooks?.onePerson !== true)
+          || (chosenTarget.target === 'connection' && chosenTarget.connectionName && !resolveNamedConnection(chosenTarget.connectionName))
+        )) {
+          res.writeHead(403, { 'Content-Type': 'application/json; charset=utf-8' });
+          res.end(serializeJSON({ error: chosenTarget.target === 'local' ? LOCAL_EXECUTION_REFUSED : UNKNOWN_CONNECTION_REFUSED, code: 'CONNECTION_NOT_ALLOWED' }));
+          return;
+        }
         // A trace surface is host-controlled metadata. Do not parse it from
         // the JSON body: only the unguessable per-runtime capability passed
         // from `dql agent ask` may mark this local request as CLI.
@@ -15871,9 +16351,12 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
         if (hostHooks && askingPrincipal) {
           if (hostHooks.audience) {
             try {
-              const audience = await hostHooks.audience(askingPrincipal);
+              const audience: unknown = await hostHooks.audience(askingPrincipal);
+              // The host's own choice; nothing (undefined) leaves DQL's default; any other answer is read as an
+              // error is: written for a stakeholder.
               if (audience === 'stakeholder' || audience === 'analyst') parsed.request.audience = audience;
-              else delete parsed.request.audience;
+              else if (audience === undefined) delete parsed.request.audience;
+              else parsed.request.audience = 'stakeholder';
             } catch {
               parsed.request.audience = 'stakeholder';
             }
@@ -15947,6 +16430,17 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
           res.end(serializeJSON({ error: askedAppAudience.reason, code: 'PERMISSION_DENIED' }));
           return;
         }
+        // The host's own word on the App (an audience it keeps, e.g. as access policies) holds for the Ask scope too.
+        const asker = currentPrincipal();
+        if (askedApp && asker && hostHooks?.authorize) {
+          const opened = await authorizeHostRequest(hostHooks, asker, { action: 'app.view', resource: { type: 'app', id: askedApp.id } });
+          if (!opened.allow && !(await askerMayAuthor())) {
+            const next = safeNextLink(opened.next);
+            res.writeHead(403, { 'Content-Type': 'application/json; charset=utf-8' });
+            res.end(serializeJSON({ error: opened.reason ?? 'You do not have access to this App.', code: 'PERMISSION_DENIED', ...(next ? { next } : {}) }));
+            return;
+          }
+        }
         scopeAppCopilotRequest(projectRoot, parsed.request, {
           knownDomain: (domain) => Boolean(projectSnapshot().manifest?.domains?.[domain]),
         });
@@ -15956,7 +16450,11 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
         // With an Idempotency-Key the submission is claimed before anything
         // runs; a replay attaches to the original run, a changed question
         // under the same key conflicts, and an unknown outcome stays explicit.
-        const idempotencyKey = typeof req.headers['idempotency-key'] === 'string' ? req.headers['idempotency-key'].trim().slice(0, 200) : '';
+        const requestedKey = typeof req.headers['idempotency-key'] === 'string' ? req.headers['idempotency-key'].trim().slice(0, 200) : '';
+        // With a host a key is the person's own: the same key from someone else is a new submission (a request the
+        // host names no one for claims nothing).
+        const keyOwner = currentRecordOwner();
+        const idempotencyKey = !requestedKey || keyOwner === null ? '' : keyOwner === undefined ? requestedKey : `p:${createHash('sha256').update(keyOwner).digest('hex').slice(0, 32)}:${requestedKey}`;
         const requestFingerprint = idempotencyKey
           ? createHash('sha256').update(JSON.stringify({
             question: parsed.request.question,
@@ -15978,14 +16476,16 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
           const inFlightElsewhere = !priorRun && !activeAgentRunControllers.has(priorClaim.runId) && Boolean(await agentRunStore.getProgress(priorClaim.runId));
           const inFlight = activeAgentRunControllers.has(priorClaim.runId) || inFlightElsewhere;
           if (priorRun && !inFlight) {
+            // HH-14: a replay is a read; the person gets the run as they may see it now.
+            const shownPrior = await runForReader(priorRun);
             if (wantsStream) {
               res.writeHead(200, { 'Content-Type': 'text/event-stream; charset=utf-8', 'Cache-Control': 'no-cache', 'Connection': 'keep-alive', 'X-Accel-Buffering': 'no' });
               writeAgentRunSse(res as unknown as ServerResponse, 'agent-run-accepted', { runId: priorClaim.runId, replayed: true });
-              writeAgentRunSse(res as unknown as ServerResponse, 'agent-run-complete', slimAgentRunForTransport(priorRun));
+              writeAgentRunSse(res as unknown as ServerResponse, 'agent-run-complete', slimAgentRunForTransport(shownPrior));
               res.end();
             } else {
               res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-              res.end(serializeJSON({ run: slimAgentRunForTransport(priorRun), replayed: true }));
+              res.end(serializeJSON({ run: slimAgentRunForTransport(shownPrior), replayed: true }));
             }
             return;
           }
@@ -16000,7 +16500,7 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
                 if (activeAgentRunControllers.has(priorClaim.runId)) continue;
                 const settled = await agentRunStore.get(priorClaim.runId);
                 if (!settled && inFlightElsewhere && await agentRunStore.getProgress(priorClaim.runId)) continue;
-                if (settled) writeAgentRunSse(res as unknown as ServerResponse, 'agent-run-complete', slimAgentRunForTransport(settled));
+                if (settled) writeAgentRunSse(res as unknown as ServerResponse, 'agent-run-complete', slimAgentRunForTransport(await runForReader(settled)));
                 else writeAgentRunSse(res as unknown as ServerResponse, 'agent-run-error', { error: 'The original submission ended without a stored run; check the run list before asking again.' });
                 break;
               }
@@ -16055,9 +16555,7 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
         if (wantsStream) writeStream('agent-run-accepted', { runId, operationId: operation?.id });
         // HH-14: a host may keep a needs-review answer's figures from this person. Until the
         // run's trust is known nothing that could quote a figure streams to them.
-        const figuresRule = hostIdentity && hostHooks?.answerFigures
-          ? await Promise.resolve().then(() => hostHooks.answerFigures!(currentPrincipal()!)).catch(() => 'withhold_review' as const)
-          : 'show';
+        const figuresRule = await figuresRuleForRequest();
         const guarded = figuresRule === 'withhold_review';
         let completedRun: AgentRun | undefined;
         let runError: unknown;
@@ -16093,7 +16591,7 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
                 runProviderEvidence,
                 () => agentRunEngine.run(parsed.request!, (event) => {
                   runProviderEvidence.setRoute(event.route);
-                  if (wantsStream) writeStream('agent-run-event', guarded ? { ...event, message: '' } : event);
+                  if (wantsStream) writeStream('agent-run-event', guarded ? eventWithoutFigures(event) : event);
                   report?.({ phase: event.type, progress: 45, message: guarded ? '' : event.message });
                 }, (delta) => {
                   if (wantsStream && !guarded) writeStream('agent-run-answer-delta', { runId: parsed.request!.runId, delta });
@@ -16121,7 +16619,7 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
               }
               const capable = attachAnalyticalRepairCapability(rawRun, resolvedTargetFingerprint);
               // HH-14: withheld figures are never stored for this person either.
-              const run = shouldWithhold(figuresRule, capable) ? withholdRunFigures(capable) : capable;
+              const run = runForPerson(figuresRule, capable);
               // The engine persists before the host can validate the DQL wrapper;
               // replace that row with the server-owned capability atomically.
               await agentRunStore.save(run);
@@ -16247,10 +16745,13 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
         res.end(serializeJSON({ error: 'Agent run not found.' }));
         return;
       }
+      // HH-14, read by id: a finished run as this person may see it; a run still going (its trust not known yet)
+      // without anything that could hold a figure, as on the stream.
+      const withheld = (await figuresRuleForRequest()) === 'withhold_review';
       res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(serializeJSON(run
-        ? { lifecycleState: 'terminal', run }
-        : { lifecycleState: progress!.lifecycle.state, progress }));
+        ? { lifecycleState: 'terminal', run: await runForReader(run) }
+        : { lifecycleState: progress!.lifecycle.state, progress: withheld ? progressWithoutFigures(progress!) : progress }));
       return;
     }
 
@@ -16263,8 +16764,10 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
         const store = getConversationStore();
         const limitParam = Number(url.searchParams.get('limit'));
         const limit = Number.isFinite(limitParam) && limitParam > 0 ? limitParam : undefined;
-        const distribution = store
-          ? await store.tierDistribution({ ...(limit ? { limit } : {}) })
+        // With a host, the counts are of the person's own turns.
+        const owner = conversationOwnerId();
+        const distribution = store && owner !== null
+          ? await store.tierDistribution({ ...(limit ? { limit } : {}), ...(owner ? { ownerId: owner } : {}) })
           : { total: 0, byRouteTier: {}, byTerminalLane: {} };
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(JSON.stringify(distribution));
@@ -16469,7 +16972,9 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
     //   target:'cell'  → generate SQL from the prompt (+ context). Writes nothing.
     //   target:'block' → assemble a COMPLETE draft, WRITE it, return preview fields.
     // Never routes through the governed Q&A answer-loop.
-    if (req.method === 'POST' && path === '/api/ai/build') {
+    // `/api/ai/build/cell` builds a notebook cell only (it returns SQL and writes nothing), so with a host it
+    // is asking; `/api/ai/build` also writes draft blocks and edits blocks, so it is authoring (route-actions.ts).
+    if (req.method === 'POST' && (path === '/api/ai/build' || path === '/api/ai/build/cell')) {
       try {
         const body = (await readJSON(req).catch(() => ({}))) as {
           prompt?: unknown;
@@ -16490,10 +16995,12 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
           res.end(serializeJSON({ error: 'Provide a non-empty { prompt }.' }));
           return;
         }
-        const target = body?.target === 'cell' || body?.target === 'block' ? body.target : undefined;
+        const cellOnly = path === '/api/ai/build/cell';
+        const target = cellOnly ? (body?.target === undefined || body?.target === 'cell' ? 'cell' : undefined)
+          : body?.target === 'cell' || body?.target === 'block' ? body.target : undefined;
         if (!target) {
           res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
-          res.end(serializeJSON({ error: "Provide { target: 'cell' | 'block' }." }));
+          res.end(serializeJSON({ error: cellOnly ? 'This route builds a notebook cell; build a block with POST /api/ai/build.' : "Provide { target: 'cell' | 'block' }." }));
           return;
         }
         const context = {
@@ -16524,6 +17031,31 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
           res.end(serializeJSON({ error: "Edit mode requires target 'block' and a { blockPath }." }));
           return;
         }
+        // With a host, a block built with AI follows the rules of any other edit: a draft is written only where
+        // one person works (their private workspace), never into a tree other people share; an edit stays inside the
+        // project, on a block file; and a certified block changes only through review, never in place.
+        let hostedOwner: string | undefined;
+        if (hostedRequest() && target === 'block') {
+          hostedOwner = hostActor() ?? currentPrincipal()?.displayName ?? currentPrincipal()?.id;
+          if (mode === 'create' && hostHooks?.onePerson !== true) {
+            res.writeHead(409, { 'Content-Type': 'application/json; charset=utf-8' });
+            res.end(serializeJSON({ error: 'A block built with AI is a draft for you alone: build it in your private workspace (your own copy of this project), where it goes to review.', code: 'BUILD_IN_DRAFT_SPACE' }));
+            return;
+          }
+          if (mode === 'edit') {
+            const file = blockPath && blockPath.endsWith('.dql') ? hostedProjectFile(projectRoot, blockPath, { privateDrafts: privateDraftsAllowed() }) : null;
+            if (!file || !existsSync(file)) {
+              res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' });
+              res.end(serializeJSON({ error: 'That block was not found in this project.' }));
+              return;
+            }
+            if (/\bstatus\s*=\s*"certified"/i.test(readFileSync(file, 'utf-8'))) {
+              res.writeHead(409, { 'Content-Type': 'application/json; charset=utf-8' });
+              res.end(serializeJSON({ error: 'A certified block changes only through review. Build a new draft from it instead, in your private workspace; a steward approves the change before it replaces the certified one.', code: 'CERTIFIED_BLOCK' }));
+              return;
+            }
+          }
+        }
         // Ensure the agent knowledge graph is built before generating, so the Build
         // path's semantic-metric routing sees the governed metrics on the very first
         // call (a cold Build-before-Ask otherwise reads an unbuilt KG and misses them).
@@ -16553,12 +17085,15 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
           target,
           mode,
           blockPath,
-          owner,
+          // With a host, the draft's owner is the signed-in person (never a name in the body, and never one
+          // DQL would otherwise look up and save in dql.config.json).
+          owner: hostedOwner ?? owner,
+          persistOwner: !hostedRequest(),
           domain,
           modelAreaId,
           contextPack,
           domainContext,
-          userId,
+          userId: hostedRequest() ? currentPrincipal()?.id : userId,
           skills,
           dbtManifestPath: resolveDbtManifestPath(projectRoot, loadProjectConfig(projectRoot)),
           // Reflect-before-certify probe (P2): run the candidate block's SQL to learn
@@ -16604,13 +17139,15 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
       try {
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
         const principal = currentPrincipal();
+        // With host hooks but nobody placed (a host without resolvePrincipal), the machine's own owner is no one's
+        // identity here: a neutral answer, naming nobody. Single-user names the local owner, as before.
         res.end(serializeJSON(principal
           ? {
             owner: hostActor() ?? principal.displayName ?? principal.id,
             principal: { id: principal.id, kind: principal.kind, displayName: principal.displayName, email: principal.email, groups: principal.groups ?? [] },
             ...(viewerAppId ? { viewer: { appId: viewerAppId } } : {}),
           }
-          : { owner: resolveLocalOwner(projectRoot) }));
+          : hostHooks ? { owner: '', principal: null } : { owner: resolveLocalOwner(projectRoot) }));
       } catch (error) {
         res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(serializeJSON({ error: error instanceof Error ? error.message : String(error) }));
@@ -16631,36 +17168,37 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
         }
         const actions: DqlAction[] = ['project.write', 'dataset.author', 'dataset.certify', 'hint.review', 'app.author', 'app.publish', 'ask', 'research', 'query.run', 'export', 'schedule.manage', 'git.review', 'connection.manage', 'settings.manage'];
         const capabilities: Record<string, boolean> = {};
+        // For an action the person may not take: the host's reason and where to go (HH-12), so a screen can say so up front.
+        const refusals: Record<string, { reason?: string; next?: { label: string; href: string } }> = {};
+        const decisions = new Map<DqlAction, Awaited<ReturnType<typeof authorizeHostRequest>>>();
+        for (const action of actions) decisions.set(action, await authorizeHostRequest(hostHooks!, principal, { action, resource: { type: 'project' } }));
+        // Exporting a statement also runs it (the SQL export route asks both): the map says so from the same two decisions.
+        const exportDecision = decisions.get('export')!.allow ? decisions.get('query.run')! : decisions.get('export')!;
+        decisions.set('export', exportDecision);
         for (const action of actions) {
-          capabilities[action] = (await authorizeHostRequest(hostHooks!, principal, { action, resource: { type: 'project' } })).allow;
+          const decision = decisions.get(action)!;
+          capabilities[action] = decision.allow;
+          if (!decision.allow && (decision.reason || decision.next)) refusals[action] = { ...(decision.reason ? { reason: decision.reason.slice(0, 280) } : {}), ...(decision.next ? { next: decision.next } : {}) };
         }
-        let extras: import('./host/request-context.js').DqlHostUi = {};
+        let answered: unknown = {};
         try {
-          extras = (await hostHooks?.ui?.(principal)) ?? {};
+          answered = await hostHooks?.ui?.(principal);
         } catch {
-          extras = {};
+          answered = {};
         }
-        const sameOrigin = (href: unknown): href is string => typeof href === 'string' && href.startsWith('/') && !href.startsWith('//');
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
         res.end(serializeJSON({
           host: true,
           person: { id: principal.id, name: principal.displayName ?? principal.email ?? principal.id, ...(principal.email ? { email: principal.email } : {}), kind: principal.kind },
           capabilities,
-          ...(sameOrigin(extras.signOutUrl) ? { signOutUrl: extras.signOutUrl } : {}),
-          ...(typeof extras.environment === 'string' ? { environment: extras.environment.slice(0, 80) } : {}),
-          ...(safeHostBanner(extras.banner) ? { banner: safeHostBanner(extras.banner) } : {}),
-          // At most 12 links in DQL's rail and 12 in the person menu, each in the host's order.
-          links: capHostLinksByPlacement((extras.links ?? []).filter((link) => sameOrigin(link.href) && typeof link.label === 'string'), 12)
-            .map((link) => ({ id: String(link.id), label: link.label.slice(0, 60), href: link.href, placement: link.placement === 'nav' ? 'nav' : 'menu', ...(Number.isInteger(link.badge) && link.badge! > 0 ? { badge: Math.min(link.badge!, 999) } : {}), ...(link.icon && HOST_ICONS.has(link.icon) ? { icon: link.icon } : {}) })),
-          answerActions: (extras.answerActions ?? []).filter((action) => sameOrigin(action.url) && typeof action.label === 'string').slice(0, 4)
-            .map((action) => {
-              const on = Array.isArray(action.on) ? action.on.filter((kind) => kind === 'review' || kind === 'unanswered' || kind === 'answered') : [];
-              return { id: String(action.id), label: action.label.slice(0, 60), url: action.url, ...(action.description ? { description: String(action.description).slice(0, 200) } : {}), on: on.length ? [...new Set(on)] : ['review'] };
-            }),
+          ...(Object.keys(refusals).length ? { refusals } : {}),
+          // The host's additions, each field of its own shape or left out: a malformed one never fails the map.
+          ...safeHostUiExtras(answered),
         }));
       } catch (error) {
-        res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
-        res.end(serializeJSON({ error: error instanceof Error ? error.message : String(error) }));
+        // Never the failure's own words: a plain sentence and a reference (the app keeps its last map and tries again).
+        res.writeHead(503, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
+        res.end(serializeJSON({ error: plainFailureMessage(logUnderReference('Reading what this person may do failed', error), 'DQL could not load what you may do here.') }));
       }
       return;
     }
@@ -16670,12 +17208,14 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
     const hostAnswerMatch = /^\/api\/host\/answers\/([^/]+)$/.exec(path);
     if (req.method === 'GET' && hostAnswerMatch) {
       const principal = currentPrincipal();
-      const run = hostIdentity && principal?.source === 'host' ? await agentRunStore.get(decodeURIComponent(hostAnswerMatch[1])) : undefined;
-      if (!run) {
+      const stored = hostIdentity && principal?.source === 'host' ? await agentRunStore.get(decodeURIComponent(hostAnswerMatch[1])) : undefined;
+      if (!stored) {
         res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
         res.end(serializeJSON({ error: 'Answer not found.' }));
         return;
       }
+      // HH-14: the answer as its owner may see it now (values only where its figures are shown).
+      const run = await runForReader(stored);
       res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
       const facts = answerFactsFromRun(run as unknown as Record<string, unknown>);
       // Values only when the host asks, and only for the answer's owner (the store is owner-scoped).
@@ -16699,12 +17239,14 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
           answered = {};
         }
         const states = new Set(['requested', 'in_progress', 'checked', 'certified', 'declined']);
+        const byRun = answered && typeof answered === 'object' && !Array.isArray(answered) ? answered : {};
         for (const id of visible) {
-          const status = answered[id];
-          if (!status || !states.has(status.state) || typeof status.label !== 'string') continue;
-          const href = typeof status.href === 'string' && status.href.startsWith('/') && !status.href.startsWith('//') ? status.href : undefined;
+          const status = byRun[id] as Partial<import('./host/request-context.js').DqlAnswerStatus> | undefined;
+          if (!status || typeof status !== 'object') continue;
+          if (typeof status.state !== 'string' || !states.has(status.state) || typeof status.label !== 'string') continue;
+          const href = typeof status.href === 'string' && status.href.startsWith('/') && !status.href.startsWith('//') && !status.href.includes('\\') ? status.href : undefined;
           statuses[id] = {
-            state: status.state,
+            state: status.state as import('./host/request-context.js').DqlAnswerStatus['state'],
             label: status.label.slice(0, 80),
             ...(typeof status.detail === 'string' ? { detail: status.detail.slice(0, 280) } : {}),
             ...(href ? { href } : {}),
@@ -16732,7 +17274,7 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
           return [];
         }
       }
-      return readHomeState(projectRoot, homePersonKey(principal)).follows;
+      return readHomeState(projectRoot, ownFilesKey() ?? NOBODY_FILES).follows;
     };
     const mayOpenAppForHome = async (app: import('@duckcodeailabs/dql-core').AppDocument): Promise<boolean> => {
       const principal = currentPrincipal();
@@ -16748,7 +17290,7 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
           res.end(serializeJSON({ error: 'A page link opens one App only.' }));
           return;
         }
-        const state = readHomeState(projectRoot, homePersonKey(principal));
+        const state = readHomeState(projectRoot, ownFilesKey() ?? NOBODY_FILES);
         const follows = await followsForPerson();
         type HomeApp = { id: string; name: string; domain: string; description?: string; homePageId?: string; pages: Array<{ id: string; title: string }>; following: boolean; lastOpenedAt?: string };
         const apps: HomeApp[] = [];
@@ -16882,11 +17424,18 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
       const follow: DqlFollow = { appId, ...(pageId ? { pageId } : {}), title: page ? `${app.name} · ${page.metadata.title}` : app.name };
       try {
         const store = homeHooks()?.follows;
+        if (ownFilesKey() === null) {
+          res.writeHead(403, { 'Content-Type': 'application/json; charset=utf-8' });
+          res.end(serializeJSON({ error: 'Sign in to follow a page.', code: 'PERMISSION_DENIED' }));
+          return;
+        }
         if (store && principal?.source === 'host') await store.set(principal, follow, body.following);
         else setLocalFollow(projectRoot, homePersonKey(principal), follow, body.following);
       } catch (error) {
+        // The host's (or the file system's) own words go to the log under a reference, never to the person.
+        const reference = logUnderReference('Saving a follow failed', error);
         res.writeHead(502, { 'Content-Type': 'application/json; charset=utf-8' });
-        res.end(serializeJSON({ error: `Following could not be saved: ${error instanceof Error ? error.message : String(error)}` }));
+        res.end(serializeJSON({ error: `Following could not be saved. Try again; if it keeps happening, ask your administrator about reference ${reference}.` }));
         return;
       }
       url.searchParams.set('page', pageId ?? '');
@@ -16896,7 +17445,7 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
 
     // HH-16: who an App is for — identity-provider groups in dql.app.json.
     // A change to the App's file, so `app.author` (a host that follows git
-    // sends it through a draft space and review).
+    // sends it through a private workspace and review).
     const audienceRoute = path.match(/^\/api\/apps\/([^/]+)\/audience$/);
     if (audienceRoute && req.method === 'PUT') {
       const appId = decodeURIComponent(audienceRoute[1]!);
@@ -16918,8 +17467,11 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
     //    are shared; PERSONAL skills (user set) are user-bound. ────────────────
     if (req.method === 'GET' && path === '/api/skills/settings') {
       try {
+        const skillSettings = buildSkillPathSettings(projectRoot);
+        // With a host, no server folder path.
+        const { resolvedPath: _resolved, ...withoutPath } = skillSettings;
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-        res.end(serializeJSON(buildSkillPathSettings(projectRoot)));
+        res.end(serializeJSON(hostedRequest() ? withoutPath : skillSettings));
       } catch (error) {
         res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(serializeJSON({ error: error instanceof Error ? error.message : String(error) }));
@@ -16936,10 +17488,16 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
           res.end(serializeJSON({ error: 'Provide an existing Skills folder path.' }));
           return;
         }
+        // With a host, a skills folder is a folder of the project (never the server's other folders), and no server path is named.
+        if (hostedRequest() && hostedProjectPath(projectRoot, requestedPath, { privateDrafts: false }) === null) {
+          res.writeHead(403, { 'Content-Type': 'application/json; charset=utf-8' });
+          res.end(serializeJSON({ error: HOSTED_FILE_REFUSED, code: 'PERMISSION_DENIED' }));
+          return;
+        }
         const resolvedPath = resolve(projectRoot, requestedPath);
         if (!existsSync(resolvedPath) || !statSync(resolvedPath).isDirectory()) {
           res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
-          res.end(serializeJSON({ error: `Skills folder not found: ${resolvedPath}` }));
+          res.end(serializeJSON({ error: hostedRequest() ? 'Skills folder not found.' : `Skills folder not found: ${resolvedPath}` }));
           return;
         }
         const configPath = join(projectRoot, 'dql.config.json');
@@ -16966,7 +17524,8 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
       try {
         const skills = [
           ...loadSkills(projectRoot).skills.filter((skill) => skill.scope === 'project'),
-          ...loadPrivateSkills(projectRoot),
+          // Private skills sit in one folder of the server: listed only where one person uses it (or without a host).
+          ...(privateDraftsAllowed() ? loadPrivateSkills(projectRoot) : []),
         ].map(serializeSkill);
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(serializeJSON({ skills }));
@@ -17019,6 +17578,11 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
           return;
         }
         const wantsPrivate = (body?.skill as { visibility?: unknown } | undefined)?.visibility === 'private';
+        if (wantsPrivate && !privateDraftsAllowed()) {
+          res.writeHead(403, { 'Content-Type': 'application/json; charset=utf-8' });
+          res.end(serializeJSON({ error: PRIVATE_DRAFTS_ELSEWHERE, code: 'PERMISSION_DENIED' }));
+          return;
+        }
         if (wantsPrivate) {
           const target = privateSkillPath(projectRoot, input.id);
           const sharedTwin = loadSkills(projectRoot).skills.some((skill) => skill.id === input.id);
@@ -17061,6 +17625,11 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
         const body = (await readJSON(req).catch(() => ({}))) as { id?: unknown };
         const identity = typeof body.id === 'string' ? body.id.trim() : '';
         const privateId = privateSkillLocalId(identity);
+        if (privateId && !privateDraftsAllowed()) {
+          res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' });
+          res.end(serializeJSON({ ok: false, error: 'Private skill not found.' }));
+          return;
+        }
         if (!privateId) {
           res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
           res.end(serializeJSON({ ok: false, error: 'Only a private skill can be published.' }));
@@ -17115,6 +17684,11 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
           return;
         }
         const privateId = privateSkillLocalId(id);
+        if (privateId && !privateDraftsAllowed()) {
+          res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' });
+          res.end(serializeJSON({ error: 'Private skill not found.' }));
+          return;
+        }
         if (privateId) {
           // Written back to its own private file. Resolving it through
           // `loadSkills` would miss it and write a shared copy instead —
@@ -17151,7 +17725,7 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
         const privateId = privateSkillLocalId(id);
         if (privateId) {
           const target = privateSkillPath(projectRoot, privateId);
-          if (!existsSync(target)) {
+          if (!existsSync(target) || !privateDraftsAllowed()) {
             res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' });
             res.end(serializeJSON({ error: `Private skill not found: ${privateId}` }));
             return;
@@ -17499,15 +18073,18 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
       return;
     }
 
+    // With a host, which keys the server's environment holds is for whoever manages its settings.
     if (req.method === 'GET' && path === '/api/settings/env-status') {
+      const manages = await hostedMay('settings.manage');
       res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-      res.end(serializeJSON({ groups: collectSettingsEnvStatus() }));
+      res.end(serializeJSON({ groups: manages ? collectSettingsEnvStatus() : collectSettingsEnvStatus().map((group) => ({ ...group, vars: group.vars.map((item) => ({ ...item, present: false })) })) }));
       return;
     }
 
     if (req.method === 'GET' && path === '/api/settings/providers') {
+      const manages = await hostedMay('settings.manage');
       res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-      res.end(serializeJSON({ providers: listProviderSettings(projectRoot) }));
+      res.end(serializeJSON({ providers: manages ? listProviderSettings(projectRoot) : listProviderSettings(projectRoot).map(({ apiKeyPreview: _preview, ...provider }) => ({ ...provider, hasApiKey: false, baseUrl: undefined, ...(provider.source === 'env' ? { source: 'none' as const, configured: false, enabled: false } : {}) })) }));
       return;
     }
 
@@ -17848,7 +18425,8 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
           const includeArchived = url.searchParams.get('archived') === '1';
           res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
           res.end(serializeJSON({
-            threads: await store.listThreads({ limit: Number.isFinite(limit) ? limit : 50, includeArchived, ...(conversationOwnerId() ? { ownerId: conversationOwnerId() } : {}) }),
+            // A host's own store may not honour ownerId: what it returns is filtered again here.
+            threads: conversationOwnerId() === null ? [] : (await store.listThreads({ limit: Number.isFinite(limit) ? limit : 50, includeArchived, ...(conversationOwnerId() ? { ownerId: conversationOwnerId()! } : {}) })).filter((thread) => conversationVisibleToCaller(thread)),
             // Browser cache identity only. It is an opaque one-way fingerprint
             // and intentionally does not become conversation/trace evidence.
             projectIdentity: conversationProjectIdentity,
@@ -17875,8 +18453,8 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
           const limit = Number(url.searchParams.get('limit') ?? '10');
           res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
           res.end(serializeJSON({
-            turns: query.trim()
-              ? await store.searchTurns({ query, limit: Number.isFinite(limit) ? limit : 10, ...(conversationOwnerId() ? { ownerId: conversationOwnerId() } : {}) })
+            turns: query.trim() && conversationOwnerId() !== null
+              ? await visibleTurns(store, await store.searchTurns({ query, limit: Number.isFinite(limit) ? limit : 10, ...(conversationOwnerId() ? { ownerId: conversationOwnerId()! } : {}) }))
               : [],
           }));
           return;
@@ -17938,13 +18516,25 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
               return;
             }
             const scopeRaw = agentRunString(record.scope);
-            const scope = scopeRaw === 'notebook' || scopeRaw === 'project' || scopeRaw === 'user' ? scopeRaw : 'project';
+            // With a host, a promoted turn is the person's own note unless they ask for one for everyone.
+            const scope = scopeRaw === 'notebook' || scopeRaw === 'project' || scopeRaw === 'user' ? scopeRaw : hostedRequest() ? 'user' : 'project';
+            // A note for everyone keeps the question, not the answer: its figures were read under one person's row rules.
+            const answerForNote = hostedRequest() && scope !== 'user'
+              ? '(the answer stays with the person who asked: a note for everyone keeps the question only)'
+              : turn.answerSummary ?? turn.answerText ?? '(no answer summary)';
+            const refusal = await memoryWriteRefusal(scope, null);
+            if (refusal) {
+              res.writeHead(refusal.status, { 'Content-Type': 'application/json; charset=utf-8' });
+              res.end(serializeJSON({ error: refusal.error, code: 'PERMISSION_DENIED' }));
+              return;
+            }
             const memory = openMemoryStore();
             try {
               const saved = await memory.upsert({
+                ...(hostedRequest() && scope === 'user' ? { scopeId: currentPrincipal()?.id } : {}),
                 scope,
                 title: agentRunString(record.title) ?? turn.question.slice(0, 120),
-                content: `Q: ${turn.question}\nA: ${turn.answerSummary ?? turn.answerText ?? '(no answer summary)'}`,
+                content: `Q: ${turn.question}\nA: ${answerForNote}`,
                 tags: ['conversation', threadId],
                 source: 'conversation',
                 confidence: 0.6,
@@ -17995,8 +18585,9 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
       const memory = openMemoryStore();
       try {
         const scope = url.searchParams.get('scope') ?? undefined;
+        const listed = await memory.list(isMemoryScope(scope) ? scope : undefined);
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-        res.end(serializeJSON({ memories: await memory.list(isMemoryScope(scope) ? scope : undefined) }));
+        res.end(serializeJSON({ memories: listed.filter((item) => memoryVisible(item)) }));
       } finally {
         await memory.close?.();
       }
@@ -18012,10 +18603,18 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
       }
       const memory = openMemoryStore();
       try {
+        // With a host: a person's own note is theirs (keyed by who they are); a note for everyone changes what the
+        // model is told for everyone, so it is a change to the project.
+        const refusal = await memoryWriteRefusal(body.scope, typeof body.id === 'string' ? await memory.get(body.id) : null);
+        if (refusal) {
+          res.writeHead(refusal.status, { 'Content-Type': 'application/json; charset=utf-8' });
+          res.end(serializeJSON({ error: refusal.error, code: 'PERMISSION_DENIED' }));
+          return;
+        }
         const saved = await memory.upsert({
           id: typeof body.id === 'string' ? body.id : undefined,
           scope: body.scope,
-          scopeId: typeof body.scopeId === 'string' ? body.scopeId : undefined,
+          scopeId: hostedRequest() && body.scope === 'user' ? currentPrincipal()?.id : typeof body.scopeId === 'string' ? body.scopeId : undefined,
           title: body.title,
           content: body.content,
           tags: Array.isArray(body.tags) ? body.tags.map(String) : undefined,
@@ -18044,6 +18643,13 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
       }
       const memory = openMemoryStore();
       try {
+        const existing = await memory.get(id);
+        const refusal = existing ? await memoryWriteRefusal(existing.scope, existing) : hostedRequest() ? { status: 404, error: 'Note not found.' } : null;
+        if (refusal) {
+          res.writeHead(refusal.status, { 'Content-Type': 'application/json; charset=utf-8' });
+          res.end(serializeJSON({ error: refusal.error, code: 'PERMISSION_DENIED' }));
+          return;
+        }
         await memory.delete(id);
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(serializeJSON({ ok: true }));
@@ -18054,6 +18660,12 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
     }
 
     if (req.method === 'POST' && path === '/api/agent/memory/default-files') {
+      const refusal = await memoryWriteRefusal('project', null);
+      if (refusal) {
+        res.writeHead(refusal.status, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(serializeJSON({ error: refusal.error, code: 'PERMISSION_DENIED' }));
+        return;
+      }
       const files = ensureDefaultMemoryFiles(projectRoot).map((p) => relative(projectRoot, p));
       res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(serializeJSON({ ok: true, files }));
@@ -18067,7 +18679,12 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
     if (req.method === 'GET' && path === '/api/agent/hints') {
       try {
         const status = url.searchParams.get('status');
-        const all = listHintsFromGit(projectRoot);
+        // With a host, a hint nobody has reviewed yet (its question, SQL and wording) is its author's and its
+        // reviewers': reviewed hints are the project's learning and are listed to everyone.
+        const listedHints = listHintsFromGit(projectRoot);
+        const principal = currentPrincipal();
+        const mayReview = !hostedRequest() || (principal && (!hostHooks?.authorize || (await authorizeHostRequest(hostHooks, principal, { action: 'hint.review', resource: { type: 'project' } })).allow));
+        const all = mayReview ? listedHints : listedHints.filter((hint) => hint.status === 'approved' || hint.status === 'retired' || (!!hostActor() && hint.author === hostActor()));
         const selected = (status ? all.filter((hint) => hint.status === status) : all)
           .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
           .slice(0, 200);
@@ -18410,6 +19027,9 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
           connection: requireActiveConnection(),
           pageRunner: createRuntimePageRunner(`http://127.0.0.1:${req.socket.localPort}`, fetch, pass),
           log: { log: () => undefined, error: () => undefined, warn: () => undefined } as unknown as Console,
+          // With a host the page runs as whoever the request names (the schedule's run-as person, for a
+          // scheduler): its digest baseline is that person's, never set by a run someone else started.
+          ...(hostHooks ? { baselineOwner: homePersonKey(currentPrincipal()) } : {}),
         });
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(serializeJSON({ ok: !record.error, appId, scheduleId, startedAt: record.startedAt, ...(record.error ? { error: record.error } : {}), tiles: record.queries.length, failedTiles: record.queries.filter((query) => query.error).length, notifications: record.notifications ?? [] }));
@@ -18463,7 +19083,7 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
         // HH-8: a host's key service signs when it has one; the export names who made it.
         const signer = hostHooks?.signing ?? localSnapshotSigner(loadOrCreateSnapshotKey(projectRoot));
         const signedBy = hostActor();
-        const signed = await signSnapshotWith({
+        const signing = async () => signSnapshotWith({
           ...(signedBy ? { signedBy } : {}),
           appId,
           appTitle: manifest.apps?.[appId]?.name ?? appId,
@@ -18475,6 +19095,19 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
           trust: { certified: trusts.filter((state: string) => state === 'certified').length, total: trusts.length },
           body: pageBody,
         }, signer);
+        // A host's key service that fails, answers late or answers something that is not a signature never yields
+        // an export that claims to be signed: the export is checked against the key it names before it is given.
+        let signed: Awaited<ReturnType<typeof signing>>;
+        try {
+          signed = await signing();
+          const check = verifySnapshot(signed.html);
+          if (!check.signatureValid || !check.contentIntact) throw new Error(`the signature does not verify (${check.problems.join(' ')})`);
+        } catch (error) {
+          const reference = logUnderReference('Signing an export failed', error);
+          res.writeHead(503, { 'Content-Type': 'application/json; charset=utf-8' });
+          res.end(serializeJSON({ ok: false, error: `This export could not be signed right now. Try again; if it keeps happening, ask your administrator about reference ${reference}.` }));
+          return;
+        }
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(serializeJSON({
           ok: true,
@@ -18504,7 +19137,7 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
       };
       try {
         if (req.method === 'GET' && !monitorsRoute[3]) {
-          send(200, { ok: true, schedules: listPageMonitors(projectRoot, appId, dashboardId) });
+          send(200, { ok: true, schedules: listPageMonitors(projectRoot, appId, dashboardId, hostHooks ? homePersonKey(currentPrincipal()) : undefined) });
           return;
         }
         if (req.method === 'POST' && !monitorsRoute[3]) {
@@ -18540,13 +19173,13 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
             ...(deliver ? { deliver } : {}),
           });
           projectSnapshots.invalidate();
-          send(200, { ok: true, ...added, path: relative(projectRoot, added.path), schedules: listPageMonitors(projectRoot, appId, dashboardId) });
+          send(200, { ok: true, ...added, path: relative(projectRoot, added.path), schedules: listPageMonitors(projectRoot, appId, dashboardId, hostHooks ? homePersonKey(currentPrincipal()) : undefined) });
           return;
         }
         if (req.method === 'DELETE' && monitorsRoute[3] && monitorsRoute[4]) {
           const removed = removePageMonitor(projectRoot, appId, decodeURIComponent(monitorsRoute[3]), decodeURIComponent(monitorsRoute[4]));
           projectSnapshots.invalidate();
-          send(200, { ok: true, path: relative(projectRoot, removed.path), schedules: listPageMonitors(projectRoot, appId, dashboardId) });
+          send(200, { ok: true, path: relative(projectRoot, removed.path), schedules: listPageMonitors(projectRoot, appId, dashboardId, hostHooks ? homePersonKey(currentPrincipal()) : undefined) });
           return;
         }
         send(405, { ok: false, error: 'Method not allowed.' });
@@ -18559,7 +19192,8 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
     // Story editions of a published page, newest first (RFC 0008 step 8).
     const storyEditionsRoute = path.match(/^\/api\/apps\/([^/]+)\/dashboards\/([^/]+)\/story-editions$/);
     if (req.method === 'GET' && storyEditionsRoute) {
-      const editions = listStoryEditions(projectRoot, decodeURIComponent(storyEditionsRoute[1]), decodeURIComponent(storyEditionsRoute[2]), homePersonKey(currentPrincipal())).reverse();
+      const editionsKey = ownFilesKey();
+      const editions = editionsKey === null ? [] : listStoryEditions(projectRoot, decodeURIComponent(storyEditionsRoute[1]), decodeURIComponent(storyEditionsRoute[2]), editionsKey).reverse();
       res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(serializeJSON({ editions }));
       return;
@@ -18594,13 +19228,13 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
         const providerConfig = selected ? getEffectiveProviderConfig(projectRoot, selected.id) : undefined;
         // Result values reach the model only inside the privacy boundary: on
         // this machine, or wherever the host's boundary rule allows (HH-5).
-        const localModel = selected
-          ? resultValuesMayReachModel(
-            { id: selected.id, name: selected.provider.name, ...(providerConfig?.model ? { model: providerConfig.model } : {}), ...(providerConfig?.baseUrl ? { baseUrl: providerConfig.baseUrl } : {}) },
-            () => selected.id === 'ollama' && isLoopbackUrl(providerConfig?.baseUrl ?? 'http://127.0.0.1:11434'),
-            storyValueRelations(evidence.storyBindings, evidence.tileRelations),
-          )
-          : false;
+        const localModel = valuesMayReachProvider({
+          selected,
+          projectRoot,
+          hosted: Boolean(hostHooks),
+          relations: storyValueRelations(evidence.storyBindings, evidence.tileRelations)?.relations,
+          withoutHost: 'this-machine',
+        });
         const model = providerConfig?.model;
         const input: StoryDraftInput = {
           pageTitle: page.metadata.title,
@@ -19075,6 +19709,9 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
           res.end(serializeJSON({ error: `Dashboard "${dashboardId}" not found in ${runSurface === 'app-builds' ? 'local App draft' : 'App'} "${appId}"` }));
           return;
         }
+        // A published page runs as this reader may see it: an earlier static answer tile whose figures depend on the
+        // reader is the placeholder for anyone who may not replace it (and so in the run's story, snapshot and digest).
+        if (runSurface !== 'app-builds') loaded.dashboard = await readerPage(appId, loaded.dashboard);
         // "Why did it move?" (RFC 0008 step 7): a reader asks for a driver
         // analysis of one Dataset tile. The probe joins this page run as one
         // transient driver tile, so it gets the page's filters and access
@@ -19189,7 +19826,9 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
           res.end(serializeJSON({ error: 'A full dashboard run cannot include tile, visible, affected, or hierarchy-interaction scheduling bounds.' }));
           return;
         }
-        activeDashboardRunKey = dashboardRunSupersessionKey(runSurface, appId, dashboardId, body.runScope);
+        const supersessionKey = dashboardRunSupersessionKey(runSurface, appId, dashboardId, body.runScope);
+        // One viewer's newer interaction supersedes only that person's own runs.
+        activeDashboardRunKey = supersessionKey ? `${currentPrincipal()?.id ?? ''}\u0000${supersessionKey}` : undefined;
         const priorDashboardRun = activeDashboardRunKey ? activeDashboardRuns.get(activeDashboardRunKey) : undefined;
         // The newest interaction owns this mounted viewer scope. A caller
         // that does not provide a scope retains legacy independent-request
@@ -19220,6 +19859,8 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
           && !activeDashboardRun.controller.signal.aborted,
         );
         const tiles: Array<{ tileId: string; status: string; [key: string]: any }> = [];
+        // HH-14: an AI-written pin's figures on this page, for a person the host keeps needs-review figures from.
+        const pinFiguresWithheld = (await figuresRuleForRequest()) === 'withhold_review';
         // The saved TileQuery and a hierarchy-interaction query have distinct
         // authority. Keep the latter in run-local memory so a chart answer is
         // grounded in the query that actually produced its settled rows while
@@ -19520,7 +20161,7 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
           }
           if (item.aiPin) {
             try {
-              localApps.current ??= new LocalAppStorage(defaultLocalAppsDbPath(projectRoot));
+              localApps.current ??= new LocalAppStorage(defaultLocalAppsDbPath(projectRoot), { owner: currentRecordOwner() });
             } catch (err) {
               tiles.push({
                 tileId: item.i,
@@ -19585,6 +20226,7 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
                 ) ?? pin;
               }
             }
+            const pinWithheld = pinFiguresWithheld && pin.certification !== 'certified' && pinArtifact?.trustState !== 'certified';
             tiles.push({
               tileId: item.i,
               status: 'ok',
@@ -19592,8 +20234,9 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
               title: item.title ?? pin.title,
               viz: item.viz,
               chartConfig: mergeDashboardChartConfig(renderedPinChartConfig, item),
-              result: renderedPinResult,
-              aiPin: pin,
+              result: pinWithheld ? (previewWithoutFigures(renderedPinResult) ?? { columns: [], rowCount: 0, rows: [] }) : renderedPinResult,
+              aiPin: pinWithheld ? pinForReader(pin, true) : pin,
+              ...(pinWithheld ? { figuresWithheld: true } : {}),
               citation: {
                 kind: 'ai_pin',
                 name: pin.title,
@@ -19645,9 +20288,8 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
                 dashboardValues: dashboardVariables,
                 requestValues: variables,
               });
-              draftTargetConnection = isConnectionConfig(body.connection)
-                ? body.connection
-                : connection ?? undefined;
+              draftTargetConnection = requestConnection(body as Record<string, unknown>)
+                ?? connection ?? undefined;
               draftRepairPlan = buildExecutionPlan(
                 { id: item.i, type: 'dql', source: draftSource, title: item.title ?? item.i },
                 {
@@ -19943,7 +20585,7 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
                   block,
                   sourceId: source.sourceId,
                   sourceRevision: currentSourceRevision,
-                  proofs: loadDatasetGrainProofs(projectRoot),
+                  proofs: datasetProofsForRequest(),
                   authority,
                   parameterValues: invocation.values,
                 });
@@ -20852,7 +21494,7 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
               const knownModels = new Set(semanticLayer.listSemanticModels().map((model) => model.name));
               const missingModels = item.semantic.semanticModelRefs.filter((model) => !knownModels.has(model));
               if (missingModels.length) throw new Error(`Semantic definition changed; missing model(s): ${missingModels.join(', ')}`);
-              const targetConnection = requireActiveConnection(isConnectionConfig(body.connection) ? body.connection : connection);
+              const targetConnection = requireActiveConnection(requestConnection(body as Record<string, unknown>) ?? connection);
               const tableMapping = await resolveSemanticTableMapping(executor, targetConnection, semanticLayer, projectRoot);
               const activeFilters = dashboardSemanticFiltersForTile(executionDashboard, item, dashboardVariables);
               const staticFilters = (item.semantic.filters ?? []).map((filter) => ({
@@ -21004,7 +21646,7 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
               });
               continue;
             }
-            blockTargetConnection = requireActiveConnection(isConnectionConfig(body.connection) ? body.connection : connection);
+            blockTargetConnection = requireActiveConnection(requestConnection(body as Record<string, unknown>) ?? connection);
             const tableMapping = await resolveSemanticTableMapping(executor, blockTargetConnection, semanticLayer, projectRoot);
             const boundParameters = dashboardTileParameterValues({
               item,
@@ -21665,7 +22307,7 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
         // A complete run of a published story page is an edition: readers can
         // see what changed since the last one. Recording never fails a run.
         const scheduledRun = scheduledPageRuns.get(req);
-        if (runSurface === 'apps' && !mcpRequest && !staleRun && !partialRun && !incompleteRun && loaded.dashboard.narrative?.presentation === 'story') {
+        if (runSurface === 'apps' && !mcpRequest && !staleRun && !partialRun && !incompleteRun && loaded.dashboard.narrative?.presentation === 'story' && ownFilesKey() !== null) {
           try {
             recordStoryEdition({
               projectRoot,
@@ -21709,9 +22351,9 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
                   runId,
                   at: edition.at,
                   ...(edition.scheduleId ? { scheduleId: edition.scheduleId } : {}),
-                })).catch(() => undefined);
+                })).catch((error) => { logUnderReference('Telling the host of a new page edition failed', error); });
               }
-            } else if (currentPrincipal()?.source !== 'link') {
+            } else if (currentPrincipal()?.source !== 'link' && ownFilesKey() !== null) {
               recordPageVisit(projectRoot, homePersonKey(currentPrincipal()), {
                 appId,
                 pageId: dashboardId,
@@ -21742,11 +22384,12 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
             chartContexts,
             failedTileContexts,
             tileRelations,
+            ownerFingerprint: activePersonaRunOwnerFingerprint(),
             expiresAt: Date.now() + 15 * 60_000,
           });
         }
         if (runSurface === 'app-builds' && !staleRun && !partialRun) {
-          const receiptStorage = new LocalAppStorage(defaultLocalAppsDbPath(projectRoot));
+          const receiptStorage = new LocalAppStorage(defaultLocalAppsDbPath(projectRoot), { owner: currentRecordOwner() });
           try {
             receiptStorage.saveAppPreviewEvidence({
               runId,
@@ -21853,6 +22496,12 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
             res.end(serializeJSON({ error: tile?.error ?? (staleRun ? 'The page changed while it ran. Export again.' : 'This tile has no result to export.'), code: 'EXPORT_FAILED' }));
             return;
           }
+          // A tile that shows only part of its result is not made into a file that would be cut without a word.
+          if ((result as { truncated?: unknown }).truncated === true) {
+            res.writeHead(413, { 'Content-Type': 'application/json; charset=utf-8' });
+            res.end(serializeJSON({ error: 'This tile shows only the first rows of its result, so its file would be cut. Narrow it with the page\'s filters, or export its query from a notebook.', code: 'EXPORT_TOO_LARGE' }));
+            return;
+          }
           const rows = result.rows as Array<Record<string, unknown>>;
           const columns = Array.isArray(result.columns)
             ? (result.columns as unknown[]).map((column) => (typeof column === 'string' ? column : String((column as { name?: unknown })?.name ?? ''))).filter(Boolean)
@@ -21904,6 +22553,7 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
     // Apps, dashboards, persona — see apps-api.ts. Returns true if handled.
     if (path.startsWith('/api/apps')
       || path.startsWith('/api/app-builds')
+      || path === '/api/app-answer-tiles'
       || path.startsWith('/api/app-recoveries')
       || path.startsWith('/api/visualizations')
       || path === '/api/persona') {
@@ -21915,6 +22565,19 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
           path,
           projectRoot,
           datasetsEnabled: datasetsAppFeatureEnabled(projectConfig),
+          answerFiguresRule: figuresRuleForRequest,
+          // With a host, an Ask answer's text is not shown to others where its figures depend on the reader.
+          ...(hostHooks ? {
+            figuresDependOnReader: (relations: string[] | undefined) => hostFiguresDependOnReader(currentHostHooks() ?? hostHooks, relations),
+            mayKeepAnswerText: mayKeepAnswerText,
+            askRunReads: async (runId: string) => {
+              const run = await agentRunStore.get(runId);
+              if (!run) return null;
+              const sql = answerSql(run as { artifacts?: unknown[] })?.sql;
+              const relations = sql ? relationsOfStatements([sql], connection?.driver ?? 'duckdb') : undefined;
+              return { ...(relations ? { relations } : {}), ...(sql ? { sql } : {}), question: run.question };
+            },
+          } : {}),
           ...(hostIdentity ? {
             // A host's reader sees the Apps they may open: the App's audience (HH-16), then the host's own rule.
             mayViewApp: async (appId: string) => {
@@ -21997,7 +22660,9 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
               if (currentSnapshot.error || currentSnapshot.stale || currentSnapshot.snapshotId !== context.snapshotId) {
                 return { ok: false as const, error: 'The project changed after this chart ran. Run the current chart again before asking about it.' };
               }
-              const currentDashboard = loadAppDashboard(projectRoot, appId, dashboardId)?.dashboard;
+              const storedDashboard = loadAppDashboard(projectRoot, appId, dashboardId)?.dashboard;
+              // The page as the run saw it for this reader (readerPage), so its fingerprint compares like with like.
+              const currentDashboard = storedDashboard ? await readerPage(appId, storedDashboard) : undefined;
               const currentDashboardFingerprint = currentDashboard
                 ? `sha256:${createHash('sha256').update(JSON.stringify(currentDashboard)).digest('hex')}`
                 : undefined;
@@ -22011,8 +22676,8 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
                 || tileQueryHash(currentTile.query) !== context.authoredQueryFingerprint) {
                 return { ok: false as const, error: 'This Dataset tile changed after the chart ran. Run the current chart again before asking about it.' };
               }
-              const currentPersonaFingerprint = activePersonaPolicyFingerprint();
-              if (currentPersonaFingerprint !== context.personaPolicyFingerprint) {
+              // The person (and App persona) who ran the chart, whatever this question's destination (RFC 0010 purposeAttributes).
+              if (activePersonaRunOwnerFingerprint() !== run.ownerFingerprint) {
                 return { ok: false as const, error: 'The active App persona changed after this chart ran. Run the chart again before asking about it.' };
               }
               try {
@@ -22062,12 +22727,8 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
                 // The chart context carries its displayed rows: they reach the
                 // model only inside the privacy boundary (HH-5), as for App stories.
                 const relations = run.tileRelations?.[tileId];
-                const valuesMayReachProvider = resultValuesMayReachModel(
-                  { id: selected.id, name: selected.provider.name, ...(providerConfig?.model ? { model: providerConfig.model } : {}), ...(providerConfig?.baseUrl ? { baseUrl: providerConfig.baseUrl } : {}) },
-                  () => selected.id === 'ollama' && isLoopbackUrl(providerConfig?.baseUrl ?? 'http://127.0.0.1:11434'),
-                  relations ? { relations } : undefined,
-                );
-                return { provider: selected.provider, valuesMayReachProvider };
+                const mayReach = valuesMayReachProvider({ selected, projectRoot, hosted: Boolean(hostHooks), ...(relations ? { relations } : {}), withoutHost: 'this-machine' });
+                return { provider: selected.provider, valuesMayReachProvider: mayReach };
               },
             });
             const afterProvider = await validateCurrentChartContext();
@@ -22114,7 +22775,7 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
             // below and never treats this local policy as a trust upgrade.
             let currentDraftSourcePolicy: AppBuildSourcePolicy | undefined;
             if (purpose === 'local_preview') {
-              const storage = new LocalAppStorage(defaultLocalAppsDbPath(projectRoot));
+              const storage = new LocalAppStorage(defaultLocalAppsDbPath(projectRoot), { owner: currentRecordOwner() });
               try {
                 const currentDraft = storage.getAppBuildDraft(draftId);
                 if (!currentDraft || !currentDraft.pages.some((page) => page.id === dashboardId)) {
@@ -22159,7 +22820,7 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
                   return { ok: false, error: `The current catalog no longer resolves Dataset source(s): ${currentSources.missingSourceIds.join(', ')}. Refresh the Dataset and run the draft again.` };
                 }
                 const sourceById = new Map(currentSources.items.map((source) => [source.sourceId, source]));
-                const proofs = loadDatasetGrainProofs(projectRoot);
+                const proofs = datasetProofsForRequest();
                 const configuredTarget = executionTargetDescriptor({});
                 for (const record of records) {
                   const source = sourceById.get(record.sourceId);
@@ -22290,7 +22951,8 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
     // GET  /api/schema             — list data files for schema panel
     if (req.method === 'GET' && path === '/api/notebooks') {
       res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-      res.end(serializeJSON(scanNotebookFiles(projectRoot)));
+      // With a host, private drafts (one folder for everyone the server serves) are listed only where one person uses it.
+      res.end(serializeJSON(privateDraftsAllowed() ? scanNotebookFiles(projectRoot) : scanNotebookFiles(projectRoot).filter((file) => !isPrivateNotebookPath(file.path))));
       return;
     }
 
@@ -22299,6 +22961,11 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
       if (!filePath) {
         res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(serializeJSON({ error: 'Missing path query parameter' }));
+        return;
+      }
+      if (hostedRequest() && !hostedProjectFile(projectRoot, filePath, { privateDrafts: privateDraftsAllowed() })) {
+        res.writeHead(403, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(serializeJSON({ error: HOSTED_FILE_REFUSED, code: 'PERMISSION_DENIED' }));
         return;
       }
       const absPath = safeJoin(projectRoot, filePath);
@@ -22347,6 +23014,11 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
         }
         const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '') || 'notebook';
         const privateDraft = (body as { visibility?: unknown }).visibility === 'private';
+        if (privateDraft && !privateDraftsAllowed()) {
+          res.writeHead(403, { 'Content-Type': 'application/json; charset=utf-8' });
+          res.end(serializeJSON({ error: 'Private drafts are not available on this shared server: everyone it serves would see them. Create the notebook in your private workspace, or as a shared notebook.', code: 'PERMISSION_DENIED' }));
+          return;
+        }
         const nbDir = privateDraft ? privateNotebookDir(projectRoot) : join(projectRoot, 'notebooks');
         mkdirSync(nbDir, { recursive: true });
         const nbPath = join(nbDir, `${slug}.dqlnb`);
@@ -22397,6 +23069,11 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
         if (!isPrivateNotebookPath(requested) || requested.includes('..') || !/\.(dqlnb|dql)$/i.test(requested)) {
           res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
           res.end(serializeJSON({ ok: false, error: 'Only a private notebook draft can be published.' }));
+          return;
+        }
+        if (!privateDraftsAllowed()) {
+          res.writeHead(403, { 'Content-Type': 'application/json; charset=utf-8' });
+          res.end(serializeJSON({ ok: false, error: HOSTED_FILE_REFUSED, code: 'PERMISSION_DENIED' }));
           return;
         }
         const source = resolve(projectRoot, requested);
@@ -22453,7 +23130,7 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
           return;
         }
         const normalized = normalizeNotebookPath(relativePath);
-        const deletable = normalized.startsWith('notebooks/') || isPrivateNotebookPath(normalized);
+        const deletable = normalized.startsWith('notebooks/') || (isPrivateNotebookPath(normalized) && privateDraftsAllowed());
         if (!deletable || !/\.(dqlnb|dql)$/i.test(normalized) || normalized.includes('..')) {
           res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
           res.end(serializeJSON({ ok: false, error: 'Only notebook files under notebooks/ can be deleted.' }));
@@ -22502,10 +23179,10 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
           res.end(serializeJSON({ error: 'Missing path or content' }));
           return;
         }
-        const absPath = safeJoin(projectRoot, filePath);
+        const absPath = hostedRequest() ? hostedProjectFile(projectRoot, filePath, { privateDrafts: privateDraftsAllowed() }) : safeJoin(projectRoot, filePath);
         if (!absPath) {
           res.writeHead(403, { 'Content-Type': 'application/json; charset=utf-8' });
-          res.end(serializeJSON({ error: 'Invalid path' }));
+          res.end(serializeJSON({ error: hostedRequest() ? HOSTED_FILE_REFUSED : 'Invalid path' }));
           return;
         }
         await mkdirAsync(dirname(absPath), { recursive: true });
@@ -22536,6 +23213,22 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
       return;
     }
 
+    // With host hooks and nobody signed in, Research has no one's runs to show and keeps none.
+    if (hostHooks && !currentPrincipal() && (path === '/api/notebook/research' || path.startsWith('/api/notebook/research/'))) {
+      if (req.method === 'GET' && path === '/api/notebook/research') {
+        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(serializeJSON(withNotebookResearchChecklistPage(emptyNotebookResearchListPage({}))));
+        return;
+      }
+      res.writeHead(403, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(serializeJSON({ error: NOBODYS_RESEARCH, code: 'PERMISSION_DENIED' }));
+      return;
+    }
+    // HH-14: a person the host keeps needs-review figures from reads research runs without their figures, and a
+    // research run they start does not compute a preview for them.
+    const researchWithheld = (path === '/api/notebook/research' || path.startsWith('/api/notebook/research/'))
+      && (await figuresRuleForRequest()) === 'withhold_review';
+
     if (req.method === 'GET' && path === '/api/notebook/research') {
       let storage: LocalNotebookResearchStorage | undefined;
       const limit = notebookResearchInteger(url.searchParams.get('limit'), 50, 1, 500);
@@ -22559,7 +23252,7 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
         const sort = notebookResearchSort(url.searchParams.get('sort'));
         const page = storage.listRunsPage({ notebookPath, sourceCellId, domain, owner, intent, search, status, reviewStatus, promotionAction, readiness, age, nextAction, activeOnly, sort, limit, offset });
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-        res.end(serializeJSON(withNotebookResearchChecklistPage(page)));
+        res.end(serializeJSON(withNotebookResearchChecklistPage(page, researchWithheld)));
       } catch (error) {
         if (isNotebookResearchStorageUnavailable(error)) {
           res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
@@ -22594,7 +23287,7 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
         const created = storage.createRun({
           notebookPath,
           domain: notebookResearchString(body.domain),
-          owner: notebookResearchString(body.owner),
+          owner: notebookResearchOwner(body.owner),
           sourceCell,
 	          sourceCellId,
 	          sourceCellName,
@@ -22607,7 +23300,7 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
           reviewedSql: notebookResearchString(body.reviewedSql),
           dqlArtifact,
         });
-        const run = body.run === true
+        const run = body.run === true && !researchWithheld
           ? await runNotebookResearch(storage, created, {
               domain: notebookResearchString(body.domain),
 	              sourceCellFingerprint,
@@ -22620,7 +23313,7 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
             })
           : created;
         res.writeHead(201, { 'Content-Type': 'application/json; charset=utf-8' });
-        res.end(serializeJSON({ run: withNotebookResearchChecklist(run) }));
+        res.end(serializeJSON({ run: withNotebookResearchChecklist(run, researchWithheld) }));
       } catch (error) {
         res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(serializeJSON({ error: error instanceof Error ? error.message : String(error) }));
@@ -22692,7 +23385,7 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
         const seeded = storage.seedRunsFromCells({
           notebookPath,
           domain: notebookResearchString(body.domain),
-          owner: notebookResearchString(body.owner),
+          owner: notebookResearchOwner(body.owner),
           notebookTitle: notebookResearchString(body.notebookTitle),
 	          cells: validCells.map((cell) => ({
 	            sourceCell: notebookResearchSourceCellPayload(cell),
@@ -22713,7 +23406,7 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
         });
         res.writeHead(201, { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(serializeJSON({
-          created: seeded.created.map(withNotebookResearchChecklist),
+          created: seeded.created.map((item) => withNotebookResearchChecklist(item, researchWithheld)),
           createdCount: seeded.createdCount,
           skippedCount: seeded.skippedCount + invalidCellCount,
           limitApplied: seeded.limitApplied,
@@ -22797,7 +23490,7 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
         const runs = [...linkedRuns, ...missingRuns];
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(serializeJSON({
-          runs: runs.map(withNotebookResearchChecklist),
+          runs: runs.map((item) => withNotebookResearchChecklist(item, researchWithheld)),
 	          requestedCount: requestedSourceCellCount,
 	          matchedCount: runs.length,
 	          limitApplied: requestedSourceCellCount > limit,
@@ -22857,7 +23550,7 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
 
         if (req.method === 'GET' && !action) {
           res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-          res.end(serializeJSON({ run: withNotebookResearchChecklist(run) }));
+          res.end(serializeJSON({ run: withNotebookResearchChecklist(run, researchWithheld) }));
           return;
         }
 
@@ -22869,7 +23562,7 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
 	          const sourceCellFingerprintPatch = notebookResearchPatchString(body, 'sourceCellFingerprint');
           const updated = storage.updateRun(id, {
             domain: notebookResearchString(body.domain),
-            owner: notebookResearchString(body.owner),
+            owner: hostedRequest() ? undefined : notebookResearchString(body.owner),
             sourceCellId: sourceCellIdPatch !== undefined ? sourceCellIdPatch : notebookResearchSourceCellId(sourceCell),
 	            sourceCellName: sourceCellNamePatch !== undefined ? sourceCellNamePatch : notebookResearchSourceCellName(sourceCell),
 	            sourceCellFingerprint: sourceCellFingerprintPatch !== undefined ? sourceCellFingerprintPatch : notebookResearchSourceCellFingerprint(sourceCell),
@@ -22901,16 +23594,22 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
             }),
           }) ?? updated;
           res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-          res.end(serializeJSON({ run: withNotebookResearchChecklist(planned) }));
+          res.end(serializeJSON({ run: withNotebookResearchChecklist(planned, researchWithheld) }));
           return;
         }
 
+	        if (req.method === 'POST' && action === 'run' && researchWithheld) {
+          // Its figures would be withheld from this person: the preview is not computed for them.
+          res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+          res.end(serializeJSON({ run: withNotebookResearchChecklist(run, true) }));
+          return;
+        }
 	        if (req.method === 'POST' && action === 'run') {
 	          const body = await readJSON(req).catch(() => ({}));
 	          const sourceCell = notebookResearchSourceCellPayload(body);
           const updated = await runNotebookResearch(storage, run, {
             domain: notebookResearchString(body.domain),
-            owner: notebookResearchString(body.owner),
+            owner: notebookResearchOwner(body.owner),
             sourceCellFingerprint: notebookResearchString(body.sourceCellFingerprint) ?? notebookResearchSourceCellFingerprint(sourceCell),
             question: notebookResearchString(body.question),
             intent: notebookResearchIntent(body.intent),
@@ -22920,7 +23619,7 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
             dqlArtifact: normalizeDqlArtifactReference(body.dqlArtifact),
           });
           res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-          res.end(serializeJSON({ run: withNotebookResearchChecklist(updated) }));
+          res.end(serializeJSON({ run: withNotebookResearchChecklist(updated, researchWithheld) }));
           return;
         }
 
@@ -22928,10 +23627,10 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
           const body = await readJSON(req).catch(() => ({}));
           const payload = await checkNotebookResearchReuse(storage, run, {
             domain: notebookResearchString(body.domain),
-            owner: notebookResearchString(body.owner),
+            owner: notebookResearchOwner(body.owner),
           });
           res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-          res.end(serializeJSON({ ...payload, run: withNotebookResearchChecklist(payload.run) }));
+          res.end(serializeJSON({ ...payload, run: withNotebookResearchChecklist(payload.run, researchWithheld) }));
           return;
         }
 
@@ -22939,12 +23638,12 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
           const body = await readJSON(req).catch(() => ({}));
           const payload = await promoteNotebookResearchToDql(storage, run, {
             domain: notebookResearchString(body.domain),
-            owner: notebookResearchString(body.owner),
+            owner: notebookResearchOwner(body.owner),
             provider: notebookResearchString(body.provider),
             tags: Array.isArray(body.tags) ? body.tags.filter((item: unknown): item is string => typeof item === 'string') : undefined,
           });
           res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-          res.end(serializeJSON({ ...payload, run: withNotebookResearchChecklist(payload.run) }));
+          res.end(serializeJSON({ ...payload, run: withNotebookResearchChecklist(payload.run, researchWithheld) }));
           return;
         }
 
@@ -22966,7 +23665,8 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
     if (req.method === 'GET' && path === '/api/run-snapshot') {
       const notebookPath = url.searchParams.get('path') ?? '';
       res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-      res.end(serializeJSON(readRunSnapshot(projectRoot, notebookPath)));
+      const snapshotKey = ownFilesKey();
+      res.end(serializeJSON(snapshotKey === null ? { found: false, snapshot: null } : readRunSnapshot(projectRoot, notebookPath, hostedRequest() ? snapshotKey : undefined)));
       return;
     }
     if (req.method === 'PUT' && path === '/api/run-snapshot') {
@@ -22977,7 +23677,12 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
           res.end(serializeJSON({ error: 'Missing path or snapshot' }));
           return;
         }
-        writeRunSnapshot(projectRoot, body.path, body.snapshot);
+        if (ownFilesKey() === null) {
+          res.writeHead(403, { 'Content-Type': 'application/json; charset=utf-8' });
+          res.end(serializeJSON({ error: 'Sign in to keep a notebook run.', code: 'PERMISSION_DENIED' }));
+          return;
+        }
+        writeRunSnapshot(projectRoot, body.path, body.snapshot, hostedRequest() ? homePersonKey(currentPrincipal()) : undefined);
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(serializeJSON({ ok: true }));
       } catch (err) {
@@ -23005,8 +23710,26 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
     if (req.method === 'GET' && path === '/api/git/diff') {
       const filePath = url.searchParams.get('path') ?? '';
       const staged = url.searchParams.get('staged') === 'true';
+      // RFC 0010 rule 8: with a host, a diff shows project content only (a path names a file under the file rule,
+      // matched literally, never as a pattern), and the whole diff leaves out everything else.
+      const hosted = hostedRequest()
+        ? { allowed: (gitRoot: string, gitRelative: string) => {
+            // git names its root by real path; compare like with like.
+            const root = (() => { try { return realpathSync(projectRoot); } catch { return resolve(projectRoot); } })();
+            const relativePath = relative(root, resolve(gitRoot, gitRelative)).split(sep).join('/');
+            return !!relativePath && !relativePath.startsWith('..') && !isAbsolute(relativePath) && hostedProjectFile(projectRoot, relativePath, { privateDrafts: privateDraftsAllowed() }) !== null;
+          } }
+        : undefined;
+      if (hosted && filePath) {
+        const gitRoot = await resolveGitRoot(projectRoot);
+        if (gitRoot && !hosted.allowed(gitRoot, filePath)) {
+          res.writeHead(403, { 'Content-Type': 'application/json; charset=utf-8' });
+          res.end(serializeJSON({ error: HOSTED_FILE_REFUSED, code: 'PERMISSION_DENIED' }));
+          return;
+        }
+      }
       res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-      res.end(serializeJSON(await readGitDiff(projectRoot, filePath, staged)));
+      res.end(serializeJSON(await readGitDiff(projectRoot, filePath, staged, hosted)));
       return;
     }
     if (req.method === 'GET' && path === '/api/git/branches') {
@@ -23274,13 +23997,24 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
                 search: schemaSearch,
               })
             : { tables: [], columnsByPath: new Map<string, Array<{ name: string; type: string }>>() };
-        const dbTables = tables.map((t) => ({
+        const listedColumns = async (relation: string, columns: Array<{ name: string; type: string }>) => {
+          // With a host, only the columns this person may see (a hidden column is not there for them).
+          const principal = currentPrincipal();
+          if (!hostHooks?.columnsVisible || !principal) return columns;
+          try {
+            const visible = new Set((await hostHooks.columnsVisible(principal, relation, columns.map((column) => column.name))).map((name) => name.toLowerCase()));
+            return columns.filter((column) => visible.has(column.name.toLowerCase()));
+          } catch {
+            return [];
+          }
+        };
+        const dbTables = await Promise.all(tables.map(async (t) => ({
           name: t.path,
           path: t.path,
-          columns: columnsByPath.get(t.path) ?? [],
+          columns: await listedColumns(t.path, columnsByPath.get(t.path) ?? []),
           source: 'database',
           objectType: t.type,
-        }));
+        })));
         const seen = new Set([
           ...dataFiles.map((f) => f.name),
           ...notebookDatasets.map((dataset) => dataset.name),
@@ -23348,6 +24082,11 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
           blockType?: 'custom' | 'semantic';
           visibility?: 'private' | 'shared';
         };
+        if (visibility === 'private' && !privateDraftsAllowed()) {
+          res.writeHead(403, { 'Content-Type': 'application/json; charset=utf-8' });
+          res.end(serializeJSON({ error: PRIVATE_DRAFTS_ELSEWHERE, code: 'PERMISSION_DENIED' }));
+          return;
+        }
         if (!name || typeof name !== 'string') {
           res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
           res.end(serializeJSON({ error: 'Missing block name' }));
@@ -23524,6 +24263,11 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
           res.end(serializeJSON({ ok: false, error: 'Missing block path.' }));
           return;
         }
+        if (isPrivateBlockPath(requested) && !privateDraftsAllowed()) {
+          res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' });
+          res.end(serializeJSON({ ok: false, error: 'Private block not found.' }));
+          return;
+        }
         if (!isPrivateBlockPath(requested) || !requested.endsWith('.dql') || requested.includes('..')) {
           res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
           res.end(serializeJSON({ ok: false, error: 'Only a private block can be published.' }));
@@ -23663,8 +24407,9 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
         scanDir(join(projectRoot, 'blocks'));
         scanDir(join(projectRoot, 'domains'));
         // Private blocks are listed like any other: hiding them would lose the
-        // author's work behind a folder they never open.
-        scanDir(privateBlockDir(projectRoot));
+        // author's work behind a folder they never open. They sit in one folder
+        // of the server, so with a host they are listed only where one person works.
+        if (privateDraftsAllowed()) scanDir(privateBlockDir(projectRoot));
         // A retired block points at the active block that replaces it, following
         // a chain of retirements; a cycle or a missing block resolves to none.
         const retirementRefs = blocks.map((block) => ({ ...block, filePath: block.path }));
@@ -23788,7 +24533,14 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
       // `{ entries, status: 'ok' | 'not_a_repo' | 'git_unavailable' | 'error', message? }`.
       // git runs with an argument array (no shell) and the path must stay inside the project.
       try {
-        const history = await readBlockHistory(projectRoot, url.searchParams.get('path'));
+        // With a host, the history shown is a project content file's: never git's, the runtime's or the settings'.
+        const named = url.searchParams.get('path');
+        if (hostedRequest() && named && !hostedProjectFile(projectRoot, named, { privateDrafts: privateDraftsAllowed() })) {
+          res.writeHead(403, { 'Content-Type': 'application/json; charset=utf-8' });
+          res.end(serializeJSON({ entries: [], status: 'error', error: HOSTED_FILE_REFUSED, code: 'PERMISSION_DENIED' }));
+          return;
+        }
+        const history = await readBlockHistory(projectRoot, named);
         res.writeHead(history.httpStatus, { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(serializeJSON(history.body));
       } catch (error) {
@@ -23811,6 +24563,12 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
         if (!absolutePath.startsWith(projectRoot + '/') && absolutePath !== projectRoot) {
           res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
           res.end(serializeJSON({ error: 'path escapes project root' }));
+          return;
+        }
+        // With a host, a block is read from project content only (the same rule as the file routes).
+        if (hostedRequest() && hostedProjectFile(projectRoot, relative(resolve(projectRoot), absolutePath), { privateDrafts: privateDraftsAllowed() }) === null) {
+          res.writeHead(403, { 'Content-Type': 'application/json; charset=utf-8' });
+          res.end(serializeJSON({ error: HOSTED_FILE_REFUSED, code: 'PERMISSION_DENIED' }));
           return;
         }
         if (!existsSync(absolutePath)) {
@@ -23855,6 +24613,12 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
         if (!absolutePath.startsWith(projectRoot + '/') && absolutePath !== projectRoot) {
           res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
           res.end(serializeJSON({ error: 'path escapes project root' }));
+          return;
+        }
+        // With a host, a block is read from project content only (the same rule as the file routes).
+        if (hostedRequest() && hostedProjectFile(projectRoot, relative(resolve(projectRoot), absolutePath), { privateDrafts: privateDraftsAllowed() }) === null) {
+          res.writeHead(403, { 'Content-Type': 'application/json; charset=utf-8' });
+          res.end(serializeJSON({ error: HOSTED_FILE_REFUSED, code: 'PERMISSION_DENIED' }));
           return;
         }
         if (!existsSync(absolutePath)) {
@@ -24036,8 +24800,9 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
           return;
         }
         if (idempotencyKey) {
-          const existingId = operationIdempotency.get(idempotencyKey);
-          const existing = existingId ? operationCoordinator.get(existingId) : null;
+          // Keyed by who asked: one person's key never answers with another's operation.
+          const existingId = operationIdempotency.get(`${operationViewer() ?? ''}\u0000${idempotencyKey}`);
+          const existing = existingId ? operationVisible(operationCoordinator.get(existingId), operationReader()) : null;
           if (existing) {
             // The repeated request gets the same draft identity the first one did.
             const scopedPath = existing.scope.startsWith('block:') ? existing.scope.slice('block:'.length) : undefined;
@@ -24133,7 +24898,7 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
           cancellable: true,
         });
         if (idempotencyKey) {
-          operationIdempotency.set(idempotencyKey, operation.id);
+          operationIdempotency.set(`${operationViewer() ?? ''}\u0000${idempotencyKey}`, operation.id);
           while (operationIdempotency.size > 100) {
             const oldest = operationIdempotency.keys().next().value;
             if (typeof oldest !== 'string') break;
@@ -24398,6 +25163,11 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
     if (req.method === 'POST' && path === '/api/block-studio/ai-imports') {
       try {
         const body = await readJSON(req);
+        if (hostedImportRefused(body)) {
+          res.writeHead(403, { 'Content-Type': 'application/json; charset=utf-8' });
+          res.end(serializeJSON({ error: HOSTED_FILE_REFUSED, code: 'PERMISSION_DENIED' }));
+          return;
+        }
         const session = await createDqlGenerationSessionFromBody(body);
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(serializeJSON(session));
@@ -24550,7 +25320,7 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(serializeJSON({ ok: results.every((result) => result.status !== 'error'), session: nextSession, results }));
       } catch (error) {
-        res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.writeHead(importErrorStatus(error), { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(serializeJSON({ error: error instanceof Error ? error.message : String(error) }));
       }
       return;
@@ -24723,7 +25493,7 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
           res.end(serializeJSON({ error: 'Block already exists' }));
           return;
         }
-        res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.writeHead(importErrorStatus(error), { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(serializeJSON({ error: error instanceof Error ? error.message : String(error) }));
       }
       return;
@@ -24741,7 +25511,7 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(serializeJSON({ ok: true, removed }));
       } catch (error) {
-        res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.writeHead(importErrorStatus(error), { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(serializeJSON({ error: error instanceof Error ? error.message : String(error) }));
       }
       return;
@@ -24751,8 +25521,14 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
       try {
         const body = await readJSON(req);
         const inputPath = typeof body.path === 'string' ? body.path : '';
+        if (hostedImportRefused(body)) {
+          res.writeHead(403, { 'Content-Type': 'application/json; charset=utf-8' });
+          res.end(serializeJSON({ error: HOSTED_FILE_REFUSED, code: 'PERMISSION_DENIED' }));
+          return;
+        }
         const session = createBlockStudioImportSession(projectRoot, {
           inputPath,
+          ...hostedImportFiles(),
           inputMode: body.inputMode === 'paste' || body.inputMode === 'upload' || body.inputMode === 'path' ? body.inputMode : undefined,
           sources: Array.isArray(body.sources)
             ? body.sources.map((source: any, index: number) => ({
@@ -24773,7 +25549,7 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(serializeJSON(validatedSession));
       } catch (error) {
-        res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.writeHead(importErrorStatus(error), { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(serializeJSON({ error: error instanceof Error ? error.message : String(error) }));
       }
       return;
@@ -24839,7 +25615,7 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
         res.writeHead(errors.length > 0 ? 207 : 200, { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(serializeJSON({ ok: errors.length === 0, session: nextSession, saved, errors, lineageRefresh }));
       } catch (error) {
-        res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.writeHead(importErrorStatus(error), { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(serializeJSON({ error: error instanceof Error ? error.message : String(error) }));
       }
       return;
@@ -24988,7 +25764,7 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
           res.end(serializeJSON({ error: 'Block already exists' }));
           return;
         }
-        res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.writeHead(importErrorStatus(error), { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(serializeJSON({ error: error instanceof Error ? error.message : String(error) }));
       }
       return;
@@ -24999,7 +25775,7 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
         const cfg = loadProjectConfig(projectRoot) as any;
         const connections = getProjectConnectionsForApi(cfg);
         const defaultKey = resolveDefaultConnectionKey(cfg, connections) ?? Object.keys(connections)[0] ?? 'default';
-        const userPrefs = readUserPrefs(userPrefsPath);
+        const userPrefs = readUserPrefs(userPrefsPathFor() ?? '');
         // UI-009 / PERF-001: Block Studio already loads the canonical semantic
         // layer. Let it omit this second, potentially multi-megabyte rendering
         // of the same 7,500+ object catalog while keeping the route compatible
@@ -25097,6 +25873,12 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
           res.end(serializeJSON({ error: 'Missing block path.' }));
           return;
         }
+        // With a host, a block opened here is project content, judged by where it really is (a symlink included).
+        if (hostedRequest() && !hostedProjectFile(projectRoot, relativePath, { privateDrafts: privateDraftsAllowed() })) {
+          res.writeHead(403, { 'Content-Type': 'application/json; charset=utf-8' });
+          res.end(serializeJSON({ error: HOSTED_FILE_REFUSED, code: 'PERMISSION_DENIED' }));
+          return;
+        }
         const payload = openBlockStudioDocument(projectRoot, relativePath, semanticLayer);
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(serializeJSON(payload));
@@ -25185,7 +25967,7 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
       try {
         const body = await readJSON(req);
         const source = typeof body.source === 'string' ? body.source : '';
-        const targetConnection = isConnectionConfig(body.connection) ? body.connection : connection;
+        const targetConnection = requestConnection(body) ?? connection;
         const parameters = body.parameters && typeof body.parameters === 'object' && !Array.isArray(body.parameters)
           ? body.parameters as Record<string, unknown>
           : {};
@@ -25563,14 +26345,19 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
       const metadataScope = connection
         ? optionalActiveConnectionMetadataScope(projectRoot, cfg, connection, defaultKey)
         : null;
+      // With a host, only someone who manages connections sees their settings, the server's dbt profiles and
+      // where drivers are installed; everyone else sees each connection's name and kind.
+      const manages = await hostedMay('connection.manage');
       res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(serializeJSON({
         default: defaultKey,
         // Saved secrets never travel to the browser.
-        connections: redactConnections(connections),
-        dbtProfiles: dbtProfiles.map((profile) => ({ ...profile, connection: redactConnections({ c: profile.connection }).c })),
+        connections: manages
+          ? redactConnections(connections)
+          : Object.fromEntries(Object.entries(connections).map(([name, value]) => [name, { driver: (value as { driver?: unknown })?.driver }])),
+        dbtProfiles: manages ? dbtProfiles.map((profile) => ({ ...profile, connection: redactConnections({ c: profile.connection }).c })) : [],
         activeConnection,
-        connectorStatus,
+        connectorStatus: manages ? connectorStatus : connectorStatus.map(({ installPath: _path, installCommand: _command, ...status }) => status),
         metadataScope,
         metadataStatus: metadataScope
           ? warehouseMetadataStatus(projectRoot, metadataScope.scopeFingerprint, defaultKey)
@@ -25592,6 +26379,12 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
         res.end(serializeJSON({ error: 'Enter a profiles.yml file or folder path.' }));
         return;
       }
+      // With a host, the server's own files are not the request's to name: a profiles file or folder inside the project only.
+      if (hostedRequest() && !hostedProfilesPath(profilePath)) {
+        res.writeHead(403, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(serializeJSON({ error: HOSTED_FILE_REFUSED, code: 'PERMISSION_DENIED' }));
+        return;
+      }
       const dbtProfiles = discoverDbtProfileConnections(projectRoot, loadProjectConfig(projectRoot), profilePath);
       if (dbtProfiles.length === 0) {
         res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' });
@@ -25600,6 +26393,24 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
       }
       res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(serializeJSON({ dbtProfiles }));
+      return;
+    }
+
+    // RFC 0010: the notebook's local dataset workspace (uploads, staged warehouse rows, their previews and sample
+    // values) is one person's. With a host where several people share the server it holds no one's data: it lists
+    // nothing and keeps nothing (a private workspace, where one person works, keeps it). Validating a governed Dataset's
+    // grain is not part of it.
+    if ((path === "/api/datasets" || (path.startsWith("/api/datasets/") && path !== "/api/datasets/validate-grain"))
+      && hostedRequest() && hostHooks?.onePerson !== true) {
+      if (req.method === "GET" && path === "/api/datasets") {
+        res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+        res.end(serializeJSON({ datasets: [], workspace: { target: "local", shared: false } }));
+        return;
+      }
+      res.writeHead(req.method === "GET" ? 404 : 403, { "Content-Type": "application/json; charset=utf-8" });
+      res.end(serializeJSON(req.method === "GET"
+        ? { error: "Dataset not found." }
+        : { error: "The local dataset workspace is one person's: stage and upload data in your private workspace.", code: "PERMISSION_DENIED" }));
       return;
     }
 
@@ -25643,6 +26454,12 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
           throw new Error(
             "Uploaded dataset exceeds the 250 MB local import limit. Link the local path or reduce the file first.",
           );
+        }
+        // With a host, a dataset is a file the person uploads: a path names a file on the server, which is not theirs to read.
+        if (hostedRequest() && typeof body.sourcePath === 'string' && body.sourcePath.trim()) {
+          res.writeHead(403, { 'Content-Type': 'application/json; charset=utf-8' });
+          res.end(serializeJSON({ error: 'Upload the file here: a path names a file on DQL\'s server, which DQL does not read for a request.', code: 'PERMISSION_DENIED' }));
+          return;
         }
         await ensureLocalWorkspaceReady();
         const imported = await datasetWorkspace.import({
@@ -25863,9 +26680,10 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
           throw new Error(
             `Unknown semantic references: ${semantic.unresolvedRefs.join(", ")}`,
           );
+        const byName = typeof body.connectionName === "string" ? resolveNamedConnection(body.connectionName) : undefined;
         const named =
           typeof body.connectionName === "string"
-            ? resolveNamedConnection(body.connectionName)
+            ? byName && hostedRequest() ? namedConnection(byName, body.connectionName) : byName
             : connection;
         const sourceConnection = requireActiveConnection(named);
         const prepared = prepareLocalExecution(
@@ -26054,7 +26872,8 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
                   const absPath = join(dataDir, file.name).replaceAll('\\', '/');
                   const reader = file.name.endsWith('.parquet') ? 'read_parquet' : 'read_csv_auto';
                   const ddl = `CREATE OR REPLACE VIEW "${tableName}" AS SELECT * FROM ${reader}('${absPath}')`;
-                  try { await executor.executeQuery(ddl, [], {}, connection); } catch { /* non-fatal */ }
+                  // DQL's own view over the project's data file (purpose `platform`): not a statement a person wrote.
+                  try { await executor.executeQuery(ddl, [], {}, connection, { purpose: 'platform' }); } catch { /* non-fatal */ }
                 }
               } catch { /* non-fatal */ }
             }
@@ -26171,7 +26990,7 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
 
     // ── Semantic layer discovery API ─────────────────────────────────────────
     if (req.method === 'GET' && path === '/api/semantic-layer') {
-      const userPrefs = readUserPrefs(userPrefsPath);
+      const userPrefs = readUserPrefs(userPrefsPathFor() ?? '');
       if (!semanticLayer) {
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(serializeJSON({
@@ -26409,20 +27228,29 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
           res.end(serializeJSON({ error: 'provider must be one of dbt, cubejs, snowflake' }));
           return;
         }
+        // RFC 0010 rule 8: with a host, a project path the request names is a folder of the project's own content,
+        // and where to clone from (a repository, its branch and folder) is the project's configuration, not the request's.
+        if (hostedRequest() && body.projectPath !== undefined && body.projectPath !== null
+          && hostedProjectPath(projectRoot, String(body.projectPath), { privateDrafts: privateDraftsAllowed() }) === null) {
+          res.writeHead(403, { 'Content-Type': 'application/json; charset=utf-8' });
+          res.end(serializeJSON({ error: HOSTED_FILE_REFUSED, code: 'PERMISSION_DENIED' }));
+          return;
+        }
+        const repoChoice = hostedRequest() ? {} : body;
         const sourceConfig = provider === 'snowflake'
           ? {
               provider,
               projectPath: body.projectPath ?? projectConfig.semanticLayer?.projectPath,
-              connection: body.connection ?? projectConfig.semanticLayer?.connection,
+              connection: (hostedRequest() ? undefined : body.connection) ?? projectConfig.semanticLayer?.connection,
             }
           : {
               provider,
               projectPath: typeof body.projectPath === 'string' ? body.projectPath : projectConfig.semanticLayer?.projectPath,
-              repoUrl: typeof body.repoUrl === 'string' ? body.repoUrl : projectConfig.semanticLayer?.repoUrl,
-              branch: typeof body.branch === 'string' ? body.branch : projectConfig.semanticLayer?.branch,
-              subPath: typeof body.subPath === 'string' ? body.subPath : projectConfig.semanticLayer?.subPath,
-              source: body.repoUrl || projectConfig.semanticLayer?.repoUrl
-                ? ((body.source ?? projectConfig.semanticLayer?.source ?? 'github') as 'local' | 'github' | 'gitlab')
+              repoUrl: typeof repoChoice.repoUrl === 'string' ? repoChoice.repoUrl : projectConfig.semanticLayer?.repoUrl,
+              branch: typeof repoChoice.branch === 'string' ? repoChoice.branch : projectConfig.semanticLayer?.branch,
+              subPath: typeof repoChoice.subPath === 'string' ? repoChoice.subPath : projectConfig.semanticLayer?.subPath,
+              source: repoChoice.repoUrl || projectConfig.semanticLayer?.repoUrl
+                ? ((repoChoice.source ?? projectConfig.semanticLayer?.source ?? 'github') as 'local' | 'github' | 'gitlab')
                 : 'local',
             };
         const executeQuery = provider === 'snowflake'
@@ -26503,20 +27331,29 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
           res.end(serializeJSON({ error: 'provider must be one of dbt, cubejs, snowflake' }));
           return;
         }
+        // RFC 0010 rule 8: with a host, a project path the request names is a folder of the project's own content,
+        // and where to clone from (a repository, its branch and folder) is the project's configuration, not the request's.
+        if (hostedRequest() && body.projectPath !== undefined && body.projectPath !== null
+          && hostedProjectPath(projectRoot, String(body.projectPath), { privateDrafts: privateDraftsAllowed() }) === null) {
+          res.writeHead(403, { 'Content-Type': 'application/json; charset=utf-8' });
+          res.end(serializeJSON({ error: HOSTED_FILE_REFUSED, code: 'PERMISSION_DENIED' }));
+          return;
+        }
+        const repoChoice = hostedRequest() ? {} : body;
         const sourceConfig = provider === 'snowflake'
           ? {
               provider,
               projectPath: body.projectPath ?? projectConfig.semanticLayer?.projectPath,
-              connection: body.connection ?? projectConfig.semanticLayer?.connection,
+              connection: (hostedRequest() ? undefined : body.connection) ?? projectConfig.semanticLayer?.connection,
             }
           : {
               provider,
               projectPath: typeof body.projectPath === 'string' ? body.projectPath : projectConfig.semanticLayer?.projectPath,
-              repoUrl: typeof body.repoUrl === 'string' ? body.repoUrl : projectConfig.semanticLayer?.repoUrl,
-              branch: typeof body.branch === 'string' ? body.branch : projectConfig.semanticLayer?.branch,
-              subPath: typeof body.subPath === 'string' ? body.subPath : projectConfig.semanticLayer?.subPath,
-              source: body.repoUrl || projectConfig.semanticLayer?.repoUrl
-                ? ((body.source ?? projectConfig.semanticLayer?.source ?? 'github') as 'local' | 'github' | 'gitlab')
+              repoUrl: typeof repoChoice.repoUrl === 'string' ? repoChoice.repoUrl : projectConfig.semanticLayer?.repoUrl,
+              branch: typeof repoChoice.branch === 'string' ? repoChoice.branch : projectConfig.semanticLayer?.branch,
+              subPath: typeof repoChoice.subPath === 'string' ? repoChoice.subPath : projectConfig.semanticLayer?.subPath,
+              source: repoChoice.repoUrl || projectConfig.semanticLayer?.repoUrl
+                ? ((repoChoice.source ?? projectConfig.semanticLayer?.source ?? 'github') as 'local' | 'github' | 'gitlab')
                 : 'local',
             };
         const executeQuery = provider === 'snowflake'
@@ -26739,21 +27576,27 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
       }
       return;
     }
+    const userPrefsPath = path.startsWith('/api/user-prefs/') ? userPrefsPathFor() : null;
+    if (path.startsWith('/api/user-prefs/') && !userPrefsPath) {
+      res.writeHead(401, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(serializeJSON({ error: 'Sign in to keep favorites.' }));
+      return;
+    }
     if (req.method === 'GET' && path === '/api/user-prefs/favorites') {
       res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-      res.end(serializeJSON({ favorites: readUserPrefs(userPrefsPath).favorites }));
+      res.end(serializeJSON({ favorites: readUserPrefs(userPrefsPath!).favorites }));
       return;
     }
     if (req.method === 'POST' && path === '/api/user-prefs/favorites') {
       try {
         const body = await readJSON(req);
-        const prefs = readUserPrefs(userPrefsPath);
+        const prefs = readUserPrefs(userPrefsPath!);
         const name = typeof body.name === 'string' ? body.name.trim() : '';
         if (name) {
           prefs.favorites = prefs.favorites.includes(name)
             ? prefs.favorites.filter((item) => item !== name)
             : [...prefs.favorites, name].sort((a, b) => a.localeCompare(b));
-          writeUserPrefs(userPrefsPath, prefs);
+          writeUserPrefs(userPrefsPath!, prefs);
         }
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(serializeJSON({ favorites: prefs.favorites }));
@@ -26765,17 +27608,17 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
     }
     if (req.method === 'GET' && path === '/api/user-prefs/recent') {
       res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-      res.end(serializeJSON({ recentlyUsed: readUserPrefs(userPrefsPath).recentlyUsed }));
+      res.end(serializeJSON({ recentlyUsed: readUserPrefs(userPrefsPath!).recentlyUsed }));
       return;
     }
     if (req.method === 'POST' && path === '/api/user-prefs/recent') {
       try {
         const body = await readJSON(req);
-        const prefs = readUserPrefs(userPrefsPath);
+        const prefs = readUserPrefs(userPrefsPath!);
         const name = typeof body.name === 'string' ? body.name.trim() : '';
         if (name) {
           prefs.recentlyUsed = [name, ...prefs.recentlyUsed.filter((item) => item !== name)].slice(0, 12);
-          writeUserPrefs(userPrefsPath, prefs);
+          writeUserPrefs(userPrefsPath!, prefs);
         }
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(serializeJSON({ recentlyUsed: prefs.recentlyUsed }));
@@ -26799,7 +27642,7 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
         1,
         Math.min(100, Number(url.searchParams.get("limit") ?? 50) || 50),
       );
-      const recent = readUserPrefs(userPrefsPath).recentlyUsed.map((name) =>
+      const recent = readUserPrefs(userPrefsPathFor() ?? '').recentlyUsed.map((name) =>
         name.toLowerCase(),
       );
       const candidates: Array<{
@@ -27062,6 +27905,13 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
           res.end(serializeJSON({ error: 'A safe dbt relation is required.' }));
           return;
         }
+        // With a host, a table is looked up by a plain name: one holding a quote, a backslash or a control character
+        // is not one DQL looks up (the lookup binds names, and this keeps them out of every statement besides).
+        if (hostedRequest() && relationParts.some((part) => /['"`\\\u0000-\u001f\u007f]/.test(part))) {
+          res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+          res.end(serializeJSON({ error: 'DQL looks up a table by its plain name. This name holds a quote, a backslash or a control character, so DQL did not look it up.', code: 'RELATION_NAME_REFUSED' }));
+          return;
+        }
         const tablePath = relationParts.at(-1)!;
         const schemaName = relationParts.length > 1 ? relationParts.slice(0, -1).join('.') : undefined;
         // Try connector.listColumns() first
@@ -27085,6 +27935,8 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
         if (columns.length === 0) {
           try {
             const isFile = /\.(csv|parquet|json)$/i.test(tablePath) || tablePath.startsWith('data/');
+            // With a host, a table is a table: a file on the server is not described for a request (RFC 0010 rule 8).
+            if (isFile && hostedRequest()) throw new Error('not a table');
             const safePath = tablePath.replace(/'/g, "''");
             if (!activeConnection) throw new Error('No active connection');
             const dialect = getDialect(activeConnection.driver);
@@ -27092,10 +27944,20 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
             const sql = isFile
               ? `DESCRIBE SELECT * FROM read_csv_auto('${safePath}') LIMIT 0`
               : `DESCRIBE ${qualifiedIdentifier}`;
-            const result = await executor.executeQuery(sql, [], {}, activeConnection);
+            const result = await executor.executeQuery(sql, [], {}, activeConnection, { purpose: 'metadata' });
             columns = schemaColumnsFromDescribeRows(result.rows);
           } catch {
             // empty columns
+          }
+        }
+        // With a host, only the columns this person may see.
+        const describer = currentPrincipal();
+        if (hostHooks?.columnsVisible && describer) {
+          try {
+            const visible = new Set((await hostHooks.columnsVisible(describer, relationParts.join('.'), columns.map((column) => column.name))).map((name) => name.toLowerCase()));
+            columns = columns.filter((column) => visible.has(column.name.toLowerCase()));
+          } catch {
+            columns = [];
           }
         }
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
@@ -27108,6 +27970,13 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
     }
 
     if (req.method === 'POST' && path === '/api/llm/run') {
+      // HH-14: the chat cell answers with the model's own SQL and its rows, never checked. A person the host keeps
+      // needs-review figures from is sent to Ask, where certified and governed answers keep their figures.
+      if ((await figuresRuleForRequest()) === 'withhold_review') {
+        res.writeHead(403, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(serializeJSON({ error: 'This workspace keeps AI-written figures that need review from you, so the chat cell is not available. Ask in Ask: certified and governed answers keep their figures.', code: 'FIGURES_WITHHELD' }));
+        return;
+      }
       const body = await readJSON(req).catch(() => null);
       if (!body || typeof body !== 'object') {
         res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
@@ -27175,10 +28044,11 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(serializeJSON({ ok: true, result }));
       } catch (error) {
-        res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.writeHead(isPolicyRefusal(error) ? 403 : 500, { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(serializeJSON({
           ok: false,
           error: error instanceof Error ? error.message : String(error),
+          ...(isPolicyRefusal(error) ? { code: 'POLICY_DENIED' } : {}),
         }));
       }
       return;
@@ -27421,7 +28291,7 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
           const decision = await authorizeHostRequest(hostHooks!, principal, { action: 'query.run', resource: { type: 'project' } });
           if (!decision.allow) {
             res.writeHead(403, { 'Content-Type': 'application/json; charset=utf-8' });
-            res.end(serializeJSON({ error: decision.reason ?? 'You do not have permission to run this query.', code: 'PERMISSION_DENIED', action: 'query.run' }));
+            res.end(serializeJSON({ error: decision.reason ?? 'You do not have permission to run this query.', code: 'PERMISSION_DENIED', action: 'query.run', ...(decision.next ? { next: decision.next } : {}) }));
             return;
           }
         }
@@ -27441,10 +28311,20 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
           sql: semantic.sql,
           subject: 'Export',
           connection: executionConnection,
+          // The whole result, not the screen's 500 rows: one row more than a file holds says it is too large.
+          rowLimit: EXPORT_MAX_ROWS + 1,
+          rowCeiling: EXPORT_MAX_ROWS + 1,
+          resultRows: EXPORT_MAX_ROWS + 1,
           sqlParams: Array.isArray(body.sqlParams) ? body.sqlParams : [],
           variables: body.variables && typeof body.variables === 'object' ? body.variables as Record<string, unknown> : {},
           semanticRefs: semantic.semanticRefs,
         });
+        if (execution.result.rows.length > EXPORT_MAX_ROWS || (execution.result.truncated && execution.result.rows.length >= EXPORT_MAX_ROWS)) {
+          res.writeHead(413, { 'Content-Type': 'application/json; charset=utf-8' });
+          res.end(serializeJSON({ error: `This result has more than ${EXPORT_MAX_ROWS.toLocaleString('en-US')} rows, more than one file holds here. Add a filter or summarise it, then export again.`, code: 'EXPORT_TOO_LARGE' }));
+          return;
+        }
+        res.setHeader('X-DQL-Row-Count', String(execution.result.rows.length));
         sendExportFile(res, exportFile(execution.result, format, typeof body.title === 'string' ? body.title : undefined));
       } catch (error) {
         if (res.headersSent || res.writableEnded) {
@@ -27453,7 +28333,7 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
         }
         const refused = error instanceof DQLAccessDeniedError || isPolicyRefusal(error);
         res.writeHead(refused ? 403 : 500, { 'Content-Type': 'application/json; charset=utf-8' });
-        res.end(serializeJSON({ error: error instanceof Error ? error.message : String(error), ...(refused ? { code: 'EXPORT_REFUSED' } : {}) }));
+        res.end(serializeJSON({ error: personErrorText(error, 'An export failed'), ...(refused ? { code: 'EXPORT_REFUSED' } : {}) }));
       }
       return;
     }
@@ -27531,7 +28411,7 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
             status: 'success',
             resultPreview: normalized,
             sql: body.sql,
-          });
+          }, Boolean(hostHooks));
         }
         const payload = serializeJSON({
           ...normalized,
@@ -27564,6 +28444,7 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
           }));
           return;
         }
+        const errorText = personErrorText(error, 'A notebook query failed');
         if (execContext?.notebookPath) {
           recordNotebookQueryRun(projectRoot, {
             notebookPath: execContext.notebookPath!,
@@ -27573,21 +28454,23 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
             source: execContext.source ?? 'notebook_sql_cell',
             status: 'error',
             durationMs: Date.now() - start,
-            errorCode: error instanceof Error ? error.message : String(error),
+            errorCode: errorText,
             sql: typeof body?.sql === 'string' ? body.sql : undefined,
           });
           updateNotebookResearchFromCellExecution(projectRoot, execContext, {
             status: 'error',
-            error: error instanceof Error ? error.message : String(error),
+            error: errorText,
             sql: typeof body?.sql === 'string' ? body.sql : undefined,
-          });
+          }, Boolean(hostHooks));
         }
-        res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+        // A refusal (the host's row policy or credentials, a connection the server chooses) is a 403, not a server error.
+        const refused = isPolicyRefusal(error);
+        res.writeHead(refused ? 403 : 500, { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(serializeJSON({
           columns: [],
           rows: [],
-          error: error instanceof Error ? error.message : String(error),
-          code: classifyAnalyticalFailure(error),
+          error: errorText,
+          code: refused ? 'POLICY_DENIED' : classifyAnalyticalFailure(error),
           details: {
             phase: 'execution',
             executionContext: notebookExecutionIdentity(execContext),
@@ -27693,8 +28576,10 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
           res.end(serializeJSON({ error: error.message, code: 'unauthorized' }));
           return;
         }
-        const runtimeCode = semanticExecutionFailureCode(error) ?? semanticRuntimeErrorCode(error);
-        const status = runtimeCode === 'EXECUTION_TARGET_MISMATCH' || runtimeCode === 'SEMANTIC_SOURCE_DRIFT'
+        const runtimeCode = isPolicyRefusal(error) ? 'POLICY_DENIED' : semanticExecutionFailureCode(error) ?? semanticRuntimeErrorCode(error);
+        const status = runtimeCode === 'POLICY_DENIED'
+          ? 403
+          : runtimeCode === 'EXECUTION_TARGET_MISMATCH' || runtimeCode === 'SEMANTIC_SOURCE_DRIFT'
           ? 409
           : runtimeCode
             ? 400
@@ -27928,7 +28813,7 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
       try {
         const body = await readJSON(req);
         target = normalizeProjectConnection(
-          requireActiveConnection(isConnectionConfig(body.connection) ? body.connection : connection),
+          requireActiveConnection(requestConnection(body) ?? connection),
           projectRoot,
         );
         const connector = await executor.getConnector(target);
@@ -28177,11 +29062,16 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
       const welcomeNotebook = resolveNotebook(projectRoot, projectConfig.project ?? 'DQL Project');
       res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(serializeJSON({
-        projectRoot,
+        // With a host: no server path, the connection's kind only (its settings are the host's), and only files the file routes open.
+        ...(hostedRequest() ? {} : { projectRoot }),
         project: projectConfig.project ?? 'DQL Project',
-        defaultConnection: projectConfig.defaultConnection ?? connection,
+        defaultConnection: hostedRequest()
+          ? (() => { const active = projectConfig.defaultConnection ?? connection; return active ? { driver: active.driver } : null; })()
+          : projectConfig.defaultConnection ?? connection,
         connectorForms: getConnectorFormSchemas(),
-        files: listProjectFiles(projectRoot),
+        files: hostedRequest()
+          ? listProjectFiles(projectRoot).filter((file) => hostedProjectFile(projectRoot, file, { privateDrafts: privateDraftsAllowed() }) !== null)
+          : listProjectFiles(projectRoot),
         notebook: welcomeNotebook,
       }));
       return;
@@ -28195,10 +29085,15 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
         return;
       }
 
+      if (hostedRequest() && !hostedProjectFile(projectRoot, relativePath, { privateDrafts: privateDraftsAllowed() })) {
+        res.writeHead(403, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(serializeJSON({ error: HOSTED_FILE_REFUSED, code: 'PERMISSION_DENIED' }));
+        return;
+      }
       const filePath = safeJoin(projectRoot, relativePath);
       if (!filePath || !existsSync(filePath) || statSync(filePath).isDirectory()) {
         res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' });
-        res.end(serializeJSON({ error: `File not found: ${relativePath}` }));
+        res.end(serializeJSON({ error: hostedRequest() ? 'File not found.' : `File not found: ${relativePath}` }));
         return;
       }
 
@@ -28262,6 +29157,14 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
     if (req.method === 'POST' && path === '/api/dql/artifacts/execute') {
       try {
         const body = await readJSON(req);
+        // RFC 0010 rule 8: with a host, a file the request names is project content only, and here a block
+        // file (`.dql`). Refused whether or not it exists, before anything else; the refusal names no path.
+        const namedFile = body.artifact && typeof body.artifact === 'object' ? (body.artifact as Record<string, unknown>).sourcePath : undefined;
+        if (hostedRequest() && namedFile !== undefined && namedFile !== null && !hostedBlockFile(namedFile)) {
+          res.writeHead(403, { 'Content-Type': 'application/json; charset=utf-8' });
+          res.end(serializeJSON({ error: HOSTED_FILE_REFUSED, code: 'PERMISSION_DENIED' }));
+          return;
+        }
         const targetConnection = await resolveExecutionConnection(body as Record<string, unknown>);
         const targetDescriptor = executionTargetDescriptor(body as Record<string, unknown>);
         const targetConnectionName = targetDescriptor.target === 'connection'
@@ -28288,6 +29191,17 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
           if (filePath && existsSync(filePath) && !statSync(filePath).isDirectory()) source = readFileSync(filePath, 'utf-8');
         }
         if (!source.trim()) throw new Error('Provide an executable DQL artifact or block name.');
+        // HH-13: a certified block run by its name or its file is its Dataset: the host decides who may use it, as for the Dataset's own runs.
+        if (hostHooks?.sourceAccess && sourcePath) {
+          const relativePath = relative(resolve(projectRoot), safeJoin(projectRoot, sourcePath) ?? '').split(sep).join('/');
+          const known = Object.values(buildManifest({ projectRoot }).blocks).find((candidate) => candidate.filePath === relativePath && (!blockName || candidate.name === blockName));
+          const refusal = known ? await restrictedBlockRefusal(known) : null;
+          if (refusal) {
+            res.writeHead(403, { 'Content-Type': 'application/json; charset=utf-8' });
+            res.end(serializeJSON(refusal));
+            return;
+          }
+        }
         const expectedReceipt = requestedArtifact?.executionReceipt;
         // When a block name is given we deliberately re-read the CANONICAL block
         // from disk, so `source` is no longer the text the receipt was taken
@@ -28383,7 +29297,8 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
         const block = manifest.blocks[blockName];
         if (!block) {
           res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' });
-          res.end(serializeJSON({ error: `Block "${blockName}" was not found.` }));
+          // With a host, a request's own text is not repeated back.
+          res.end(serializeJSON({ error: hostedRequest() ? 'That block was not found. Pick a certified block from the list.' : `Block "${blockName}" was not found.` }));
           return;
         }
         if (block.status !== 'certified') throw new Error(`Block "${blockName}" is not certified.`);
@@ -28441,6 +29356,12 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
         }
 
         const resolved = resolveNotebookBlockReferenceCell(cell, projectRoot);
+        const blockRefusal = resolved.blockName && resolved.blockPath ? await restrictedBlockRefusal({ name: resolved.blockName, filePath: resolved.blockPath, ...(resolved.domain ? { domain: resolved.domain } : {}) }) : null;
+        if (blockRefusal) {
+          res.writeHead(403, { 'Content-Type': 'application/json; charset=utf-8' });
+          res.end(serializeJSON(blockRefusal));
+          return;
+        }
         const executableCell = resolved.cell;
         const invocation = executableCell.type === 'dql'
           ? prepareBlockInvocation({
@@ -28559,7 +29480,7 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
             status: 'success',
             resultPreview: normalized,
             sql: executableSql,
-          });
+          }, Boolean(hostHooks));
         }
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(serializeJSON({
@@ -28627,18 +29548,21 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
           updateNotebookResearchFromCellExecution(projectRoot, execContext, {
             status: 'error',
             error: error instanceof Error ? error.message : String(error),
-          });
+          }, Boolean(hostHooks));
         }
         const internalRelationCode = error instanceof DqlInternalRelationIdError
           ? 'DQL_INTERNAL_RELATION_ID'
           : undefined;
         const semanticCode = semanticExecutionFailureCode(error) ?? semanticRuntimeErrorCode(error);
-        const code = internalRelationCode ?? semanticCode ?? classifyAnalyticalFailure(error);
+        const refused = isPolicyRefusal(error);
+        const code = refused ? 'POLICY_DENIED' : internalRelationCode ?? semanticCode ?? classifyAnalyticalFailure(error);
         const semanticDetails = semanticExecutionFailureDetails(error) ?? semanticRuntimeErrorDetails(error);
         const details = semanticDetails && typeof semanticDetails === 'object' && !Array.isArray(semanticDetails)
           ? semanticDetails as Record<string, unknown>
           : {};
-        const status = internalRelationCode
+        const status = refused
+          ? 403
+          : internalRelationCode
           ? 400
           : code === 'EXECUTION_TARGET_MISMATCH' || code === 'SEMANTIC_SOURCE_DRIFT'
           ? 409
@@ -28735,7 +29659,9 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
       return;
     }
 
-    const content = readFileSync(filePath);
+    // A hosted page says so before any script runs, so the app never shows its single-user screens there, even while
+    // the person's capability map is loading or failing to load (RFC 0010 HH-9).
+    const content = hostIdentity && requestedPath === '/index.html' ? hostedIndexHtml(readFileSync(filePath)) : readFileSync(filePath);
     res.writeHead(200, {
       'Content-Type': contentTypeFor(filePath),
       'Cache-Control': staticResponseCacheControl(filePath),
@@ -28749,12 +29675,12 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
       // richer contracts; this boundary is the final server-survival guard.
       if (res.writableEnded || res.destroyed) return;
       const code = apiErrorCode(error, 'INTERNAL_RUNTIME_ERROR');
-      const message = apiErrorMessage(error);
+      const message = hostHooks && isProgramError(error) ? personErrorText(error) : apiErrorMessage(error);
       if (res.headersSent) {
         res.end();
         return;
       }
-      res.writeHead(code === 'SEMANTIC_SOURCE_DRIFT' ? 409 : 500, {
+      res.writeHead(code === 'SEMANTIC_SOURCE_DRIFT' ? 409 : error instanceof HostStoreError ? 503 : 500, {
         'Content-Type': 'application/json; charset=utf-8',
       });
       res.end(serializeJSON(apiErrorEnvelope({
@@ -28768,10 +29694,12 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
           : ['Retry the request.', 'Open Trust & Steps for the stable failure details.'],
       })));
     });
-  });
+  }));
 
   server.once('close', () => {
     runtimeClosing = true;
+    unregisterServerHooks(scope.id);
+    syncProcessHostHooks();
     datasetResultCache?.close();
     for (const watcher of [...projectWatchers]) closeProjectWatcher(watcher);
     projectWatchers.length = 0;
@@ -28784,7 +29712,7 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
     // WAL handle after the Notebook process has stopped).
     void Promise.resolve(conversationStoreInstance?.close?.()).catch(() => undefined);
     conversationStoreInstance = undefined;
-    for (const client of operationSseClients) {
+    for (const client of operationSseClients.keys()) {
       try { client.end(); } catch { /* connection already closed */ }
     }
     operationSseClients.clear();
@@ -29132,8 +30060,9 @@ function readRowField(row: Record<string, unknown>, field: string): unknown {
   return entry?.[1];
 }
 
+/** A Snowflake string's content: Snowflake reads backslashes in strings, so they are escaped as well as quotes. */
 function escapeSqlString(value: string): string {
-  return value.replace(/'/g, "''");
+  return value.replace(/\\/g, '\\\\').replace(/'/g, "''");
 }
 
 function connectionDriverLabel(connection: ConnectionConfig): string {
@@ -29148,6 +30077,7 @@ function connectionDriverLabel(connection: ConnectionConfig): string {
 function normalizeQueryResult(
   result: any,
   semanticRefs?: { metrics: string[]; dimensions: string[] },
+  rowCap: number = NOTEBOOK_EXECUTE_PREVIEW_ROW_LIMIT,
 ): {
   columns: string[];
   rows: Record<string, unknown>[];
@@ -29176,7 +30106,7 @@ function normalizeQueryResult(
     answerTier: result?.answerTier,
   });
   const rawRows = Array.isArray(result?.rows) ? result.rows : [];
-  const rows = canonical.rows.slice(0, NOTEBOOK_EXECUTE_PREVIEW_ROW_LIMIT);
+  const rows = canonical.rows.slice(0, rowCap);
   const hasRefs = semanticRefs && (semanticRefs.metrics.length > 0 || semanticRefs.dimensions.length > 0);
   return {
     columns: canonical.columns,
@@ -29451,7 +30381,7 @@ function loadAppBuildDraftDashboard(
   draftSources: AppBuildDraftSource[];
   draftSourcePolicy: AppBuildSourcePolicy;
 } | null {
-  const storage = new LocalAppStorage(defaultLocalAppsDbPath(projectRoot));
+  const storage = new LocalAppStorage(defaultLocalAppsDbPath(projectRoot), { owner: currentRecordOwner() });
   try {
     const draft = storage.getAppBuildDraft(draftId);
     if (!draft) return null;
@@ -29570,7 +30500,7 @@ function currentAppBuildPreviewIntentFingerprint(
   draftId: string,
   dashboardId: string,
 ): string | undefined {
-  const storage = new LocalAppStorage(defaultLocalAppsDbPath(projectRoot));
+  const storage = new LocalAppStorage(defaultLocalAppsDbPath(projectRoot), { owner: currentRecordOwner() });
   try {
     const draft = storage.getAppBuildDraft(draftId);
     if (!draft || !draft.pages.some((page) => page.id === dashboardId)) return undefined;
@@ -29596,7 +30526,7 @@ function invalidateIncompleteAppBuildPreviewReceipt(input: {
   expectedReceiptId?: string;
 }): boolean {
   if (!input.expectedReceiptId) return false;
-  const storage = new LocalAppStorage(defaultLocalAppsDbPath(input.projectRoot));
+  const storage = new LocalAppStorage(defaultLocalAppsDbPath(input.projectRoot), { owner: currentRecordOwner() });
   try {
     const current = storage.getAppBuildDraft(input.draftId);
     if (!current || !current.pages.some((page) => page.id === input.dashboardId)) return false;
@@ -31044,6 +31974,7 @@ function createModelingImportSession(
   gitRoot: string | null,
   loopback: boolean,
   source: Record<string, unknown>,
+  hosted?: { pathAllowed: (requested: string) => boolean; fileAllowed: (absolutePath: string) => boolean },
 ): ModelingImportSession {
   const mode = source.mode;
   if (mode !== 'current_project' && mode !== 'path' && mode !== 'upload' && mode !== 'paste') throw Object.assign(new Error('Choose current_project, path, upload, or paste.'), { code: 'INVALID_REQUEST' });
@@ -31055,6 +31986,7 @@ function createModelingImportSession(
     files.push({ name: typeof source.filename === 'string' ? source.filename : mode === 'paste' ? 'pasted-modeling.yaml' : 'uploaded-modeling.yaml', content, inProject: false });
   } else {
     if (mode === 'path' && !loopback) throw Object.assign(new Error('Local path import is available only on the loopback Notebook runtime.'), { code: 'PATH_ACCESS_FORBIDDEN' });
+    if (mode === 'path' && hosted && !hosted.pathAllowed(typeof source.path === 'string' ? source.path : '')) throw Object.assign(new Error(HOSTED_FILE_REFUSED), { code: 'PATH_ACCESS_FORBIDDEN' });
     const allowedRoot = realpathSync(resolve(gitRoot ?? projectRoot));
     const requestedInput = mode === 'current_project'
       ? resolve(projectRoot)
@@ -31075,6 +32007,7 @@ function createModelingImportSession(
       }
       const resolvedPath = realpathSync(path);
       if (resolvedPath !== allowedRoot && !resolvedPath.startsWith(`${allowedRoot}${sep}`)) continue;
+      if (hosted && !hosted.fileAllowed(path)) continue;
       const resolvedProject = realpathSync(projectRoot);
       files.push({ name: relative(requested, resolvedPath).replace(/\\/g, '/') || resolvedPath.split(sep).at(-1)!, path: relative(resolvedProject, resolvedPath).replace(/\\/g, '/'), content: readFileSync(resolvedPath, 'utf8'), inProject: resolvedPath === resolvedProject || resolvedPath.startsWith(`${resolvedProject}${sep}`) });
     }
@@ -34955,6 +35888,10 @@ export interface ExecutionServiceInput {
   connection: ConnectionConfig;
   enforceReadOnly?: boolean;
   rowLimit?: number;
+  /** The largest SQL bound `rowLimit` may set (default 10 000); a file sets its own. */
+  rowCeiling?: number;
+  /** How many rows the result keeps (default: the screen's 500); a file keeps more. */
+  resultRows?: number;
   sqlParams?: SQLParamSpec[];
   variables?: Record<string, unknown>;
   semanticRefs?: { metrics: string[]; dimensions: string[] };
@@ -35000,6 +35937,7 @@ export class ExecutionService {
       projectConfig: this.host.projectConfig(),
       enforceReadOnly: input.enforceReadOnly,
       rowLimit: input.rowLimit,
+      ...(input.rowCeiling ? { rowCeiling: input.rowCeiling } : {}),
     });
     throwIfExecutionSignalAborted(input.signal);
     const raw = input.executePrepared
@@ -35016,7 +35954,7 @@ export class ExecutionService {
           input.signal ? { signal: input.signal } : undefined,
         );
     throwIfExecutionSignalAborted(input.signal);
-    const result = normalizeQueryResult(raw, input.semanticRefs);
+    const result = normalizeQueryResult(raw, input.semanticRefs, input.resultRows);
     return {
       preparation,
       result,
@@ -35054,6 +35992,8 @@ export async function prepareAnalyticalExecutionSql(input: {
   projectConfig: ProjectConfig;
   enforceReadOnly?: boolean;
   rowLimit?: number;
+  /** The largest bound `rowLimit` may set (default 10 000, the screen's ceiling); an export's file sets its own. */
+  rowCeiling?: number;
 }): Promise<AnalyticalExecutionPreparation> {
   const sourceSql = input.sql.trim();
   const rewrites: Array<{ from: string; to: string }> = [];
@@ -35115,7 +36055,7 @@ export async function prepareAnalyticalExecutionSql(input: {
 
   const rowBound = input.rowLimit === undefined
     ? undefined
-    : buildRowBoundedSql(prepared.sql, input.rowLimit, input.connection.driver);
+    : buildRowBoundedSql(prepared.sql, input.rowLimit, input.connection.driver, input.rowCeiling);
   return {
     sourceSql,
     decodedSql,
@@ -35809,8 +36749,8 @@ function withAnalyticalCompilationOrigin<T>(stage: AnalyticalErrorStage, fn: () 
 /** No dbt grounding — decoding an internal id needs none for a qualified suffix. */
 const EMPTY_SCHEMA_GROUNDING = { tables: [], joinKeys: [], byKey: new Map() };
 
-export function clampAnalyticalRowBound(rowLimit: number): number {
-  return Number.isFinite(rowLimit) ? Math.max(1, Math.min(10_000, Math.floor(rowLimit))) : 200;
+export function clampAnalyticalRowBound(rowLimit: number, ceiling = 10_000): number {
+  return Number.isFinite(rowLimit) ? Math.max(1, Math.min(ceiling, Math.floor(rowLimit))) : 200;
 }
 
 /**
@@ -35856,6 +36796,7 @@ export function buildRowBoundedSql(
   sql: string,
   rowLimit: number | undefined,
   dialect = 'duckdb',
+  ceiling = 10_000,
 ): AnalyticalRowBoundResult {
   const trimmed = sql.trim().replace(/;\s*$/, '').trim();
   if (!rowLimit) return { sql: trimmed, outcome: 'skipped', reason: 'no row bound requested' };
@@ -35880,7 +36821,7 @@ export function buildRowBoundedSql(
     return { sql: trimmed, outcome: 'existing', reason: 'statement already carries its own bound' };
   }
 
-  return { sql: `${trimmed}\nLIMIT ${clampAnalyticalRowBound(rowLimit)}`, outcome: 'appended' };
+  return { sql: `${trimmed}\nLIMIT ${clampAnalyticalRowBound(rowLimit, ceiling)}`, outcome: 'appended' };
 }
 
 /**
@@ -36525,6 +37466,16 @@ export function normalizeProjectConnection(connection: ConnectionConfig, project
   if ((normalized.driver === 'file' || normalized.driver === 'duckdb') && normalized.filepath && normalized.filepath !== ':memory:' && !isAbsoluteLikePath(normalized.filepath)) {
     normalized.filepath = resolve(projectRoot, normalized.filepath);
   }
+  // Folders a hosted connection still reads files from (none by default): relative to the project.
+  if ((normalized.driver === 'file' || normalized.driver === 'duckdb') && Array.isArray(normalized.allowedDirectories)) {
+    normalized.allowedDirectories = normalized.allowedDirectories
+      .filter((folder): folder is string => typeof folder === 'string' && folder.trim() !== '')
+      .map((folder) => (isAbsoluteLikePath(folder) ? folder : resolve(projectRoot, folder)));
+  } else if (normalized.allowedDirectories !== undefined) {
+    delete normalized.allowedDirectories;
+  }
+  // Only DQL restricts an engine (with a host); a configuration never asks for it, nor turns it off.
+  delete normalized.restrictExternalAccess;
 
   // Every driver's client library loads from the project's connector folder.
   normalized.moduleSearchPaths = connectorModuleSearchPaths(projectRoot);
@@ -36637,6 +37588,87 @@ function safeJoin(rootDir: string, requestPath: string): string | null {
   const fullPath = resolve(rootDir, `.${normalized.startsWith('/') ? normalized : `/${normalized}`}`);
   const resolvedRoot = resolve(rootDir);
   return fullPath.startsWith(resolvedRoot) ? fullPath : null;
+}
+
+/**
+ * RFC 0010: WHICH FILES A HOSTED REQUEST MAY OPEN BY PATH. With a host, the
+ * file routes serve project content only (notebooks, blocks, Apps and their
+ * pages, domains, the semantic layer, docs): never a dot folder or dotfile
+ * (`.dql/` holds caches, run traces, per-person Home state and stored
+ * secrets; `.git/`, `.github/`, `.env`), the project's connection settings or
+ * dbt profiles, data or build folders, nor a database file. A symlink is
+ * judged by where it points. Private notebook drafts under
+ * `.dql/local/private/notebooks` only where one person uses the server.
+ */
+const HOSTED_FILE_EXTENSIONS = new Set(['.dqlnb', '.dql', '.dqld', '.md', '.sql', '.yaml', '.yml', '.json']);
+const HOSTED_DENIED_FOLDERS = new Set(['node_modules', 'target', 'data', 'dist', 'logs', 'seeds']);
+const HOSTED_DENIED_NAMES = new Set(['dql.config.json', 'profiles.yml', 'profiles.yaml', 'package.json', 'package-lock.json']);
+export const HOSTED_FILE_REFUSED = 'This file is not one DQL opens here: only notebooks, blocks, Apps, domains, the semantic layer and docs. Open it from the Files list.';
+
+function hostedFileRuleBroken(relativePath: string, privateDrafts: boolean): boolean {
+  const segments = relativePath.split('/').filter(Boolean);
+  if (!segments.length || segments.includes('..')) return true;
+  const name = segments.at(-1)!.toLowerCase();
+  const extension = extname(name);
+  if (privateDrafts && relativePath.startsWith(`${PRIVATE_NOTEBOOK_PREFIX}/`) && segments.length === 5 && (extension === '.dqlnb' || extension === '.dql')) return false;
+  if (segments.some((segment) => segment.startsWith('.'))) return true;
+  if (segments.slice(0, -1).some((segment) => HOSTED_DENIED_FOLDERS.has(segment.toLowerCase()))) return true;
+  if (HOSTED_DENIED_NAMES.has(name) || /secret|credential|password|token/i.test(name)) return true;
+  // A notebook's last run kept beside it (before a host, or by `dql notebook`) holds one person's result rows.
+  if (name.endsWith('.run.json')) return true;
+  return !HOSTED_FILE_EXTENSIONS.has(extension);
+}
+
+/** The absolute path a hosted request may open, or null (refused, whether or not the file exists). */
+export function hostedProjectFile(projectRoot: string, requested: string, options: { privateDrafts: boolean }): string | null {
+  const absolute = safeJoin(projectRoot, requested);
+  if (!absolute) return null;
+  const root = resolve(projectRoot);
+  const asRelative = (target: string, base: string) => relative(base, target).split(sep).join('/');
+  if (absolute !== root && !absolute.startsWith(`${root}${sep}`)) return null;
+  if (hostedFileRuleBroken(asRelative(absolute, root), options.privateDrafts)) return null;
+  if (!existsSync(absolute)) return absolute;
+  // Where it really is: a symlink may not lead out of the project, or into what the rule keeps out.
+  try {
+    const realRoot = realpathSync(root);
+    const real = realpathSync(absolute);
+    if (!real.startsWith(`${realRoot}${sep}`)) return null;
+    if (hostedFileRuleBroken(asRelative(real, realRoot), options.privateDrafts)) return null;
+  } catch {
+    return null;
+  }
+  return absolute;
+}
+
+/**
+ * A file or folder a hosted request names to read from (an import's source,
+ * a skills folder), or null: inside the project (judged by real path too), in
+ * no dot folder and no folder the file rule keeps out (`data`, `target`,
+ * `node_modules`, ...); a file is judged by `hostedProjectFile`. Refused
+ * whether or not it exists; `~` and absolute paths outside the project are
+ * refused.
+ */
+export function hostedProjectPath(projectRoot: string, requested: string, options: { privateDrafts: boolean }): string | null {
+  if (typeof requested !== 'string' || !requested.trim() || requested.trim().startsWith('~') || /[\u0000-\u001f]/.test(requested)) return null;
+  const root = resolve(projectRoot);
+  const absolute = resolve(root, requested.trim());
+  if (absolute !== root && !absolute.startsWith(`${root}${sep}`)) return null;
+  const asRelative = (target: string, base: string) => relative(base, target).split(sep).join('/');
+  const folderBroken = (relativePath: string) => relativePath.split('/').filter(Boolean)
+    .some((segment) => segment === '..' || segment.startsWith('.') || HOSTED_DENIED_FOLDERS.has(segment.toLowerCase()));
+  const isFile = existsSync(absolute) ? statSync(absolute).isFile() : HOSTED_FILE_EXTENSIONS.has(extname(absolute).toLowerCase());
+  if (isFile) return absolute === root ? null : hostedProjectFile(projectRoot, asRelative(absolute, root), options);
+  if (folderBroken(asRelative(absolute, root))) return null;
+  if (!existsSync(absolute)) return absolute;
+  try {
+    const realRoot = realpathSync(root);
+    const real = realpathSync(absolute);
+    if (real !== realRoot && !real.startsWith(`${realRoot}${sep}`)) return null;
+    if (folderBroken(asRelative(real, realRoot))) return null;
+  } catch {
+    return null;
+  }
+  return absolute;
 }
 
 function contentTypeFor(filePath: string): string {
@@ -36835,6 +37867,44 @@ function resolveNotebookBlockReferenceCell(
 
 function isConnectionConfig(value: unknown): value is ConnectionConfig {
   return Boolean(value && typeof value === 'object' && 'driver' in (value as Record<string, unknown>));
+}
+
+/**
+ * The environment a child process gets when it runs on project content for a hosted server: where programs are,
+ * a home, a locale and a temporary folder, and nothing else of the server's (no keys, tokens or passwords).
+ */
+export function minimalChildEnv(extra: Record<string, string | undefined> = {}): NodeJS.ProcessEnv {
+  const keep = ['PATH', 'HOME', 'LANG', 'LC_ALL', 'LC_CTYPE', 'TZ', 'TMPDIR', 'TEMP', 'TMP', 'SYSTEMROOT', 'PATHEXT'];
+  const env: NodeJS.ProcessEnv = {};
+  for (const name of keep) if (process.env[name] !== undefined) env[name] = process.env[name];
+  for (const [name, value] of Object.entries(extra)) if (value !== undefined) env[name] = value;
+  return env;
+}
+
+/** What MetricFlow gets with a host: the minimal environment and dbt's own DBT_* settings (its profile's warehouse settings). */
+function metricFlowEnvironment(): NodeJS.ProcessEnv {
+  return minimalChildEnv(Object.fromEntries(Object.entries(process.env).filter((entry): entry is [string, string] => /^DBT_[A-Z0-9_]+$/.test(entry[0]) && typeof entry[1] === 'string')));
+}
+
+/** dbt's own settings (DBT_*), which a dbt run needs; never another program's secrets. */
+function dbtEnvironment(): Record<string, string> {
+  return Object.fromEntries(Object.entries(process.env).filter((entry): entry is [string, string] => /^DBT_[A-Z0-9_]+$/.test(entry[0]) && typeof entry[1] === 'string' && !/(PASSWORD|SECRET|TOKEN|KEY)/.test(entry[0])));
+}
+
+/** A request asked for a connection the server chooses (RFC 0010: with a host, the server picks the connection). */
+export class ConnectionChoiceRefusedError extends Error {
+  readonly code = 'CONNECTION_NOT_ALLOWED';
+  constructor(message: string) {
+    super(message);
+    this.name = 'ConnectionChoiceRefusedError';
+  }
+}
+const UNKNOWN_CONNECTION_REFUSED = 'This workspace has no connection by that name. Pick one of the workspace\'s connections, or leave the choice to the workspace.';
+const LOCAL_EXECUTION_REFUSED = 'Queries here run on the workspace\'s connection, not on the server\'s local files. Pick one of the workspace\'s connections.';
+
+/** One of the project's own connections, carrying the name the server resolved it by (for the host's row rules and credentials). */
+function namedConnection(config: ConnectionConfig, name: string): ConnectionConfig {
+  return { ...config, name } as ConnectionConfig;
 }
 
 // ── dql-notebook helper functions ─────────────────────────────────────────────
@@ -37135,6 +38205,7 @@ function readUserPrefs(userPrefsPath: string): UserPrefs {
 }
 
 function writeUserPrefs(userPrefsPath: string, prefs: UserPrefs): void {
+  mkdirSync(dirname(userPrefsPath), { recursive: true });
   writeFileSync(userPrefsPath, JSON.stringify(prefs, null, 2) + '\n', 'utf-8');
 }
 
@@ -37215,9 +38286,10 @@ async function introspectSchema(
   const columnsByPath = new Map<string, Array<{ name: string; type: string }>>();
   const limit = Math.min(1_000, Math.max(1, Math.floor(options.limit ?? 200)));
   const offset = Math.max(0, Math.floor(options.offset ?? 0));
-  const escapedSearch = options.search?.trim().replace(/'/g, "''");
-  const searchPredicate = escapedSearch
-    ? ` AND (LOWER(table_schema) LIKE LOWER('%${escapedSearch}%') OR LOWER(table_name) LIKE LOWER('%${escapedSearch}%'))`
+  // The search text is a bound value (never part of the statement's text: several engines read backslashes in strings).
+  const search = options.search?.trim();
+  const searchPredicate = search
+    ? ' AND (LOWER(table_schema) LIKE LOWER($1) OR LOWER(table_name) LIKE LOWER($2))'
     : '';
 
   // Runtime inventory is table-first and bounded. Columns are loaded only for
@@ -37231,7 +38303,7 @@ async function introspectSchema(
        ${searchPredicate}
        ORDER BY table_schema, table_name
        LIMIT ${limit} OFFSET ${offset}`,
-      [], {}, connection, { purpose: 'metadata' },
+      search ? [{ name: 'search', position: 1 }, { name: 'search', position: 2 }] : [], search ? { search: `%${search}%` } : {}, connection, { purpose: 'metadata' },
     );
     tables = catalogRows.rows.map((row) => {
       const schema = String(row['table_schema'] ?? row['TABLE_SCHEMA'] ?? 'default');
@@ -37503,10 +38575,19 @@ function blockStudioExecutionFingerprint(source: string): string {
     .digest('hex');
 }
 
-function blockStudioRunSummaryPath(projectRoot: string, blockPath: string): string {
+/**
+ * Where a block's last Block Studio run (row count, columns, time) is kept. With a host it is the person's who ran it
+ * (their row rules decided the count): one folder per person; a request the host names no one for keeps and reads
+ * none (null). Without a host, the one project-wide file as before.
+ */
+function blockStudioRunSummaryPath(projectRoot: string, blockPath: string): string | null {
   const normalizedPath = normalize(blockPath).replace(/^\/+/, '').replaceAll('\\', '/');
   const pathKey = createHash('sha256').update(normalizedPath).digest('hex').slice(0, 32);
-  return join(projectRoot, '.dql', 'runs', 'block-studio', `${pathKey}.json`);
+  const owner = currentRecordOwner();
+  if (owner === null) return null;
+  if (owner === undefined) return join(projectRoot, '.dql', 'runs', 'block-studio', `${pathKey}.json`);
+  const person = `p-${createHash('sha256').update(owner).digest('hex').slice(0, 32)}`;
+  return join(projectRoot, '.dql', 'local', 'private', 'block-studio-runs', person, `${pathKey}.json`);
 }
 
 function writeBlockStudioRunSummary(
@@ -37518,6 +38599,7 @@ function writeBlockStudioRunSummary(
   const normalizedPath = normalize(blockPath).replace(/^\/+/, '').replaceAll('\\', '/');
   if (!isBlockStudioBlockPath(normalizedPath)) return;
   const receiptPath = blockStudioRunSummaryPath(projectRoot, normalizedPath);
+  if (!receiptPath) return;
   mkdirSync(dirname(receiptPath), { recursive: true });
   const receipt: StoredBlockStudioRunSummary = {
     version: 1,
@@ -37541,7 +38623,7 @@ function readBlockStudioRunSummary(
   try {
     const normalizedPath = normalize(blockPath).replace(/^\/+/, '').replaceAll('\\', '/');
     const receiptPath = blockStudioRunSummaryPath(projectRoot, normalizedPath);
-    if (!existsSync(receiptPath)) return null;
+    if (!receiptPath || !existsSync(receiptPath)) return null;
     const receipt = JSON.parse(readFileSync(receiptPath, 'utf-8')) as Partial<StoredBlockStudioRunSummary>;
     if (
       receipt.version !== 1
@@ -38638,6 +39720,8 @@ export function validateBlockStudioSource(
 
 export interface CreateDqlGenerationSessionForProjectOptions {
   inputPath?: string;
+  /** Which files under the import path may be read (a hosted server: project content only). */
+  fileAllowed?: (absolutePath: string) => boolean;
   inputMode?: BlockStudioImportInputMode;
   sources?: BlockStudioImportSource[];
   sourceKind?: BlockStudioImportSourceKind | 'raw-sql';
@@ -38773,6 +39857,7 @@ export async function createDqlGenerationSessionForProject(
 ): Promise<DqlGenerationSession> {
   const session = createBlockStudioImportSession(projectRoot, {
     inputPath: options.inputPath ?? '',
+    ...(options.fileAllowed ? { fileAllowed: options.fileAllowed } : {}),
     inputMode: options.inputMode,
     sources: options.sources,
     sourceKind: options.sourceKind ?? 'raw-sql',
@@ -39558,6 +40643,68 @@ export function storyValueRelations(
     for (const relation of relations) all.add(relation);
   }
   return { relations: [...all].sort() };
+}
+
+/**
+ * The host's additions to the DQL app (HH-9), as DQL passes them on: each field of its own shape and plain, every
+ * link same-origin, or left out. A malformed answer (not an object, a list that is not a list, entries that are not
+ * objects) gives none of the fields it got wrong, never a failure.
+ */
+export function safeHostUiExtras(answer: unknown): {
+  audience?: 'reader';
+  appNotFound?: { message: string; next?: { label: string; href: string } };
+  signOutUrl?: string;
+  environment?: string;
+  banner?: ReturnType<typeof safeHostBanner>;
+  links: Array<{ id: string; label: string; href: string; placement: 'menu' | 'nav'; badge?: number; icon?: string }>;
+  answerActions: Array<{ id: string; label: string; url: string; description?: string; on: Array<'review' | 'unanswered' | 'answered'> }>;
+} {
+  const extras = answer && typeof answer === 'object' && !Array.isArray(answer) ? answer as Record<string, unknown> : {};
+  const sameOrigin = (href: unknown): href is string => typeof href === 'string' && href.startsWith('/') && !href.startsWith('//') && !href.includes('\\');
+  const entries = (value: unknown): Array<Record<string, unknown>> => (Array.isArray(value) ? value.filter((entry): entry is Record<string, unknown> => !!entry && typeof entry === 'object' && !Array.isArray(entry)) : []);
+  const appNotFound = safeAppNotFound(extras.appNotFound);
+  const banner = safeHostBanner(extras.banner);
+  const environment = typeof extras.environment === 'string' ? extras.environment.replace(/\s+/g, ' ').trim().slice(0, 80) : '';
+  return {
+    ...(extras.audience === 'reader' ? { audience: 'reader' as const } : {}),
+    ...(appNotFound ? { appNotFound } : {}),
+    ...(sameOrigin(extras.signOutUrl) ? { signOutUrl: extras.signOutUrl } : {}),
+    ...(environment ? { environment } : {}),
+    ...(banner ? { banner } : {}),
+    // At most 12 links in DQL's rail and 12 in the person menu, each in the host's order.
+    links: capHostLinksByPlacement(entries(extras.links).filter((link) => sameOrigin(link.href) && typeof link.label === 'string' && link.label.trim()), 12)
+      .map((link) => {
+        const badge = link.badge;
+        const icon = link.icon;
+        return {
+          id: String(link.id ?? '').slice(0, 80),
+          label: String(link.label).slice(0, 60),
+          href: link.href as string,
+          placement: link.placement === 'nav' ? 'nav' as const : 'menu' as const,
+          ...(typeof badge === 'number' && Number.isInteger(badge) && badge > 0 ? { badge: Math.min(badge, 999) } : {}),
+          ...(typeof icon === 'string' && HOST_ICONS.has(icon) ? { icon } : {}),
+        };
+      }),
+    answerActions: entries(extras.answerActions).filter((action) => sameOrigin(action.url) && typeof action.label === 'string' && action.label.trim()).slice(0, 4)
+      .map((action) => {
+        const on = Array.isArray(action.on) ? action.on.filter((kind): kind is 'review' | 'unanswered' | 'answered' => kind === 'review' || kind === 'unanswered' || kind === 'answered') : [];
+        return {
+          id: String(action.id ?? '').slice(0, 80),
+          label: String(action.label).slice(0, 60),
+          url: action.url as string,
+          ...(typeof action.description === 'string' && action.description ? { description: action.description.slice(0, 200) } : {}),
+          on: on.length ? [...new Set(on)] : ['review' as const],
+        };
+      }),
+  };
+}
+
+/** The app's page as a hosted server serves it: marked hosted (`<meta name="dql-hosted" content="1">`) before any script. */
+export function hostedIndexHtml(content: Buffer): Buffer {
+  const html = content.toString('utf8');
+  if (html.includes('name="dql-hosted"')) return content;
+  const marked = /<head[^>]*>/i.test(html) ? html.replace(/<head[^>]*>/i, (head) => `${head}\n    <meta name="dql-hosted" content="1" />`) : `<meta name="dql-hosted" content="1" />${html}`;
+  return Buffer.from(marked, 'utf8');
 }
 
 /** The host's links, keeping at most `limit` for the rail and `limit` for the person menu, in order. */
@@ -41208,7 +42355,9 @@ async function selectAssistProvider(
   // a working Codex or Ollama sat idle. Governance is untouched: the same host
   // decides, freezes and validates — only the transport carrying the
   // conversation can change, and only on a genuine fault.
-  const alternates = requestedProvider
+  // A model on this machine never fails over to one off it: whether results may reach the model was decided for
+  // the model on this machine (the local-model rule), so its prompts must not be carried anywhere else.
+  const alternates = requestedProvider || ollamaOnThisMachine({ id: selected.id, provider }, config.baseUrl)
     // An explicitly requested provider is a choice, not a default. Honour it.
     ? []
     : settings
@@ -41602,6 +42751,37 @@ function renderConversationMemoryForPrompt(context: Record<string, unknown> | un
     recap,
     'If the user asks what this conversation is about, summarize this context directly. Do not query data or invent values.',
   ].filter(Boolean).join('\n');
+}
+
+/**
+ * The conversation as a model outside the privacy boundary may read it: the questions asked and the names of what
+ * the answers measured and showed (columns, measures, dimensions). No answer text, row, member or other value.
+ */
+export function renderConversationShapeForPrompt(context: Record<string, unknown> | undefined): string | undefined {
+  if (!context) return undefined;
+  const turns = Array.isArray(context.turns)
+    ? context.turns.map(agentRunRecord).filter((turn): turn is Record<string, unknown> => Boolean(turn)).slice(-4)
+    : [];
+  const questions = [
+    ...turns.map((turn) => agentRunString(turn.question)),
+    agentRunString(context.sourceQuestion),
+  ].filter((value): value is string => Boolean(value)).slice(-4);
+  const latest = turns.at(-1);
+  const result = latest ? agentRunRecord(latest.result) : undefined;
+  const columns = [
+    ...agentRunStringArray(result?.columns),
+    ...agentRunStringArray(context.resultColumns ?? context.outputColumns),
+  ].filter((column, index, all) => all.indexOf(column) === index).slice(0, 8);
+  const bits = [
+    questions.length ? `the questions: ${questions.map((question) => `"${question}"`).join('; ')}` : '',
+    columns.length ? `the latest result's columns: ${columns.join(', ')}` : '',
+  ].filter(Boolean);
+  if (bits.length === 0) return undefined;
+  return [
+    'Current conversation context:',
+    `We were talking about ${bits.join('. ')}.`,
+    'The answers\' figures and rows are not given here (they stay out of this model). Do not state or invent any value; point the person to the answers on screen.',
+  ].join('\n');
 }
 
 export function buildConversationContextRecap(context: Record<string, unknown> | undefined): string | undefined {
@@ -44397,9 +45577,17 @@ async function readGitLog(cwd: string, limit: number): Promise<{ inRepo: boolean
   return { inRepo: true, commits };
 }
 
-function snapshotPathFor(projectRoot: string, notebookPath: string): string | null {
-  const abs = safeJoin(projectRoot, notebookPath);
-  if (!abs) return null;
+/**
+ * Where a notebook's last run is kept: beside the notebook, or, with a host,
+ * in the person's own folder under `.dql/local/private/run-snapshots` (the
+ * results are what that person may see, never anyone else's).
+ */
+function snapshotPathFor(projectRoot: string, notebookPath: string, personKey?: string): string | null {
+  const inProject = safeJoin(projectRoot, notebookPath);
+  if (!inProject) return null;
+  const abs = personKey
+    ? join(projectRoot, '.dql', 'local', 'private', 'run-snapshots', personKey, relative(resolve(projectRoot), inProject))
+    : inProject;
   // Strip extension and append `.run.json` so `foo.dqlnb` → `foo.run.json`
   // and `bar.dql` → `bar.run.json`. Keeps the sibling file next to source.
   const dot = abs.lastIndexOf('.');
@@ -44407,8 +45595,8 @@ function snapshotPathFor(projectRoot: string, notebookPath: string): string | nu
   return `${base}.run.json`;
 }
 
-function readRunSnapshot(projectRoot: string, notebookPath: string): { found: boolean; snapshot: unknown | null } {
-  const p = snapshotPathFor(projectRoot, notebookPath);
+function readRunSnapshot(projectRoot: string, notebookPath: string, personKey?: string): { found: boolean; snapshot: unknown | null } {
+  const p = snapshotPathFor(projectRoot, notebookPath, personKey);
   if (!p || !existsSync(p)) return { found: false, snapshot: null };
   try {
     const raw = readFileSync(p, 'utf-8');
@@ -44418,8 +45606,8 @@ function readRunSnapshot(projectRoot: string, notebookPath: string): { found: bo
   }
 }
 
-function writeRunSnapshot(projectRoot: string, notebookPath: string, snapshot: unknown): void {
-  const p = snapshotPathFor(projectRoot, notebookPath);
+function writeRunSnapshot(projectRoot: string, notebookPath: string, snapshot: unknown, personKey?: string): void {
+  const p = snapshotPathFor(projectRoot, notebookPath, personKey);
   if (!p) throw new Error('Invalid path');
   mkdirSync(dirname(p), { recursive: true });
   writeFileSync(p, JSON.stringify(snapshot, null, 2), 'utf-8');
@@ -44451,6 +45639,8 @@ async function readGitDiff(
   cwd: string,
   filePath: string,
   staged = false,
+  /** With a host: only files `allowed` passes, every path matched literally (no pathspec magic or patterns). */
+  hosted?: { allowed: (gitRoot: string, gitRelative: string) => boolean },
 ): Promise<{
   inRepo: boolean;
   diff: string;
@@ -44463,18 +45653,26 @@ async function readGitDiff(
     return { inRepo: false, diff: '', before: null, after: null, diffReport: null };
   }
   const baseArgs = staged ? ['diff', '--cached', '--no-color'] : ['diff', '--no-color'];
+  const literal = (path: string) => (hosted ? `:(literal)${path}` : path);
   if (!filePath) {
+    if (hosted) {
+      const names = await execGit(gitRoot, [...baseArgs, '--name-only', '-z']);
+      const shown = names.stdout.split('\0').filter((name) => name && hosted.allowed(gitRoot, name));
+      if (!shown.length) return { inRepo: true, diff: '', before: null, after: null, diffReport: null };
+      const res = await execGit(gitRoot, [...baseArgs, '--', ...shown.map(literal)]);
+      return { inRepo: true, diff: res.stdout, before: null, after: null, diffReport: null };
+    }
     const res = await execGit(gitRoot, baseArgs);
     return { inRepo: true, diff: res.stdout, before: null, after: null, diffReport: null };
   }
   const isSemantic = filePath.endsWith('.dql') || filePath.endsWith('.dqlnb');
   const [diffRes, before, after] = await Promise.all([
-    execGit(gitRoot, [...baseArgs, '--', filePath]),
+    execGit(gitRoot, [...baseArgs, '--', literal(filePath)]),
     isSemantic ? readHeadBlob(gitRoot, filePath) : Promise.resolve<string | null>(null),
     isSemantic ? readWorkingCopy(join(gitRoot, filePath)) : Promise.resolve<string | null>(null),
   ]);
   const diffText = !staged && !diffRes.stdout.trim()
-    ? (await readUntrackedTextDiff(gitRoot, filePath)) || diffRes.stdout
+    ? (await readUntrackedTextDiff(gitRoot, filePath, hosted ? (name) => hosted.allowed(gitRoot, name) : undefined)) || diffRes.stdout
     : diffRes.stdout;
   const diffReport = isSemantic ? computeSemanticDiff(filePath, before, after) : null;
   return { inRepo: true, diff: diffText, before, after, diffReport };
@@ -44483,18 +45681,20 @@ async function readGitDiff(
 const MAX_UNTRACKED_DIFF_FILES = 20;
 const MAX_UNTRACKED_DIFF_BYTES = 512 * 1024;
 
-async function readUntrackedTextDiff(cwd: string, filePath: string): Promise<string> {
-  const status = await execGit(cwd, ['status', '--porcelain=v1', '--untracked-files=normal', '--', filePath]);
+async function readUntrackedTextDiff(cwd: string, filePath: string, allowed?: (gitRelative: string) => boolean): Promise<string> {
+  const spec = allowed ? `:(literal)${filePath}` : filePath;
+  const status = await execGit(cwd, ['status', '--porcelain=v1', '--untracked-files=normal', '--', spec]);
   if (status.code !== 0 || !status.stdout.split('\n').some((line) => line.startsWith('?? '))) {
     return '';
   }
 
-  const listed = await execGit(cwd, ['ls-files', '--others', '--exclude-standard', '--', filePath]);
+  const listed = await execGit(cwd, ['ls-files', '--others', '--exclude-standard', '--', spec]);
   if (listed.code !== 0) return '';
 
   const chunks: string[] = [];
   let totalBytes = 0;
   for (const rawPath of listed.stdout.split('\n').map((p) => p.trim()).filter(Boolean)) {
+    if (allowed && !allowed(rawPath)) continue;
     if (chunks.length >= MAX_UNTRACKED_DIFF_FILES || totalBytes >= MAX_UNTRACKED_DIFF_BYTES) break;
     const absPath = safeJoin(cwd, rawPath);
     if (!absPath || !existsSync(absPath)) continue;
@@ -44811,14 +46011,21 @@ function gitHubCompareUrl(remoteUrl: string | null, branch: string, base: string
  * so a review cannot accidentally include unrelated work.
  */
 /** A host's review request (HH-8), or null to use the GitHub CLI as before. */
-async function openHostPullRequest(input: { gitRoot: string; branch: string; base: string; title: string; body: string }): Promise<{ ok: true; url: string } | { ok: false; error: string } | null> {
+export async function openHostPullRequest(input: { gitRoot: string; branch: string; base: string; title: string; body: string }): Promise<{ ok: true; url: string } | { ok: false; error: string } | null> {
   const open = currentHostGitHooks()?.openPullRequest;
   if (!open) return null;
   try {
-    const { url } = await open({ ...input, principal: currentPrincipal() ?? null });
+    const answer: unknown = await open({ ...input, principal: currentPrincipal() ?? null });
+    const url = answer && typeof answer === 'object' ? (answer as { url?: unknown }).url : undefined;
+    // A review link is a web address or a path on this site, nothing else (a script link would run in the app).
+    if (typeof url !== 'string' || !(/^https?:\/\//i.test(url) || (url.startsWith('/') && !url.startsWith('//') && !url.includes('\\')))) {
+      throw new Error('the host answered without a usable review link');
+    }
     return { ok: true, url };
   } catch (error) {
-    return { ok: false, error: error instanceof Error ? error.message : String(error) };
+    // The host's own words (an address, a token in a URL) stay in the log, under a reference.
+    const reference = logUnderReference('Opening a review through the host failed', error);
+    return { ok: false, error: `The review request could not be opened right now. Try again; if it keeps happening, ask your administrator about reference ${reference}.` };
   }
 }
 
@@ -45705,14 +46912,26 @@ type NotebookResearchReviewChecklist = {
   }>;
 };
 
-function withNotebookResearchChecklistPage(page: NotebookResearchRunListResult): Omit<NotebookResearchRunListResult, 'runs'> & { runs: Array<NotebookResearchRun & { reviewChecklist: NotebookResearchReviewChecklist }> } {
+function withNotebookResearchChecklistPage(page: NotebookResearchRunListResult, figuresWithheld = false): Omit<NotebookResearchRunListResult, 'runs'> & { runs: Array<NotebookResearchRun & { reviewChecklist: NotebookResearchReviewChecklist }> } {
   return {
     ...page,
-    runs: page.runs.map(withNotebookResearchChecklist),
+    runs: page.runs.map((run) => withNotebookResearchChecklist(run, figuresWithheld)),
   };
 }
 
-function withNotebookResearchChecklist(run: NotebookResearchRun): NotebookResearchRun & { reviewChecklist: NotebookResearchReviewChecklist } {
+/**
+ * HH-14: a research run as a person the host keeps needs-review figures from reads it, until it is certified: its
+ * question, SQL and result shape (columns, row count), never a value or a sentence written from one.
+ */
+function notebookResearchRunWithoutFigures(run: NotebookResearchRun): NotebookResearchRun & { figuresWithheld?: true } {
+  if (run.reviewStatus === 'certified') return run;
+  const { summary: _summary, recommendation: _recommendation, evidence: _evidence, display: _display, researchPlan: _plan, ...rest } = run;
+  const preview = previewWithoutFigures(run.resultPreview);
+  return { ...rest, ...(preview ? { resultPreview: preview } : {}), summary: WITHHELD_ANSWER, figuresWithheld: true };
+}
+
+function withNotebookResearchChecklist(stored: NotebookResearchRun, figuresWithheld = false): NotebookResearchRun & { reviewChecklist: NotebookResearchReviewChecklist } {
+  const run = figuresWithheld ? notebookResearchRunWithoutFigures(stored) : stored;
   const researchPlan = run.researchPlan ?? buildNotebookResearchPlan({
     run,
     evidence: run.evidence,
@@ -46280,6 +47499,9 @@ function recordNotebookQueryRun(projectRoot: string, input: {
   contextPackId?: string;
   objectKey?: string;
 }): void {
+  // With a host, a person's query history (their SQL, cell names, row counts) is not kept in the project-wide
+  // metadata cache, where every person's context is drawn from.
+  if (currentRecordOwner() !== undefined) return;
   try {
     recordQueryRun(projectRoot, {
       objectKey: input.objectKey,
@@ -46302,6 +47524,19 @@ function recordNotebookQueryRun(projectRoot: string, input: {
   }
 }
 
+/**
+ * RFC 0010: with a host, each person's notebook research runs (their questions, SQL and result previews) are in
+ * their own store: listed, read, changed and updated by a cell run only for them. What they publish to the project (a
+ * draft block) is project content as before. With host hooks and nobody signed in, no store (null): such a request
+ * reads and writes no one's runs. Without a host, the one local store. The shared store a server kept before it had a
+ * host is never read with one.
+ */
+function notebookResearchDbPath(projectRoot: string, hosted: boolean): string | null {
+  const principal = currentPrincipal();
+  if (principal && principal.source !== 'local') return join(projectRoot, '.dql', 'local', 'private', 'research', `${homePersonKey(principal)}.sqlite`);
+  return hosted ? null : defaultNotebookResearchDbPath(projectRoot);
+}
+
 function updateNotebookResearchFromCellExecution(
   projectRoot: string,
   execContext: NotebookExecutionContextInput,
@@ -46311,9 +47546,12 @@ function updateNotebookResearchFromCellExecution(
     error?: string;
     sql?: string;
   },
+  hosted: boolean,
 ): void {
   if (!execContext.notebookPath || (!execContext.cellId && !execContext.researchRunId)) return;
-  const storage = new LocalNotebookResearchStorage(defaultNotebookResearchDbPath(projectRoot));
+  const dbPath = notebookResearchDbPath(projectRoot, hosted);
+  if (!dbPath) return;
+  const storage = new LocalNotebookResearchStorage(dbPath);
   try {
     const page = storage.listRunsPage({
       notebookPath: execContext.notebookPath,
@@ -47454,8 +48692,8 @@ export function buildAgentValueProbeSql(
     const normalized = term.toLowerCase().replace(/\s+/g, ' ').trim();
     const tokens = normalized.split(' ').filter((token) => token.length >= 4);
     return [
-      `${castValue} = ${sqlStringLiteral(normalized)}`,
-      ...tokens.slice(0, 2).map((token) => `${castValue} LIKE ${sqlStringLiteral(`${escapeSqlLike(token)}%`)} ESCAPE '\\'`),
+      `${castValue} = ${sqlStringLiteral(normalized, connection.driver)}`,
+      ...tokens.slice(0, 2).map((token) => `${castValue} LIKE ${sqlStringLiteral(`${escapeSqlLike(token)}%`, connection.driver)} ESCAPE '!'`),
     ];
   }))
     .slice(0, 8)
@@ -47495,10 +48733,10 @@ export function buildAgentCanonicalValueProbeSql(
   // without honorifics ("Matthew Meyer" for the stored "Mr. Matthew Meyer").
   // DISTINCT + LIMIT 2 keeps this proof-grade — two stored values containing
   // the term is ambiguity and binds nothing.
-  const exact = `${castValue} = ${sqlStringLiteral(normalized)}`;
-  const wordSuffix = `${castValue} LIKE ${sqlStringLiteral(`% ${normalized}`)}`;
-  const wordPrefix = `${castValue} LIKE ${sqlStringLiteral(`${normalized} %`)}`;
-  const wordInner = `${castValue} LIKE ${sqlStringLiteral(`% ${normalized} %`)}`;
+  const exact = `${castValue} = ${sqlStringLiteral(normalized, connection.driver)}`;
+  const wordSuffix = `${castValue} LIKE ${sqlStringLiteral(`% ${normalized}`, connection.driver)}`;
+  const wordPrefix = `${castValue} LIKE ${sqlStringLiteral(`${normalized} %`, connection.driver)}`;
+  const wordInner = `${castValue} LIKE ${sqlStringLiteral(`% ${normalized} %`, connection.driver)}`;
   return [
     `SELECT DISTINCT ${identifier} AS dql_literal_value`,
     `FROM ${quotedRelation}`,
@@ -47520,7 +48758,7 @@ export function buildAgentExactValueProbeSql(
   return [
     'SELECT 1 AS dql_literal_match',
     `FROM ${relation}`,
-    `WHERE ${identifier} IS NOT NULL AND ${castValue} = ${sqlStringLiteral(normalized)}`,
+    `WHERE ${identifier} IS NOT NULL AND ${castValue} = ${sqlStringLiteral(normalized, connection.driver)}`,
     'LIMIT 1',
   ].join('\n');
 }
@@ -47582,12 +48820,19 @@ function quoteAgentIdentifier(identifier: string, connection: ConnectionConfig):
   return getDialect(connection.driver).quoteIdentifier(identifier);
 }
 
-function sqlStringLiteral(value: string): string {
-  return `'${value.replace(/'/g, "''")}'`;
+/**
+ * A probe value as a string literal for `driver`. A value with a backslash or a control character is not probed
+ * (engines escape them differently, and some by a setting DQL cannot see); BigQuery has no doubled quote, so its
+ * quote is escaped with a backslash.
+ */
+function sqlStringLiteral(value: string, driver?: string): string {
+  if (/[\\\u0000-\u001f\u007f]/.test(value)) throw new Error('VALUE_NOT_PROBED');
+  return driver === 'bigquery' ? `'${value.replace(/'/g, "\\'")}'` : `'${value.replace(/'/g, "''")}'`;
 }
 
+/** A LIKE pattern's literal part, escaped with `!` (ESCAPE '!'): no backslash, which engines read differently. */
 function escapeSqlLike(value: string): string {
-  return value.replace(/[\\%_]/g, (match) => `\\${match}`);
+  return value.replace(/[!%_]/g, (match) => `!${match}`);
 }
 
 function valueProbeRowValues(row: unknown): string[] {
@@ -47920,7 +49165,7 @@ function isPolicyRefusal(error: unknown): boolean {
   let current: unknown = error;
   for (let depth = 0; depth < 5 && current && typeof current === 'object'; depth += 1) {
     const code = (current as { code?: unknown }).code;
-    if (code === 'ROW_POLICY_REFUSED' || code === 'CREDENTIALS_REQUIRED') return true;
+    if (code === 'ROW_POLICY_REFUSED' || code === 'CREDENTIALS_REQUIRED' || code === 'CONNECTION_NOT_ALLOWED') return true;
     current = (current as { cause?: unknown }).cause;
   }
   return false;

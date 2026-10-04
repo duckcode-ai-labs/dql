@@ -83,6 +83,12 @@ export interface InvestigationExecutorDeps {
   loadRun(runId: string): Promise<AgentRun | null | undefined>;
   /** Outside context for this run (e.g. the person's knowledge sources); a function decides per run. */
   contextSources?: InvestigationContextSource[] | ((context: Parameters<AgentRouteExecutor>[0]) => InvestigationContextSource[] | undefined);
+  /**
+   * RFC 0010 HH-5: whether this run's computed facts (figures, driver members) may reach the model that words the
+   * summary. The run's own opt-in asks for the wording; this decides whether it may have it (the privacy boundary,
+   * the project's row-egress switch). Without it, the run's opt-in alone decides, as before.
+   */
+  narrationMayCarryValues?(request: Parameters<AgentRouteExecutor>[0]['request']): boolean | Promise<boolean>;
   now?: () => Date;
 }
 
@@ -150,7 +156,8 @@ export function createInvestigationExecutor(deps: InvestigationExecutorDeps): Ag
       ...(deps.now ? { now: deps.now } : {}),
     });
 
-    const optedIn = (request as { researchResultRowsOptIn?: boolean }).researchResultRowsOptIn === true;
+    const optedIn = (request as { researchResultRowsOptIn?: boolean }).researchResultRowsOptIn === true
+      && (!deps.narrationMayCarryValues || await Promise.resolve().then(() => deps.narrationMayCarryValues!(request)).then((allowed) => allowed === true, () => false));
     if (outcome.kind === 'report' && optedIn && outcome.report.status === 'answered' && remainingMs() > NARRATION_MIN_REMAINING_MS) {
       outcome.receipt.budget.aiCalls += 1;
       const narration = await narrateInvestigation(scope, request.question, outcome.report, onStep);

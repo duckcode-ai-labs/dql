@@ -110,7 +110,8 @@ export class SQLiteConnector implements DatabaseConnector {
     const filtered = table ? tables.filter((t) => t.name === table) : tables;
     const columns: ColumnInfo[] = [];
     for (const t of filtered) {
-      const result = await this.execute(`PRAGMA table_info("${t.name.replace(/"/g, '""')}")`);
+      // The table's name is a bind value of the table-valued pragma, never part of the statement's text.
+      const result = await this.execute('SELECT name, type, cid FROM pragma_table_info(?)', [t.name]);
       for (const row of result.rows) {
         columns.push({
           schema: 'main',

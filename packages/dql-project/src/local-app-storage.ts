@@ -184,6 +184,8 @@ export interface LocalAiPin {
   lastRefreshedAt?: string;
   lastRefreshError?: string;
   promotedBlockPath?: string;
+  /** With a host (RFC 0010): the person who pinned it; its stored answer and rows are theirs, read only by them. */
+  ownerId?: string;
 }
 
 export interface CreateLocalAiPinInput {
@@ -227,6 +229,8 @@ export interface LocalAppConversation {
   lastMessage?: string;
   context?: LocalAppConversationContext;
   messages?: LocalAppConversationMessage[];
+  /** With a host (RFC 0010): the person it is kept for, the only one who reads it. */
+  ownerId?: string;
 }
 
 export interface CreateLocalAppConversationInput {
@@ -272,6 +276,8 @@ export interface LocalAppInvestigation {
   createdAt: string;
   updatedAt: string;
   lastRunAt?: string;
+  /** With a host (RFC 0010): the person it is kept for (it was run as them), the only one who reads it. */
+  ownerId?: string;
 }
 
 export interface CreateLocalAppInvestigationInput {
@@ -315,6 +321,16 @@ export interface UpdateLocalAppInvestigationInput {
   lastRunAt?: string;
 }
 
+/**
+ * Whose per-person App records (analysis memos, App conversations) a storage
+ * keeps and reads (RFC 0010). Undefined: no host, every record (the one local
+ * user). A string: the signed-in person; records are stamped with it and only
+ * theirs are read. Null: a host named nobody; such a caller reads none and
+ * what it keeps is no one's. Records from before the host have no owner and
+ * are no one's with a host.
+ */
+export type LocalAppRecordOwner = string | null | undefined;
+
 export function defaultLocalAppsDbPath(projectRoot: string): string {
   return `${projectRoot}/.dql/local/apps.sqlite`;
 }
@@ -326,7 +342,10 @@ export function defaultLocalAppsDbPath(projectRoot: string): string {
 export class LocalAppStorage {
   private db: Database.Database;
 
-  constructor(dbPath: string) {
+  private readonly owner: LocalAppRecordOwner;
+
+  constructor(dbPath: string, options: { owner?: LocalAppRecordOwner } = {}) {
+    this.owner = options.owner;
     mkdirSync(dirname(dbPath), { recursive: true });
     const Database = loadDatabase();
     this.db = new Database(dbPath);
@@ -347,6 +366,7 @@ export class LocalAppStorage {
     input: { expectedRevision?: number; operations?: AppBuildDraftOperation[]; deletePreviewEvidenceRunId?: string } = {},
   ): AppBuildDraft {
     const run = this.db.transaction(() => {
+      this.refuseOthersDraft(draft.id);
       const current = this.db.prepare('SELECT revision FROM app_build_drafts WHERE id = ?').get(draft.id) as { revision?: number } | undefined;
       if (input.expectedRevision !== undefined && current?.revision !== input.expectedRevision) {
         throw new Error(`APP_BUILD_REVISION_CONFLICT: expected ${input.expectedRevision}, current ${current?.revision ?? 'missing'}`);
@@ -355,8 +375,8 @@ export class LocalAppStorage {
         INSERT INTO app_build_drafts (
           id, app_id, name, base_app_id, base_fingerprint, revision,
           proposal_hash, state, authoring_mode, source_policy, template, payload,
-          created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          created_at, updated_at, owner_id
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(id) DO UPDATE SET
           app_id = excluded.app_id,
           name = excluded.name,
@@ -385,6 +405,7 @@ export class LocalAppStorage {
         JSON.stringify(draft),
         draft.createdAt,
         draft.updatedAt,
+        this.owner ?? null,
       );
       const operations = input.operations ?? [];
       if (operations.length) {
@@ -486,6 +507,7 @@ export class LocalAppStorage {
         }
         return { draft: current, deduped: true };
       }
+      this.refuseOthersDraft(draft.id);
       const current = this.db.prepare('SELECT revision FROM app_build_drafts WHERE id = ?').get(draft.id) as { revision?: number } | undefined;
       if (current?.revision !== input.expectedRevision) {
         throw new Error(`APP_BUILD_REVISION_CONFLICT: expected ${input.expectedRevision}, current ${current?.revision ?? 'missing'}`);
@@ -494,8 +516,8 @@ export class LocalAppStorage {
         INSERT INTO app_build_drafts (
           id, app_id, name, base_app_id, base_fingerprint, revision,
           proposal_hash, state, authoring_mode, source_policy, template, payload,
-          created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          created_at, updated_at, owner_id
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(id) DO UPDATE SET
           app_id = excluded.app_id,
           name = excluded.name,
@@ -524,6 +546,7 @@ export class LocalAppStorage {
         JSON.stringify(draft),
         draft.createdAt,
         draft.updatedAt,
+        this.owner ?? null,
       );
       if (input.operations.length) {
         this.db.prepare(`
@@ -545,15 +568,17 @@ export class LocalAppStorage {
   }
 
   getAppBuildDraft(id: string): AppBuildDraft | null {
-    const row = this.db.prepare('SELECT payload FROM app_build_drafts WHERE id = ?').get(id) as { payload?: unknown } | undefined;
+    const params: unknown[] = [id];
+    const owner = this.ownerClause(params);
+    const row = this.db.prepare(`SELECT payload FROM app_build_drafts WHERE id = ?${owner}`).get(...params) as { payload?: unknown } | undefined;
     if (!row || typeof row.payload !== 'string') return null;
     try { return JSON.parse(row.payload) as AppBuildDraft; } catch { return null; }
   }
 
   listAppBuildDrafts(appId?: string): AppBuildDraft[] {
-    const rows = (appId
-      ? this.db.prepare('SELECT payload FROM app_build_drafts WHERE app_id = ? ORDER BY updated_at DESC').all(appId)
-      : this.db.prepare('SELECT payload FROM app_build_drafts ORDER BY updated_at DESC').all()) as Array<{ payload?: unknown }>;
+    const params: unknown[] = appId ? [appId] : [];
+    const where = `WHERE ${appId ? 'app_id = ?' : '1 = 1'}${this.ownerClause(params)}`;
+    const rows = this.db.prepare(`SELECT payload FROM app_build_drafts ${where} ORDER BY updated_at DESC`).all(...params) as Array<{ payload?: unknown }>;
     return rows.flatMap((row) => {
       if (typeof row.payload !== 'string') return [];
       try { return [JSON.parse(row.payload) as AppBuildDraft]; } catch { return []; }
@@ -679,13 +704,14 @@ export class LocalAppStorage {
       followUps: input.followUps,
       createdAt: now,
       updatedAt: now,
+      ...(this.owner ? { ownerId: this.owner } : {}),
     };
     this.db.prepare(`
       INSERT INTO ai_pins (
         id, app_id, dashboard_id, tile_id, title, answer, question, sql, source_tier,
         certification, review_status, refresh_cadence, chart_config, result,
-        citations, analysis_plan, evidence, follow_ups, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        citations, analysis_plan, evidence, follow_ups, created_at, updated_at, owner_id
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       pin.id,
       pin.appId,
@@ -707,12 +733,15 @@ export class LocalAppStorage {
       json(pin.followUps ?? []),
       pin.createdAt,
       pin.updatedAt,
+      this.owner ?? null,
     );
     return pin;
   }
 
   getAiPin(id: string): LocalAiPin | null {
-    const row = this.db.prepare('SELECT * FROM ai_pins WHERE id = ?').get(id) as Record<string, unknown> | undefined;
+    const params: unknown[] = [id];
+    const owner = this.ownerClause(params);
+    const row = this.db.prepare(`SELECT * FROM ai_pins WHERE id = ?${owner}`).get(...params) as Record<string, unknown> | undefined;
     return row ? rowToAiPin(row) : null;
   }
 
@@ -727,12 +756,13 @@ export class LocalAppStorage {
       clauses.push('dashboard_id = ?');
       params.push(dashboardId);
     }
-    const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
+    const where = `WHERE 1 = 1${clauses.map((clause) => ` AND ${clause}`).join('')}${this.ownerClause(params)}`;
     const rows = this.db.prepare(`SELECT * FROM ai_pins ${where} ORDER BY updated_at DESC`).all(...params) as Record<string, unknown>[];
     return rows.map(rowToAiPin);
   }
 
   updateAiPinResult(id: string, result: unknown, error?: string): LocalAiPin | null {
+    if (!this.getAiPin(id)) return null;
     const now = new Date().toISOString();
     this.db.prepare(`
       UPDATE ai_pins
@@ -743,6 +773,7 @@ export class LocalAppStorage {
   }
 
   markAiPinPromoted(id: string, blockPath: string): LocalAiPin | null {
+    if (!this.getAiPin(id)) return null;
     const now = new Date().toISOString();
     this.db.prepare(`
       UPDATE ai_pins
@@ -770,14 +801,15 @@ export class LocalAppStorage {
       reviewStatus: 'needs_review',
       createdAt: now,
       updatedAt: now,
+      ...(this.owner ? { ownerId: this.owner } : {}),
     };
     this.db.prepare(`
       INSERT INTO app_investigations (
         id, app_id, dashboard_id, source_tile_id, source_block_id, title, question,
         intent, context, status, summary, recommendation, metrics, driver_cards,
         result_previews, evidence, report_sections, generated_sql, review_status, error, pinned_ai_pin_id,
-        created_at, updated_at, last_run_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        created_at, updated_at, last_run_at, owner_id
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       investigation.id,
       investigation.appId,
@@ -803,6 +835,7 @@ export class LocalAppStorage {
       investigation.createdAt,
       investigation.updatedAt,
       null,
+      this.owner ?? null,
     );
     return investigation;
   }
@@ -815,9 +848,10 @@ export class LocalAppStorage {
     const params: unknown[] = [appId];
     const dashboardClause = dashboardId ? ' AND dashboard_id = ?' : '';
     if (dashboardId) params.push(dashboardId);
+    const owner = this.ownerClause(params);
     const rows = this.db.prepare(`
       SELECT * FROM app_investigations
-      WHERE app_id = ?${dashboardClause}
+      WHERE app_id = ?${dashboardClause}${owner}
       ORDER BY updated_at DESC
     `).all(...params) as Record<string, unknown>[];
     return rows.map(rowToInvestigation);
@@ -833,7 +867,9 @@ export class LocalAppStorage {
   }
 
   getAppInvestigation(id: string): LocalAppInvestigation | null {
-    const row = this.db.prepare('SELECT * FROM app_investigations WHERE id = ?').get(id) as Record<string, unknown> | undefined;
+    const params: unknown[] = [id];
+    const owner = this.ownerClause(params);
+    const row = this.db.prepare(`SELECT * FROM app_investigations WHERE id = ?${owner}`).get(...params) as Record<string, unknown> | undefined;
     return row ? rowToInvestigation(row) : null;
   }
 
@@ -890,11 +926,12 @@ export class LocalAppStorage {
       createdAt: now,
       updatedAt: now,
       messageCount: 0,
+      ...(this.owner ? { ownerId: this.owner } : {}),
     };
     this.db.prepare(`
       INSERT INTO app_conversations (
-        id, app_id, dashboard_id, notebook_path, title, context, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        id, app_id, dashboard_id, notebook_path, title, context, created_at, updated_at, owner_id
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       conversation.id,
       conversation.appId,
@@ -904,6 +941,7 @@ export class LocalAppStorage {
       json(input.context),
       conversation.createdAt,
       conversation.updatedAt,
+      this.owner ?? null,
     );
     if (input.messages?.length) {
       this.replaceAppConversationMessages(conversation.id, input.messages);
@@ -912,16 +950,20 @@ export class LocalAppStorage {
   }
 
   listAppConversations(appId: string): LocalAppConversation[] {
+    const params: unknown[] = [appId];
+    const owner = this.ownerClause(params);
     const rows = this.db.prepare(`
       SELECT * FROM app_conversations
-      WHERE app_id = ?
+      WHERE app_id = ?${owner}
       ORDER BY updated_at DESC
-    `).all(appId) as Record<string, unknown>[];
+    `).all(...params) as Record<string, unknown>[];
     return rows.map((row) => this.rowToConversation(row));
   }
 
   getAppConversation(id: string): LocalAppConversation | null {
-    const row = this.db.prepare('SELECT * FROM app_conversations WHERE id = ?').get(id) as Record<string, unknown> | undefined;
+    const params: unknown[] = [id];
+    const owner = this.ownerClause(params);
+    const row = this.db.prepare(`SELECT * FROM app_conversations WHERE id = ?${owner}`).get(...params) as Record<string, unknown> | undefined;
     if (!row) return null;
     return {
       ...this.rowToConversation(row),
@@ -952,6 +994,7 @@ export class LocalAppStorage {
   }
 
   deleteAppConversation(id: string): boolean {
+    if (!this.getAppConversation(id)) return false;
     this.db.prepare('DELETE FROM app_conversation_messages WHERE conversation_id = ?').run(id);
     const result = this.db.prepare('DELETE FROM app_conversations WHERE id = ?').run(id);
     return result.changes > 0;
@@ -1226,6 +1269,10 @@ export class LocalAppStorage {
     this.ensureColumn('app_investigations', 'pinned_ai_pin_id', 'TEXT');
     this.ensureColumn('app_investigations', 'report_sections', 'TEXT');
     this.ensureColumn('app_conversations', 'context', 'TEXT');
+    this.ensureColumn('app_investigations', 'owner_id', 'TEXT');
+    this.ensureColumn('app_conversations', 'owner_id', 'TEXT');
+    this.ensureColumn('ai_pins', 'owner_id', 'TEXT');
+    this.ensureColumn('app_build_drafts', 'owner_id', 'TEXT');
     this.ensureColumn('app_build_drafts', 'template', "TEXT NOT NULL DEFAULT 'blank'");
     this.ensureColumn('app_preview_evidence', 'dataset_binding_tile_ids', "TEXT NOT NULL DEFAULT '[]'");
     this.ensureColumn('app_preview_evidence', 'dataset_bindings', "TEXT NOT NULL DEFAULT '[]'");
@@ -1239,6 +1286,21 @@ export class LocalAppStorage {
       const sql = `INSERT OR REPLACE INTO ${table} (${columns.join(',')}) VALUES (${columns.map(() => '?').join(',')})`;
       this.db.prepare(sql).run(...columns.map((column) => row[column]));
     }
+  }
+
+  /** With an owner, a draft id someone else holds (or one from before the host) cannot be written over. */
+  private refuseOthersDraft(id: string): void {
+    if (this.owner === undefined) return;
+    const row = this.db.prepare('SELECT owner_id FROM app_build_drafts WHERE id = ?').get(id) as { owner_id?: unknown } | undefined;
+    if (row && (this.owner === null || row.owner_id !== this.owner)) throw new Error('APP_BUILD_DRAFT_NOT_FOUND: that App draft was not found.');
+  }
+
+  /** The owner filter for a per-person table (see LocalAppRecordOwner); appends its parameter. */
+  private ownerClause(params: unknown[]): string {
+    if (this.owner === undefined) return '';
+    if (this.owner === null) return ' AND 0';
+    params.push(this.owner);
+    return ' AND owner_id = ?';
   }
 
   private ensureColumn(table: string, column: string, type: string): void {
@@ -1306,6 +1368,7 @@ export class LocalAppStorage {
       messageCount: typeof summary.message_count === 'number' ? summary.message_count : Number(summary.message_count ?? 0),
       lastMessage: optionalString(summary.last_message),
       context: normalizeConversationContext(parseJson(row.context)),
+      ...(optionalString(row.owner_id) ? { ownerId: optionalString(row.owner_id) } : {}),
     };
   }
 }
@@ -1357,6 +1420,7 @@ function rowToAiPin(row: Record<string, unknown>): LocalAiPin {
     lastRefreshedAt: optionalString(row.last_refreshed_at),
     lastRefreshError: optionalString(row.last_refresh_error),
     promotedBlockPath: optionalString(row.promoted_block_path),
+    ...(optionalString(row.owner_id) ? { ownerId: optionalString(row.owner_id) } : {}),
   };
 }
 
@@ -1386,6 +1450,7 @@ function rowToInvestigation(row: Record<string, unknown>): LocalAppInvestigation
     createdAt: String(row.created_at),
     updatedAt: String(row.updated_at),
     lastRunAt: optionalString(row.last_run_at),
+    ...(optionalString(row.owner_id) ? { ownerId: optionalString(row.owner_id) } : {}),
   };
 }
 

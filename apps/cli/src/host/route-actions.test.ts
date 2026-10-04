@@ -23,7 +23,11 @@ describe('what each API request does (RFC 0010 HH-2)', () => {
     ['POST', '/api/agent/hints/h-1/review', 'hint.review', 'hint'],
     ['POST', '/api/agent/hints/h-1/lifecycle', 'hint.review', 'hint'],
     ['PATCH', '/api/agent/hints/h-1', 'hint.review', 'hint'],
-    ['POST', '/api/agent/learnings/correction', 'ask', 'project'],
+    // A recorded correction writes a candidate hint into the project: a change to it, not part of asking.
+    ['POST', '/api/agent/learnings/correction', 'project.write', 'project'],
+    // Promoting a research run writes a draft block into the project.
+    ['POST', '/api/notebook/research/r1/promote-dql', 'dataset.author', 'project'],
+    ['POST', '/api/notebook/research/r1/run', 'research', 'project'],
     ['GET', '/api/apps', 'project.read', 'project'],
     ['POST', '/api/apps', 'app.author', 'project'],
     ['GET', '/api/apps/claims', 'app.view', 'app'],

@@ -1,7 +1,7 @@
 import { hostPageSrc, useHostPage } from '../../host/host-ui';
 
 /**
- * A page the host adds (for example requests or reviews in DQL Enterprise),
+ * A page the host adds (for example its requests or reviews),
  * shown in DQL's main area so DQL's header and navigation stay around it.
  * The page is the host's, on the same origin and the same theme.
  */

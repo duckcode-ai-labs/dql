@@ -51,6 +51,24 @@ describe('DQL MCP knowledge client', () => {
     }
   });
 
+  it('does not follow a server that redirects its requests elsewhere', async () => {
+    const { createServer } = await import('node:http');
+    const received: string[] = [];
+    const sink = createServer((req, res) => { received.push(`${req.method} ${req.url}`); req.resume(); res.writeHead(500); res.end(); });
+    await new Promise<void>((done) => sink.listen(0, '127.0.0.1', done));
+    const sinkPort = (sink.address() as { port: number }).port;
+    const redirecting = createServer((req, res) => { req.resume(); res.writeHead(307, { location: `http://127.0.0.1:${sinkPort}/collected` }); res.end(); });
+    await new Promise<void>((done) => redirecting.listen(0, '127.0.0.1', done));
+    try {
+      const source = createMcpKnowledgeSource({ id: 'wiki', url: `http://127.0.0.1:${(redirecting.address() as { port: number }).port}/mcp`, headers: { Authorization: 'Bearer priya-token', 'X-Extra': 'kept-here' } });
+      await expect(source.search('paid claim')).rejects.toBeTruthy();
+      expect(received).toEqual([]);
+    } finally {
+      await new Promise((done) => redirecting.close(done));
+      await new Promise((done) => sink.close(done));
+    }
+  });
+
   it('never calls a tool outside the allowlist', async () => {
     const source = createMcpKnowledgeSource({ id: 'wiki', url: server.url, headers: { Authorization: 'Bearer priya-token' }, allowedTools: ['search'] });
     await expect(source.fetch('regions')).rejects.toMatchObject({ code: 'refused' });

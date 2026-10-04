@@ -70,6 +70,8 @@ export async function startProjectRuntime(
     askAgentRuntimeMode?: AskAgentRuntimeMode;
     /** RFC 0010: run as a hosted runtime (see `@duckcodeailabs/dql-cli/host`). */
     hostHooks?: DqlHostHooks;
+    /** RFC 0010 rule 1: how long DQL waits for a host hook (default 10 s). */
+    hostHookTimeoutMs?: number;
     /** Exact browser origins for a runtime behind a host's front door. */
     allowedOrigins?: string[];
     /** Replaces `defaultConnection` from dql.config.json, e.g. a host-managed connection. */
@@ -92,6 +94,7 @@ export async function startProjectRuntime(
     host,
     askAgentRuntimeMode: opts.askAgentRuntimeMode,
     ...(opts.hostHooks ? { hostHooks: opts.hostHooks } : {}),
+    ...(opts.hostHookTimeoutMs !== undefined ? { hostHookTimeoutMs: opts.hostHookTimeoutMs } : {}),
     ...(opts.allowedOrigins ? { allowedOrigins: opts.allowedOrigins } : {}),
     trustedCliTraceToken: askTraceCapability,
     instanceId,

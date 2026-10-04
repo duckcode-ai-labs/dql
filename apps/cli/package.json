@@ -19,6 +19,7 @@
     "build": "pnpm --filter @duckcodeailabs/dql-notebook-app build && rm -rf dist tsconfig.tsbuildinfo && tsc -b && node ./scripts/copy-runtime-assets.mjs",
     "dev": "tsx src/index.ts",
     "test": "vitest run --passWithNoTests",
+    "test:offline": "node scripts/test-offline.mjs",
     "bench:manifest": "tsx bench/manifest-bench.ts",
     "clean": "rm -rf dist tsconfig.tsbuildinfo",
     "prepublishOnly": "pnpm run build"

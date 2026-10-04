@@ -5076,7 +5076,8 @@ export const api = {
     domain?: string;
     modelAreaId?: string;
   }): Promise<AiBuildResult> {
-    return request<AiBuildResult>('/api/ai/build', {
+    // A cell only returns SQL (asking); a block is written (authoring): two routes, so a host can tell them apart.
+    return request<AiBuildResult>(input.target === 'cell' ? '/api/ai/build/cell' : '/api/ai/build', {
       method: 'POST',
       body: JSON.stringify(input),
     });
@@ -7833,6 +7834,10 @@ export const api = {
     dqlSource?: string;
     sql?: string;
     visualization?: string;
+    /** The Ask answer itself: with a host, what it read decides whether its text may be shown to others. */
+    runId?: string;
+    /** `live`: a tile that runs the answer for each reader instead of showing its text. */
+    mode?: 'text' | 'live';
   }): Promise<{ ok: true; draft: AppStudioBuildDraft; pageId: string; tileId: string; deduped: boolean }> {
     return request(`/api/app-builds/${encodeURIComponent(id)}/ask-results`, {
       method: 'POST',
@@ -8188,13 +8193,14 @@ export const api = {
     }
   },
 
-  async getDashboard(appId: string, dashboardId: string): Promise<DashboardDocumentResponse | null> {
+  /** `throwNotFound`: a page this project does not have throws its 404 (the App reader says so) instead of null. */
+  async getDashboard(appId: string, dashboardId: string, options: { throwNotFound?: boolean } = {}): Promise<DashboardDocumentResponse | null> {
     try {
       return await request<DashboardDocumentResponse>(
         `/api/apps/${encodeURIComponent(appId)}/dashboards/${encodeURIComponent(dashboardId)}`,
       );
     } catch (error) {
-      if (error instanceof DqlApiError && error.status === 403) throw error;
+      if (error instanceof DqlApiError && (error.status === 403 || (options.throwNotFound && error.status === 404))) throw error;
       return null;
     }
   },

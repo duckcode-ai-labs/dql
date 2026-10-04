@@ -1,24 +1,28 @@
-import React, { useState } from 'react';
+import React from 'react';
+import {
+  Bird, ChartColumn, Cloud, Columns3, Database, Feather, FileSpreadsheet, Layers, Rabbit, Search, Snowflake, Warehouse,
+  type LucideIcon,
+} from 'lucide-react';
 
-// Each driver lists candidate logo URLs in priority order. We try the
-// first; on error fall through to the next. Final fallback is a colored
-// swatch using the driver's brand color. Sources:
-//   - cdn.simpleicons.org (Simple Icons, CC0) — clean monochrome marks
-const SI = (slug: string, color: string) =>
-  `https://cdn.simpleicons.org/${slug}/${color}`;
-
-const SOURCES: Record<string, string[]> = {
-  duckdb: [SI('duckdb', 'FFF000')],
-  file: [SI('duckdb', 'FFF000')],
-  snowflake: [SI('snowflake', '29B5E8')],
-  databricks: [SI('databricks', 'FF3621')],
-  sqlite: [SI('sqlite', '0F80CC')],
-  bigquery: [SI('googlebigquery', '4285F4')],
-  postgresql: [SI('postgresql', '336791')],
-  redshift: [SI('amazonredshift', '8C4FFF')],
-  mysql: [SI('mysql', '00758F')],
-  trino: [SI('trino', 'DD00A1')],
-  clickhouse: [SI('clickhouse', 'FAFF69')],
+// Each driver's mark is drawn here, from the app's own icon set, in the
+// driver's colour: nothing is fetched from another site (a page that loads an
+// image from a logo service tells that service who opened DQL, and when). The
+// driver's name is always written beside it, so the mark is decorative.
+const MARKS: Record<string, LucideIcon> = {
+  duckdb: Bird,
+  file: FileSpreadsheet,
+  snowflake: Snowflake,
+  databricks: Layers,
+  sqlite: Feather,
+  bigquery: Search,
+  postgresql: Database,
+  redshift: Warehouse,
+  mysql: Database,
+  mssql: Database,
+  fabric: Columns3,
+  trino: Rabbit,
+  clickhouse: ChartColumn,
+  athena: Cloud,
 };
 
 const FALLBACK_COLORS: Record<string, string> = {
@@ -61,23 +65,28 @@ function Swatch({ size, color }: { size: number; color: string }) {
 }
 
 export function DriverLogo({ driver, size = 16, fallbackColor }: DriverLogoProps) {
-  const sources = SOURCES[driver] ?? [];
-  const swatch = fallbackColor ?? FALLBACK_COLORS[driver] ?? '#888';
-  const [idx, setIdx] = useState(0);
-
-  if (sources.length === 0 || idx >= sources.length) {
-    return <Swatch size={size} color={swatch} />;
-  }
-
+  const color = fallbackColor ?? FALLBACK_COLORS[driver] ?? '#888';
+  const Mark = MARKS[driver];
+  if (!Mark) return <Swatch size={size} color={color} />;
   return (
-    <img
-      src={sources[idx]}
-      alt={`${driver} logo`}
-      width={size}
-      height={size}
-      loading="lazy"
-      onError={() => setIdx(idx + 1)}
-      style={{ flexShrink: 0, display: 'block', objectFit: 'contain' }}
-    />
+    <span
+      aria-hidden
+      data-driver-mark={driver}
+      style={{
+        width: size,
+        height: size,
+        borderRadius: 4,
+        // The colour on a tint of itself, outlined so a light colour (DuckDB, ClickHouse) still reads on every theme.
+        background: `color-mix(in srgb, ${color} 16%, transparent)`,
+        boxShadow: `inset 0 0 0 1px color-mix(in srgb, ${color} 55%, var(--border-default, #888))`,
+        color: `color-mix(in srgb, ${color} 70%, var(--text-primary, #222))`,
+        flexShrink: 0,
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}
+    >
+      <Mark size={Math.max(10, Math.round(size * 0.68))} strokeWidth={2} aria-hidden focusable={false} />
+    </span>
   );
 }

@@ -182,6 +182,92 @@ Then query files from SQL:
 select * from read_csv_auto('./data/orders.csv')
 ```
 
+By default DuckDB installs a known extension the first time a statement needs
+it (for example `httpfs` to read a URL), downloading it from DuckDB's
+extension repository. Set `DQL_DUCKDB_AUTOINSTALL=off` to have DuckDB use only
+the extensions already installed: a statement that needs another one then
+fails with "Missing Extension" instead of downloading it. Hosts that must not
+fetch code at run time set this.
+
+### When DQL serves people through a host
+
+When DQL runs inside a host (RFC 0010), a
+statement reaches the connection's tables and views and nothing else the
+engine could reach. DuckDB and `file` connections open with external access
+off and their settings locked, after the database itself is open: no file
+outside the database is read or written (file readers, `FROM 'file.csv'`,
+`COPY`, `ATTACH`, `EXPORT DATABASE`), no extension is installed or loaded,
+and no `SET` or `PRAGMA` changes a setting. DQL also refuses those statements
+(and their counterparts on other engines) before they run.
+
+A folder of data files a connection should still read, for example one
+mounted for it, is named in `allowedDirectories` (none by default; relative
+folders are inside the project):
+
+```json
+{
+  "driver": "duckdb",
+  "filepath": "./warehouse.duckdb",
+  "allowedDirectories": ["./data"]
+}
+```
+
+A file reader whose path is a plain string inside one of these folders then
+runs. DuckDB 1.2 and later enforce the folders in the engine; DuckDB 1.1 has
+no such setting, so a connection that names folders keeps external access on
+in the engine (extensions stay out) and DQL's statement check enforces them.
+The driver DQL pins today is 1.1.3, so the folders rest on that check until
+the driver is 1.2 or later; none are listed by default, and then the engine
+itself is closed. Without a host nothing changes: `dql notebook` reads files
+as before.
+
+With a host the statement check is deliberately broad on every connection: a
+statement that begins with `SET`, `RESET`, `USE`, `PREPARE`, `EXECUTE` or
+`CALL` is refused, and so is one whose text holds what looks like a file
+reader's call anywhere, a string literal included. The check reads each
+statement the way its engine does (its strings, quoted names and comments,
+under every setting that changes how the engine reads them) and refuses one
+it cannot read that way.
+
+With a host, a statement a person or a model writes only reads, on every
+connection: one `SELECT` (or `WITH`, `VALUES`, `TABLE`, `SHOW`, `DESCRIBE` or
+`EXPLAIN` of one). A change to data, tables, settings or the session, or
+several statements at once, is refused. DQL's own statements (its views of
+the project's data files, uploaded datasets) keep their shapes. Give
+the warehouse account behind a hosted connection read-only grants all the
+same: the check is a second layer, not a substitute for them. Without a host
+nothing changes: a notebook cell may still write to your own DuckDB file.
+
+Such a statement does not read the warehouse's own record of other sessions,
+their queries, its users or its settings either: query-history, session and
+activity views and their table functions, server settings and variables, and
+SHOW of sessions, users, grants or settings. On each engine:
+
+| Engine | Not read with a host |
+|---|---|
+| Snowflake | `ACCOUNT_USAGE` (and `ORGANIZATION_USAGE`) `QUERY_HISTORY`, `LOGIN_HISTORY`, `SESSIONS`, `ACCESS_HISTORY`; the `INFORMATION_SCHEMA` query- and login-history functions; `SHOW PARAMETERS`, `USERS`, `GRANTS` and the like |
+| Databricks | `system.query.history`, `system.access.*`, `system.billing.*`; `SHOW GRANTS`, `USERS` and the like |
+| BigQuery | `INFORMATION_SCHEMA.JOBS*`, `INFORMATION_SCHEMA.SESSIONS*` |
+| Postgres, Redshift | `pg_stat_activity`, `pg_stat_statements`, `pg_settings`, `pg_locks` and the other activity, settings and role views, `current_setting`, the `pg_read_file` family; Redshift's `stl_*`, `svl_*`, `stv_*`, `sys_query_*` views; SHOW (Postgres: all; Redshift: anything but tables, columns, schemas, databases, views, datashares, models) |
+| MySQL | `performance_schema.*`, `mysql.*`, `sys.*`, `information_schema.PROCESSLIST` and `INNODB_TRX`, `@@` variables; `SHOW PROCESSLIST`, `VARIABLES`, `STATUS`, `GRANTS` and the like |
+| DuckDB | `duckdb_settings`, `duckdb_secrets`, `duckdb_extensions`, `duckdb_databases`, `pg_settings`, `current_setting` |
+| ClickHouse | `system` logs, processes, settings, users, roles, grants, quotas; `SHOW PROCESSLIST`, `SETTINGS` and the like |
+| Trino, Athena | `system.runtime.*` queries, tasks, nodes, transactions |
+| SQL Server, Fabric | `sys.dm_exec_*`, `sys.dm_os_*`, `sys.dm_tran_*`, `sys.configurations`, logins and credentials, `@@` variables |
+| SQLite | nothing beyond `PRAGMA` and `ATTACH`, refused already |
+
+A name is matched however it is written (any case, quoted or not, qualified
+or not); the same name as another schema's table, or as a column, is not
+(`ops.pg_locks`, `t.stl_weight`). There is no setting to allow these: the
+warehouse role's grants are the first control, so give it no grant on them.
+DQL's own statements are not affected; with a host, warehouse discovery does
+not read query history.
+
+Catalog lookups (a table's columns, the schema search) send schema and table
+names to the warehouse as bound values on every engine, never inside the
+statement's text. Databricks connections take `?` parameters, sent as the
+statement API's named parameters.
+
 ## SQLite
 
 ```json

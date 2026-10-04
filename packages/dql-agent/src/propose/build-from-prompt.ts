@@ -138,6 +138,11 @@ export interface BuildFromPromptOptions {
   /** Active user, for personal-skill selection. */
   userId?: string;
   /**
+   * Whether the owner found or given is saved in dql.config.json for next time (the default, for one person's
+   * own project). A server many people use passes false: the owner is the person signed in, not the project's.
+   */
+  persistOwner?: boolean;
+  /**
    * Project + user Skills to inject as business context. When omitted the
    * engine loads them from `.dql/skills/` itself.
    */
@@ -845,7 +850,7 @@ async function buildBlock(
   matchedMetric?: MatchedGovernedMetric,
 ): Promise<BuildBlockResult> {
   const { projectRoot } = options;
-  const owner = resolveLocalOwner(projectRoot, { explicit: options.owner });
+  const owner = resolveLocalOwner(projectRoot, { explicit: options.owner, persist: options.persistOwner !== false });
   const domain = (options.domain ?? 'misc').trim() || 'misc';
 
   const { content, userPrompt } = await generateBlockContent(options, grounding, provider, skillsPrompt, matchedMetric);
@@ -1173,7 +1178,7 @@ async function editBlock(
   const record = toBlockRecord({
     slug: existing.name,
     domain: existing.domain ?? 'misc',
-    owner: existing.owner ?? resolveLocalOwner(options.projectRoot, { explicit: options.owner }),
+    owner: existing.owner ?? resolveLocalOwner(options.projectRoot, { explicit: options.owner, persist: options.persistOwner !== false }),
     description: description ?? `Block "${existing.name}".`,
     grain,
     outputs,

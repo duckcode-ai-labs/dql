@@ -60,5 +60,13 @@ export default defineConfig({
     include: ['src/**/*.test.ts'],
     // CLI integration tests start real local servers and exercise filesystem/package workflows.
     testTimeout: 30_000,
+    // The suite reaches nothing beyond this machine: no check for the latest release on the npm registry, and a
+    // connector driver install (a server started on a project whose connection needs one) uses npm's cache only,
+    // against a registry on loopback that answers nothing.
+    env: {
+      DQL_DISABLE_VERSION_CHECK: '1',
+      npm_config_offline: 'true',
+      npm_config_registry: 'http://127.0.0.1:9/',
+    },
   },
 });

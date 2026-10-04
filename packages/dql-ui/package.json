@@ -20,7 +20,12 @@
       "import": "./dist/icons/index.js"
     },
     "./styles": "./src/styles/globals.css",
-    "./styles/tokens": "./src/styles/tokens.css"
+    "./styles/tokens": "./src/styles/tokens.css",
+    "./styles/fonts": "./src/styles/fonts.css",
+    "./font-licence": {
+      "types": "./src/styles/font-licence.d.mts",
+      "default": "./src/styles/font-licence.mjs"
+    }
   },
   "scripts": {
     "build": "rm -rf dist tsconfig.tsbuildinfo && tsc",

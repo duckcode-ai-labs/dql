@@ -126,7 +126,7 @@ export function startAppScheduler(options: {
 /** Runs one App schedule as cron does and logs a one-line outcome. */
 export async function runScheduledApp(
   schedule: ScheduledAppDashboard,
-  options: { projectRoot: string; executor: QueryExecutor; connection: ConnectionConfig; pageRunner: AppPageRunner; log?: Log },
+  options: { projectRoot: string; executor: QueryExecutor; connection: ConnectionConfig; pageRunner: AppPageRunner; log?: Log; baselineOwner?: string },
 ): Promise<RunRecord> {
   const log = options.log ?? console;
   const record = await runAppDashboard(schedule.appId, schedule.dashboardId, {
@@ -136,6 +136,7 @@ export async function runScheduledApp(
     trigger: 'cron',
     scheduleId: schedule.scheduleId,
     pageRunner: options.pageRunner,
+    ...(options.baselineOwner ? { baselineOwner: options.baselineOwner } : {}),
   });
   const failed = record.queries.filter((q) => q.error).length;
   const tag = record.error ? `error: ${record.error}` : failed > 0 ? `tile-errors:${failed}` : 'ok';

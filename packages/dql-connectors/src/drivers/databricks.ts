@@ -69,9 +69,8 @@ export class DatabricksConnector implements DatabaseConnector {
     if (!this.baseUrl || !this.token || !this.warehouseId) {
       throw new Error('Databricks connector not connected. Call connect() first.');
     }
-    if (params && params.length > 0) {
-      throw new Error('Databricks connector does not yet support positional parameters.');
-    }
+    // `?` placeholders become the Statement Execution API's named parameters: values never enter the text.
+    const bound = params && params.length > 0 ? databricksNamedParameters(sql, params) : { statement: sql, parameters: undefined };
 
     const startTime = performance.now();
     const response = await fetch(`${this.baseUrl}/api/2.0/sql/statements`, {
@@ -81,7 +80,8 @@ export class DatabricksConnector implements DatabaseConnector {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        statement: sql,
+        statement: bound.statement,
+        ...(bound.parameters ? { parameters: bound.parameters } : {}),
         warehouse_id: this.warehouseId,
         catalog: this.catalog,
         schema: this.schema,
@@ -163,17 +163,21 @@ export class DatabricksConnector implements DatabaseConnector {
   }
 
   async listColumns(schema?: string, table?: string): Promise<ColumnInfo[]> {
+    // Names travel as named parameters, never inside the statement's text (Spark reads backslashes in strings).
     let sql = `SELECT table_schema, table_name, column_name, data_type, ordinal_position
        FROM information_schema.columns
        WHERE table_schema NOT IN ('information_schema')`;
+    const params: unknown[] = [];
     if (schema) {
-      sql += ` AND table_schema = '${schema.replace(/'/g, "''")}'`;
+      params.push(schema);
+      sql += ` AND table_schema = ?`;
     }
     if (table) {
-      sql += ` AND table_name = '${table.replace(/'/g, "''")}'`;
+      params.push(table);
+      sql += ` AND table_name = ?`;
     }
     sql += ` ORDER BY table_schema, table_name, ordinal_position`;
-    const result = await this.execute(sql);
+    const result = await this.execute(sql, params);
     return result.rows.map((row) => ({
       schema: String(row['table_schema'] ?? ''),
       table: String(row['table_name'] ?? ''),
@@ -279,6 +283,70 @@ function mapWarehouseType(driverType: string): ColumnType {
   if (lower === 'boolean') return 'boolean';
   if (lower.includes('string') || lower.includes('char')) return 'string';
   return 'unknown';
+}
+
+/** A named parameter of the Databricks SQL Statement Execution API (`:name` in the statement). */
+export interface DatabricksParameter {
+  name: string;
+  value?: string;
+  type?: string;
+}
+
+/**
+ * A statement with `?` placeholders as the Statement Execution API takes it: each placeholder outside strings,
+ * quoted names and comments becomes `:dql_pN`, and its value goes in `parameters` (typed; null leaves `value` out).
+ */
+export function databricksNamedParameters(sql: string, params: unknown[]): { statement: string; parameters: DatabricksParameter[] } {
+  let statement = '';
+  let used = 0;
+  let index = 0;
+  while (index < sql.length) {
+    const char = sql[index]!;
+    const next = sql[index + 1];
+    if (char === "'" || char === '"' || char === '`') {
+      let end = index + 1;
+      while (end < sql.length && sql[end] !== char) end += char !== '`' && sql[end] === '\\' ? 2 : 1;
+      statement += sql.slice(index, end + 1);
+      index = end + 1;
+      continue;
+    }
+    if (char === '-' && next === '-') {
+      const end = sql.indexOf('\n', index);
+      const stop = end < 0 ? sql.length : end;
+      statement += sql.slice(index, stop);
+      index = stop;
+      continue;
+    }
+    if (char === '/' && next === '*') {
+      const end = sql.indexOf('*/', index + 2);
+      const stop = end < 0 ? sql.length : end + 2;
+      statement += sql.slice(index, stop);
+      index = stop;
+      continue;
+    }
+    if (char === '?') {
+      used += 1;
+      statement += `:dql_p${used}`;
+      index += 1;
+      continue;
+    }
+    statement += char;
+    index += 1;
+  }
+  if (used !== params.length) throw new Error(`The statement has ${used} placeholder${used === 1 ? '' : 's'} for ${params.length} value${params.length === 1 ? '' : 's'}.`);
+  const parameters = params.map((value, position): DatabricksParameter => {
+    const name = `dql_p${position + 1}`;
+    if (value === null || value === undefined) return { name };
+    if (typeof value === 'boolean') return { name, value: value ? 'true' : 'false', type: 'BOOLEAN' };
+    if (typeof value === 'bigint') return { name, value: value.toString(), type: 'BIGINT' };
+    if (typeof value === 'number') {
+      if (!Number.isFinite(value)) throw new Error(`A parameter value of ${value} cannot be sent to Databricks.`);
+      return { name, value: String(value), type: Number.isSafeInteger(value) ? 'BIGINT' : 'DOUBLE' };
+    }
+    if (value instanceof Date) return { name, value: value.toISOString(), type: 'TIMESTAMP' };
+    return { name, value: typeof value === 'string' ? value : JSON.stringify(value), type: 'STRING' };
+  });
+  return { statement, parameters };
 }
 
 function delay(ms: number): Promise<void> {

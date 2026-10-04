@@ -13,6 +13,7 @@ import { dump as dumpYaml, load as loadYaml } from "js-yaml";
 import type {
   ConnectionConfig,
   QueryExecutor,
+  QueryResult,
 } from "@duckcodeailabs/dql-connectors";
 
 export type DatasetStorageMode = "local" | "project" | "staged";
@@ -102,6 +103,20 @@ export interface ImportDatasetInput {
   tags?: string[];
 }
 
+/**
+ * RFC 0010, with a host: the engine reads no files for a statement (host/engine-guard.ts). The workspace
+ * then reads each uploaded or staged file itself, with a private in-memory engine no statement reaches,
+ * and keeps its rows in a table of the workspace database (not a view over the file). `platform` writes
+ * that table: DQL's own write of the person's own upload, not a statement they wrote, so it does not pass
+ * the host's statement checks. Without a host the workspace keeps views over its files, as before.
+ */
+export interface NotebookDatasetWorkspaceOptions {
+  privateReads?: { platform: QueryExecutor };
+}
+
+/** Rows moved from the private reader into the workspace table per statement. */
+const TRANSFER_BATCH_ROWS = 20_000;
+
 type ProjectRegistry = {
   version: 1;
   datasets: DatasetSource[];
@@ -116,21 +131,32 @@ export class NotebookDatasetWorkspace {
   readonly databasePath: string;
   readonly localConnection: ConnectionConfig;
 
+  private readonly platform?: QueryExecutor;
+
   constructor(
     readonly projectRoot: string,
     private readonly executor: QueryExecutor,
-    moduleSearchPaths?: string[],
+    private readonly moduleSearchPaths?: string[],
+    options: NotebookDatasetWorkspaceOptions = {},
   ) {
     this.localRoot = join(projectRoot, ".dql", "local");
     this.datasetRoot = join(this.localRoot, "datasets");
     this.stagedRoot = join(this.datasetRoot, "staged");
     this.databasePath = join(this.localRoot, "notebook.duckdb");
+    this.platform = options.privateReads?.platform;
     this.localConnection = {
       driver: "duckdb",
       filepath: this.databasePath,
       ...(moduleSearchPaths?.length ? { moduleSearchPaths } : {}),
+      // The same restricted engine the host's statements get, so both use one connection.
+      ...(this.platform ? { restrictExternalAccess: true } : {}),
     };
     mkdirSync(this.stagedRoot, { recursive: true });
+  }
+
+  /** Whether files are read privately and kept as tables (with a host). */
+  get keepsTables(): boolean {
+    return Boolean(this.platform);
   }
 
   list(): DatasetSource[] {
@@ -160,8 +186,10 @@ export class NotebookDatasetWorkspace {
         this.remove(dataset.id);
         continue;
       }
-      if (existsSync(this.absolutePath(dataset)))
-        await this.registerView(dataset);
+      if (!existsSync(this.absolutePath(dataset))) continue;
+      // A table already kept for it is current; a view (from a run without a host) is replaced by one.
+      if (this.platform && (await this.relationType(dataset.alias)) === "BASE TABLE") continue;
+      await this.registerView(dataset);
     }
   }
 
@@ -386,6 +414,10 @@ export class NotebookDatasetWorkspace {
       const path = this.absolutePath(dataset);
       if (existsSync(path)) rmSync(path, { force: true });
     }
+    if (this.platform) {
+      void this.dropRelation(dataset.alias).catch(() => undefined);
+      return;
+    }
     void this.executor
       .executeQuery(
         `DROP VIEW IF EXISTS ${quoteIdentifier(dataset.alias)}`,
@@ -412,12 +444,9 @@ export class NotebookDatasetWorkspace {
       input.rows.map((row) => JSON.stringify(row, bigintReplacer)).join("\n") +
       "\n";
     writeFileSync(jsonPath, body, "utf-8");
-    await this.executor.executeQuery(
-      `COPY (SELECT * FROM read_json_auto(${quoteLiteral(jsonPath.replaceAll("\\", "/"))})) TO ${quoteLiteral(parquetPath.replaceAll("\\", "/"))} (FORMAT PARQUET)`,
-      [],
-      {},
-      this.localConnection,
-    );
+    const copy = `COPY (SELECT * FROM read_json_auto(${quoteLiteral(jsonPath.replaceAll("\\", "/"))})) TO ${quoteLiteral(parquetPath.replaceAll("\\", "/"))} (FORMAT PARQUET)`;
+    if (this.platform) await this.withPrivateReader((run) => run(copy));
+    else await this.executor.executeQuery(copy, [], {}, this.localConnection);
     rmSync(jsonPath, { force: true });
     const buffer = readFileSync(parquetPath);
     const now = new Date();
@@ -460,6 +489,10 @@ export class NotebookDatasetWorkspace {
             )
             .join(", ")
         : "*";
+    if (this.platform) {
+      await this.keepAsTable(dataset.alias, `SELECT ${projection} FROM ${source}`);
+      return;
+    }
     await this.executor.executeQuery(
       `CREATE OR REPLACE VIEW ${quoteIdentifier(dataset.alias)} AS SELECT ${projection} FROM ${source}`,
       [],
@@ -473,7 +506,13 @@ export class NotebookDatasetWorkspace {
     format: DatasetSource["format"],
   ): Promise<DatasetProfile> {
     const relation = `${readerFor(format)}(${quoteLiteral(path.replaceAll("\\", "/"))})`;
-    const [description, countResult, previewResult] = await Promise.all([
+    const [description, countResult, previewResult] = this.platform
+      ? await this.withPrivateReader(async (run) => [
+          await run(`DESCRIBE SELECT * FROM ${relation}`),
+          await run(`SELECT COUNT(*) AS row_count FROM ${relation}`),
+          await run(`SELECT * FROM ${relation} LIMIT 100`),
+        ])
+      : await Promise.all([
       this.executor.executeQuery(
         `DESCRIBE SELECT * FROM ${relation}`,
         [],
@@ -557,6 +596,93 @@ export class NotebookDatasetWorkspace {
       warnings,
       preview,
     };
+  }
+
+  /**
+   * With a host: a private in-memory engine, for reading the workspace's own files (an upload, a staged
+   * result). It is reached only through the server's own executor with this connection, which no
+   * statement a person writes uses (theirs are restricted); each use works in tables of its own, dropped
+   * afterwards.
+   */
+  private async withPrivateReader<T>(
+    work: (run: (sql: string) => Promise<QueryResult>, table: string) => Promise<T>,
+  ): Promise<T> {
+    const platform = this.platform!;
+    const reader: ConnectionConfig = {
+      driver: "duckdb",
+      filepath: ":memory:",
+      ...(this.moduleSearchPaths?.length ? { moduleSearchPaths: this.moduleSearchPaths } : {}),
+    };
+    const run = (sql: string) => platform.executePositional(sql, [], reader);
+    const table = `dql_upload_${randomUUID().replaceAll("-", "")}`;
+    // Formats are read with what is already on this machine; nothing is fetched.
+    await run("SET autoinstall_known_extensions = false");
+    try {
+      return await work(run, table);
+    } finally {
+      await run(`DROP TABLE IF EXISTS ${quoteIdentifier(table)}`).catch(() => undefined);
+    }
+  }
+
+  /** The kind of relation the workspace database holds under this name (`BASE TABLE`, `VIEW`), if any. */
+  private async relationType(name: string): Promise<string | undefined> {
+    if (!this.platform) return undefined;
+    const result = await this.platform.executePositional(
+      "SELECT table_type FROM information_schema.tables WHERE table_schema = current_schema() AND table_name = ?",
+      [name],
+      this.localConnection,
+    );
+    const type = (result.rows?.[0] as Record<string, unknown> | undefined)?.table_type;
+    return typeof type === "string" ? type : undefined;
+  }
+
+  private async dropRelation(name: string): Promise<void> {
+    if (!this.platform) return;
+    const type = await this.relationType(name);
+    if (!type) return;
+    await this.platform.executePositional(
+      `DROP ${type === "VIEW" ? "VIEW" : "TABLE"} IF EXISTS ${quoteIdentifier(name)}`,
+      [],
+      this.localConnection,
+    );
+  }
+
+  /**
+   * With a host: read the file with the private engine and keep its rows in a table of the workspace
+   * database. Values travel as text, in DuckDB's own text form, and are cast back to their types.
+   */
+  private async keepAsTable(alias: string, select: string): Promise<void> {
+    const platform = this.platform!;
+    await this.withPrivateReader(async (run, src) => {
+      await run(`CREATE TABLE ${quoteIdentifier(src)} AS ${select}`);
+      const columns = ((await run(`DESCRIBE ${quoteIdentifier(src)}`)).rows ?? []).map((raw) => {
+        const row = raw as Record<string, unknown>;
+        return { name: String(row.column_name ?? row.name), type: String(row.column_type ?? row.type ?? "VARCHAR") };
+      });
+      if (!columns.length) throw new Error("The dataset file has no columns.");
+      const total = Number(((await run(`SELECT COUNT(*) AS n FROM ${quoteIdentifier(src)}`)).rows?.[0] as Record<string, unknown> | undefined)?.n ?? 0);
+      await this.dropRelation(alias);
+      await platform.executePositional(
+        `CREATE TABLE ${quoteIdentifier(alias)} (${columns.map((column) => `${quoteIdentifier(column.name)} ${column.type}`).join(", ")})`,
+        [],
+        this.localConnection,
+      );
+      const asText = columns.map((column) => `${quoteIdentifier(column.name)} := CAST(${quoteIdentifier(column.name)} AS VARCHAR)`).join(", ");
+      const shape = quoteLiteral(JSON.stringify([Object.fromEntries(columns.map((column) => [column.name, "VARCHAR"]))]));
+      const typed = columns.map((column) => `CAST(r.${quoteIdentifier(column.name)} AS ${column.type})`).join(", ");
+      for (let offset = 0; offset < total; offset += TRANSFER_BATCH_ROWS) {
+        const batch = await run(
+          `SELECT CAST(to_json(list(struct_pack(${asText}))) AS VARCHAR) AS rows_json FROM (SELECT * FROM ${quoteIdentifier(src)} WHERE rowid >= ${offset} AND rowid < ${offset + TRANSFER_BATCH_ROWS})`,
+        );
+        const json = (batch.rows?.[0] as Record<string, unknown> | undefined)?.rows_json;
+        if (typeof json !== "string" || json === "[]") continue;
+        await platform.executePositional(
+          `INSERT INTO ${quoteIdentifier(alias)} SELECT ${typed} FROM (SELECT unnest(from_json(CAST(? AS JSON), ${shape})) AS r)`,
+          [json],
+          this.localConnection,
+        );
+      }
+    });
   }
 
   private require(id: string): DatasetSource {

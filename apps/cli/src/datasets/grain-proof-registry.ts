@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from '
 import { dirname, join } from 'node:path';
 import type { DatasetGrainProofV1 } from '@duckcodeailabs/dql-core';
 import {
+  DATASET_PROOF_RELATIVE_PATH,
   LOCAL_DATASET_PROOF_RELATIVE_PATH,
   type DatasetBlockProofMaterial,
 } from '@duckcodeailabs/dql-agent';
@@ -43,11 +44,11 @@ export function datasetGrainProofFromRuntime(input: {
  * under `.dql/local`, while the stable `keyEvidence` reference stays in the
  * checked-in Dataset declaration. Replacement is atomic for a given proof ID.
  */
-export function persistLocalDatasetGrainProof(projectRoot: string, proof: DatasetGrainProofV1): {
+export function persistLocalDatasetGrainProof(projectRoot: string, proof: DatasetGrainProofV1, options: { path?: string } = {}): {
   path: string;
   proof: DatasetGrainProofV1;
 } {
-  const path = join(projectRoot, LOCAL_DATASET_PROOF_RELATIVE_PATH);
+  const path = options.path ?? join(projectRoot, LOCAL_DATASET_PROOF_RELATIVE_PATH);
   const current = readLocalProofs(path);
   const next = [...current.filter((candidate) => candidate.id !== proof.id), proof]
     .sort((left, right) => left.id.localeCompare(right.id));
@@ -56,6 +57,37 @@ export function persistLocalDatasetGrainProof(projectRoot: string, proof: Datase
   writeFileSync(temporary, `${JSON.stringify({ version: 1, proofs: next }, null, 2)}\n`, 'utf8');
   renameSync(temporary, path);
   return { path, proof };
+}
+
+/**
+ * RFC 0010: with a host, a grain check runs under the asking person's row rules and credentials, so what it proves
+ * is theirs: it is kept in their own file (by the identity that decides their rows), never as shared evidence.
+ */
+export function personDatasetProofPath(projectRoot: string, personKey: string): string {
+  const safe = /^[a-z0-9-]{1,80}$/.test(personKey) ? personKey : 'unknown';
+  return join(projectRoot, '.dql', 'local', 'private', 'datasets', 'proofs', `${safe}.json`);
+}
+
+/** The proofs one person may go on: the project's checked-in (reviewed) proofs, then their own local ones. */
+export function loadPersonDatasetGrainProofs(projectRoot: string, personKey: string): Map<string, DatasetGrainProofV1> {
+  const proofs = new Map<string, DatasetGrainProofV1>();
+  for (const path of [join(projectRoot, DATASET_PROOF_RELATIVE_PATH), personDatasetProofPath(projectRoot, personKey)]) {
+    for (const proof of readLocalProofs(path)) proofs.set(proof.id, proof);
+  }
+  return proofs;
+}
+
+/**
+ * With a host: local proofs written before were computed under whoever ran a page then, so they stop being shared
+ * evidence. The file is moved where nothing reads it (kept, not deleted). Returns whether there was one.
+ */
+export function retireSharedLocalDatasetProofs(projectRoot: string): boolean {
+  const shared = join(projectRoot, LOCAL_DATASET_PROOF_RELATIVE_PATH);
+  if (!existsSync(shared)) return false;
+  const kept = join(projectRoot, '.dql', 'local', 'private', 'datasets', 'shared-proofs-before-host.json');
+  mkdirSync(dirname(kept), { recursive: true });
+  renameSync(shared, kept);
+  return true;
 }
 
 function readLocalProofs(path: string): DatasetGrainProofV1[] {

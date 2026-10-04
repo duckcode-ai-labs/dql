@@ -1,5 +1,8 @@
 import { answerIdentities } from './answer-facts.js';
+import { createHmac, randomBytes } from 'node:crypto';
+import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import type { IncomingMessage, ServerResponse } from 'node:http';
+import { join } from 'node:path';
 import { createAskTracePortableBundleV1, toOtlpOpenInferenceJsonV1 } from '@duckcodeailabs/dql-agent';
 import type { DqlPrincipal } from './request-context.js';
 import type { DqlRouteAction } from './route-actions.js';
@@ -261,10 +264,64 @@ type TraceStoreLike = {
 };
 
 /**
- * A trace store that also exports each finished trace — strictly redacted —
- * to the host's sink and/or an OTLP collector, after the local write.
+ * QUESTION FINGERPRINTS LEAVE KEYED. A trace keeps `sha256(question)` to tell
+ * the same question apart from others on this install. Sent to a host's sink
+ * or an OpenTelemetry collector, that hash could be checked against a list of
+ * likely questions anywhere, so it leaves as HMAC-SHA256 under this install's
+ * own key: the same question still keys the same way here, and nowhere else.
  */
-export function withTraceExport<T extends TraceStoreLike>(store: T, targets: { sink?: DqlTraceSink; otlpEndpoint?: string; otlpHeaders?: Record<string, string> }): T {
+export function keyQuestionFingerprints<T>(trace: T, key: string): T {
+  const keyed = (value: string) => `sha256:${createHmac('sha256', key).update(value).digest('hex')}`;
+  const walk = (value: unknown): unknown => {
+    if (Array.isArray(value)) return value.map(walk);
+    if (!value || typeof value !== 'object') return value;
+    const record = value as Record<string, unknown>;
+    const out: Record<string, unknown> = {};
+    for (const [name, entry] of Object.entries(record)) {
+      // The question's own fingerprint, and the stage span that carries it.
+      if (typeof entry === 'string' && (name === 'questionFingerprint' || (name === 'fingerprint' && record.kind === 'stage'))) out[name] = keyed(entry);
+      else out[name] = walk(entry);
+    }
+    return out;
+  };
+  return walk(trace) as T;
+}
+
+/**
+ * The key question fingerprints leave under: the host's (`traceSalt`, stable
+ * for its workspace), or one DQL makes once and keeps in the project's private
+ * folder (`.dql/local/private/trace-salt`), never in git.
+ */
+export function traceQuestionKey(projectRoot: string, hostSalt?: unknown): string {
+  if (typeof hostSalt === 'string' && hostSalt.trim()) return hostSalt;
+  // A host's key that is not a text is not used (and never written anywhere); DQL keys with its own instead.
+  if (hostSalt !== undefined) console.warn('[dql] The host\'s traceSalt is not a non-empty text; question fingerprints are keyed with this project\'s own key.');
+  const folder = join(projectRoot, '.dql', 'local', 'private');
+  const file = join(folder, 'trace-salt');
+  if (existsSync(file)) {
+    const saved = readFileSync(file, 'utf8').trim();
+    if (/^[0-9a-f]{64}$/.test(saved)) return saved;
+  }
+  mkdirSync(folder, { recursive: true });
+  const made = randomBytes(32).toString('hex');
+  try {
+    writeFileSync(file, `${made}\n`, { encoding: 'utf8', mode: 0o600, flag: 'wx' });
+  } catch {
+    // Another process made it first: use theirs.
+    const saved = readFileSync(file, 'utf8').trim();
+    if (/^[0-9a-f]{64}$/.test(saved)) return saved;
+    writeFileSync(file, `${made}\n`, { encoding: 'utf8', mode: 0o600 });
+  }
+  try { chmodSync(file, 0o600); } catch { /* best effort on file systems without modes */ }
+  return made;
+}
+
+/**
+ * A trace store that also exports each finished trace — strictly redacted —
+ * to the host's sink and/or an OTLP collector, after the local write. With
+ * `questionKey`, question fingerprints leave keyed (`keyQuestionFingerprints`).
+ */
+export function withTraceExport<T extends TraceStoreLike>(store: T, targets: { sink?: DqlTraceSink; otlpEndpoint?: string; otlpHeaders?: Record<string, string>; questionKey?: () => string }): T {
   if (!targets.sink && !targets.otlpEndpoint) return store;
   return new Proxy(store, {
     get(target, property) {
@@ -275,8 +332,9 @@ export function withTraceExport<T extends TraceStoreLike>(store: T, targets: { s
         queueMicrotask(() => {
           void (async () => {
             try {
-              const trace = target.get(envelope.traceId);
-              if (!trace) return;
+              const stored = target.get(envelope.traceId);
+              if (!stored) return;
+              const trace = targets.questionKey ? keyQuestionFingerprints(stored, targets.questionKey()) : stored;
               const bundle = createAskTracePortableBundleV1(trace, { profile: 'strict', provenance: 'recorded' } as Parameters<typeof createAskTracePortableBundleV1>[1]);
               const otlp = toOtlpOpenInferenceJsonV1(bundle.trace);
               if (targets.sink) await targets.sink({ traceId: envelope.traceId, runId: envelope.runId, bundle, otlp });

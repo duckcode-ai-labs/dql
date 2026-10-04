@@ -290,17 +290,21 @@ export class SnowflakeConnector implements DatabaseConnector {
   }
 
   async listColumns(schema?: string, table?: string): Promise<ColumnInfo[]> {
+    // Names travel as bind values, never inside the statement's text (Snowflake reads backslashes in strings).
     let sql = `SELECT table_schema, table_name, column_name, data_type, ordinal_position
        FROM information_schema.columns
        WHERE table_schema NOT IN ('INFORMATION_SCHEMA')`;
+    const params: unknown[] = [];
     if (schema) {
-      sql += ` AND table_schema = '${schema.replace(/'/g, "''")}'`;
+      params.push(schema);
+      sql += ` AND table_schema = ?`;
     }
     if (table) {
-      sql += ` AND table_name = '${table.replace(/'/g, "''")}'`;
+      params.push(table);
+      sql += ` AND table_name = ?`;
     }
     sql += ` ORDER BY table_schema, table_name, ordinal_position`;
-    const result = await this.execute(sql);
+    const result = await this.execute(sql, params);
     return result.rows.map((row) => ({
       schema: String(row['TABLE_SCHEMA'] ?? row['table_schema'] ?? ''),
       table: String(row['TABLE_NAME'] ?? row['table_name'] ?? ''),

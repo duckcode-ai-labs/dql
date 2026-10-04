@@ -372,4 +372,7 @@ feature requests: [open an issue](https://github.com/duckcode-ai/dql/issues).
 
 ## License
 
-[Apache-2.0](./LICENSE)
+[Apache-2.0](./LICENSE), except four packages that are MIT:
+`create-dql-app`, `@duckcodeailabs/dql-openlineage`,
+`@duckcodeailabs/dql-plugin-api` and `@duckcodeailabs/dql-telemetry`. Each
+package's `package.json` names its license.

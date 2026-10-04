@@ -238,6 +238,15 @@ describe('ConversationStore', () => {
     expect(dist.byTerminalLane).toMatchObject({ certified: 1, semantic: 2, generated: 1 });
   });
 
+  it('counts only one owner\'s turns when asked for an owner', () => {
+    const mine = store.createThread({ ownerId: 'u-priya' });
+    const theirs = store.createThread({ ownerId: 'u-dan' });
+    store.appendTurn(mine.id, { question: 'a', cascade: { terminalLane: 'certified', routeTier: 'certified_block', label: 'x', outcome: { lane: 'certified', routeTier: 'certified_block' } } });
+    store.appendTurn(theirs.id, { question: 'b', cascade: { terminalLane: 'generated', routeTier: 'generated_sql', label: 'x', outcome: { lane: 'generated', routeTier: 'generated_sql' } } });
+    expect(store.tierDistribution({ ownerId: 'u-priya' })).toMatchObject({ total: 1, byRouteTier: { certified_block: 1 } });
+    expect(store.tierDistribution().total).toBe(2);
+  });
+
   it('searches turns by keyword, scoped to a thread', () => {
     const revenueThread = store.createThread();
     const signupThread = store.createThread();

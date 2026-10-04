@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { HostAnswerActions } from './HostAnswerActions';
 import { CitedDocuments, appliedListStyle, appliedTagStyle } from './CitedDocuments';
-import { hostAllows, useHostUi } from '../../host/host-ui';
+import { hostAllows, hostReader, hostRefusal, useHostPage, useHostUi } from '../../host/host-ui';
 import { createPortal } from 'react-dom';
 import { normalizeDqlArtifactReference } from '@duckcodeailabs/dql-core/artifacts';
 import {
@@ -389,6 +389,12 @@ export function UnifiedAgentRunPanel({
   askLayout = false,
 }: UnifiedAgentRunPanelProps): JSX.Element {
   const { state: notebookState, dispatch: notebookDispatch } = useNotebook();
+  // With a host: a person who may not ask is not offered the box (the host says why and where to ask for it), and a
+  // reader's screen says what answers are built on in plain words.
+  const hostUi = useHostUi();
+  const hostPage = useHostPage();
+  const askRefusal = hostRefusal(hostUi, 'ask');
+  const reader = hostReader(hostUi);
   // An empty Ask suggests questions this project's own metrics can answer. Ask
   // opened directly (a link, a reader's only page) has not loaded the semantic
   // layer yet: load it once here; a failure just keeps the general examples.
@@ -1229,12 +1235,27 @@ export function UnifiedAgentRunPanel({
             </div>
             <span style={{ fontSize: 13.5, fontWeight: 650, color: t.textPrimary, whiteSpace: 'nowrap' }}>{title === 'AI Copilot' ? 'Ask your data' : title}</span>
             <div style={{ flex: 1 }} />
-            <span style={{ fontSize: 11, color: t.textMuted, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>Certified first · semantic next · generated SQL last</span>
+            <span style={{ fontSize: 11, color: t.textMuted, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>{reader ? 'Certified answers first, then approved metrics, then new SQL marked Needs review' : 'Certified first · semantic next · generated SQL last'}</span>
           </div>
 
           <div ref={askScrollRef} style={{ flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'hidden', display: 'flex', flexDirection: 'column' }}>
             <div style={{ width: 'min(720px, 100% - 48px)', margin: '0 auto', padding: '26px 0 12px', display: 'flex', flexDirection: 'column', gap: 26 }}>
-              {presentedItems.length === 0 && !running ? (
+              {presentedItems.length === 0 && !running && askRefusal ? (
+                <div role="note" style={{ margin: 'auto 0', display: 'grid', gap: 12, justifyItems: 'center', textAlign: 'center', color: t.textSecondary, paddingTop: 40 }}>
+                  <div style={largeIconShellStyle(t)}><Sparkles size={20} /></div>
+                  <div style={{ fontSize: 13.5, lineHeight: 1.5, maxWidth: 420, color: t.textSecondary }}>{askRefusal.reason ?? 'Asking questions is not open to you here.'}</div>
+                  {askRefusal.next ? (
+                    <button
+                      type="button"
+                      className="dql-hover"
+                      onClick={() => { hostPage.openPage({ id: `refusal-${askRefusal.next!.href}`, label: askRefusal.next!.label, href: askRefusal.next!.href }); notebookDispatch({ type: 'SET_MAIN_VIEW', view: 'host_page' }); }}
+                      style={{ height: 34, padding: '0 14px', borderRadius: 10, border: 'none', background: 'var(--accent)', color: 'var(--accent-fg, #fff)', cursor: 'pointer', fontFamily: t.font, fontSize: 13, fontWeight: 600 }}
+                    >
+                      {askRefusal.next.label}
+                    </button>
+                  ) : null}
+                </div>
+              ) : presentedItems.length === 0 && !running ? (
                 <div style={{ margin: 'auto 0', display: 'grid', gap: 14, justifyItems: 'center', textAlign: 'center', color: t.textSecondary, paddingTop: 40 }}>
                   <div style={largeIconShellStyle(t)}><Sparkles size={20} /></div>
                   <div style={{ fontSize: 13.5, lineHeight: 1.5, maxWidth: 400, color: t.textSecondary }}>{emptyHint ?? DEFAULT_EMPTY_HINT}</div>
@@ -1275,15 +1296,16 @@ export function UnifiedAgentRunPanel({
               {running && <RunProgress events={runningEvents} t={t} streamingAnswer={streamingAnswer} thinkingMode={thinkingMode} backgroundRun={backgroundRun} />}
             </div>
 
+            {askRefusal ? null : (
             <div style={{ width: 'min(720px, 100% - 48px)', margin: 'auto auto 0', padding: '10px 0 16px', position: 'sticky', bottom: 0, background: 'linear-gradient(to top, var(--bg-canvas) 82%, transparent)' }}>
               {error ? <div style={{ color: t.error, fontSize: 12, marginBottom: 8 }}>{error}</div> : null}
               {scopeControl ? <div style={{ marginBottom: 7 }}>{scopeControl}</div> : onClearScope ? (
-                <div style={{ width: 'fit-content', maxWidth: '100%', marginBottom: 7, padding: '4px 7px 4px 9px', border: '1px solid var(--border-default)', borderRadius: 999, background: 'var(--bg-2)', color: t.textMuted, fontSize: 10.5, display: 'flex', alignItems: 'center', gap: 5 }}>
+                <div style={{ width: 'fit-content', maxWidth: '100%', marginBottom: 7, padding: '4px 7px 4px 9px', border: '1px solid var(--border-default)', borderRadius: 999, background: 'var(--bg-2)', color: t.textMuted, fontSize: 11, display: 'flex', alignItems: 'center', gap: 5 }}>
                   <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{scopeHint}</span>
                   <button type="button" onClick={onClearScope} aria-label="Clear modeling scope" title="Clear modeling scope" style={{ border: 0, background: 'transparent', color: t.textMuted, cursor: 'pointer', display: 'grid', placeItems: 'center', padding: 1 }}><X size={12} /></button>
                 </div>
               ) : null}
-              <div style={{ background: 'var(--bg-2)', border: '1px solid var(--border-default)', borderRadius: 14, boxShadow: '0 1px 2px rgba(26,26,26,0.03), 0 6px 22px rgba(26,26,26,0.05)', display: 'flex', flexDirection: 'column' }}>
+              <div className="dql-ask-composer" style={{ background: 'var(--bg-2)', border: '1px solid var(--border-default)', borderRadius: 14, boxShadow: '0 1px 2px rgba(26,26,26,0.03), 0 6px 22px rgba(26,26,26,0.05)', display: 'flex', flexDirection: 'column' }}>
                 <textarea
                   ref={inputRef}
                   value={input}
@@ -1315,8 +1337,9 @@ export function UnifiedAgentRunPanel({
                   </button>
                 </div>
               </div>
-              <div style={{ textAlign: 'center', fontSize: 10.5, color: t.textMuted, marginTop: 8 }}>Each answer says what it is built on: certified, governed, or needs review.</div>
+              <div style={{ textAlign: 'center', fontSize: 11, color: t.textMuted, marginTop: 8 }}>Each answer says what it is built on: certified, governed, or needs review.</div>
             </div>
+            )}
           </div>
         </div>
 
@@ -2628,6 +2651,7 @@ const ASK_KEYFRAMES = `
   .dql-lift:hover { transform: translateY(-1px); }
   .dql-ask-ghost:hover { background: var(--bg-0); color: var(--text-primary) !important; }
   .dql-ask-chip:hover { border-color: var(--accent) !important; box-shadow: 0 1px 6px rgba(107,93,211,0.12); }
+  .dql-ask-composer:focus-within { border-color: var(--border-focus, var(--accent)) !important; box-shadow: 0 0 0 2px color-mix(in srgb, var(--border-focus, var(--accent)) 35%, transparent), 0 6px 22px rgba(26,26,26,0.05) !important; }
   details > summary::-webkit-details-marker { display: none; }
   @media (prefers-reduced-motion: reduce) { .dql-agent-thinking-dot, .dql-agent-activity { animation: none !important; } }
 `;
@@ -3188,7 +3212,9 @@ function AskRunCard(props: AskRunCardProps) {
       <ClarificationChoiceList run={run} t={t} onSelect={onSelectClarification} />
 
       {/* Executed results live in the transcript; the inspector owns DQL/SQL/lineage/trust. */}
-      {figuresWithheld ? (
+      {/* The answer's own words already say why its figures are hidden (the host's withheld answer); this note is only
+          for an answer that came without them. */}
+      {figuresWithheld && !run.summary ? (
         <div role="note" data-testid="ask-figures-withheld" style={{ padding: '10px 12px', border: `1px solid ${t.cellBorder}`, borderLeft: `3px solid ${t.warning}`, borderRadius: 8, background: t.cellBg, fontSize: 12.5, color: t.textSecondary }}>
           The figures stay hidden until an analyst checks this answer. What it would be built on is kept for the check.
         </div>
@@ -5289,6 +5315,8 @@ function AddToAppMenu({
   const [newName, setNewName] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** With a host: the answer's text could not be added (its figures depend on who looks); this adds it live instead. */
+  const [liveInstead, setLiveInstead] = useState<(() => Promise<void>) | null>(null);
   /** The tile name, editable before adding rather than silently derived. */
   const [tileName, setTileName] = useState('');
   const [done, setDone] = useState<{
@@ -5335,22 +5363,45 @@ function AddToAppMenu({
     setError(null);
   };
 
-  const addToDraft = async (draft: AppStudioBuildDraft, name: string, requestedPageId?: string, pageTitle?: string) => {
+  const addToDraft = async (draft: AppStudioBuildDraft, name: string, requestedPageId?: string, pageTitle?: string, live = false) => {
     const tileTitle = tileName.trim() || defaultAppName(run.question);
     const dqlArtifact = answerDqlArtifactFromRun(run);
     const certifiedBlock = certifiedBlockNameFromRun(run);
-    const result = await api.addAskResultToAppBuild(draft.id, {
-      expectedRevision: draft.revision,
-      expectedProposalHash: draft.proposalHash,
-      pageId: requestedPageId,
-      title: tileTitle,
-      question: run.question,
-      answer: acceptedAskAnswer(run) ?? run.summary,
-      certifiedBlockId: certifiedBlock,
-      dqlSource: dqlArtifact?.source,
-      sql: answerSqlFromRun(run),
-      visualization: runChartConfig(run)?.chart,
-    });
+    setLiveInstead(null);
+    let result: Awaited<ReturnType<typeof api.addAskResultToAppBuild>>;
+    try {
+      result = await api.addAskResultToAppBuild(draft.id, {
+        expectedRevision: draft.revision,
+        expectedProposalHash: draft.proposalHash,
+        pageId: requestedPageId,
+        title: tileTitle,
+        question: run.question,
+        answer: acceptedAskAnswer(run) ?? run.summary,
+        certifiedBlockId: certifiedBlock,
+        dqlSource: dqlArtifact?.source,
+        sql: answerSqlFromRun(run),
+        visualization: runChartConfig(run)?.chart,
+        runId: run.id,
+        ...(live ? { mode: 'live' as const } : {}),
+      });
+    } catch (e) {
+      // With a host, an answer whose figures depend on who looks is added as a live tile, never as its text.
+      if (!live && e instanceof DqlApiError && e.code === 'ANSWER_FIGURES_DEPEND_ON_READER'
+        && Array.isArray((e.details as { ways?: unknown } | undefined)?.ways) && ((e.details as { ways: Array<{ id?: string }> }).ways).some((way) => way.id === 'live')) {
+        setLiveInstead(() => async () => {
+          setBusy(true);
+          setError(null);
+          try {
+            await addToDraft(draft, name, requestedPageId, pageTitle, true);
+          } catch (again) {
+            setError(askAppWriteErrorMessage(again, 'Could not add to app.'));
+          } finally {
+            setBusy(false);
+          }
+        });
+      }
+      throw e;
+    }
     setDone({
       appId: result.draft.appId,
       draftId: result.draft.id,
@@ -5493,6 +5544,11 @@ function AddToAppMenu({
               <button type="button" onClick={closePicker} style={{ border: 'none', background: 'transparent', color: t.textMuted, cursor: 'pointer', fontSize: 15, lineHeight: 1 }}>×</button>
             </div>
             {error ? <div style={{ fontSize: 11, color: t.error, marginBottom: 7, lineHeight: 1.4 }}>{error}</div> : null}
+            {error && liveInstead ? (
+              <button type="button" className="dql-hover" disabled={busy} onClick={() => void liveInstead()} style={{ ...smallButtonStyle(t), marginBottom: 8 }}>
+                Add as a live tile
+              </button>
+            ) : null}
             {view === 'new' ? (
               <div style={{ display: 'grid', gap: 8 }}>
                 <input

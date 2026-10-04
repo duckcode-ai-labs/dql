@@ -210,6 +210,26 @@ describe('Research runs an investigation on the Ask pipeline', () => {
     expect(refused.askPipelineReceipt?.story?.map((step) => step.title)).toContain('Kept the summary written from the figures');
   });
 
+  it('the run\'s opt-in asks for the wording; the computed facts reach the model only where the boundary and the project allow (RFC 0010 HH-5)', async () => {
+    const source = { workspaceContext: { researchSource: { runId: 'run-source' } } };
+    const loadRun = async (id: string) => (id === 'run-source' ? storedRun() : undefined);
+    const words = async () => 'Revenue fell 930.00 (30.0%) in August 2025 compared with July 2025: 2170.00 against 3100.00.';
+    for (const decision of [() => false, () => Promise.resolve(false), () => { throw new Error('boundary rule down'); }]) {
+      const kept = fakeHost({ dispatch: words });
+      const result = await createInvestigationExecutor({ host: kept.host, loadRun, narrationMayCarryValues: decision })(run({ ...source, researchResultRowsOptIn: true } as Partial<AgentRunRequest>).context);
+      expect(kept.calls.dispatches).toHaveLength(0);
+      expect(reportOf(result).narration).toBeUndefined();
+    }
+    const allowed = fakeHost({ dispatch: words });
+    const worded = await createInvestigationExecutor({ host: allowed.host, loadRun, narrationMayCarryValues: () => true })(run({ ...source, researchResultRowsOptIn: true } as Partial<AgentRunRequest>).context);
+    expect(allowed.calls.dispatches.map((call) => call.purpose)).toEqual(['research_narrate']);
+    expect(reportOf(worded).narration?.verified).toBe(true);
+    // Without the run's own opt-in nothing is worded, whatever the boundary says.
+    const unasked = fakeHost({ dispatch: words });
+    await createInvestigationExecutor({ host: unasked.host, loadRun, narrationMayCarryValues: () => true })(run(source).context);
+    expect(unasked.calls.dispatches).toHaveLength(0);
+  });
+
   it('an Ask that declined a why-question offers "Investigate the drivers"; any other gap does not', () => {
     const gap = (clause: string): PipelineOutcome => ({
       kind: 'gap', gap: 'not_modeled', message: 'unsupported', nearest: [], text: 'Explaining why is something Research investigates.', offerExploration: false,

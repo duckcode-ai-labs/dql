@@ -130,6 +130,9 @@ function connectionKey(server: KnowledgeServerConfig): string {
   return createHash('sha256').update(JSON.stringify([server.id, server.url, server.command, server.args, server.cwd, server.env, server.headers])).digest('hex');
 }
 
+/** fetch that never follows a redirect, for every request the MCP transport makes (its event stream included). */
+const noRedirects: typeof fetch = (input, init) => fetch(input, { ...(init ?? {}), redirect: 'error' });
+
 async function connect(server: KnowledgeServerConfig, searchTool: string, fetchTool: string): Promise<Connection> {
   const key = connectionKey(server);
   let pending = connections.get(key);
@@ -138,7 +141,8 @@ async function connect(server: KnowledgeServerConfig, searchTool: string, fetchT
     pending = (async () => {
       const client = new Client({ name: 'dql-knowledge', version: '1' });
       const transport = server.url
-        ? new StreamableHTTPClientTransport(new URL(server.url), { requestInit: { headers: { ...(server.headers ?? {}) } } })
+        // Every request goes to the server's own URL: a redirect elsewhere (outside the hosts the server was allowed on) is an error, not followed.
+        ? new StreamableHTTPClientTransport(new URL(server.url), { requestInit: { headers: { ...(server.headers ?? {}) }, redirect: 'error' }, fetch: noRedirects })
         : new StdioClientTransport({ command: server.command!, args: server.args ?? [], ...(server.env ? { env: server.env } : {}), ...(server.cwd ? { cwd: server.cwd } : {}), stderr: 'ignore' });
       await client.connect(transport);
       return { client, lastUsed: Date.now() };

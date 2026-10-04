@@ -68,20 +68,31 @@ export interface DqlPrincipal {
   groups?: string[];
   /** Values row rules can read, e.g. region, cost_center. */
   attributes?: Record<string, string | number | boolean | string[]>;
-  /** 'local' when DQL resolved it itself; 'host' when a hook supplied it. */
-  source: 'local' | 'host';
+  /** HH-11: Apps the host gave this person beyond each App's own policies, by App id ('execute' runs its tiles; 'read' opens it). */
+  appGrants?: Record<string, 'read' | 'execute'>;
+  /** 'host' when a hook supplied it; 'link' for a read-only page link (its one App, as the owner publishes it); 'local' for the local owner. */
+  source: 'local' | 'host' | 'link';
 }
 
 export interface DqlRequestContext {
-  principal: DqlPrincipal;
+  /** The signed-in person; absent when the host names no one for this request (it then reads and keeps no one's content). */
+  principal?: DqlPrincipal;
   requestId: string;
+  /** The route action this request was authorized as (HH-2); statements it runs carry it (HH-17). */
+  action?: DqlAction;
+  /** Where the request's statements' results go (HH-17): person, model, delivery or export. */
+  destination?: DqlDestination;
+  /** The hooks of the server this request arrived at (one process may run several servers). */
+  hooks?: DqlHostHooks;
 }
 ```
 
 The request handler resolves the principal before dispatching a route. It
 then runs the route inside `requestContext.run(ctx, …)`, using the same
 `AsyncLocalStorage` pattern already used for provider evidence and Ask
-traces.
+traces. A host's request without anyone signed in (a host without
+`resolvePrincipal`) runs with a context that names its server's hooks and no
+principal.
 
 Code reads the principal with `currentPrincipal()`. Background work (agent
 runs, schedules) captures the context when it starts and restores it for
@@ -89,59 +100,66 @@ every step.
 
 ### The hooks
 
+Every hook and field, once (`apps/cli/src/host/request-context.ts` is the source; each may also return its value
+directly instead of a Promise). The defaults without a hook are in the table below.
+
 ```ts
 export interface DqlHostHooks {
-  /** Who is asking. null → 401. Replaces the shared-token check when present. */
-  resolvePrincipal?(req: IncomingMessage): Promise<DqlPrincipal | null>;
+  // Who is asking and what they may do (HH-1, HH-2, HH-12)
+  resolvePrincipal?(req: IncomingMessage): Promise<DqlPrincipal | null>;   // null → 401; replaces the shared token
+  authorize?(principal: DqlPrincipal, action: DqlAction, resource: DqlResource): Promise<DqlDecision>; // reason, next
+  enterpriseCertification?: boolean;      // certify with every enterprise gate; the host decides, not the request
+  onePerson?: boolean;                    // one person works here (a draft space): private drafts and local datasets allowed
 
-  /** Certify with every enterprise gate required; with a host, the host decides, not the request. */
-  enterpriseCertification?: boolean;
-
-  /** May this principal do this? Called at route dispatch and before tool calls. */
-  authorize?(principal: DqlPrincipal, action: DqlAction, resource: DqlResource): Promise<DqlDecision>;
-
-  /**
-   * Narrow a query to what the principal may see. Called for every query.
-   * The context says where the result goes (HH-17): `destination` is
-   * `person`, `model` (Ask, Research), `delivery` (a schedule) or `export`
-   * (a CSV, JSON or Excel file), and `action` is the request's route action.
-   */
-  rowPolicy?(query: DqlQueryContext): Promise<{ sql: string; params: unknown[] } | DqlRefusal>;
-
-  /** HH-17: screen personal-data questions by wording (default) or leave them to the host's column refusals. */
+  // The one query path (HH-3, HH-4, HH-6, HH-17)
+  rowPolicy?(query: DqlQueryContext): Promise<{ sql: string; params?: unknown[]; groupRows?: { column: string; minimum: number; refusal: string } } | { refuse: string }>;
+  credentials?(input: DqlCredentialsContext): Promise<DqlCredentialsResult>;   // the person's own warehouse sign-in
+  statements?(event: DqlStatementEvent): void;                                // outcome and duration, never SQL
+  columnsVisible?(principal: DqlPrincipal, relation: string, columns: string[]): Promise<string[]>;
   sensitiveQuestions?: 'wording' | 'columns';
+  purposeAttributes?: readonly string[];  // marks the host sets per request for where values go (rule 5)
 
-  /** Credentials for a connection, as this principal. */
-  credentials?(input: { principal: DqlPrincipal; connection: string; driver: string }): Promise<DqlConnectionSecret | DqlRefusal>;
+  // Models and the privacy boundary (HH-5)
+  modelProvider?(input: { principal: DqlPrincipal | null }): { id: string; provider: DqlModelProvider } | undefined;
+  isInBoundary?(model: { id: string; name: string; model?: string; baseUrl?: string }, context?: { relations?: string[] }): boolean;
 
-  /** A model provider for a task; undefined → DQL's own choice. */
-  modelProvider?(input: { route: DqlModelRoute; principal: DqlPrincipal }): AgentProvider | undefined;
+  // What answers show to whom (HH-9, HH-13, HH-14, HH-15)
+  audience?(principal: DqlPrincipal): Promise<'stakeholder' | 'analyst' | undefined>;
+  answerStatus?(principal: DqlPrincipal, runIds: string[]): Promise<Record<string, DqlAnswerStatus>>;
+  sourceAccess?(principal: DqlPrincipal, sources: DqlSourceRef[]): Promise<Iterable<string>>;
+  answerFigures?(principal: DqlPrincipal): Promise<'show' | 'withhold_review'>;   // only `show` shows; an error or anything else withholds
+  figuresDependOnReader?(input: { relations?: string[] }): Promise<boolean>;     // an error is yes
+  keepsAnswerText?(principal: DqlPrincipal, input: { appId: string }): Promise<boolean>; // an error is no
+  knowledgeSources?(principal: DqlPrincipal): Promise<DqlKnowledgeServer[]>;
 
-  /** Whether result values may reach this provider (the privacy boundary). */
-  isInBoundary?(provider: DqlProviderDescriptor, context?: { relations?: string[] }): boolean;
-
-  /** Where state lives. Each store has a local SQLite/file default. */
-  stores?: {
-    runs?: AgentRunStore;
-    memory?: MemoryStoreFactory;
-    conversations?: ConversationStoreFactory;
-    traces?: TraceSink;
-    audit?: AuditSink;
-  };
-
-  /** Wraps every tool call, MCP and native: check, log, or refuse. */
-  tools?: ToolGateway;
-
-  schedules?: ScheduleTrigger;
-  delivery?: DeliverySink;
-  signing?: SigningKeyProvider;
-  git?: GitHost;
-
-  /** HH-16: a Home that summarises; following pages; who an App is for. */
+  // The host around DQL's screens (HH-9, HH-16)
+  ui?(principal: DqlPrincipal): Promise<{
+    signOutUrl?: string;
+    links?: Array<{ id: string; label: string; href: string; placement: 'menu' | 'nav'; badge?: number; icon?: DqlHostIcon }>;
+    answerActions?: Array<{ id: string; label: string; url: string; description?: string; on?: Array<'review' | 'unanswered' | 'answered'> }>;
+    environment?: string;
+    banner?: DqlHostBanner;
+    audience?: 'reader';                                                         // reader words on stakeholder screens
+    appNotFound?: { message: string; next?: { label: string; href: string } };  // an App link this host cannot open here
+  }>;
   homeCards?(principal: DqlPrincipal): Promise<DqlHomeCard[]>;
   follows?: { list(principal: DqlPrincipal): Promise<DqlFollow[]>; set(principal: DqlPrincipal, follow: DqlFollow, following: boolean): Promise<void> };
   pageEdition?(edition: DqlPageEdition): Promise<void>;
   directoryGroups?(principal: DqlPrincipal): Promise<DqlDirectoryGroup[]>;
+
+  // Where state lives, and what leaves (HH-6, HH-7, HH-8)
+  stores?: {
+    runs?: DqlRunStore;
+    memory?: (projectRoot: string) => DqlMemoryStore;
+    conversations?: (defaultPath: string) => DqlConversationStore;
+  };
+  audit?: DqlAuditSink;
+  traces?: DqlTraceSink;
+  traceSalt?: string;                     // the key exported question fingerprints are keyed with
+  tools?(call: { name: string; args: unknown; principal: DqlPrincipal | null }, next: () => Promise<unknown>): Promise<unknown>;
+  delivery?: DeliverySink;
+  signing?: SnapshotSigner;
+  git?: { openPullRequest?(input: { gitRoot: string; branch: string; base: string; title: string; body: string; principal: DqlPrincipal | null }): Promise<{ url: string }> };
 }
 ```
 
@@ -151,34 +169,77 @@ program imports a supported API rather than a file path.
 
 ### Local defaults (no hooks)
 
-| Hook | Default |
+| Hook or field | Default |
 |---|---|
-| `resolvePrincipal` | The local owner from `resolveLocalOwner`. The shared-token check keeps working for non-loopback binds |
+| `resolvePrincipal` | No host: the local owner from `resolveLocalOwner`. A host without it: no one is placed, so nothing personal is read or kept (threads, runs, notes and Home are no one's and list empty), and `GET /api/identity` names no one (`{ owner: '', principal: null }`), never the machine's own owner. Either way the shared-token check keeps guarding non-loopback binds |
 | `authorize` | Today's persona and App-policy checks, unchanged |
-| `rowPolicy` | Today's `@rls` lowering for blocks. Every other query passes through unchanged |
-| `sensitiveQuestions` | `wording`: Ask and Research refuse direct payment, health, contact and protected-attribute questions about individuals by their words, before planning (today's check) |
+| `enterpriseCertification` | No host: the request's own choice, as today. With a host: off unless the host sets it (the request's choice is ignored) |
+| `onePerson` | With a host: no (a shared server: no private drafts, no local dataset workspace). No host: one person |
+| `rowPolicy` | Today's `@rls` lowering for blocks. Every other query passes through unchanged; no `groupRows` |
 | `credentials` | Project config plus the local credential vault (`.dql/local/private`) |
-| `modelProvider` | Today's provider selection |
-| `isInBoundary` | Ollama on a loopback URL (today's rule) |
-| `stores.*` | Today's SQLite files. `traces` also writes OTLP when the standard `OTEL_EXPORTER_OTLP_ENDPOINT` is set |
-| `tools` | Pass-through |
-| `schedules`, `delivery`, `signing`, `git` | Today's in-process cron, notifiers, local signing key and `gh` |
+| `statements` | Nothing is told |
+| `columnsVisible` | Every column is listed |
+| `sensitiveQuestions` | `wording`: Ask and Research refuse direct payment, health, contact and protected-attribute questions about individuals by their words, before planning (today's check) |
+| `purposeAttributes` | None: every attribute counts when DQL finds a person's own earlier run. A value that is not a list of names names none |
+| `modelProvider` | Today's provider selection. With the hook: undefined uses it too; an error, or an answer that is not `{ id, provider }`, refuses the model step in plain words (`HostModelUnavailableError`), never the project's own provider |
+| `isInBoundary` | A model on this machine only: Ollama, and every address the provider can contact is a loopback URL. The Ollama provider talks to its one configured base URL (else `http://127.0.0.1:11434`) and tries no other address; a model on this machine never fails over to another provider the project has |
+| `audience` | The request body's `audience`, as today. With the hook: its `stakeholder` or `analyst`; undefined leaves DQL's default; an error or any other answer means `stakeholder` |
+| `answerStatus` | No status beside answers |
+| `sourceAccess` | Every source |
+| `answerFigures` | `show`. With the hook, only a clear `show` shows; an error or any other answer withholds |
+| `figuresDependOnReader` | No host: no. A host with `rowPolicy` or `credentials`: yes. An error: yes |
+| `keepsAnswerText` | `authorize` for `app.author` on the App, then `dataset.certify`. An error, or no decision: no |
+| `knowledgeSources` | No host: the project's `.dql/mcp-servers.json` servers marked `use: ["knowledge"]`. A host without it: none |
+| `ui` (all fields) | No host: `GET /api/host/ui` is `{ host: false }` and the screens use the single-user words. With a host and no field: no host links, actions, banner or sign-out; the screens' words and the App reader's "could not be read" message are as before |
 | `homeCards` | None |
 | `follows` | The person's own file in `.dql/local/private/home/` |
 | `pageEdition` | Nothing is told (a scheduled edition is still recorded, without figures) |
 | `directoryGroups` | The author types group names |
+| `stores.*` | Today's SQLite files |
+| `audit` | Nothing is told |
+| `traces` | The local trace store; OTLP too when the standard `OTEL_EXPORTER_OTLP_ENDPOINT` is set |
+| `traceSalt` | A key DQL makes once in `.dql/local/private/trace-salt` |
+| `tools` | Pass-through |
+| `delivery`, `signing`, `git` | Today's notifiers, local signing key and `gh` |
 
 ### Rules every hook follows
 
 1. **Fail closed:**
    - a hook that throws is treated as a refusal;
+   - so is an answer that is not of the hook's shape (a bare string or number where an object is due, a list, a
+     wrong type): DQL refuses in its own words and never repeats the answer back (it could be SQL or a token);
+   - with a host, a failure DQL did not expect while serving a request (a JavaScript runtime error) reads as a plain
+     sentence with a reference of eight letters; its own text goes only to the server's log, under that reference;
+   - the hooks DQL calls for status and effects read their answers the same way: `answerStatus` passes on only
+     well-formed statuses (a known state, a label, a same-origin link); `delivery` counts a message delivered only
+     on `{ delivered: true }`, and a sink that fails is "not delivered" with a reference; a `signing` service that
+     fails, answers late or answers something that does not verify against the key it names gives no export (a
+     plain refusal with a reference), never one that claims to be signed; `git.openPullRequest` must answer a web
+     address or a same-origin path, else the review request is refused plainly; `pageEdition` and `traces` errors
+     are logged (counted) and change nothing; a `traceSalt` that is not a non-empty text is not used;
+   - a hook that does not answer in time counts as one that failed. Every hook DQL waits for has a time limit:
+     decisions and stores (`resolvePrincipal`, `authorize`, `rowPolicy`, `credentials`, `columnsVisible`,
+     `audience`, `ui`, `answerStatus`, `sourceAccess`, `answerFigures`, `figuresDependOnReader`, `keepsAnswerText`,
+     `knowledgeSources`, `homeCards`, `directoryGroups`, `follows`, every `stores` call) get
+     `LocalServerOptions.hostHookTimeoutMs`, 10 seconds unless the embedding program sets it; `delivery`, `signing`
+     and `git`, which do work outside DQL, get six times that; the tool gate gets it to decide (until it calls
+     `next()`), and the tool's own run is not bounded here. `resolvePrincipal` that does not answer in time is a 503
+     "DQL could not check who you are right now", `authorize` a refusal "DQL could not check what you may do right
+     now"; the others fail closed as they do on an error. An answer that comes after the limit is ignored. Observers
+     DQL does not wait for (`audit`, `traces`, `statements`, `pageEdition`) and the synchronous model hooks
+     (`modelProvider`, `isInBoundary`) have no limit;
    - `resolvePrincipal` returning null gives a 401;
    - a `DqlRefusal` from `rowPolicy` or `credentials` is shown to the person, never retried with broader rights.
 2. **Never fall back to a service credential.** If `credentials` refuses (for example, the person's warehouse token has expired), the answer is "reconnect", not a quiet retry as the service account.
 3. **With a host, the request body no longer names actors.** Reviews, correction authors and the default owner of new content are stamped from the host's principal, and request fields such as `reviewer` and `author` are ignored. A content `owner` the author types (for example a team) stays content metadata; only its default comes from the person. The rule set a certification uses (`enterprise`) comes from the host, not the request. With no hooks, today's behaviour is kept exactly: the local owner, and names from the body. Recording who certified what is part of the audit sink (HH-6).
 4. **One query path.** Every warehouse query goes through `ExecutionService.execute` or `executePreparedAgenticSqlBoundary`, including AI-written SQL. That path calls `rowPolicy` exactly once. A test enumerates direct `executeQuery` call sites and fails when a new one appears outside the allowlist.
-5. **Caches are keyed by access.** The Dataset result cache already includes the persona policy fingerprint. It adds the principal's policy fingerprint, the hash of what `rowPolicy` returned, and the credential id.
-6. **Records carry the person.** Runs, threads, memory items and trace spans record `principal.id`. With no hooks this is the local owner, so existing SQLite files gain a column with a default.
+5. **Caches are keyed by access.** The Dataset result cache already includes the persona policy fingerprint. It adds the principal's policy fingerprint, the hash of what `rowPolicy` returned, and the credential id. A host that marks a principal per request with where its values go (for the model, a delivery) names those attributes in `purposeAttributes`: they stay in every cache and proof key, so a result read for one destination never serves another, and DQL leaves them out only to find a person's own earlier run again (a question about a chart on screen finds the chart that person ran; its rows reach a model only through `isInBoundary` with the tables they came from).
+6. **Records carry the person.** Runs, threads, memory items and trace spans record `principal.id`. With no hooks this is the local owner, so existing SQLite files gain a column with a default. Ask traces (`/api/ask-traces`, by id, by run, export) follow their runs: only the asker sees them. Operations (an Ask in progress, a page run, a refresh: `/api/operations`, its live stream and cancelling) are each person's own too: with a principal, a person lists, reads, follows and cancels only operations started in their own requests, and someone else's is "not found"; work nobody asked for has no owner and is shown to no one. Cancelling a run and superseding a page run are the asker's alone. A host ends a person's open streams when their session ends (DQL has no sessions of its own).
+7. **With a host, the server chooses the connection.** A request may pick one of the project's own connections by name (`executionTarget: { target: 'connection', connectionName }`); a name the project does not have is refused without being repeated back. Connection settings a request carries (`connection`) are ignored: only the project's own configuration and the `credentials` hook supply a connection's settings. `rowPolicy` and `credentials` see the name the server resolved, never one the request made up. The server's own local DuckDB workspace (`executionTarget: { target: 'local' }`) is shared by everyone the server serves, so it is refused unless the host sets `onePerson: true` (a server only one person uses). This also applies to anyone the server placed without a host (a read-only link, a scheduled run's pass). With no hooks, the notebook picks connections as before.
+8. **With a host, file routes serve project content only.** The routes that open a file by path (`/api/notebook-content` read and write, `/api/notebook/file`, a block's body, a filter's block) open notebooks, blocks, Apps and their pages, domains, the semantic layer and docs (`.dqlnb`, `.dql`, `.dqld`, `.md`, `.sql`, `.yaml`, `.yml`, `.json`), never a dot folder or dotfile (`.dql/` holds caches, run traces, each person's Home state and stored secrets; `.git/`, `.github/`, `.env`), `dql.config.json`, dbt profiles, `data/`, `target/`, `node_modules/` or a database file; a symlink is judged by where it points. A refused path answers 403 whether or not it exists. The bootstrap lists only such files, names no server path and shows the default connection's kind only. A notebook's last run (`/api/run-snapshot`) is kept per person. The server's own configuration (connection settings, the server user's dbt profiles, driver install paths, which provider keys its environment holds, its folders) is shown only to someone the host lets manage connections or settings. Private notebook drafts (`.dql/local/private/notebooks`) sit in one folder for everyone a server serves, so with a host they are listed, opened, created and published only where the host sets `onePerson: true`. Single-user `dql notebook` is unchanged: its UI opens the one user's own files. Every other request field that names a file or folder follows the same rule, refused whether or not it exists: a block run by its file (`artifact.sourcePath` on `/api/dql/artifacts/execute`, a `.dql` file), a diff by path (`/api/git/diff`, matched literally, never as a pattern; the whole diff shows project content only), and what an import reads (SQL and modeling YAML imports read from a path read only project content files under it, a semantic layer import's project path, a skills folder, a dbt profiles path). A dataset is uploaded, never read from a path on the server; a semantic layer import clones only the repository the project configures; a table description reads tables, never files. Ids a request names (an import candidate, a hint, a trace) are ids, never paths (this also holds without a host).
+9. **With a host, programs run on project content get a minimal environment.** Setting the project up (`/api/onboarding/*`) and installing drivers (`/api/connectors/*`) are `settings.manage`; onboarding's dbt project must be inside the project (real path), and `dbt parse` gets only where programs are, a home, a locale, a temporary folder and `DBT_*` settings, never the server's secrets. MetricFlow, which reads the project's dbt files for semantic queries, gets the same with all of dbt's `DBT_*` settings (its profile's warehouse settings).
+10. **Columns a person may not see are not listed.** The optional `columnsVisible(principal, relation, columns)` hook names the columns the schema routes (`/api/schema`, `/api/describe-table`) list to that person; a hook that throws lists none of the table's columns. (The Ask vocabulary does not use it yet.)
+11. **Every route is classed by what it does.** A route under the asking families (`/api/agent-runs`, `/api/ask`, `/api/ai`, `/api/agent`, `/api/llm`, research) is `ask` or `research` only when it is listed as one (it writes only the person's own runs, threads, notes and traces); any other route there is `project.write`, so a host's role ladder and read-only rules apply. Building a block with AI (`POST /api/ai/build`) is `dataset.author`; building a notebook cell (`POST /api/ai/build/cell`) returns SQL and is `ask`; applying an App autopilot change is `app.author`. With a host, a draft block built with AI is written only where one person works (`onePerson`), an edit stays on a `.dql` file inside the project, a certified block is never rewritten in place (it changes through review), the draft's owner is the signed-in person and nothing is saved in `dql.config.json`; favorites and recent items are each person's own.
 
 ### Action vocabulary (for `authorize`)
 
@@ -197,7 +258,25 @@ project itself.
 ### Privacy boundary
 
 The OSS rule stays: result values reach a model only when the model runs on
-this machine. `isInBoundary` generalises the check, which today is
+this machine. "On this machine" is judged from the provider itself: an Ollama
+provider talks to one base URL (its setting, else `OLLAMA_BASE_URL`, else
+`http://127.0.0.1:11434`) and never another address of its own, a model on
+this machine never fails over to another provider, and the model is local only
+when every address it can contact is a loopback URL. When that Ollama does not
+answer, the call fails with "Ollama is not running at <url>".
+
+A grouped tile's members are results too. A story or page draft whose model is
+outside the boundary gets every binding without its value, and a grouped
+tile's per-member bindings named by position (`{{tile.column[group 1]}}`, "…
+for group 1"), never by member; the accepted draft is mapped back to the real
+bindings before it is saved, so nothing of the member reaches that model.
+
+A follow-up's earlier values are values too. Outside the boundary, the
+earlier reading's restriction values (a member as typed, or as the warehouse
+stores it) and the literals of its AI-drafted SQL reach the model named by
+position (`[value 1]`), and what the model writes gets the real values back
+before DQL reads it; the member-spelling lookups (a stored spelling, the
+members a name could mean) are not made for such a model. `isInBoundary` generalises the check, which today is
 hard-coded to Ollama on loopback, so a host can declare its own boundary.
 The commercial host's wording, approved on 2026-09-25, is:
 
@@ -205,8 +284,26 @@ The commercial host's wording, approved on 2026-09-25, is:
 > cloud account, in a region their admin approved, with data retention off —
 > or on the person's own machine.
 
-`resolveProviderResultRowEgressPolicy` consults `isInBoundary`. Ask still
-sends zero result rows by default, whatever the boundary.
+Every model prompt that can carry result values decides through one function,
+`valuesMayReachProvider` (`apps/cli/src/local-runtime.ts`): with a host, its
+`isInBoundary` (told every table the values came from when DQL knows them all;
+an error or anything but `true` is no); a host without that rule, or no host
+for a story or page draft and a chart question, only a model on this machine.
+Without a host, the prompts the single-user product has always sent to the
+model the person chose keep doing so: a conversation's memory, a follow-up's
+earlier answer (the reading and the drafted SQL get it), App Autopilot's
+preview, and the Research narration the person asked for. When the decision is
+no, the prompt is built without values: conversation memory gives the questions
+and the result columns only (and the person's own earlier messages, not the
+answers); a follow-up gets the earlier reading and SQL but not the answer or the
+thread's summary; App Autopilot gets the preview's columns, row count and filter
+names; Research keeps the summary written from its figures without a model; a
+story or page draft gets bindings without values and grouped members by
+position; a chart question is answered without a model. Research narration
+also needs the project's `providerResultRowEgress` switch not to be `disabled`.
+`resolveProviderResultRowEgressPolicy` does not consult `isInBoundary`: it caps
+the rows the dispatch ledger lets through (none for ordinary Ask, whatever the
+boundary; a Research run's own opt-in up to the project's ceiling).
 
 ### Slices
 
@@ -219,7 +316,7 @@ identical.
 | HH-2 | `authorize` at route dispatch; the persona registry reads the request context | Two concurrent requests with different principals see different App access; switching the persona in one request does not affect the other |
 | HH-3 | One query path plus `rowPolicy`; cache keys by access | Call-site allowlist test; two principals, same question, different rows, from both a certified Dataset and AI-written SQL; a `rowPolicy` refusal stops the query |
 | HH-4 | `credentials` and a connector factory registry (the documented plugin seam) | Pool keyed by credential id; a refusal gives "reconnect", never a service-account retry |
-| HH-5 | `modelProvider`, `isInBoundary`; Bedrock and Vertex providers (OSS features in their own right) | Values egress follows `isInBoundary`; a Bedrock provider passes the provider contract tests |
+| HH-5 | `modelProvider`, `isInBoundary`; Bedrock and Vertex providers (OSS features in their own right) | Every prompt that can carry values decides through `valuesMayReachProvider` (`isInBoundary` with a host); a Bedrock provider passes the provider contract tests |
 | HH-6 | Store interfaces and injection (runs, memory, conversations, traces, audit); OTLP trace export; asynchronous stores; statement metrics | Stores swapped for Promise-returning fakes in tests; two copies share one set; a principal id on every record |
 | HH-7 | `tools` gateway around MCP and native tool calls; MCP HTTP transport with a host authenticator | A gateway that refuses `tool.run_sql` blocks it in both paths |
 | HH-8 | `schedules`, `delivery`, `signing`, `git` | A schedule runs as its owner's principal; a delivery sink receives the digest |
@@ -233,7 +330,7 @@ All slices below are on `claude/oss-security-fixes`, implemented 2026-09-25 and 
 
 ### HH-2 — what each person may do
 - **Permission checks:** every placed request maps to an action and resource (`route-actions.ts`) and goes to `authorize`. A refusal answers 403 `PERMISSION_DENIED` with the action.
-- **View as:** personas are kept per person (`PersonaRegistry.useSlots`).
+- **View as:** personas are kept per person (`PersonaRegistry.useSlots`), in memory for at most 5,000 people (`PERSONA_SLOT_LIMIT`); past that the least recently used person's goes, and they see Apps as themselves again.
 - **People without a persona:** App policies check their own groups, never the owner default. Row rules read their attributes as `{user.<name>}`.
 - **Caches:** cache and proof keys include the person, only when a host is present.
 
@@ -251,17 +348,31 @@ Checked in the built CLI. Tests: `viewer-links.test.ts`, notebook `server-auth.t
 ### HH-3 — one query path
 `row-policy.ts`.
 - **Single entry point:** with `rowPolicy`, the server wraps its one executor. Every statement passes the policy once first: executor calls, connectors, streams, and DuckDB read scopes.
-- **What the policy is told:** the person, SQL, values, tables (parser-based), connection and purpose. Schema reads are tagged `metadata`.
+- **What the policy is told:** the person, SQL, values, tables (parser-based), connection and purpose. Schema reads are tagged `metadata`, the connector's own catalog lookups (`listTables`, `listColumns`) included: they run through this path, so the policy sees them and the statement observer (HH-6) hears of them. A statement DQL issues itself to keep its own objects (a project's data-file views) is tagged `platform`; no request sets that purpose. `platform` is an additive value of `QueryPurpose` (`'data' | 'metadata' | 'platform'`, from `@duckcodeailabs/dql-connectors`): `rowPolicy` and `credentials` may receive it, so a host that switches exhaustively on `purpose` needs a case for it (treat it like `data` unless the host wants otherwise). Statement events (HH-6) keep two purposes and report a `platform` statement as `data`.
+- **Names are values:** every driver's catalog lookup binds schema and table names (and the schema search its text, and Ask's member lookups their value) as parameters, never inside the statement's text. With a host, `GET /api/describe-table` refuses a name holding a quote, a backslash or a control character (`RELATION_NAME_REFUSED`).
 - **Refusals:** a refusal answers `ROW_POLICY_REFUSED` and runs nothing.
+- **When the warehouse refuses a statement (any host):** the warehouse's own words can quote the statement it was sent, which after a rewrite holds the rule's predicate and the person's values. They go to the server's log under a reference of eight letters (no digits, so a host that scrubs numbers from its log keeps it whole). What DQL carries on is a `WarehouseStatementError`: the warehouse's diagnosis cut before any excerpt of the statement, with every literal only the rewrite added left out, and the reference. Ask says a plain sentence (a missing table, a column or a function the warehouse does not have, a statement it could not run) naming only the tables the statement reads, and "Ask your administrator about reference …"; the warehouse's words never reach the answer, its steps, the stream or the thread. A corrective draft of AI-written SQL still gets the diagnosis. The log line is that same diagnosis (never the excerpt, which can cut a rewrite value short), the failure's kind and the statement's own tables, so the host's predicate and its values never reach the log either. DQL's own deadline and cancellation errors pass on unchanged.
 - **Guard test:** a source scan fails if server code creates another executor or connector.
 
 Checked on real DuckDB: an admin, a CA user and a US user get all rows, CA only and US only; a user with no region is refused.
+
+**The engine reaches the database only.** With any host, every statement on the one path reaches the connection's tables and views, whatever the host's policy decides (a policy that returns the statement as it is does not open anything more):
+- DuckDB and `file` connections open restricted (`restrictExternalAccess`), after the database itself is open: external access off (no file readers, replacement scans, `COPY`, `ATTACH`, `EXPORT`/`IMPORT DATABASE`), extensions neither installed nor loaded, and the settings locked so no statement turns them back on. Every connector on the same file shares the restriction.
+- A statement check (`host/engine-guard.ts`) refuses the same families on every engine where it can see them, before the policy is asked: file readers, `getenv`, queries given as text, `COPY`, `ATTACH`, `INSTALL`, `LOAD`, `PRAGMA`, `SET`/`RESET`, `EXPORT`/`IMPORT`, `PREPARE`/`EXECUTE`, `CALL`, and each engine's own: `pg_read_file` and the large-object, `query_to_xml` and session functions, `LOAD DATA` and `INTO OUTFILE`, `load_extension` and SQLite's file functions, Snowflake stages (`@stage`, `LIST`, `PUT`/`GET`, stage and query-history functions, `RESULT_SCAN`), Spark path tables (a table named by a file path, such as `csv.` with a quoted path) and `read_files`, `secret`, `reflect`, BigQuery `EXTERNAL_QUERY` and `ML.`/`AI.`/`OBJ.` functions, SQL Server `OPENROWSET`, ClickHouse table functions that reach files, URLs or other servers. The refusal is `ROW_POLICY_REFUSED` with plain text; the engine's own refusal reads the same way.
+- The check reads a statement the way its engine does (`host/sql-lexicon.ts`): each engine's strings (backslash escapes, doubled quotes, `$$` and `$tag$`, triple-quoted and raw strings), quoted names (double quotes, backticks, brackets) and comments (`--`, `#`, `//`, block and executable comments). Where the engine's reading depends on a setting DQL cannot see (MySQL `NO_BACKSLASH_ESCAPES` and `ANSI_QUOTES`, Postgres `standard_conforming_strings`, Spark `escapedStringLiterals`), every reading must agree. What it cannot decide it refuses: an unterminated string or comment, a nested or executable comment, a line comment with a line break other than its own, a character outside text that engines read differently, an engine it does not know. A word that a case fold or Unicode normalisation turns into a keyword is read as that keyword.
+- **Statements a person or a model writes only read**, on every connection whatever its protections (Ask, notebook cells, App tiles, the query API, MCP, Slack): one statement, a `SELECT` (or `WITH`, `VALUES`, `TABLE`, `SHOW`, `DESCRIBE`, `SUMMARIZE`, `PIVOT`, or `EXPLAIN` of one); a change to data, objects, settings or the session, a row lock or `SELECT … INTO`, an effect function (`nextval`) or several statements are refused in plain words. Statements DQL issues itself (`platform`) keep their shapes. Nor does such a statement read the warehouse's own record of other sessions, their queries, its users or its settings, engine by engine (query-history, session and activity views and their table functions, server settings and `@@` variables, SHOW of sessions, users, grants or settings; the list per engine is in docs/reference/connectors.md), matched on the statement's names in any case, quoted or not, however qualified; there is no setting to allow them. The warehouse role behind a hosted connection should still be read only, with no grant on those views: the check is a second layer, not a substitute.
+- A host that checks a statement before passing it on uses the same check and reading from `@duckcodeailabs/dql-cli/host`: `hostedStatementRefusal(sql, driver, allowedDirectories, { readOnly })` (null, or the plain refusal), `lexStatement(sql, driver)` (the tokens with their positions; throws `UnreadableStatement`) and `knownLexicon(driver)`.
+- `allowedDirectories` on a connection (none by default) names folders whose files stay readable through plain paths. DuckDB 1.2 and later enforce them in the engine; on DuckDB 1.1 the connection keeps external access in the engine (extensions stay out) and the statement check enforces them.
+- The notebook's local dataset workspace (a draft space's uploads) reads each uploaded or staged file itself, with a private in-memory engine no statement reaches, and keeps its rows in a table of the workspace database instead of a view over the file.
+
+Tests: `host/engine-guard.test.ts` (real DuckDB: canary file and variable never returned, tables, views, an allowed folder, a draft space's upload, no host unchanged), `drivers/duckdb.test.ts`.
 
 ### HH-4 — the person's own warehouse sign-in
 `credentials` in `withHostQueryHooks`.
 - **Order:** before any statement, the host lays the person's settings (token, user, role or target) over the connection. The row policy then sees the final connection.
 - **Pooling:** connections are pooled by their full settings.
 - **Refusals:** a refusal answers `CREDENTIALS_REQUIRED` ("reconnect"), and there is never a service-credential retry.
+- **Whose connection:** with a host, the connection is the project's (rule 7): the request may only name one, and the hooks see the name the server resolved.
 
 Checked on real DuckDB with per-person warehouses. Not built: a connector registry, and idle eviction of per-person connections.
 
@@ -277,8 +388,8 @@ Not built: choosing Bedrock or Vertex in the Settings page. Tests: `claude-cloud
 ### HH-6 — audit, traces and stores
 `observability.ts`.
 - **Audit:** `audit` receives one event per request that changed something or was refused (who, action, resource, status, outcome). It also receives one per finished answer: trust label, SQL fingerprints and sources, with no question, SQL or values.
-- **Traces:** each finished Ask trace, as the strict redacted bundle, goes to `traces` and/or as OTLP/JSON to `OTEL_EXPORTER_OTLP_(TRACES_)ENDPOINT` (**needs a live check** with a collector). Export never slows or fails an answer.
-- **Stores:** `stores.runs|memory|conversations` replace the project's SQLite files. Every store method returns a Promise and DQL awaits each call, so a host can keep them in a shared database and run several copies of DQL for one project (update, E4). DQL's own SQLite stores answer synchronously and are used exactly as before. The ownership rules do not change: with a host, runs carry `ownerId` and read as not found for anyone else; threads carry their owner and list, search, open and continue only for them; a run interrupted because its copy of DQL stopped is closed for the person who asked. `dql-agent` exports the records the SQLite stores keep, so a host store keeps the same ones: `agentRunForStorage` / `agentRunFromStorage`, the progress pair, `interruptedAgentRun`, `newConversationThread`, `conversationTurnForStorage`, `conversationTurnSearchTags`, `memoryRecordForStorage` and `ftsTokens`. `loadConversationSnapshot` and `advanceThreadStateAsync` read and fold a thread held in any such store. Two copies sharing one set of stores continue each other's threads (`async-stores.test.ts`). What stays in one copy's memory is listed for hosts: a run's evidence for stories, snapshots and chart questions (`PersonScopedMap`), cancelling a run that copy is running, a streamed answer, and Ask traces (the project's trace file). A host sends each person's requests to one copy, or accepts that these start again after a move ("run the page again").
+- **Traces:** each finished Ask trace, as the strict redacted bundle, goes to `traces` and/or as OTLP/JSON to `OTEL_EXPORTER_OTLP_(TRACES_)ENDPOINT` (**needs a live check** with a collector). Export never slows or fails an answer. The question's fingerprint (a hash of its text) leaves keyed: HMAC-SHA256 under the host's `traceSalt`, or a key DQL makes once in `.dql/local/private/trace-salt`, so it cannot be checked against likely questions elsewhere; the same question keys the same way on one install.
+- **Stores:** `stores.runs|memory|conversations` replace the project's SQLite files. Every store method returns a Promise and DQL awaits each call, so a host can keep them in a shared database and run several copies of DQL for one project (update, E4). DQL's own SQLite stores answer synchronously and are used exactly as before. The ownership rules do not change: with a host, runs carry `ownerId` and read as not found for anyone else; threads carry their owner and list, search, open and continue only for them; a run interrupted because its copy of DQL stopped is closed for the person who asked. `dql-agent` exports the records the SQLite stores keep, so a host store keeps the same ones: `agentRunForStorage` / `agentRunFromStorage`, the progress pair, `interruptedAgentRun`, `newConversationThread`, `conversationTurnForStorage`, `conversationTurnSearchTags`, `memoryRecordForStorage` and `ftsTokens`. `loadConversationSnapshot` and `advanceThreadStateAsync` read and fold a thread held in any such store. Two copies sharing one set of stores continue each other's threads (`async-stores.test.ts`). What stays in one copy's memory is listed for hosts: a run's evidence for stories, snapshots and chart questions (`PersonScopedMap`), cancelling a run that copy is running, a streamed answer, and Ask traces (the project's trace file). A host sends each person's requests to one copy, or accepts that these start again after a move ("run the page again"). A store call that fails (throws or rejects) is never shown to the person in its own words: they read "DQL could not reach its saved answers (conversations, notes) right now" with a reference of eight letters, and the store's text goes to the server's log under that reference (`host/host-stores.ts`). An answer of the wrong shape is read as nothing (a list that is not a list is empty, a count that is not a number is 0), or as such a failure where DQL needs the record (a created thread, an appended turn, a request claim).
 - **Statements:** `statements` hears of every warehouse statement DQL ran — the engine, whether it read data or schema, the outcome (`ok`, `error`, or `refused` by the row policy or the person's connection) and how long it took — for a host's metrics. It never sees the SQL, parameters, rows or who asked; its errors are ignored.
 
 Not built: a hint-store factory. Tests: `observability.test.ts`, `async-stores.test.ts`, `row-policy.test.ts`, `dql-agent/src/conversation/async-store.test.ts`.
@@ -292,7 +403,7 @@ Not built: a hint-store factory. Tests: `observability.test.ts`, `async-stores.t
 Not built: an MCP HTTP transport with a host authenticator. Tests: `tool-gate.test.ts`, `host-hooks.test.ts`.
 
 ### HH-8 — schedules, delivery, signing and git
-- **Schedules:** `POST /api/apps/:app/schedules/:schedule/run` (action `schedule.manage`) lets an outside scheduler run one App schedule as its owner. The page runs through the reader's full-page run route under a pass (`schedule-runs.ts`). The pass is random, accepted only from this machine and only for that App's page runs, lasts two minutes, and is revoked when the run ends. Permission checks and row policy therefore apply as the owner.
+- **Schedules:** `POST /api/apps/:app/schedules/:schedule/run` (action `schedule.manage`) lets an outside scheduler run one App schedule as its owner. The page runs through the reader's full-page run route under a pass (`schedule-runs.ts`). The pass is random, accepted only from this machine and only for that App's page runs, lasts two minutes, and is revoked when the run ends. Permission checks and row policy therefore apply as the owner. The digest compares each run with the last run as the same person: the baseline (`.dql/local/digests`) is kept per person a run ran as, so a run someone else starts neither reads the run-as person's baseline nor sets it, and the monitors list shows each person the last run and firing monitors as they ran it.
 - **Delivery:** `delivery` replaces DQL's email, Slack and webhook senders for digests and alerts.
 - **Signing:** `signing` is a key service (for example a KMS or HSM Ed25519 key) that signs exported snapshots without handing out the private key. Exports record `signedBy`, and the existing verifier accepts them.
 - **Git:** commits are authored as the signed-in person when they have an email. `git.openPullRequest` replaces the GitHub CLI for review requests.
@@ -311,13 +422,17 @@ Tests: `route-actions.test.ts`, `privacy-boundary.test.ts`, `per-person.test.ts`
 ### HH-9 — the host around DQL's own screens
 A host serves every role with DQL's app. It does not rebuild Ask, Apps or notebooks; it adds to them.
 - **`ui(principal)`** returns what the host adds for this person: `signOutUrl`, an `environment` label, `links` (placed in the account `menu` or the side `nav`), `answerActions` (buttons on an answer that needs review, such as "Ask an analyst to check this") and an optional `banner` — a strip above every screen for something the person must keep in mind everywhere, such as "Draft space — changes go to review, not Production", with a `tone` (`info` or `caution`) and up to three links (for example "Back to Production"). Only same-origin paths are kept, at most 12 links in the side nav and 12 in the menu (each in the host's order) and 4 actions; banner text is plain text of at most 200 characters.
-- **`GET /api/host/ui`** answers `{ host: false }` without a host. With one, it answers the person, those additions and `capabilities`, which say whether each action is allowed (Ask, authoring, certifying, publishing, git review, settings and others). The same `authorize` hook still guards every route, so `capabilities` only decides what the app shows.
+- **`ui(principal)`** may also say who the screens speak to and what a missing App says:
+  - `audience: 'reader'` — the person reads and asks here but does not build (a hosted stakeholder). The App library then shows only All, Shared Apps and Favourites, without the local-draft and private counts, "local insights" or "Local DQL App", and Ask's header says "Certified answers first, then approved metrics, then new SQL marked Needs review". Any other value, or none, changes nothing.
+  - `appNotFound: { message, next? }` — what the App reader says when this project has no such App or page (with a host, it may be in another of the host's projects): plain text of at most 200 characters, and an optional same-origin link (for example "Switch workspace"), opened as a host page. Absent: DQL's own message, as before.
+- **`GET /api/host/ui`** answers `{ host: false }` without a host. With one, it answers the person, those additions and `capabilities`, which say whether each action is allowed (Ask, authoring, certifying, publishing, git review, settings and others), and `refusals`: for an action that is not allowed, the reason and the same-origin `next` link the host's `authorize` gave (HH-12). The same `authorize` hook still guards every route, so `capabilities` and `refusals` only decide what the app shows. Each capability is asked on the project; where a route asks more than one action, the map says what the route would: `export` is allowed only when `query.run` is too (exporting a statement runs it), with the refusal of whichever says no. The `app.*` and `schedule.manage` capabilities are the project-wide answer: an App's own routes ask about that App (its policies, audience and grants), so a person may still be refused on one App the map allows, or allowed on one they were given. Ask uses them: a person who may not ask is not offered the question box or suggested questions; the screen shows the host's reason and its `next` link (for example "Request access") instead.
 - **In the app:**
   - Navigation hides screens the person may not use.
   - The header shows the person, the environment and sign-out.
   - A host `banner` is a strip above the header; its links open at the top level, since they may take the person to another environment (a host that runs a writable copy of a project per person, beside Production, says so here).
   - A host `nav` link opens the host's page inside DQL's main area, with `embed=1` added so the page leaves out its own frame.
   - An answer that needs review offers the host's answer actions, which POST `{ runId, question, trustState }` to the host's path.
+- **A hosted page never falls back to the single-user screens.** With `resolvePrincipal`, the server marks the app's page (`<meta name="dql-hosted" content="1">`) and every answer (`X-DQL-Hosted: 1`, refusals and failures too). Until the person's map arrives the app shows only "Connecting…" (no screens, no settings, no source control, no browser-side download); it retries quickly and then every 30 seconds, and after 15 seconds says "DQL can't be reached right now" with a Reload button. A map that loaded once is kept when a later reload fails (a 502 while a worker restarts, a 429). Only a server that is not hosted may answer `{ host: false }`. `GET /api/host/ui` passes on each `ui` field only in its own shape (a list that is not a list, entries that are not objects, links that are not same-origin paths, a non-text environment: left out) and never fails because of the hook; it reads the hook's error as no additions.
 - **Sign-in:** a host's 401 may carry `X-DQL-Sign-In: <same-origin path>`. The app then goes there once, with `returnTo` set to the current page, instead of asking for an access link.
 - **Readers read:** without `app.author`, the App library hides Build new App, Edit and Delete, and the App opens without the View/Edit switch, personas or the local handoff.
 - **No first-run review:** the host sets up the project, so `/api/onboarding/launch` never opens the installer's setup review for the people it signs in (`hostManaged: true`).
@@ -325,7 +440,7 @@ A host serves every role with DQL's app. It does not rebuild Ask, Apps or notebo
 Without a host nothing changes. Tests: `per-person.test.ts` (route), `host-ui.test.tsx` (app).
 
 ### HH-10 — answers belong to who asked, and the host can follow them
-- **Ownership:** with a host, every run records the signed-in person as `ownerId`. Someone else's run reads as not found wherever DQL reads runs (the run routes, traces, repair, follow-ups, Research), and the run list and count are that person's own. Runs from before the host have no owner and are hidden from host people. The SQLite store filters by owner in SQL.
+- **Ownership:** with a host, every run records the signed-in person as `ownerId`. Someone else's run reads as not found wherever DQL reads runs (the run routes, traces, repair, follow-ups, Research), and the run list and count are that person's own. Runs from before the host have no owner and are hidden from host people. The SQLite store filters by owner in SQL. Notebook research runs (`/api/notebook/research*`) are kept in a store per person (`.dql/local/private/research/<person>.sqlite`) and record the signed-in person as their owner; the project's shared research store from before the host is not read with one. An App's analysis memos, App conversations and AI pins record the signed-in person as their owner and are read, run, pinned, refreshed and reused only for them (`LocalAppStorage` `owner`; a page run shows a pin's stored answer and rows only to the person who pinned it); rows from before the host have no owner and are no one's.
 - **`GET /api/host/answers/:runId`** gives the host one of the caller's own answers as it may keep it: question, status, trust, the SQL and where it came from, its fingerprint, the tables it read, the trace id and the object the person had open. Never the written answer, rows or result values (`answerFactsFromRun`).
 - **`answerStatus(principal, runIds)`** tells the app where the host's review of each answer stands (`requested`, `in_progress`, `checked`, `certified`, `declined`, with a label, detail and a same-origin page). `POST /api/host/answer-status` asks only about the caller's own runs. The answer shows the status in place of the host's answer actions, with Open for the page.
 - **Rail links** may carry a `badge` count and one of DQL's icons (`inbox`, `requests`, `review`, `work`, `health`, `admin`, `people`, `git`, `link`).
@@ -349,7 +464,7 @@ Tests: `host-hooks.test.ts`, `app-workspace-loader.test.ts`.
 ### Schema refresh for hosts
 `startProjectRuntime` returns `syncSchema()`: it refreshes DQL's schema snapshot (table and column names, no values) through the runtime's own connection, so a DuckDB file is never opened twice. A host that applies column policies in `rowPolicy` uses it to know every protected table's columns. No project files change.
 
-### Host follow-ups (Enterprise's first full build)
+### Host follow-ups (from a hosting product's first full build)
 - **Background requests:** the app marks any API request made more than 30 seconds after the person last touched the page `x-dql-background: 1` (polls, refreshes, recovery loops), so a host's idle sign-out isn't kept alive by an unattended tab.
 - **App page links:** `/?app=<id>&page=<id>` opens that App page (the App's home page without `page`); the parameters are removed once read. App schedule deliveries carry `appPage { appId, pageId, title, href }` with that same-origin link, so a host can send a link-only message that opens the page.
 - **Model usage:** with an audit sink, every model call's provider, model, operation and token counts (including a streamed Claude reply's) is a `model_usage` audit event for the person whose request made it — never prompt or reply text. `setProviderUsageListener` in `@duckcodeailabs/dql-agent` is the underlying listener.
@@ -363,7 +478,11 @@ Tests: `server-auth.test.ts`, `ask-trace-navigation.test.ts`, `app-page-run.test
 `sourceAccess(principal, sources)` gets App Datasets (`app:block:…`, `app:semantic:…`), certified blocks (their `app:block:` id when the block has a file) and metrics (`metric:<name>`), and returns the ids the person may use; an error allows none. Ask builds its vocabulary only from the admitted ones, before anything reaches the model (the cached view is keyed by the person's access), and an App page refuses just the tiles on a refused Dataset ("You don't have access to the Dataset …"), which also covers `/api/app-datasets/run` and field values. Tables themselves stay governed by row rules and warehouse permissions: a restricted Dataset is not a restricted table.
 
 ### HH-14 — figures of an answer that needs review
-`answerFigures(principal)` returns `show` or `withhold_review`. For a person it withholds from, an Ask answer that needs review is stored and sent without any value: its answer text, result rows, step summaries, events, evaluations and receipts are left out, and the run keeps its trust, SQL, sources, tables and each result's column names and row count (`figuresWithheld: true`). Nothing that could quote a figure streams to that person while the run is going (answer deltas and progress wording). Certified and governed answers are unchanged; the host's answer actions (ask an analyst, make it certified) stay on the answer. An error withholds.
+`answerFigures(principal)` returns `show` or `withhold_review`. For a person it withholds from, an Ask answer that needs review is stored and sent without any value: its answer text, result rows, step summaries, events, evaluations and receipts are left out, and the run keeps its trust, SQL, sources, tables and each result's column names and row count (`figuresWithheld: true`). Nothing that could quote a figure streams to that person while the run is going: no answer deltas, and each run event carries only its kind, route, status and trust (no wording, no payload: an `artifact.created` event otherwise carries the whole answer). The same decision applies on every asking door: the notebook chat cell (`/api/llm/run`) is refused for such a person, notebook research runs and App analysis memos show them their question, SQL and result shape only and are not run for them, and a repaired answer is withheld like an Ask answer. Certified and governed answers are unchanged; the host's answer actions (ask an analyst, make it certified) stay on the answer. Only a clear `show` shows: an error, or an answer that is not one of the two values (undefined, a typo, another type), withholds. The decision is taken on every read too: a run read by id while it is still going carries no wording, event payload, artifact or step note (as on the stream); a run that ended before its trust was settled (cancelled, interrupted, blocked) is withheld whole when it holds a result that is not certified or governed, and otherwise keeps its own words but none of its workings; a replay, the run list and the host's answer facts read the same way, and what the run store keeps for such a person is withheld from the first write.
+
+**AI pins are each person's own.** With a host, an AI pin (an answer pinned to an App page from Copilot, with its stored rows) is kept for the person who pinned it and is not shared App content: the page holds its tile, but only the pinner sees its answer and rows, and refreshes and promotes it. Creating one answers with `notice: "Only you see this pin; keep it as a live tile to share it."`, and the App's pin panel and the tile say the same. To share an answer, add it as a live tile. For a person the host keeps needs-review figures from (HH-14), an AI-written pin reads as its question, SQL and result shape only, wherever it is read: when it is made, listed, refreshed, opened with its App and run on its page.
+
+**An answer's text on an App page.** `figuresDependOnReader({ relations })` says whether figures read from those tables can differ by who reads them (a row rule, column policy, tag, or each person's own warehouse sign-in). An Ask answer added to an App page as its written text would show every reader the figures its author saw, so with a host DQL refuses it where the answer is yes: when it is added from Ask (`POST /api/app-builds/:id/ask-results`, 409 `ANSWER_FIGURES_DEPEND_ON_READER`, "This answer's figures depend on who is looking. Add it as a live tile instead."), when a draft edit or a page write adds one, and at the publish preflight. The way forward is a live tile (`mode: 'live'`), which runs the answer's own SQL (read from the person's own run, never from the browser) for each reader; its source says the question, not the figures. The tile records the tables the answer read (`sourceEvidence` of kind `answer_relation`), so the check holds later; a tile with no record is judged as if it read any table. Tiles of this kind published before are not removed: `GET /api/app-answer-tiles` lists them (ids and titles, never their text) for the stewards who replace them. Without the hook, a host with `rowPolicy` or `credentials` counts as yes; an error is yes; without a host nothing changes. Until they are replaced, everyone except the people who replace them reads a placeholder in place of their text ("This answer's figures depend on who is looking. A steward needs to replace it with a live tile.") on the page and in every run of it, and so in its stories, snapshots, digests and what agents read; `keepsAnswerText(principal, { appId })` names those people (an error is no), and without it DQL asks `authorize` for `app.author` on the App, then `dataset.certify`.
 
 ### HH-15 — knowledge sources: answers that cite documents
 `knowledgeSources(principal)` returns the read-only document servers this person may use — streamable HTTP MCP endpoints, each with **this person's** headers (e.g. their own OAuth token) — as `DqlKnowledgeServer { id, label?, url, headers?, searchTool?, searchArg?, fetchTool?, fetchArg?, searchArgs?, fetchArgs? }`.
@@ -380,7 +499,7 @@ Tests: `host/knowledge.test.ts` (Ask end to end through the server with a fake M
 ### HH-16 — a Home that summarises, following pages, and who an App is for
 Stakeholders open DQL to see what changed, not to start from an empty question. Every hook here has a local default, so `dql notebook` gets the same Home for its one person.
 - **Home (`GET /api/home`)**, above Ask on a new chat, loaded after it: **My Apps** (the Apps the person may open — followed first, then the ones they opened last), and **What moved** on the pages they follow or opened: each page's certified or governed single figures (a KPI's value, a driver's current value, a leader's value) from the person's **own** last two complete runs of it, under one scope (filters, parameters and persona). Never another person's figures, never a tile that needs review, never rows; nothing is cached across people. Kept in `.dql/local/private/home/<person>.json` (a hash of the host's id; `local` without a host). When a scheduled run is newer than the person's last look, Home says so and shows no figure: they open the page and see it as themselves.
-- **`homeCards(principal)`** adds the host's own cards to Home — for example "Open requests": a title and up to eight items with a status and a same-origin link (`GET /api/host/home-cards`, called only when Home opens; plain text, other links dropped; an error or a slow host: none).
+- **`homeCards(principal)`** adds the host's own cards to Home — for example "Open requests": a title and up to eight items with a status and a same-origin link (`GET /api/host/home-cards`, called only when Home opens; plain text, other links dropped; an error or a host slower than 5 seconds: none).
 - **Follow a page** (`POST /api/apps/:app/follow { pageId, following }`, action `app.view`). With **`follows: { list, set }`** the host keeps follows, so it can tell each person about new editions through their own notification preferences; without it, follows are the person's own state in the private folder.
 - **`pageEdition(edition)`**: a scheduled run of a page (HH-8's run pass) whose governed figures differ from the last scheduled run is a new edition. The host hears `{ appId, pageId, appTitle, pageTitle, href, runId, at, scheduleId }` — never a figure; the link is `/?app=…&page=…`. A reader's own run is never an edition.
 - **Story editions are per person with a host.** An edition holds the values one person's run showed (their row rules); each person now has their own file, so one person's values are never listed to another. Without a host there is one file, as before.
@@ -399,7 +518,7 @@ Tests: `host/knowledge.test.ts` (a definition question), `host/knowledge-researc
 - **`DqlQueryContext.destination`** — `person`, `model`, `delivery` or `export` — and **`action`**, the request's route action (HH-2), on every statement a request runs. DQL sets them from the request: `ask` and `research` are `model`, the two file exports below are `export` (a signed snapshot or a trace download, also the `export` action, reads a run already made and is `person`), `schedule.manage` and a scheduled run's pass are `delivery`, anything else `person`; work nobody asked for (a startup sync) has neither. The request context carries `action` and `destination`, so every statement a request starts — directly, streamed, in a read scope, or from an agent's tool — hears the same.
 - **Exports are files made on the server**: `POST /api/query/export` (`{ sql, format, title?, executionTarget? }`, route action `export`; with a host the person must also be allowed `query.run`) and `POST /api/apps/:app/dashboards/:page/export` (`{ tileId, format, variables? }`, one tile of a published page, action `export` on that App). `format` is `csv`, `json` or `xlsx`. The statement runs again for the file with `destination: 'export'`, so the host's policy decides what the file may hold (mask, or refuse with a reason: 403 `EXPORT_REFUSED` for SQL, 422 for a tile). CSV text a spreadsheet would read as a formula is prefixed with `'`; Excel cells are inline strings, never formulas. An export's results are cached apart from what the person sees on screen (`destination` is part of the host principal's cache identity when it is `export`).
 - **The app**: with a host, a table's CSV / JSON / Excel buttons and an App tile's **Download** items call these routes; a hosted table with no export route (an Ask answer, a Block Studio preview) offers no download, since the host decides what may leave. Without a host nothing changes: CSV and JSON are saved from the table on screen.
-- **A person's own connections**: `.dql/local/private/connections.json` (`{ defaultConnection?, connections }`, outside git) adds to the project's connections, replaces one of the same name, and its `defaultConnection` wins, wherever DQL reads the project config (the notebook, `dql certify`, schedules). A host's command line writes the development copy an admin named for a workspace (DQL Enterprise's `dqle dev-connection`), so a developer's laptop never needs Production's credentials. Without the file nothing changes; the Connections page still lists and edits only the shared connections.
+- **A person's own connections**: `.dql/local/private/connections.json` (`{ defaultConnection?, connections }`, outside git) adds to the project's connections, replaces one of the same name, and its `defaultConnection` wins, wherever DQL reads the project config (the notebook, `dql certify`, schedules). A host's command line writes the development copy an admin named for a workspace, so a developer's laptop never needs Production's credentials. Without the file nothing changes; the Connections page still lists and edits only the shared connections.
 - **`sensitiveQuestions: 'columns'`** tells Ask and Research that the host refuses personal data by column: its `rowPolicy` refuses a `model` statement that would list classified columns (health, card data) for individuals, with a reason the person reads, and lets aggregates through ("claims by diagnosis"). The wording check for payment, health, contact and protected attributes is then skipped; regulated identifiers (SSN, passport, date of birth) and one person's pay stay refused by wording. Without the setting (and without a host) the wording check is unchanged. A row policy's refusal (`ROW_POLICY_REFUSED`) is classified `POLICY_DENIED`: nothing an automatic repair can change.
 
 Tests: `host/exports.test.ts` (destinations from actions, SQL and tile exports as CSV, JSON and Excel with a host that masks and refuses, the screen and the file kept apart, standalone unchanged), `export/result-file.test.ts`, `private-connections.test.ts`, dql-agent `analytical-request-policy.test.ts`, `analytical-failure-repair.test.ts`.
@@ -422,12 +541,12 @@ Tests: `host/exports.test.ts` (destinations from actions, SQL and tile exports a
 The first host runs it on a pull request's preview as the steward reviewing it, and shows the result as the change's "Keys proven" check. Tests: `datasets/key-proofs.test.ts` (real DuckDB), `route-actions.test.ts`.
 
 ### One process, several servers
-Each request carries its own server's hooks in its request context, so a host that runs Production and pull request previews in one process never has one server's git, delivery, model, tool-gate or usage hooks replaced by another's; the process-wide values are only a fallback for work outside a request. A runtime's `close()` also ends open event streams (a browser tab with DQL open used to hold it forever), a host's own model id (`bedrock`, `vertex`) no longer fails the local provider settings, and `dql app ls` / `GET /api/apps` (without a host) name App files that don't load and why.
+Every server runs each request it answers, and the work its startup begins, in its own scope (`withServerScope`), and each request carries its server's hooks in its request context. So a host that runs Production and pull request previews in one process — or a server without a host beside them — never has one server's git, delivery, model, privacy boundary, tool-gate or usage hooks used for another's: a server without a host uses none of a host's, and "view as" (the App persona) is kept per person and per server. The process-wide values serve only work outside every server (a host's own call into DQL code), and are a host's hooks only while every server running in the process has the same ones; with servers whose hooks differ they are empty. Starting or stopping a server never removes another's tool gate (one gate serves the process and asks the current work's server). A runtime's `close()` also ends open event streams (a browser tab with DQL open used to hold it forever), a host's own model id (`bedrock`, `vertex`) no longer fails the local provider settings, and `dql app ls` / `GET /api/apps` (without a host) name App files that don't load and why.
 
 Tests: `host-hooks.test.ts`, `host-scope.test.ts`, `scoped-hooks.test.ts`, `notebook.test.ts`, `provider-settings.test.ts`, `app.test.ts`.
 
 ### Entry point
-`@duckcodeailabs/dql-cli/host` also exports `startProjectRuntime`: the full server with its UI for one project, as `dql notebook` runs it, taking `hostHooks`, `allowedOrigins` and a host-managed `connection`. The first host (DQL Enterprise) starts every workspace this way; its end-to-end test drives this branch's server through sign-in, roles, row rules and DuckDB for five people.
+`@duckcodeailabs/dql-cli/host` also exports `startProjectRuntime`: the full server with its UI for one project, as `dql notebook` runs it, taking `hostHooks`, `allowedOrigins` and a host-managed `connection`. The first host starts every workspace this way.
 
 ### Needs a live check before release
 1. Claude on Amazon Bedrock (in-region and Geo profile model ids, long answers, tool use) with real AWS credentials, and from an ECS task role.
@@ -452,6 +571,8 @@ Nothing changes for projects or for `dql notebook` with no hooks.
 - **Why the request body stops naming actors.** Today, anyone who can reach the server can certify in someone else's name. After HH-1, only the server can say who acted.
 - **The one query path protects against more than row rules.** It is also where read-only checking, deadlines and cost guards are enforced for every query, not only those that remember to call it.
 - **Hooks run in-process with full trust.** A host that loads untrusted hooks has already lost. The contract gives no sandbox.
+- **Why the engine is restricted, not only the statement.** A statement check reads text; an engine can be reached in more ways than any check lists. With a host, DuckDB's own settings close files, extensions and settings, and the check is the second layer (and the only DQL-side one for engines whose settings DQL does not control).
+- **Why a request only names a connection (rule 7).** A request names one of the project's connections; the project's config and the credentials hook supply its settings, so row rules scoped to a connection hold.
 
 ## Alternatives considered
 

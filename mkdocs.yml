@@ -94,6 +94,7 @@ nav:
       - Notebook research engine: guides/notebook-research.md
       - Dashboards: guides/dashboards.md
       - Connect an AI agent (MCP): guides/mcp.md
+      - Hosted servers: guides/hosted-servers.md
       - Import dbt: guides/import-dbt.md
       - Connect a warehouse: guides/connect-warehouse.md
       - Migrate from earlier versions: guides/migrate.md

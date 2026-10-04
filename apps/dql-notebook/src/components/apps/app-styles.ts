@@ -442,7 +442,7 @@ export const APP_STYLES = `
 .dql-app-card-labels { min-width: 0; display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
 .dql-app-visibility { display: inline-flex; align-items: center; gap: 4px; min-height: 22px; padding: 0 7px; border: 1px solid var(--border-subtle); border-radius: 999px; font-size: 11px; font-weight: 600; white-space: nowrap; }
 .dql-app-visibility.private { color: var(--text-secondary); background: var(--bg-2); }
-.dql-app-visibility.shared { color: var(--accent); border-color: color-mix(in srgb,var(--accent) 25%,var(--border-subtle)); background: var(--accent-dim); }
+.dql-app-visibility.shared { color: color-mix(in srgb, var(--accent) 80%, var(--text-primary)); border-color: color-mix(in srgb,var(--accent) 25%,var(--border-subtle)); background: var(--accent-dim); }
 .dql-app-draft-card { border-color: color-mix(in srgb,var(--accent) 26%,var(--border-subtle)); }
 .dql-app-draft-card .dql-app-card-body { background: linear-gradient(145deg,color-mix(in srgb,var(--accent-dim) 48%,var(--bg-0)),var(--bg-0) 42%); }
 .dql-app-draft-mark { flex:0 0 auto; width:29px; height:29px; display:grid; place-items:center; border-radius:8px; color:var(--accent); background:var(--accent-dim); }
@@ -463,6 +463,9 @@ export const APP_STYLES = `
 
 .dql-app-star.on { color: var(--dql-app-accent); background: var(--dql-app-accent-soft); border-color: rgba(37, 99, 235, 0.35); }
 .dql-app-card h3 { margin: 13px 0 0; font-size: 16px; line-height: 1.2; }
+.dql-app-card-link { color: inherit; text-decoration: none; }
+.dql-app-card-link:hover { text-decoration: underline; text-underline-offset: 2px; }
+.dql-app-card-link:focus-visible { outline: 2px solid var(--border-focus, var(--accent)); outline-offset: 2px; border-radius: 4px; }
 .dql-app-card p { min-height: 54px; margin: 7px 0 0; color: var(--dql-app-muted); font-size: 12px; line-height: 1.5; }
 
 .dql-app-card-mini {
@@ -570,7 +573,8 @@ export const APP_STYLES = `
   width: fit-content;
   border: 1px solid rgba(22, 163, 74, 0.26);
   background: var(--dql-app-green-soft);
-  color: var(--dql-app-green);
+  /* The words in the status colour's ink: mixed toward the theme's text so they read (4.5:1) on the tint. */
+  color: color-mix(in srgb, var(--dql-app-green) 60%, var(--text-primary, #1a1a1a));
   font-family: var(--font-mono);
   font-size: 11px;
   font-weight: 600;
@@ -586,7 +590,7 @@ export const APP_STYLES = `
   background: currentColor;
 }
 
-.dql-app-seal.draft { border-color: rgba(202, 138, 4, 0.30); background: var(--dql-app-orange-soft); color: var(--dql-app-orange); }
+.dql-app-seal.draft { border-color: rgba(202, 138, 4, 0.30); background: var(--dql-app-orange-soft); color: color-mix(in srgb, var(--dql-app-orange) 60%, var(--text-primary, #1a1a1a)); }
 .dql-app-seal.agentic { border-color: rgba(37, 99, 235, 0.32); background: var(--dql-app-accent-soft); color: var(--dql-app-accent); }
 
 .dql-app-create-shell,
@@ -2143,7 +2147,7 @@ export const APP_STYLES = `
 }
 
 .dql-app-section-tabs b {
-  color: var(--dql-app-accent);
+  color: color-mix(in srgb, var(--dql-app-accent) 80%, var(--text-primary, #1a1a1a));
   font-family: var(--font-mono);
   font-size: 11px;
 }
@@ -4116,6 +4120,7 @@ export const APP_STYLES = `
 
 .dql-app-simple-list,
 .dql-app-settings-grid { display: grid; gap: 10px; }
+.dql-app-panel-note { margin: 0; font-size: 12px; line-height: 1.45; color: var(--text-secondary); }
 .dql-app-settings-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .dql-app-panel-card {
   border: 1px solid var(--dql-app-line);

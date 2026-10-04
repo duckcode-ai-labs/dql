@@ -3,6 +3,7 @@ import type { IncomingMessage } from 'node:http';
 import type { DqlAction, DqlResource, DqlRouteAction } from './route-actions.js';
 import type { DqlCredentialsHook, DqlRowPolicy } from './row-policy.js';
 import type { DqlAuditSink, DqlTraceSink } from './observability.js';
+import { HostHookTimeoutError } from './hook-deadline.js';
 
 export type { DqlAction, DqlResource, DqlRouteAction } from './route-actions.js';
 
@@ -68,7 +69,8 @@ export function destinationForAction(action: DqlAction | undefined): DqlDestinat
 }
 
 export interface DqlRequestContext {
-  principal: DqlPrincipal;
+  /** The signed-in person; absent when the host names no one for this request (it then reads no one's content). */
+  principal?: DqlPrincipal;
   requestId: string;
   /** The route action this request was authorized as (HH-2); statements it runs carry it (HH-17). */
   action?: DqlAction;
@@ -82,9 +84,9 @@ export interface DqlRequestContext {
   hooks?: DqlHostHooks;
 }
 
-/** The hooks of the server handling the current request, if a host set them. */
+/** The hooks of the server handling the current work (a request, or the server's own work), if a host set them. */
 export function currentHostHooks(): DqlHostHooks | undefined {
-  return requestContext.getStore()?.hooks;
+  return scopedHostHooks()?.hooks;
 }
 
 /** What DQL knows about the values it is about to send a model (`isInBoundary`). */
@@ -250,8 +252,9 @@ export interface DqlHostHooks {
   /**
    * Whom answers are written for: a stakeholder (consumption only, no SQL or
    * authoring handoffs) or an analyst. With this hook the host decides per
-   * person and the request body's `audience` is ignored; a hook error means
-   * stakeholder.
+   * person and the request body's `audience` is ignored; a hook error, or an
+   * answer that is neither of the two, means stakeholder; undefined leaves
+   * DQL's default.
    */
   audience?(principal: DqlPrincipal): Promise<'stakeholder' | 'analyst' | undefined> | 'stakeholder' | 'analyst' | undefined;
   /**
@@ -263,8 +266,9 @@ export interface DqlHostHooks {
   ui?(principal: DqlPrincipal): Promise<DqlHostUi> | DqlHostUi;
   /**
    * Where the host's review of each answer stands, for answers this person
-   * asked (HH-10): e.g. "Request R-142 · assigned to Sam" or "Checked by
-   * Dan Kim". Shown beside the answer; the answer's own trust label stays.
+   * asked (HH-10): e.g. "Request R-142 · assigned to a reviewer" or "Checked
+   * by a named reviewer". Shown beside the answer; the answer's own trust
+   * label stays.
    */
   answerStatus?(principal: DqlPrincipal, runIds: string[]): Promise<Record<string, DqlAnswerStatus>> | Record<string, DqlAnswerStatus>;
   /**
@@ -278,9 +282,31 @@ export interface DqlHostHooks {
    * HH-14: whether this person sees the figures of an Ask answer that needs
    * review. `withhold_review` gives them — and stores for them — the answer
    * without any value (what it is built on, its SQL and trust), until someone
-   * checks it; certified and governed answers are unchanged. An error withholds.
+   * checks it; certified and governed answers are unchanged. Only a clear
+   * `show` shows: an error, or any answer that is not `show` (undefined, a
+   * typo, another type), withholds.
    */
   answerFigures?(principal: DqlPrincipal): 'show' | 'withhold_review' | Promise<'show' | 'withhold_review'>;
+  /**
+   * Whether figures read from these tables can differ by who reads them: a
+   * row rule, column policy or tag protection the host applies to one of
+   * them. DQL asks before an Ask answer's written text (the figures its
+   * author saw) is saved into an App page as a static text tile, and refuses
+   * it when the answer is yes: a live tile runs each reader's own rules.
+   * `relations` absent: DQL could not list every table the answer read; answer
+   * as if it could be any table. An error means yes. Without this hook, a
+   * host with `rowPolicy` or `credentials` is taken to mean yes.
+   */
+  figuresDependOnReader?(input: { relations?: string[] }): boolean | Promise<boolean>;
+  /**
+   * Whether this person still reads the text of an Ask answer published as a
+   * static tile before `figuresDependOnReader` refused them (the people who
+   * replace such tiles: an App's authors and stewards). Everyone else reads a
+   * placeholder in its place, on the page and in every page run. An error
+   * means no. Without this hook DQL asks `authorize` for `app.author` on the
+   * App, then `dataset.certify`.
+   */
+  keepsAnswerText?(principal: DqlPrincipal, input: { appId: string }): boolean | Promise<boolean>;
   /**
    * HH-15: the knowledge sources (read-only document servers, e.g.
    * Confluence) this person may use, each with this person's own auth
@@ -320,6 +346,14 @@ export interface DqlHostHooks {
   /** Each finished Ask trace, strictly redacted, as a bundle and as OTLP (HH-6). */
   traces?: DqlTraceSink;
   /**
+   * A secret the host keeps stable for this workspace (for example derived
+   * from its key service), under which question fingerprints leave in traces
+   * (the sink above and OTLP): HMAC-SHA256, so they cannot be checked against
+   * likely questions elsewhere. Without it DQL makes one and keeps it in
+   * `.dql/local/private/trace-salt`.
+   */
+  traceSalt?: string;
+  /**
    * Where state lives (HH-6), for hosts that run several copies of DQL on
    * shared storage. Each defaults to today's SQLite file in the project.
    * Every method returns a Promise; DQL awaits each call, so a store may be
@@ -335,6 +369,30 @@ export interface DqlHostHooks {
    * lineage, cadence). With a host, the host decides this, not the request.
    */
   enterpriseCertification?: boolean;
+  /**
+   * Only one person uses this server (a host's per-person sandbox), so the
+   * server's own local state is theirs: a request may run on its local DuckDB
+   * workspace (`executionTarget: { target: 'local' }`) and open private
+   * drafts under `.dql/local/private/notebooks`. Otherwise everyone the server
+   * serves would share them, so with a host both are refused (the server
+   * chooses the connection; file routes serve project content only).
+   */
+  onePerson?: boolean;
+  /**
+   * Which of a table's columns this person may see listed (a column policy may
+   * hide some): DQL's schema routes list only these. A hook that throws lists
+   * none of the table's columns.
+   */
+  columnsVisible?(principal: DqlPrincipal, relation: string, columns: string[]): Promise<string[]> | string[];
+  /**
+   * Attributes the host sets on a principal for one request to say where its
+   * values go (for example "for the model", "for a delivery"), not who the
+   * person is. They stay in the keys of cached and proven results, so a result
+   * read for one destination never serves another. They are left out only
+   * when DQL finds the person's own earlier run again: a question about a
+   * chart on screen finds the chart that person ran.
+   */
+  purposeAttributes?: readonly string[];
   /**
    * HH-17: how Ask and Research screen questions for personal data about
    * individuals. `wording` (the default) refuses before planning by the
@@ -386,6 +444,30 @@ export interface DqlHostUi {
    * Production). `caution` draws it in the warning colour.
    */
   banner?: DqlHostBanner;
+  /**
+   * Who DQL's screens speak to. `reader`: a person who reads and asks here but
+   * does not build (a hosted stakeholder): the App library and Ask leave out
+   * the single-user notebook's words (local drafts, private Apps, local files)
+   * and say in plain words what an answer is built on. Absent: unchanged.
+   */
+  audience?: 'reader';
+  /**
+   * What an App link says when this project has no such App (with a host, the
+   * App may be in another of its projects): plain words of at most 200
+   * characters and, optionally, a same-origin link to go on. Absent: DQL's
+   * own message.
+   */
+  appNotFound?: { message: string; next?: { label: string; href: string } };
+}
+
+/** `appNotFound` as DQL passes it on: plain text, a same-origin link only. */
+export function safeAppNotFound(value: unknown): { message: string; next?: { label: string; href: string } } | undefined {
+  if (!value || typeof value !== 'object') return undefined;
+  const raw = value as Record<string, unknown>;
+  const message = typeof raw.message === 'string' ? raw.message.replace(/\s+/g, ' ').trim().slice(0, 200) : '';
+  if (!message) return undefined;
+  const next = safeNextLink(raw.next as DqlDecision['next']);
+  return { message, ...(next ? { next: { label: next.label.slice(0, 40), href: next.href } } : {}) };
 }
 
 /** One card the host adds to a person's Home (HH-16), e.g. "Open requests". */
@@ -535,8 +617,85 @@ export type DqlModelProvider = import('@duckcodeailabs/dql-agent').AgentProvider
 const requestContext = new AsyncLocalStorage<DqlRequestContext>();
 
 /**
- * The host's model hooks, for code outside a request's closure (provider
- * selection is module-level). One host per process, set at server start.
+ * ONE PROCESS, SEVERAL SERVERS (RFC 0010). A host may run several DQL servers
+ * in one process — its Production and each pull request's preview, a server
+ * without hooks beside them — each with its own hooks. Every request a server
+ * answers, and the work it starts, runs in that server's scope, so the hooks
+ * that govern it are always its own server's: the request context's hooks when
+ * it names them, else its server's (none for a server without a host). The
+ * process-wide values below are only for work outside every server (a host's
+ * own call into DQL code), and they are a host's hooks only when every server
+ * running in the process has the same ones; servers with different hooks leave
+ * them empty, so such work never borrows one server's hooks for another's.
+ */
+export interface DqlServerScope {
+  /** Unique per server start: keeps per-server state (such as "view as") apart. */
+  readonly id: string;
+  hooks?: DqlHostHooks;
+}
+const serverScope = new AsyncLocalStorage<DqlServerScope>();
+
+/** Run `work` as the server `scope`'s own (DQL does this around each request and its server's startup). */
+export function withServerScope<T>(scope: DqlServerScope, work: () => T): T {
+  return serverScope.run(scope, work);
+}
+
+/** The server the current work belongs to, if any. */
+export function currentServerScope(): DqlServerScope | undefined {
+  return serverScope.getStore();
+}
+
+/**
+ * The hooks that govern the current work: `{ hooks }` (possibly none) when the work belongs to a server or a
+ * request that names its hooks; undefined outside every server, where the process-wide values apply.
+ */
+export function scopedHostHooks(): { hooks: DqlHostHooks | undefined } | undefined {
+  const context = requestContext.getStore();
+  if (context?.hooks) return { hooks: context.hooks };
+  const scope = serverScope.getStore();
+  if (scope) return { hooks: scope.hooks };
+  return undefined;
+}
+
+const liveServers = new Map<string, DqlHostHooks | undefined>();
+/** A server started (with its hooks, or none); see `processHostHooks`. */
+export function registerServerHooks(id: string, hooks: DqlHostHooks | undefined): void {
+  liveServers.set(id, hooks);
+}
+/** A server stopped. */
+export function unregisterServerHooks(id: string): void {
+  liveServers.delete(id);
+}
+/**
+ * The hooks for work outside every server: the one host's, when every server running in this process has the same
+ * hooks; none when there is no server, or servers with different hooks (or a server without a host beside a hosted
+ * one) run here.
+ */
+export function processHostHooks(): DqlHostHooks | undefined {
+  const all = [...liveServers.values()];
+  const first = all[0];
+  return first && all.every((hooks) => hooks === first) ? first : undefined;
+}
+
+/** Whether any server running in this process has a host (for work outside every server that must take the safe side). */
+export function anyHostedServer(): boolean {
+  return [...liveServers.values()].some(Boolean);
+}
+
+let processToolHooks: DqlHostHooks['tools'] | undefined;
+/** The tool gate's hook for work outside every server (process-wide fallback). */
+export function setProcessToolHooks(tools: DqlHostHooks['tools'] | undefined): void {
+  processToolHooks = tools;
+}
+/** The tool gate's hook for the current work: its server's (or request's), else the process-wide one. */
+export function currentToolHooks(): DqlHostHooks['tools'] | undefined {
+  const scoped = scopedHostHooks();
+  return scoped ? scoped.hooks?.tools : processToolHooks;
+}
+
+/**
+ * The host's model hooks for work outside every server (provider selection is
+ * module-level); see `processHostHooks`.
  */
 let hostModelHooks: Pick<DqlHostHooks, 'modelProvider' | 'isInBoundary'> = {};
 export function setHostModelHooks(hooks: Pick<DqlHostHooks, 'modelProvider' | 'isInBoundary'> | undefined): void {
@@ -548,14 +707,16 @@ export function setHostGitHooks(hooks: DqlHostHooks['git'] | undefined): void {
   hostGitHooks = hooks;
 }
 export function currentHostGitHooks(): DqlHostHooks['git'] | undefined {
-  const scoped = currentHostHooks();
-  return scoped ? scoped.git : hostGitHooks;
+  const scoped = scopedHostHooks();
+  return scoped ? scoped.hooks?.git : hostGitHooks;
 }
 
-/** The model hooks for the current request's server, else the process's. */
+/** The model hooks for the current work's server (none for a server without a host), else the process's. */
 function modelHooks(): Pick<DqlHostHooks, 'modelProvider' | 'isInBoundary'> {
-  const scoped = currentHostHooks();
-  return scoped ? { ...(scoped.modelProvider ? { modelProvider: scoped.modelProvider } : {}), ...(scoped.isInBoundary ? { isInBoundary: scoped.isInBoundary } : {}) } : hostModelHooks;
+  const scoped = scopedHostHooks();
+  if (!scoped) return hostModelHooks;
+  const hooks = scoped.hooks;
+  return { ...(hooks?.modelProvider ? { modelProvider: hooks.modelProvider } : {}), ...(hooks?.isInBoundary ? { isInBoundary: hooks.isInBoundary } : {}) };
 }
 
 /** `Name <email>` for the signed-in person, to author commits; undefined without an email. */
@@ -566,13 +727,37 @@ export function hostGitAuthor(): string | undefined {
   return `${name} <${principal.email.replace(/[<>\s]/g, '')}>`;
 }
 
-/** The host's model for the person asking, if the host supplies one. */
-export function hostModelProvider(): { id: string; provider: DqlModelProvider } | undefined {
-  try {
-    return modelHooks().modelProvider?.({ principal: currentPrincipal() ?? null }) ?? undefined;
-  } catch {
-    return undefined;
+export const HOST_MODEL_UNAVAILABLE = 'DQL could not get the model your administrator set up, so it did not ask a model. Try again; if it keeps happening, ask your administrator.';
+
+/** The host's model hook failed or answered something that is not a model: no model is used, not even the project's own. */
+export class HostModelUnavailableError extends Error {
+  readonly code = 'HOST_MODEL_UNAVAILABLE';
+  constructor() {
+    super(HOST_MODEL_UNAVAILABLE);
+    this.name = 'HostModelUnavailableError';
   }
+}
+
+/**
+ * The host's model for the person asking, if the host supplies one (HH-5). Undefined (the hook answers nothing, or
+ * there is no hook) uses DQL's own provider settings. A hook that throws, or answers something other than
+ * `{ id, provider }`, refuses: DQL then asks no model at all rather than the project's own (HostModelUnavailableError).
+ */
+export function hostModelProvider(): { id: string; provider: DqlModelProvider } | undefined {
+  const hook = modelHooks().modelProvider;
+  if (!hook) return undefined;
+  let answer: unknown;
+  try {
+    answer = hook({ principal: currentPrincipal() ?? null });
+  } catch {
+    throw new HostModelUnavailableError();
+  }
+  if (answer === undefined || answer === null) return undefined;
+  const record = answer as { id?: unknown; provider?: unknown };
+  if (typeof answer !== 'object' || typeof (answer as { then?: unknown }).then === 'function' || typeof record.id !== 'string' || !record.id.trim() || !record.provider || typeof record.provider !== 'object') {
+    throw new HostModelUnavailableError();
+  }
+  return answer as { id: string; provider: DqlModelProvider };
 }
 
 /**
@@ -650,48 +835,104 @@ export function normalizeHostPrincipal(value: unknown): DqlPrincipal | null {
   };
 }
 
-/** Ask the host who is asking; null when it refuses, errs or answers with something malformed. */
+/** Ask the host who is asking; null when it refuses, errs, answers late or with something malformed. */
 export async function resolveHostPrincipal(hooks: DqlHostHooks, req: IncomingMessage): Promise<DqlPrincipal | null> {
-  if (!hooks.resolvePrincipal) return null;
+  return (await resolveHostPrincipalOutcome(hooks, req)).principal;
+}
+
+/** Shown when the host does not say in time who is asking (rule 1: a time limit, then a refusal). */
+export const HOST_IDENTITY_UNAVAILABLE = 'DQL could not check who you are right now. Try again in a moment.';
+/** Shown when the host does not say in time whether this person may do this. */
+export const HOST_DECISION_UNAVAILABLE = 'DQL could not check what you may do right now. Try again in a moment.';
+
+/**
+ * Who is asking, and whether the host could not say in time (`unavailable`: the hook did not answer within its
+ * deadline). Either way nobody is placed when the principal is null.
+ */
+export async function resolveHostPrincipalOutcome(hooks: DqlHostHooks, req: IncomingMessage): Promise<{ principal: DqlPrincipal | null; unavailable?: true }> {
+  if (!hooks.resolvePrincipal) return { principal: null };
   try {
-    return normalizeHostPrincipal(await hooks.resolvePrincipal(req));
-  } catch {
-    return null;
+    return { principal: normalizeHostPrincipal(await hooks.resolvePrincipal(req)) };
+  } catch (error) {
+    return error instanceof HostHookTimeoutError ? { principal: null, unavailable: true } : { principal: null };
   }
 }
 
-/** Ask the host whether this request may go ahead; an error is a refusal. */
+/** Ask the host whether this request may go ahead; an error, a late answer or anything but `{ allow: true }` refuses. */
 export async function authorizeHostRequest(hooks: DqlHostHooks, principal: DqlPrincipal, route: DqlRouteAction): Promise<DqlDecision> {
   if (!hooks.authorize) return { allow: true };
   try {
-    const decision = await hooks.authorize(principal, route.action, route.resource);
-    if (decision && decision.allow === true) return { allow: true };
-    const reason = decision && typeof decision.reason === 'string' && decision.reason.trim() ? decision.reason.trim() : undefined;
-    const next = decision ? safeNextLink(decision.next) : undefined;
+    const decision: unknown = await hooks.authorize(principal, route.action, route.resource);
+    if (!decision || typeof decision !== 'object') return { allow: false };
+    const answer = decision as Partial<DqlDecision>;
+    if (answer.allow === true) return { allow: true };
+    const reason = typeof answer.reason === 'string' && answer.reason.trim() ? answer.reason.trim() : undefined;
+    const next = safeNextLink(answer.next);
     return { allow: false, ...(reason ? { reason } : {}), ...(next ? { next } : {}) };
-  } catch {
-    return { allow: false };
+  } catch (error) {
+    return error instanceof HostHookTimeoutError ? { allow: false, reason: HOST_DECISION_UNAVAILABLE } : { allow: false };
   }
 }
 
 /**
- * ONE PERSONA PER PERSON. "View as" (the App persona) is kept per signed-in
- * person, so a steward previewing an App as a member never changes what
- * anyone else sees. Requests without a host principal keep the one
- * process-wide persona, as before.
+ * Whether an answer's figures, read from these tables, could differ for another reader (the host's
+ * `figuresDependOnReader`). No host: no. A hook that errs: yes.
  */
+export async function hostFiguresDependOnReader(hooks: DqlHostHooks | undefined, relations: string[] | undefined): Promise<boolean> {
+  if (!hooks) return false;
+  if (!hooks.figuresDependOnReader) return Boolean(hooks.rowPolicy || hooks.credentials);
+  try {
+    return (await hooks.figuresDependOnReader(relations ? { relations: [...relations] } : {})) !== false;
+  } catch {
+    return true;
+  }
+}
+
+/**
+ * ONE PERSONA PER PERSON, PER SERVER. "View as" (the App persona) is kept per
+ * signed-in person on each server, so a steward previewing an App as a member
+ * never changes what anyone else sees, and a persona chosen on one server
+ * (Production) is not active on another in the same process (a preview).
+ * Requests without a host principal keep the one process-wide persona, as
+ * before.
+ *
+ * The slots live in memory, so they are bounded: at most
+ * `PERSONA_SLOT_LIMIT` people keep one, and past that the least recently
+ * used person's goes. That person then sees Apps as themselves again (the
+ * default), never as anyone else.
+ */
+export const PERSONA_SLOT_LIMIT = 5_000;
 const personaSlots = new Map<string, { value: unknown }>();
-export function installHostPersonaSlots(registry: { useSlots(resolver: (() => { value: any } | undefined) | null): void }): void {
+export function installHostPersonaSlots(
+  registry: { useSlots(resolver: (() => { value: any } | undefined) | null): void },
+  options: { limit?: number } = {},
+): void {
+  const limit = Math.max(1, Math.floor(options.limit ?? PERSONA_SLOT_LIMIT));
   registry.useSlots(() => {
     const principal = currentPrincipal();
     if (!principal || principal.source === 'local') return undefined;
-    let slot = personaSlots.get(principal.id);
-    if (!slot) {
+    // Per server too: a persona chosen on one server (Production) is not active on another (a preview).
+    const key = `${serverScope.getStore()?.id ?? ''}\u0000${principal.id}`;
+    let slot = personaSlots.get(key);
+    if (slot) {
+      // Most recently used last.
+      personaSlots.delete(key);
+    } else {
       slot = { value: null };
-      personaSlots.set(principal.id, slot);
+    }
+    personaSlots.set(key, slot);
+    while (personaSlots.size > limit) {
+      const oldest = personaSlots.keys().next().value;
+      if (oldest === undefined) break;
+      personaSlots.delete(oldest);
     }
     return slot;
   });
+}
+
+/** How many people keep a persona slot now (for tests and health checks). */
+export function personaSlotCount(): number {
+  return personaSlots.size;
 }
 
 /**
@@ -742,6 +983,27 @@ export function hostPrincipalPolicyIdentity(): Record<string, unknown> | undefin
   const attributes = Object.fromEntries(Object.entries(principal.attributes ?? {}).sort(([left], [right]) => left.localeCompare(right)));
   const destination = currentDestination();
   return { id: principal.id, groups: [...(principal.groups ?? [])].sort(), attributes, ...(destination === 'export' ? { destination } : {}) };
+}
+
+/**
+ * Who the signed-in person is, for finding their own earlier run (a chart they
+ * ran, asked about later): their id, groups and attributes, without where this
+ * request's values go (the destination, the host's `purposeAttributes`). Never
+ * a cache or proof key: those keep the destination apart.
+ */
+export function hostPrincipalRunOwner(): Record<string, unknown> | undefined {
+  const principal = currentPrincipal();
+  if (!principal || principal.source !== 'host') return undefined;
+  const purposes = new Set(purposeAttributeNames(currentHostHooks()?.purposeAttributes));
+  const attributes = Object.fromEntries(Object.entries(principal.attributes ?? {})
+    .filter(([name]) => !purposes.has(name))
+    .sort(([left], [right]) => left.localeCompare(right)));
+  return { id: principal.id, groups: [...(principal.groups ?? [])].sort(), attributes };
+}
+
+/** The host's `purposeAttributes` as DQL reads them: a list of names; anything else names none. */
+export function purposeAttributeNames(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((name): name is string => typeof name === 'string' && name.length > 0) : [];
 }
 
 /** Where the current request's statements' results go (HH-17); undefined outside a request. */

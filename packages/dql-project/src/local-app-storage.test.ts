@@ -504,4 +504,36 @@ describe('LocalAppStorage', () => {
     expect(store.listAppBuildDrafts(appId)).toHaveLength(1);
     expect(store.getAppPreviewEvidence('app_run_archive')?.snapshotId).toBe('snapshot-1');
   });
+
+  it('keeps analysis memos and App conversations for their owner, as the caller says (RFC 0010)', () => {
+    const path = join(dir, '.dql', 'local', 'apps.sqlite');
+    const legacy = store.createAppInvestigation({ appId: 'claims', question: 'From before the host' });
+    const asPriya = new LocalAppStorage(path, { owner: 'u-priya' });
+    const asDan = new LocalAppStorage(path, { owner: 'u-dan' });
+    const asNobody = new LocalAppStorage(path, { owner: null });
+    try {
+      const memo = asPriya.createAppInvestigation({ appId: 'claims', question: 'Why West?' });
+      const talk = asPriya.createAppConversation({ appId: 'claims', title: 'West' });
+      expect(memo.ownerId).toBe('u-priya');
+      expect(asPriya.listAppInvestigations('claims').map((item) => item.id)).toEqual([memo.id]);
+      expect(asPriya.findReusableAppInvestigation({ appId: 'claims', question: 'Why West?' })?.id).toBe(memo.id);
+      expect(asDan.listAppInvestigations('claims')).toEqual([]);
+      expect(asDan.getAppInvestigation(memo.id)).toBeNull();
+      expect(asDan.updateAppInvestigation(memo.id, { title: 'taken' })).toBeNull();
+      expect(asDan.findReusableAppInvestigation({ appId: 'claims', question: 'Why West?' })).toBeNull();
+      expect(asDan.listAppConversations('claims')).toEqual([]);
+      expect(asDan.getAppConversation(talk.id)).toBeNull();
+      expect(asDan.deleteAppConversation(talk.id)).toBe(false);
+      expect(asNobody.listAppInvestigations('claims')).toEqual([]);
+      expect(asNobody.getAppInvestigation(legacy.id)).toBeNull();
+      expect(asPriya.getAppInvestigation(legacy.id)).toBeNull();
+      // Without an owner (no host): every record, as before.
+      expect(store.listAppInvestigations('claims').map((item) => item.id).sort()).toEqual([legacy.id, memo.id].sort());
+      expect(asPriya.getAppConversation(talk.id)?.title).toBe('West');
+    } finally {
+      asPriya.close();
+      asDan.close();
+      asNobody.close();
+    }
+  });
 });

@@ -5,7 +5,8 @@ import { HostAnswerActions, HostAnswerStatusView, answerNeedsReview } from '../c
 import { HostPersonMenu } from '../components/shell/HostPersonMenu';
 import { HostBanner } from '../components/shell/HostBanner';
 import { themes } from '../themes/notebook-theme';
-import { HostUiProvider, hostAllows, hostPageSrc, navItemAllowed, type HostUi, type HostUiState } from './host-ui';
+import { HOST_UNREACHABLE_AFTER_MS, HostConnecting, HostUiProvider, hostAllows, hostPageSrc, hostReader, hostRefusal, hostUiFrom, navItemAllowed, pageSaysHosted, type HostUi, type HostUiState } from './host-ui';
+import { appLibraryWords } from '../components/apps/app-library-words';
 
 const NO_HOST: HostUiState = { host: false };
 
@@ -53,6 +54,31 @@ describe('host UI (RFC 0010 HH-9)', () => {
     expect(navItemAllowed(priya, 'apps')).toBe(true);
     // Settings opens for either settings or connection managers.
     expect(navItemAllowed(hosted({ capabilities: { 'connection.manage': true } }), 'settings')).toBe(true);
+  });
+
+  it('says why an action is refused and where to ask, only under a host and only for what is refused', () => {
+    expect(hostRefusal(NO_HOST, 'ask')).toBeNull();
+    expect(hostRefusal(hosted(), 'ask')).toBeNull();
+    const vic = hosted({ capabilities: { ask: false }, refusals: { ask: { reason: 'Asking needs the explorer role in this workspace.', next: { label: 'Request access', href: '/e/access' } } } });
+    expect(hostRefusal(vic, 'ask')).toEqual({ reason: 'Asking needs the explorer role in this workspace.', next: { label: 'Request access', href: '/e/access' } });
+    // Refused without a reason: still refused (the screen uses its own words).
+    expect(hostRefusal(hosted({ capabilities: {} }), 'ask')).toEqual({});
+  });
+
+  it('speaks to a reader in plain words, and is unchanged without a host or for authors', () => {
+    expect(hostReader(NO_HOST)).toBe(false);
+    expect(hostReader(hosted())).toBe(false);
+    expect(hostReader(hosted({ audience: 'reader' }))).toBe(true);
+    const local = appLibraryWords(false);
+    expect(local.filters).toEqual(['all', 'drafts', 'private', 'shared', 'fav']);
+    expect(local.label('drafts')).toBe('Local drafts');
+    expect(local.loadingDetail).toBe('Reading local app files from this DQL project.');
+    const reader = appLibraryWords(true);
+    expect(reader.filters).toEqual(['all', 'shared', 'fav']);
+    expect(reader.label('shared')).toBe('Shared Apps');
+    expect(reader.localCounts).toBe(false);
+    const words = [reader.intro, reader.loadingDetail, reader.emptyDetail, reader.appNote({ name: 'Claims Weekly', domain: 'claims' }), ...reader.filters.map(reader.label)].join(' ');
+    expect(words).not.toMatch(/local|draft|private|consumption surface|project/i);
   });
 
   it('shows the host banner above every screen, with its links at the top level', () => {
@@ -157,5 +183,46 @@ describe('host sign-in on a refused request', () => {
     reportServerAuthRejected(401, 'https://evil.example/login');
     expect(assign).not.toHaveBeenCalled();
     expect(wasServerAuthRejected()).toBe(true);
+  });
+});
+
+describe('a hosted page before (or without) its capability map', () => {
+  afterEach(() => vi.unstubAllGlobals());
+  const hostedPage = { querySelector: (selector: string) => (selector === 'meta[name="dql-hosted"]' ? { getAttribute: () => '1' } : null) };
+
+  it('knows it is hosted from the page the server served; a page without the mark is single-user', () => {
+    expect(pageSaysHosted(hostedPage as never)).toBe(true);
+    expect(pageSaysHosted({ querySelector: () => null } as never)).toBe(false);
+    expect(pageSaysHosted(undefined)).toBe(false);
+  });
+
+  it('shows no screens, only a neutral line, until the map is known', () => {
+    vi.stubGlobal('document', hostedPage);
+    const html = renderToStaticMarkup(<HostUiProvider><button type="button">Settings</button><button type="button">Source control</button></HostUiProvider>);
+    expect(html).toContain('Connecting…');
+    expect(html).not.toContain('Settings');
+    expect(html).not.toContain('Source control');
+  });
+
+  it('a single-user page renders its screens at once, as before', () => {
+    vi.stubGlobal('document', { querySelector: () => null });
+    expect(renderToStaticMarkup(<HostUiProvider><span>Settings</span></HostUiProvider>)).toContain('Settings');
+  });
+
+  it('says plainly when DQL cannot be reached after a while, and asks to sign in on a 401', () => {
+    const since = 1_000_000;
+    expect(renderToStaticMarkup(<HostConnecting pending={{ since, attempts: 2, status: 502 }} now={since + 2_000} />)).toContain('Connecting…');
+    const late = renderToStaticMarkup(<HostConnecting pending={{ since, attempts: 4, status: 429 }} now={since + HOST_UNREACHABLE_AFTER_MS} />);
+    expect(late).toContain('DQL can&#x27;t be reached right now.');
+    expect(late).toContain('Reload');
+    expect(renderToStaticMarkup(<HostConnecting pending={{ since, attempts: 1, status: 401 }} now={since} />)).toContain('Sign in to use DQL.');
+  });
+
+  it('reads the map defensively: only a hosted map with a person counts, and only `true` allows', () => {
+    for (const junk of [null, 'x', { host: false }, { host: true }, { host: 'true', person: { id: 'u' } }]) expect(hostUiFrom(junk), JSON.stringify(junk)).toBeNull();
+    const read = hostUiFrom({ host: true, person: { id: 'u-1', name: 'Ana' }, capabilities: { ask: true, export: 'yes', 'settings.manage': 1 }, links: { id: 'x' }, answerActions: [null, { id: 'a', label: 'A', url: '/a' }] });
+    expect(read?.capabilities).toEqual({ ask: true, export: false, 'settings.manage': false });
+    expect(read?.links).toEqual([]);
+    expect(read?.answerActions).toEqual([{ id: 'a', label: 'A', url: '/a' }]);
   });
 });

@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { QueryExecutor } from '@duckcodeailabs/dql-connectors';
 import { capHostLinksByPlacement, startLocalServer } from '../local-runtime.js';
-import { hostActor, hostModelProvider, normalizeHostPrincipal, resultValuesMayReachModel, setHostModelHooks, withRequestContext, type DqlHostHooks, type DqlPrincipal } from './request-context.js';
+import { HostModelUnavailableError, hostActor, hostModelProvider, normalizeHostPrincipal, resultValuesMayReachModel, setHostModelHooks, withRequestContext, type DqlHostHooks, type DqlPrincipal } from './request-context.js';
 
 /**
  * RFC 0010 HH-1: a host says who is asking, and DQL records that person —
@@ -80,6 +80,14 @@ describe('host principal (RFC 0010 HH-1)', () => {
       expect(response.status).toBe(401);
       expect(await response.json()).toEqual({ error: 'Sign in to use DQL.' });
     }
+  });
+
+  it('with hooks but no resolvePrincipal, names nobody: not the machine\'s own owner (single-user names it, as before)', async () => {
+    const local = await (await fetch(`${await start()}/api/identity`)).json() as { owner: string };
+    expect(local.owner).toBeTruthy();
+    const hosted = await fetch(`${await start({ statements: () => undefined })}/api/identity`);
+    expect(hosted.status).toBe(200);
+    expect(await hosted.json()).toEqual({ owner: '', principal: null });
   });
 
   it('answers each request as its own person, even when they overlap', async () => {
@@ -213,9 +221,14 @@ describe('the model and the privacy boundary (RFC 0010 HH-5)', () => {
     setHostModelHooks({ modelProvider: ({ principal }) => { asked.push(principal?.id ?? null); return principal ? { id: 'anthropic', provider: fakeModel } : undefined; } });
     expect(withRequestContext({ principal: PEOPLE.maria!, requestId: 'r' }, () => hostModelProvider())).toEqual({ id: 'anthropic', provider: fakeModel });
     expect(hostModelProvider()).toBeUndefined();
-    setHostModelHooks({ modelProvider: () => { throw new Error('model registry down'); } });
-    expect(hostModelProvider()).toBeUndefined();
     expect(asked).toEqual(['u-maria', null]);
+    // A hook that fails, or answers something that is not a model, refuses: no model at all, not the project's own.
+    setHostModelHooks({ modelProvider: () => { throw new Error('model registry down'); } });
+    expect(() => hostModelProvider()).toThrow(HostModelUnavailableError);
+    for (const junk of ['bedrock', 42, { id: 'x' }, { provider: fakeModel }, { id: '', provider: fakeModel }, { id: 'x', provider: 'a token' }, Promise.resolve({ id: 'x', provider: fakeModel })]) {
+      setHostModelHooks({ modelProvider: () => junk as never });
+      expect(() => hostModelProvider(), JSON.stringify(junk)).toThrow(HostModelUnavailableError);
+    }
   });
 
   it('lets values reach a model only inside the boundary: this machine by default, the host\'s rule when set', () => {

@@ -8,6 +8,569 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+### Highlights
+
+- **Rules for hosted servers (RFC 0010).** When a host resolves a person for
+  each request, the server keeps each person's records separate, opens project
+  content only, chooses the connection itself, reads person- and model-written
+  SQL with each engine's own rules and refuses anything but reads, applies one
+  figures decision on every route, and reaches a model only through the
+  boundary check. See [Hosted servers](docs/guides/hosted-servers.md) and
+  [RFC 0010](docs/rfcs/0010-host-hooks.md).
+- **What changes for a single-user `dql notebook`:** fonts and driver icons
+  are served by DQL itself; an export holds the whole result up to 100,000
+  rows and refuses a larger one with `EXPORT_TOO_LARGE` (it used to stop at
+  the 500 rows on screen); a local Ollama model contacts only its configured
+  address; research narration follows `providerResultRowEgress: disabled`.
+  Everything else behaves as before.
+- **For host authors:** new optional hooks and fields, time limits on every
+  hook, and fail-closed handling of malformed answers; hooks belong to one
+  server instance. The host package exports the statement check.
+
+### Local models
+
+- The Ollama provider talks only to its configured base URL (the provider
+  setting, else `OLLAMA_BASE_URL`, else `http://127.0.0.1:11434`), and says
+  "Ollama is not running at <url>" when nothing answers there. Docker Compose
+  already names its Ollama in `OLLAMA_BASE_URL`; any other container setup
+  names it the same way.
+- A model on this machine (Ollama on a loopback URL) stays the model for its
+  prompts: it never fails over to another provider the project has
+  configured. Whether a model is on this machine is judged from every address
+  the provider can contact. This applies with and without a host.
+
+### Notebook
+
+- The Connections panel draws each driver's mark with the app's own icons,
+  in the driver's colour, instead of loading a logo image from an icon
+  service: opening it contacts no site but DQL's own. A test keeps image and
+  script CDNs out of the app's sources.
+- The built app ships Inter's licence (SIL Open Font License 1.1) beside its
+  font files, as `assets/Inter-OFL.txt`; `THIRD_PARTY_NOTICES.md` lists it.
+  `@duckcodeailabs/dql-ui/font-licence` is the Vite plugin that does this, for
+  any app that loads the shared styles.
+
+### For contributors
+
+- New host-contract tests: `host-hook-faults`, `host-two-servers`,
+  `host-request-concurrency`, `rfc-contract`, `model-boundary-egress`,
+  `design-contract`; the notebook's entry point has its own test
+  (`main-chunk-reload`).
+- `pnpm --filter @duckcodeailabs/dql-cli test:offline` runs the CLI suite
+  with every Node process recording each name lookup and connection to an
+  address that is not this machine, and fails on any (a lookup is caught
+  even when it fails before a socket exists). The test that reports a failing
+  dbt Cloud connection answers its probe in-process.
+
+### Hardening for hosted servers
+
+- The host package (`@duckcodeailabs/dql-cli/host`) exports the statement
+  check DQL runs on a hosted connection (`hostedStatementRefusal` and its
+  refusals) and the per-engine reading it rests on (`lexStatement`,
+  `knownLexicon`, `UnreadableStatement`), so a host that checks a statement
+  before passing it on applies the same rules.
+- A host's status and effect hooks are read the same way as its decisions:
+  `answerStatus` passes on only well-formed statuses with same-origin links;
+  `delivery` counts a message delivered only on `{ delivered: true }`, and a
+  failing sink is "not delivered" with a reference instead of its own words;
+  a `signing` service that fails, answers late or answers something that does
+  not verify gives no export (a plain refusal with a reference); a review link
+  from `git.openPullRequest` must be a web address or a path on the site;
+  `pageEdition` failures are logged under a reference; a `traceSalt` that is
+  not a text is not used.
+- A hosted server's refusals that send a person to where only they work (a
+  private draft, a block built with AI, a new draft of a certified block, a
+  private notebook, uploading data) now say "your private workspace", which
+  fits any host.
+- Each server in a process runs its requests and its own work in its scope:
+  its model, privacy boundary, delivery, git and tool gate are its own (none
+  of a host's for a server without one), whatever other servers run beside
+  it. "View as" is kept per person and per server. Process-wide hooks serve
+  only work outside every server, and only while every server in the process
+  has the same hooks.
+- With a host, every model prompt that can carry result values asks the
+  host's `isInBoundary` (or, without that rule, allows only a model on this
+  machine) through one decision: story drafts, chart questions, a
+  conversation's memory, a follow-up's earlier answer for the reading and the
+  AI-drafted SQL, App Autopilot's preview facts and the Research narration.
+  When it says no, the prompt carries the questions,
+  readings, SQL, column names and shapes, never an answer's figures, rows or
+  members. Research narration also follows the project's
+  `providerResultRowEgress: disabled` switch, with or without a host. Without a
+  host, prompts to the model the person chose are unchanged.
+- A story or governed page drafted by a model outside the privacy boundary
+  gets a grouped tile's per-member bindings named by position ("open claims
+  for group 1"), mapped back to the real bindings once the draft is accepted;
+  no binding's value travels with the prompt. A model inside the boundary
+  sees them as before.
+- With a host, the capability map (`GET /api/host/ui`) allows `export` only
+  when the person may also run queries (`query.run`), as the SQL export route
+  requires, and its refusal is the one the route gives (its reason and next
+  link).
+- A hosted page never shows the single-user screens (settings, source
+  control, a browser-side CSV or JSON download) when the person's capability
+  map has not arrived or fails to load: the server marks the page and every
+  answer as hosted, the app shows "Connecting…" and retries, says "DQL can't
+  be reached right now" after 15 seconds, and keeps a map that loaded once
+  when a later reload fails (a 502 during a restart, a 429).
+  `GET /api/host/ui` passes on each of a host's `ui` fields only in its own
+  shape and never fails because of a malformed one.
+- A host's `audience` answer that is neither `stakeholder` nor `analyst`
+  (nor undefined) means `stakeholder`, as an error does. A `purposeAttributes`
+  value that is not a list of names names none. When a host's `follows.set`
+  fails, the person reads "Following could not be saved. Try again" with a
+  reference, never the host's own error text.
+- Every host hook DQL waits for has a time limit, so a host's hung policy
+  store or database never holds a person's request: decisions and stores get
+  `hostHookTimeoutMs` (a new `startLocalServer` option, 10 seconds by
+  default), delivery, signing and git six times that, and the tool gate that
+  long to decide. A hook that does not answer in time fails closed as on an
+  error: "DQL could not check who you are right now" (503), "DQL could not
+  check what you may do right now" (403), the statement refused, no figures,
+  nothing listed. An answer after the limit is ignored.
+- A host's runs, conversation or notes store that fails is never shown in
+  its own words (a database's address, role or statement): the person reads
+  "DQL could not reach its saved answers right now" (or conversations, notes)
+  with a reference of eight letters, and the store's text goes to the
+  server's log under it. A store answer of the wrong shape (a list that is
+  not a list, a count that is not a number) is read as nothing instead of
+  failing the request.
+- A host's `rowPolicy` or `credentials` answer that is not one of its shapes
+  (a bare string, a number, a list) is refused in DQL's own words ("DQL could
+  not check what you may see…", "DQL could not get your warehouse sign-in…")
+  and never repeated back. With a host, a failure DQL did not expect while
+  serving a request reads as a plain sentence with a reference of eight
+  letters; its own text goes only to the server's log under that reference.
+- A host's `answerFigures` shows needs-review figures only when it answers
+  `show`. An error, `withhold_review`, or any other answer (nothing, a typo,
+  another type) withholds them, on every asking door.
+- A part of the notebook app loaded later (a lazy chunk) that cannot be
+  fetched, as when a host ended the person's session and sends the request to
+  sign-in, reloads the page once (landing on sign-in) instead of showing
+  "Failed to fetch dynamically imported module". At most one automatic
+  reload, even in a browser that refuses session storage: the reload marks
+  the page's address (`?dql-reloaded=…`, taken out of the address bar as the
+  page starts), and a page reached that way within the minute, or a page that
+  can mark neither its address nor storage, shows "DQL could not load part of
+  the page. Reload the page." instead of reloading again. The app's files are
+  still served only to a signed-in person.
+- An answer that cites a team document keeps its own reading ("I read this
+  as: claims paid in the last full week (14–20 September 2026)") even when the
+  document happens to hold one of its numbers: only a sentence beyond the
+  reading that states a figure a document alone holds is removed, and "A
+  figure taken from a document was left out" is said only when one was.
+  `knowledgeOnlyFigures` and `withoutKnowledgeOnlyFigures` take the reading
+  (optional; without it, the answer's opening "I read this as:" sentence).
+- When a statement fails on the warehouse, Ask names only tables the
+  statement reads: a column or a function the warehouse does not have is said
+  as such ("A column this answer reads (status) is not in the claims table on
+  the warehouse"), never as a table the connection "cannot see", and literals,
+  aliases and functions are never listed as tables. With a host, the
+  warehouse's own words go to the server's log under a reference of eight
+  letters (no digits, so a log scrubber keeps it whole), without the values a
+  row policy's rewrite added, and the answer says "Ask your administrator
+  about reference …"; they never
+  reach the answer, its steps, the stream or the thread. Elsewhere (a notebook
+  cell, a tile) the warehouse's diagnosis is shown without any excerpt of a
+  statement the host's row policy rewrote, with the reference. Single-user
+  `dql notebook` shows the warehouse's words as before. The DuckDB connector's
+  "build your dbt models" hint is given only for a missing table, view or
+  schema.
+- With a host, an App schedule's digest baseline belongs to the person a run
+  ran as: a run someone else starts (through
+  `POST /api/apps/:app/schedules/:schedule/run`) keeps a baseline of its own
+  and never sets the run-as person's, so a digest never compares one person's
+  figures with another's. Without a host the schedule keeps one baseline, as
+  before.
+- With a host, AI pins are each person's own and not shared App content;
+  creating one, the App's pin panel and the pin's tile now say "Only you see
+  this pin; keep it as a live tile to share it."
+- Promoting an AI pin answers with the draft block's project path
+  (`apps/<id>/drafts/<name>.dql`, with `/` on every system), as other routes
+  name project files, never a path on the server.
+- With a host, each person's App persona ("view as") is kept in memory for
+  at most 5,000 people; past that the least recently used person's goes and
+  they see Apps as themselves again.
+- Ask traces sent to a host's sink or an OpenTelemetry collector carry the
+  question's fingerprint keyed with HMAC-SHA256 under the host's new
+  `traceSalt` (or a key kept in `.dql/local/private/trace-salt`). The same
+  question keys the same way on one install; fingerprints kept in the local
+  trace store are unchanged.
+- With a host whose rules make an answer's figures depend on who reads them
+  (new hook `figuresDependOnReader`), an Ask answer is not added to an App
+  page as its written text, which would show every reader its author's
+  figures: adding it, a draft edit or page write that adds it, and the
+  publish preflight refuse it with "This answer's figures depend on who is
+  looking. Add it as a live tile instead." A live tile (`mode: 'live'`) runs
+  the answer's SQL for each reader. Such tiles record the tables the answer
+  read; ones published before are listed for stewards
+  (`GET /api/app-answer-tiles`), not removed.
+- With a host, an Ask answer published on an App page as its text before
+  that rule shows everyone who does not replace such tiles (new optional
+  hook `keepsAnswerText`; by default the App's authors and stewards) a
+  placeholder in its place: "This answer's figures depend on who is
+  looking. A steward needs to replace it with a live tile.", on the page and
+  in every run of it (stories, snapshots, digests, agents).
+- With a host, a statement reaches the connection's tables and views only.
+  DuckDB and `file` connections open with external access off and their
+  settings locked (after the database is open), and DQL refuses statements
+  that read a file, the environment or a setting, or load an extension, on
+  every engine, before they run (`ROW_POLICY_REFUSED`, plain text). A
+  connection may name folders whose files stay readable
+  (`allowedDirectories`, none by default). A draft space's uploaded datasets
+  are read by DQL itself and kept as tables. Without a host nothing changes.
+  Upgrading: a hosted project whose blocks or views read files (for example
+  `read_csv_auto('./data/orders.csv')`) lists that folder in the
+  connection's `allowedDirectories`.
+- With a host, the statement check reads each statement the way its engine
+  reads it: each engine's strings (backslash escapes, doubled quotes, dollar,
+  triple-quoted and raw strings), quoted names and comments (`--`, `#`, `//`,
+  block and executable comments); where that depends on a setting DQL cannot
+  see, every reading must agree. A statement it cannot read that way is
+  refused in plain words, and so is a connection to an engine it does not
+  know. Each engine's own ways beyond the tables are refused too: stages,
+  tables named by a file path, table functions that reach files, URLs or other
+  servers, procedures, dynamic SQL, secrets and other statements' results.
+  DQL's own value lookups escape their LIKE patterns with `!`.
+- With a host, a statement a person or a model writes (Ask, notebook cells,
+  App tiles, `/api/query`, MCP, Slack) only reads, on every connection
+  whatever its protections: one `SELECT` (or `WITH`, `VALUES`, `TABLE`,
+  `SHOW`, `DESCRIBE` or `EXPLAIN` of one). A change to data, tables, settings
+  or the session, a row lock, `SELECT … INTO`, `nextval`, or several
+  statements at once is refused (`ROW_POLICY_REFUSED`, plain words). DQL's own
+  statements keep their shapes: a new query purpose, `platform`, marks them
+  and is never taken from a request (a host's `rowPolicy` and `credentials`
+  may see it). Give the warehouse account behind a hosted connection
+  read-only grants all the same. Without a host nothing changes. Upgrading: a
+  hosted notebook cell or block that wrote to its connection is refused; put
+  data in through uploads.
+- `QueryPurpose` (`@duckcodeailabs/dql-connectors`) gains an additive value,
+  `platform`, for the statements DQL issues itself; with a host, `rowPolicy`
+  and `credentials` may receive it. A host that switches exhaustively on
+  `purpose` needs a case for it (treat it like `data` unless it wants
+  otherwise); statement events (`statements`) still report `data` or
+  `metadata`, a `platform` statement as `data`.
+- With a host, a statement a person or a model writes does not read the
+  warehouse's own record of other sessions, their queries, its users or its
+  settings, on each engine: Snowflake's `ACCOUNT_USAGE` query, login, session
+  and access history; Databricks `system.query.history`, `system.access` and
+  `system.billing`; BigQuery `INFORMATION_SCHEMA.JOBS*` and `SESSIONS*`;
+  Postgres and Redshift `pg_stat_activity`, `pg_stat_statements`,
+  `pg_settings`, `current_setting` and Redshift's `stl_`, `svl_`, `stv_` and
+  `sys_query_` views; MySQL `performance_schema`, `mysql`, `sys`,
+  `information_schema.PROCESSLIST` and `@@` variables; DuckDB
+  `duckdb_settings`, `duckdb_extensions`, `duckdb_databases`, `pg_settings`
+  and `current_setting`; ClickHouse's `system` logs, processes, settings,
+  users and grants; Trino and Athena `system.runtime`; SQL Server and Fabric
+  `sys.dm_*`, configurations and logins. A name is matched in any case,
+  quoted or not, however it is qualified; SHOW of sessions, users, grants or
+  settings is refused the same way (on Postgres, SHOW altogether), and
+  `SHOW CREATE TABLE` reads. The refusal is `ROW_POLICY_REFUSED` in plain
+  words, and there is no setting to allow these: the warehouse role's grants
+  stay the first control, so give it none on them. DQL's own statements are
+  not affected. Upgrading: with a host, warehouse discovery does not read
+  query history ("Use query history", `--query-history`); it says so and
+  drafts from the catalog alone.
+- Catalog lookups bind names on every engine: a connector's `listColumns`
+  and `listTables` send schema and table names as bound values (SQLite
+  describes a table through `pragma_table_info`), as do the schema search and
+  Ask's member lookups, and BigQuery and ClickHouse quoted names escape a
+  backslash. Databricks connections take `?` parameters, sent as the
+  statement API's named parameters. With a host, a connector's catalog
+  lookups run through the one checked path as metadata (the row policy sees
+  them and the statement observer hears of them), and
+  `GET /api/describe-table` refuses a name holding a quote, a backslash or a
+  control character (`RELATION_NAME_REFUSED`).
+- With a host, a statement that failed on the warehouse is logged as the
+  warehouse's diagnosis (never its excerpt of the statement sent), the
+  failure's kind and the statement's own tables; a value the engine cut short
+  in its own words is left out as well.
+- HH-14 holds on every read of a run: a run read by id while it is still going
+  carries no wording, event payload, artifact or step note; a run that ended
+  before its trust was settled (cancelled, interrupted, blocked) and kept a
+  result that is not certified or governed is withheld whole, and otherwise
+  keeps its own words but none of its workings; a replay, the run list and
+  the host's answer facts take the decision when they are read; and what the
+  run store keeps for such a person is withheld from the first write. A
+  withheld run also leaves out the accepted answer text kept beside it and
+  each task's outcome summary.
+- HH-14 holds for AI pins too: for such a person an AI-written pin reads as
+  its question, SQL and result shape only, when it is made (from Copilot or
+  from an analysis memo), listed, refreshed, opened with its App and run on
+  its page; a certified pin keeps its figures.
+- With a host, a `modelProvider` hook that fails, or answers something other
+  than `{ id, provider }`, refuses the model step in plain words: DQL then
+  asks no model, never the project's own provider. A hook that answers
+  undefined still uses the project's settings.
+- With a host, outside the privacy boundary, a follow-up's earlier
+  restriction values and its AI-drafted SQL's literals reach the model named
+  by position (`[value 1]`), and what the model writes gets the real values
+  back; member-spelling lookups (a stored spelling, the members a name could
+  mean) are not made for such a model.
+- With host hooks but no `resolvePrincipal`, `GET /api/identity` names no one
+  (`{ owner: '', principal: null }`), never the machine's own owner.
+- With a host, a notebook cell's or research run's query history (its SQL,
+  cell name, row count) is not kept in the project-wide metadata cache,
+  from which every person's context is drawn.
+- With a host, a draft block made from an AI pin or an App's exploratory
+  tile (project content) is described by the question it answers, never by
+  the answer text with one person's figures. An AI pin is refreshed and
+  promoted only through its own App.
+- Promoting a notebook research run to a draft block
+  (`POST /api/notebook/research/:id/promote-dql`) is authoring
+  (`dataset.author`): it writes a draft block into the project.
+- With a host, recording a correction (`POST /api/agent/learnings/correction`)
+  is a change to the project (`project.write`): it writes a candidate hint
+  and its trace under `.dql/hints` and `.dql/traces`, so a host that keeps a
+  workspace read-only refuses it there (a draft space takes it, as a
+  reviewed change). Until a hint is reviewed, only its author and people
+  who may review hints list it (`GET /api/agent/hints`); reviewed hints are
+  the project's, as before.
+- HH-14 (a host keeping needs-review figures from a person) is decided in
+  one place and applied on every asking door, not on Ask only: the notebook
+  chat cell (`/api/llm/run`) is not available to such a person; notebook
+  research runs and App analysis memos show them their question, SQL and
+  result shape, never a value, and are not run for them; a repaired answer
+  (`/api/agent-runs/:id/repair-execution`) is withheld and stored withheld,
+  as an Ask answer is. Certified research runs and memos keep their
+  figures.
+- With a host, a block's last Block Studio run (row count, columns, time,
+  decided by the runner's row rules) is kept in the runner's own folder and
+  shown back only to them.
+- With a host, a notebook's last run kept beside it (`*.run.json`, written
+  without a host) is not project content: the file routes refuse it, as
+  they refuse other runtime files.
+- With a host several people share, private skills and private blocks (one
+  folder of the server for everyone) follow the private-notebook rule: none
+  are listed, made, changed, deleted or published there; a draft space
+  (`onePerson`) keeps them as before.
+- With a host several people share, the notebook's local dataset workspace
+  (`/api/datasets`: uploads, staged warehouse rows, their previews and
+  sample values) lists nothing and keeps nothing: it is one person's, and
+  querying it was already refused there. A draft space (`onePerson`) keeps
+  it as before; validating a governed Dataset's grain is unaffected.
+- With a host, a Block Studio import or AI import session (its SQL,
+  candidates and preview rows, run as the importer) is the importer's:
+  listed, opened, changed, run, saved and deleted only by them; clearing
+  imports clears only theirs, and someone else's id answers 404. Sessions
+  kept before the host are no one's with one. Without a host nothing
+  changes.
+- With a host, an App build draft (its goal, pages and the Ask answers
+  added to it) and an AI App build session (its prompt, plan, preview rows
+  and answer) are the author's who started them: listed, opened, changed,
+  run and published only by them, and an id someone else holds is never
+  written over. Drafts and sessions kept before the host are no one's with
+  one. Without a host nothing changes.
+- With a host, an Ask `Idempotency-Key` is the person's own: the same key
+  from someone else is a new submission, never a replay, a conflict naming
+  the other run, or an attachment to it.
+- With a host, keeping a conversation turn as a note makes it the person's
+  own note unless they ask for a note for everyone, and a note for everyone
+  keeps the question only: the answer's figures were read under one
+  person's row rules.
+- With a host, `GET /api/agent-runs/tier-distribution` counts the person's
+  own conversation turns only (`tierDistribution({ ownerId })`).
+- With a host, a page of the Ask trace list names only the reader's traces,
+  in its entries and in its cursor (it reads further pages until it holds
+  enough of theirs).
+- With host hooks, a request the host names no one for (a host without
+  `resolvePrincipal`) reads no one's Ask runs, traces, conversations, Home,
+  follows, story editions or notebook runs, and keeps none of its own.
+  Conversation lists and searches from a host's own store are filtered
+  again by owner. Without a host nothing changes.
+- With a host, an AI pin (an answer pinned to an App page, with its answer
+  text and stored rows, computed under the pinner's row rules) is the
+  pinner's: the pin list, the App document and a page run show its stored
+  answer and rows only to them, and only they refresh it; for anyone else the
+  pinned tile is not found. Pins kept before the host are no one's with one.
+  Without a host nothing changes.
+- With a host, an App's analysis memos (investigations: the question, its
+  SQL and result previews, run as the person who asked) and App conversations
+  are each person's: listed, opened, run, pinned, changed, deleted and reused
+  for the same question only for them, and the App's own document lists only
+  theirs. Memos and conversations kept before the host name no owner and are
+  no one's with one. A host that names nobody for a request reads none.
+  Without a host, the one local user sees every record as before. New
+  `owner` option on `LocalAppStorage` (an `owner_id` column on both tables).
+- With a host that withholds needs-review figures from a person (HH-14), a
+  streamed Ask sends that person each run event with its kind, route,
+  status and trust only: the event payloads (an answer artifact carries the
+  answer text and its rows) and wording are left out while the run goes, as
+  the answer deltas already were.
+- With a host, notebook research runs (their questions, SQL and result
+  previews) are each person's: listed, opened, changed, rerun and updated by
+  a cell run only for the person who ran them (someone else's run is not
+  found on every research route), and their owner is the person signed in,
+  never a name in the request. With host hooks and nobody signed in, none are
+  shown or kept. The shared store a server kept before it had a host is not
+  read with one (those runs name no verified owner). A draft block they
+  publish to the project is project content as before. Without a host, the
+  one local store as before.
+- With a host, a Dataset's grain check (run with a page) is kept in the
+  person's own file, under the identity that decided their rows, and only
+  that person's checks and the project's checked-in proofs are gone on: a
+  check computed under one person's row rules is never shared evidence. The
+  local proofs file a server kept before is moved aside when it starts with
+  a host. Without a host nothing changes.
+- A host's row policy may ask for a check on a statement's result
+  (`groupRows`: a column with each group's row count, and a minimum): when
+  any group holds fewer rows, DQL refuses with the host's plain message and
+  hands over no row (a stream is held until the check), and the count column
+  never reaches anyone. A host uses it to keep near-individual groups away
+  from a model.
+- With a host, every request field that names a file or folder follows the
+  file routes' rule (project content only, refused whether or not it
+  exists): a block run by its file on `/api/dql/artifacts/execute`
+  (`artifact.sourcePath`, a `.dql` file), a diff by path (matched literally;
+  the whole diff shows project content only), SQL and modeling YAML imports
+  read from a path (only project content files under it), a semantic layer
+  import's project path (the repository it clones is the project's own), a
+  skills folder, a dbt profiles path, and a block opened in Block Studio or
+  shown with its history (by real path, so a symlink is judged by where it
+  points). A dataset is uploaded, never read
+  from a path on the server, and a table description reads tables, not
+  files. Import candidate, hint and trace ids are checked as ids, with or
+  without a host.
+- New host hook field `purposeAttributes`: the attributes a host sets on a
+  person for one request to say where its values go (for the model, a
+  delivery). They stay in every cache and proof key; DQL leaves them out
+  only to find the person's own earlier run, so a question about a chart on
+  screen finds the chart that person ran. The chart's rows reach the model
+  only where the host's `isInBoundary` allows them for the tables they came
+  from; otherwise the answer is written from the chart without the model.
+- With a host, MetricFlow (semantic queries through dbt) runs with a minimal
+  environment: dbt's own `DBT_*` settings and nothing else from the server's
+  environment. Put the warehouse settings its profile reads in `DBT_*`
+  variables.
+- With a host, every route is classed by what it does: under the asking
+  families (`/api/agent-runs`, `/api/ask`, `/api/ai`, `/api/agent`,
+  `/api/llm`, research) only the routes listed as asking are `ask` or
+  `research`; any other is `project.write`. Building a block with AI
+  (`POST /api/ai/build`) is authoring (`dataset.author`), and a notebook
+  cell is built with `POST /api/ai/build/cell` (asking; the notebook uses it).
+  With a host, an AI-built draft is written only where one person works, a
+  certified block is never rewritten in place, an edit stays on a block file
+  inside the project, and the draft's owner is the signed-in person (nothing
+  is saved in `dql.config.json`). Favorites and recent items are each
+  person's own. Single-user `dql notebook` builds as before.
+- The MCP client for a knowledge server sends every request to the server's
+  own address: a redirect is an error, never followed.
+- Knowledge sources: the check that keeps a document's figures out of an
+  answer's note, and out of the answer itself, reads a number however it is
+  written: in English words ("twelve thousand"), in another script's digits,
+  in full-width or circled digits, as spaced digits, or as a fraction. Years
+  and one-digit counts are still left alone. This applies without a host too.
+- New host hook `columnsVisible(principal, relation, columns)`: the schema
+  routes (`/api/schema`, `/api/describe-table`) list only the columns the
+  person may see; a hook that throws lists none.
+- With a host, agent memory: a person's own notes (scope `user`) are keyed
+  by who they are and listed, changed or removed by them alone; notes for
+  everyone (project, notebook, artifact) need `project.write`.
+- With a host, setting the project up (`/api/onboarding/*`) and installing
+  drivers (`/api/connectors/*`) are `settings.manage` actions; onboarding's
+  dbt project and profiles must be inside the project (judged by real path),
+  and its `dbt parse` runs with a minimal environment (none of the server's
+  keys or passwords). Single-user `dql notebook` is unchanged.
+- A refusal by the host's row policy or credentials, or of a connection the
+  server chooses, answers 403 with `POLICY_DENIED` on the SQL routes
+  (`/api/query`, notebook cells, SQL draft previews, semantic queries), not
+  a 500.
+- An export (`/api/query/export`) holds the whole result, up to 100,000 rows;
+  a larger result is refused with a plain message (`EXPORT_TOO_LARGE`), and a
+  page tile that shows only part of its result is not exported as a file
+  that would be cut. Before, a file held at most the screen's 500 rows and
+  said nothing. This applies without a host too.
+- With a host (RFC 0010), the server chooses the connection: a request may
+  pick one of the project's own connections by name, a connection object in
+  a request is ignored, and the host's hooks see the name the server
+  resolved. The server's local DuckDB workspace is available to requests only
+  where the host allows it (`onePerson`). Single-user `dql notebook` is
+  unchanged.
+- With a host, the file routes serve project content only (notebooks,
+  blocks, Apps, domains, the semantic layer, docs): never the runtime's own
+  folders, git's files, the connection settings, data or a database file,
+  and a symlink is judged by where it points. A notebook's last run is kept
+  per person, and private drafts are for a server one person uses.
+- With a host, Ask scoped to an App ("Ask about this App") also asks the
+  host whether the person may open that App, so an audience the host keeps
+  (for example as access policies) holds for it too.
+- With a host, the server's own configuration is for whoever may manage
+  it: `GET /api/connections` shows others each connection's name and kind
+  (no settings, dbt profiles of the server's user or driver install paths),
+  the provider and environment settings say nothing about which keys the
+  server's environment holds, and skill settings name no server folder.
+- With a host, a certified block run by name or file
+  (`/api/dql/artifacts/execute`) or from a notebook cell (`@block(...)`) is
+  checked with the host's `sourceAccess`, as its Dataset's own runs are.
+- With a host, Ask traces follow their runs: the trace list, a trace by id
+  or by run, and its export show only the person's own (someone else's is
+  "not found").
+- With a host, operations (an Ask in progress, a page run, a refresh) are
+  each person's own: the operations list, one operation by id, cancelling it
+  and the live operations stream show only operations the person started.
+  With host hooks but nobody signed in (a host without `resolvePrincipal`),
+  none are shown.
+  Cancelling a run and superseding a page run are the asker's alone.
+
+### Screens: fonts from DQL itself, readable text, words for hosted readers
+
+- The app no longer asks Google Fonts (or any other host) for its fonts:
+  Inter ships in `@duckcodeailabs/dql-ui` (`src/styles/fonts/`, SIL Open
+  Font License 1.1, Latin and Latin Extended subsets, about 95 KB) and loads
+  from the DQL server. Code text uses JetBrains Mono when the computer has
+  it installed, else the system's monospace face. Kalam and Caveat are no
+  longer loaded (nothing used them). `@duckcodeailabs/dql-ui/styles/fonts`
+  exports the `@font-face` rules for an app that embeds DQL's look.
+- Text reads at WCAG AA (4.5:1) in every theme. Obsidian's tertiary text
+  (`--text-tertiary`, hints, dates, captions) is `#8d93a3` (was `#626878`,
+  3.1:1 on cards); Paper's is `#64676e` and White's `#56657a` (both were
+  just under 4.5:1 on their page backgrounds). The certified and draft
+  seals on Apps and the column-type badge in result tables draw their words
+  in the status colour mixed toward the theme's text, so they read on their
+  tint (the badge used the dark theme's colours in every theme); so do the
+  environment chip, the current chat, a shared App's label, page counts,
+  and the trust pill and source chip of an App's story. Token names
+  are unchanged; an app that embeds DQL with its own copy of the shared
+  tokens (for example a design-tokens package) should take the same three
+  `--text-tertiary` values.
+- No text under 11px on the Ask screen: the history list ("Recent", "just
+  now"), the scope line, the composer's option labels and the line under the
+  composer were 10 to 10.5px.
+- The Ask box shows keyboard focus: the composer draws a ring in the focus
+  colour (`--border-focus`) while its question box has focus.
+- An App card on the library is a container, not a button holding buttons:
+  its title is the one link that opens the App, and the favourite, View and
+  Edit buttons beside it name the App they act on ("Add Claims Weekly to
+  favourites", "View Claims Weekly").
+- With a host, screens say up front what the person may not do, and speak to
+  readers in plain words (RFC 0010 HH-9). `GET /api/host/ui` adds
+  `refusals`: for each action that is not allowed, the reason and the
+  same-origin `next` link the host's `authorize` gave. Ask uses it: someone
+  who may not ask is no longer offered the question box and suggested
+  questions only to be refused after asking; the screen shows the host's
+  reason and its link (for example "Request access"). Two optional `ui`
+  fields: `audience: 'reader'` leaves the single-user notebook's words out
+  of the App library and Ask (local drafts, private counts, "local
+  insights", "Local DQL App", "semantic next"), and `appNotFound` gives the
+  App reader the host's words, and a link, when this project has no such
+  App (with a host it may be in another project), instead of "could not be
+  read from the local project. Check that the server is running". Without a
+  host, or without these fields, nothing changes.
+- For a hosted reader the header names the product "DQL" (not "DQL
+  Workbench") and an App page's top bar its name, not its id, and an answer whose figures the host withholds says so once:
+  the app's own "figures stay hidden" note shows only when the answer came
+  without the host's words.
+
+### Bounded caches and no downloads on demand
+
+- Ask's context packs in `.dql/cache/metadata.sqlite` are kept bounded: the
+  newest 200, none older than 7 days, at most 64 MB in all. Each question used
+  to add a pack for good. `DQL_CONTEXT_PACK_MAX`, `DQL_CONTEXT_PACK_DAYS` and
+  `DQL_CONTEXT_PACK_MAX_MB` change the bounds.
+- `DQL_DUCKDB_AUTOINSTALL=off` keeps DuckDB from downloading an extension the
+  first time a statement needs one; only installed extensions are used.
+  Unset, DuckDB's default is unchanged.
+
 ### Retired blocks name their replacement (`replacedBy`, `deprecatedOn`)
 
 - A deprecated block can declare `replacedBy = "<block>"` (name or `.dql`

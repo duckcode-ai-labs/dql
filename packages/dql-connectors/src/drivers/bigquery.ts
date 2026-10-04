@@ -1,6 +1,6 @@
 import type { DatabaseConnector, ConnectionConfig, TableInfo, ColumnInfo } from '../connector.js';
 import type { QueryExecutionOptions, QueryResult, ColumnMeta, ColumnType, Row } from '../result-types.js';
-import { boundedResult, loadDependency, redactSecrets, sqlLiteral, withDeadline } from './shared.js';
+import { boundedResult, loadDependency, redactSecrets, withDeadline } from './shared.js';
 
 /** The part of `@google-cloud/bigquery` this connector uses; the package is loaded at connect time. */
 interface BigQueryField { name: string; type?: string; mode?: string }
@@ -162,13 +162,18 @@ export class BigQueryConnector implements DatabaseConnector {
   }
 
   async listColumns(schema?: string, table?: string): Promise<ColumnInfo[]> {
-    const datasets = schema ? [schema] : await this.datasets();
+    const datasets = schema ? [datasetName(schema)] : await this.datasets();
     const columns: ColumnInfo[] = [];
     for (const dataset of datasets) {
+      // The table's name travels as a query parameter; a dataset is a name, so only a dataset's own characters pass.
       let sql = `SELECT table_schema, table_name, column_name, data_type, ordinal_position FROM ${quoteIdentifier(dataset)}.INFORMATION_SCHEMA.COLUMNS`;
-      if (table) sql += ` WHERE table_name = ${bigQueryString(table)}`;
+      const params: unknown[] = [];
+      if (table) {
+        params.push(table);
+        sql += ` WHERE table_name = ?`;
+      }
       sql += ` ORDER BY table_name, ordinal_position`;
-      const result = await this.execute(sql);
+      const result = await this.execute(sql, params);
       for (const row of result.rows) {
         columns.push({
           schema: String(row['table_schema'] ?? dataset),
@@ -184,12 +189,13 @@ export class BigQueryConnector implements DatabaseConnector {
 }
 
 function quoteIdentifier(name: string): string {
-  return `\`${name.replace(/`/g, '\\`')}\``;
+  return `\`${name.replace(/\\/g, '\\\\').replace(/`/g, '\\`')}\``;
 }
 
-/** BigQuery strings escape with a backslash; a doubled quote is not an escape there. */
-function bigQueryString(value: string): string {
-  return sqlLiteral(value, 'backslash');
+/** A dataset (or `project.dataset`) as BigQuery names one: letters, digits, `_`, `-`, `.` and `:`, nothing that quotes or escapes. */
+function datasetName(name: string): string {
+  if (!/^[A-Za-z0-9_.:-]+$/.test(name)) throw new Error('BigQuery dataset names hold letters, digits, underscores, hyphens, dots and colons only.');
+  return name;
 }
 
 /**

@@ -3565,6 +3565,9 @@ function MarkdownTile({ markdown, variant = 'text', themeMode }: { markdown: str
   );
 }
 
+/** With a host, an AI pin is per person and not shared App content. */
+export const AI_PIN_ONLY_YOU = 'Only you see this pin; keep it as a live tile to share it.';
+
 function AiPinSummary({
   pin,
   themeMode,
@@ -3576,6 +3579,8 @@ function AiPinSummary({
 }) {
   const [message, setMessage] = useState<string | null>(null);
   const theme = themes[themeMode as NotebookThemeMode] ?? themes.light;
+  // With a host an AI pin is its pinner's own, not the App's: others never see its answer or rows.
+  const hosted = useHostUi().host;
   const refresh = async () => {
     setMessage('Refreshing...');
     const result = await api.refreshAiPin(pin.appId, pin.id);
@@ -3596,7 +3601,7 @@ function AiPinSummary({
             <span style={{ fontSize: 11, fontWeight: 600, color: pin.certification === 'certified' ? '#15803d' : '#b45309', background: pin.certification === 'certified' ? 'rgba(22,163,74,0.1)' : 'rgba(245,158,11,0.12)', border: `1px solid ${pin.certification === 'certified' ? 'rgba(22,163,74,0.22)' : 'rgba(245,158,11,0.24)'}`, borderRadius: 999, padding: '3px 7px' }}>
               {pin.certification === 'certified' ? 'Certified' : 'Review required'}
             </span>
-            <span style={{ fontSize: 11, color: 'var(--color-text-muted, rgba(0,0,0,0.58))' }}>Pinned report insight</span>
+            <span style={{ fontSize: 11, color: 'var(--color-text-muted, rgba(0,0,0,0.58))' }}>{hosted ? AI_PIN_ONLY_YOU : 'Pinned report insight'}</span>
           </div>
           <div style={{ minWidth: 0 }}>
             {renderMarkdown(pin.answer, theme)}
@@ -4186,7 +4191,7 @@ const dashboardStoryChipStyle: CSSProperties = {
 
 const dashboardStorySourceChipStyle: CSSProperties = {
   ...dashboardStoryChipStyle,
-  color: 'var(--dql-app-accent, #4f46e5)',
+  color: 'color-mix(in srgb, var(--dql-app-accent, #4f46e5) 80%, var(--text-primary, #1a1a1a))',
   borderColor: 'rgba(79,70,229,0.22)',
   background: 'var(--dql-app-accent-soft, rgba(79,70,229,0.08))',
 };
@@ -4437,7 +4442,8 @@ function trustPillStyle(certified: boolean): CSSProperties {
     // Certified shares the brand teal (RFC 0008); review is the status amber.
     border: `1px solid color-mix(in srgb, var(${certified ? '--trust-certified' : '--trust-review'}) 32%, transparent)`,
     background: `color-mix(in srgb, var(${certified ? '--trust-certified' : '--trust-review'}) 10%, transparent)`,
-    color: `var(${certified ? '--trust-certified' : '--trust-review'})`,
+    // Words in the trust colour's ink (mixed toward the text) so they read at 4.5:1 on its tint.
+    color: `color-mix(in srgb, var(${certified ? '--trust-certified' : '--trust-review'}) ${certified ? 80 : 60}%, var(--text-primary, #1a1a1a))`,
     gap: 4,
   };
 }

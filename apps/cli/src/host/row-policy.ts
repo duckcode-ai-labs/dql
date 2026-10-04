@@ -1,13 +1,17 @@
 import type {
   ConnectionConfig,
   DatabaseConnector,
+  QueryBatch,
   QueryExecutionOptions,
   QueryExecutor,
   QueryPurpose,
 } from '@duckcodeailabs/dql-connectors';
+import { classifyWarehouseError, hostedWarehouseError, warehouseDiagnosis } from '@duckcodeailabs/dql-agent';
 import { analyzeSqlReferences, extractTablesFromSql } from '@duckcodeailabs/dql-core';
 import { currentDestination, currentPrincipal, currentRequestContext, type DqlDestination, type DqlPrincipal, type DqlStatementObserver } from './request-context.js';
+import { HOSTED_STATEMENT_REFUSED, hostedStatementRefusal, isEngineRestrictionError, restrictedEngineConnection } from './engine-guard.js';
 import type { DqlAction } from './route-actions.js';
+import { newReference } from './plain-errors.js';
 
 /**
  * ONE QUERY PATH (RFC 0010, slice HH-3). Every statement DQL sends to a
@@ -44,7 +48,19 @@ export interface DqlQueryContext {
   action?: DqlAction;
 }
 
-export type DqlRowPolicyResult = { sql: string; params?: unknown[] } | { refuse: string };
+/**
+ * A check on the result before anyone (the person or a model) gets it: the
+ * host's statement carries each group's row count in `column`; when any row's
+ * count is below `minimum` (or is not a count), DQL refuses with `refusal` and
+ * hands over no row. The column is removed from what passes.
+ */
+export interface DqlGroupRowsCheck {
+  column: string;
+  minimum: number;
+  refusal: string;
+}
+
+export type DqlRowPolicyResult = { sql: string; params?: unknown[]; groupRows?: DqlGroupRowsCheck } | { refuse: string };
 
 export type DqlRowPolicy = (query: DqlQueryContext) => Promise<DqlRowPolicyResult> | DqlRowPolicyResult;
 
@@ -70,6 +86,14 @@ export type DqlCredentialsResult = { connection: Partial<ConnectionConfig> } | {
 
 export type DqlCredentialsHook = (input: DqlCredentialsContext) => Promise<DqlCredentialsResult> | DqlCredentialsResult;
 
+const CREDENTIALS_UNREADABLE = 'DQL could not get your warehouse sign-in. Reconnect and try again.';
+const POLICY_UNREADABLE = 'DQL could not check what you may see, so it did not run this query.';
+
+/** A hook's answer that is an object (not null, not a list, not a string or number). */
+function isAnswerObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
 export class CredentialsRefusedError extends Error {
   readonly code = 'CREDENTIALS_REQUIRED';
   constructor(message: string) {
@@ -80,19 +104,21 @@ export class CredentialsRefusedError extends Error {
 
 /** The connection as this person, or a refusal; a hook error refuses too. */
 export async function resolvePersonConnection(hook: DqlCredentialsHook, config: ConnectionConfig, purpose: QueryPurpose = 'data'): Promise<ConnectionConfig> {
-  let answer: DqlCredentialsResult;
+  let answer: unknown;
   try {
     answer = await hook({ principal: currentPrincipal() ?? null, connection: { ...config }, purpose });
   } catch {
-    throw new CredentialsRefusedError('DQL could not get your warehouse sign-in. Reconnect and try again.');
+    throw new CredentialsRefusedError(CREDENTIALS_UNREADABLE);
   }
-  if (answer && 'refuse' in answer) {
+  // Only an object of one of the two shapes counts; anything else (a bare string such as a token, a number, a list)
+  // refuses in DQL's own words and is never repeated back.
+  if (!isAnswerObject(answer)) throw new CredentialsRefusedError(CREDENTIALS_UNREADABLE);
+  if ('refuse' in answer) {
     throw new CredentialsRefusedError(typeof answer.refuse === 'string' && answer.refuse.trim() ? answer.refuse.trim() : 'Reconnect to your warehouse to run this query.');
   }
-  if (!answer || typeof answer.connection !== 'object' || answer.connection === null) {
-    throw new CredentialsRefusedError('DQL could not get your warehouse sign-in. Reconnect and try again.');
-  }
-  const { driver: _ignored, ...overlay } = answer.connection;
+  const connection = answer.connection;
+  if (!isAnswerObject(connection)) throw new CredentialsRefusedError(CREDENTIALS_UNREADABLE);
+  const { driver: _ignored, ...overlay } = connection as Partial<ConnectionConfig>;
   return { ...config, ...overlay } as ConnectionConfig;
 }
 
@@ -145,8 +171,8 @@ export async function applyRowPolicy(
   params: unknown[],
   connection: Pick<ConnectionConfig, 'driver'> & { name?: string },
   purpose: QueryPurpose = 'data',
-): Promise<{ sql: string; params: unknown[] }> {
-  let answer: DqlRowPolicyResult;
+): Promise<{ sql: string; params: unknown[]; groupRows?: DqlGroupRowsCheck }> {
+  let answer: unknown;
   const destination = currentDestination();
   const action = currentRequestContext()?.action;
   try {
@@ -161,15 +187,159 @@ export async function applyRowPolicy(
       ...(action ? { action } : {}),
     });
   } catch {
-    throw new RowPolicyRefusedError('DQL could not check what you may see, so it did not run this query.');
+    throw new RowPolicyRefusedError(POLICY_UNREADABLE);
   }
-  if (answer && 'refuse' in answer) {
+  // Only an object of one of the two shapes counts; anything else (a bare SQL string, a number, a list) refuses in
+  // DQL's own words and is never repeated back.
+  if (!isAnswerObject(answer)) throw new RowPolicyRefusedError(POLICY_UNREADABLE);
+  if ('refuse' in answer) {
     throw new RowPolicyRefusedError(typeof answer.refuse === 'string' && answer.refuse.trim() ? answer.refuse.trim() : 'You may not see the data this query reads.');
   }
-  if (!answer || typeof answer.sql !== 'string' || !answer.sql.trim()) {
-    throw new RowPolicyRefusedError('DQL could not check what you may see, so it did not run this query.');
+  if (typeof answer.sql !== 'string' || !answer.sql.trim()) throw new RowPolicyRefusedError(POLICY_UNREADABLE);
+  const check = answer.groupRows;
+  if (check !== undefined) {
+    const valid = !!check && typeof check === 'object' && typeof (check as DqlGroupRowsCheck).column === 'string' && !!(check as DqlGroupRowsCheck).column.trim()
+      && Number.isInteger((check as DqlGroupRowsCheck).minimum) && (check as DqlGroupRowsCheck).minimum > 0 && typeof (check as DqlGroupRowsCheck).refusal === 'string';
+    if (!valid) throw new RowPolicyRefusedError(POLICY_UNREADABLE);
+    return { sql: answer.sql, params: Array.isArray(answer.params) ? answer.params : params, groupRows: check as DqlGroupRowsCheck };
   }
   return { sql: answer.sql, params: Array.isArray(answer.params) ? answer.params : params };
+}
+
+/** A row's value for a column, whatever case the engine gave the column's name (Snowflake upper-cases). */
+function columnKey(names: Iterable<string>, column: string): string | undefined {
+  for (const name of names) if (name.toLowerCase() === column.toLowerCase()) return name;
+  return undefined;
+}
+
+/**
+ * The result, once every group holds at least the check's minimum of rows, without the count column; a refusal
+ * (no row handed over) when any group holds fewer, or a row has no count.
+ */
+export function checkedGroupRows<R extends { columns?: Array<{ name: string }>; rows?: Array<Record<string, unknown>> }>(result: R, check: DqlGroupRowsCheck | undefined): R {
+  if (!check) return result;
+  const refusal = () => new RowPolicyRefusedError(check.refusal.trim() || 'Some groups in this answer are too small to show.');
+  const rows = Array.isArray(result?.rows) ? result.rows : [];
+  for (const row of rows) {
+    const key = columnKey(Object.keys(row ?? {}), check.column);
+    const value = key === undefined ? undefined : row[key];
+    const count = typeof value === 'bigint' ? Number(value) : typeof value === 'string' && /^\d+$/.test(value) ? Number(value) : value;
+    if (typeof count !== 'number' || !Number.isFinite(count) || count < check.minimum) throw refusal();
+  }
+  const strip = (row: Record<string, unknown>) => {
+    const key = columnKey(Object.keys(row), check.column);
+    if (key === undefined) return row;
+    const { [key]: _count, ...rest } = row;
+    return rest;
+  };
+  return {
+    ...result,
+    rows: rows.map(strip),
+    ...(Array.isArray(result?.columns) ? { columns: result.columns.filter((column) => column.name.toLowerCase() !== check.column.toLowerCase()) } : {}),
+  };
+}
+
+/**
+ * WHEN THE WAREHOUSE REFUSES A STATEMENT, WITH A HOST (HH-3). A driver's
+ * message can quote the statement it was sent (DuckDB's and Postgres's
+ * `LINE 1: …` excerpt, a Spark plan, an echoed query) — and the statement sent
+ * is the host's rewrite, with a row rule's predicate and the person's values
+ * in it. So the warehouse's own words go to the server's log under a short
+ * reference (a host scrubs its log), and what DQL carries on — to a notebook
+ * cell, a tile, or Ask, which says only a plain sentence and the reference —
+ * is the diagnosis without any excerpt and without anything only the rewrite
+ * added. The log line is the same diagnosis (never the excerpt, which can cut
+ * a rewrite value short), with the failure's kind and the statement's own
+ * tables, so the host's predicate and its values never reach the log either.
+ * DQL's own words for a statement it stopped (a deadline, a cancellation)
+ * pass on unchanged.
+ */
+export class WarehouseStatementError extends Error {
+  readonly warehouseReference: string;
+  readonly warehouseDiagnosis: string;
+  constructor(diagnosis: string, reference: string, codes: Record<string, unknown> = {}) {
+    super(`${diagnosis} (reference ${reference})`);
+    this.name = 'WarehouseStatementError';
+    this.warehouseReference = reference;
+    this.warehouseDiagnosis = diagnosis;
+    // The driver's codes (never its text or the error itself) stay: callers retry or explain by them.
+    for (const key of ['code', 'sqlState', 'vendorCode', 'retryable', 'driver'] as const) {
+      if (codes[key] !== undefined) Object.defineProperty(this, key, { value: codes[key], enumerable: true });
+    }
+  }
+}
+
+const OWN_STOP = /query was cancelled|exceeded the \d+ms deadline/i;
+const LITERAL = /'(?:[^']|'')*'|(?<![\w$.])\d+(?:\.\d+)?(?![\w$.])/g;
+const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/**
+ * What a statement's failure may say beyond the log: the warehouse's
+ * diagnosis, cut before any excerpt of the statement sent, with every literal
+ * that only the host's rewrite holds (a row rule's values) left out. A
+ * statement the host ran as written keeps the warehouse's words.
+ */
+export function plainWarehouseDiagnosis(raw: string, written: string, sent: string): string {
+  if (written === sent) return raw;
+  return withoutRewriteValues(warehouseDiagnosis(raw), written, sent) || 'The warehouse could not run the statement.';
+}
+
+/** A text with the statement sent, and every literal only the host's rewrite holds (quoted or bare), left out. */
+function withoutRewriteValues(raw: string, written: string, sent: string): string {
+  if (written === sent) return raw;
+  let text = raw;
+  if (sent.trim()) text = text.split(sent).join('[the statement]');
+  const own = new Set(written.match(LITERAL) ?? []);
+  const added = [...new Set(sent.match(LITERAL) ?? [])].filter((literal) => !own.has(literal));
+  for (const literal of added) {
+    const quoted = literal.startsWith("'");
+    // A value an engine cut short in its own excerpt (`'Wes...`) is left out too: any start of three characters
+    // or more of a quoted value, followed by an ellipsis.
+    if (quoted) {
+      const value = literal.slice(1, -1).replace(/''/g, "'");
+      for (let length = Math.min(value.length - 1, 64); length >= 3; length -= 1) {
+        text = text.replace(new RegExp(`'?${escapeRegExp(value.slice(0, length))}(?:\\.\\.\\.|\u2026)`, 'g'), '…');
+      }
+    }
+    // A number the rewrite added goes only as a whole token: cutting it out wherever its digits stand would garble
+    // the rest of the text (every 0 of an id or of INT32 for a rule's `= 0`).
+    if (quoted) text = text.split(literal).join("'…'");
+    const bare = quoted ? literal.slice(1, -1).replace(/''/g, "'") : literal;
+    // Unquoted, only a value goes (a region, a number): a mask's own text ('****') is no one's value, and cutting
+    // it out of the middle of a masked value ('**** ****** 0003') would garble what the person may see.
+    if (/[\p{L}\p{N}]/u.test(bare) && (bare.trim().length >= 2 || /^\d+$/.test(bare))) text = text.replace(new RegExp(`(?<![\\w$])${escapeRegExp(bare)}(?![\\w$])`, 'g'), '…');
+  }
+  return text;
+}
+
+/** A failed run, as the server carries it on with a host (see WarehouseStatementError). */
+function hostedFailure(error: unknown, written: string, sent: string, options?: QueryExecutionOptions): unknown {
+  // DQL's own refusals (the engine's restriction read plainly, a row policy's) are not warehouse failures.
+  if (error instanceof RowPolicyRefusedError || error instanceof CredentialsRefusedError) return error;
+  if (options?.signal?.aborted || hostedWarehouseError(error)) return error;
+  const raw = error instanceof Error ? error.message : String(error);
+  if ((error as { name?: unknown } | null)?.name === 'AbortError' || OWN_STOP.test(raw)) return error;
+  const reference = newReference();
+  try {
+    // The log keeps the warehouse's diagnosis, never its excerpt of the statement sent (which holds the host's
+    // predicate and can cut a value short), without any value only the rewrite added; with the failure's kind and
+    // the statement's own tables.
+    const failure = classifyWarehouseError(raw, { sql: written });
+    const tables = failure.relations.length ? `; tables: ${failure.relations.join(', ')}` : '';
+    const diagnosis = withoutRewriteValues(warehouseDiagnosis(raw) || 'The warehouse could not run the statement.', written, sent);
+    console.warn(`[dql] A statement failed on the warehouse (reference ${reference}; ${failure.class}${tables}): ${diagnosis}`);
+  } catch { /* the person still gets the reference */ }
+  const codes = error && typeof error === 'object' ? error as Record<string, unknown> : {};
+  return new WarehouseStatementError(plainWarehouseDiagnosis(raw, written, sent), reference, codes);
+}
+
+async function runHosted<R>(hosted: boolean | undefined, run: () => Promise<R>, written: string, sent: string, options?: QueryExecutionOptions): Promise<R> {
+  if (!hosted) return run();
+  try {
+    return await run();
+  } catch (error) {
+    throw hostedFailure(error, written, sent, options);
+  }
 }
 
 /**
@@ -203,28 +373,86 @@ async function timed<R>(observe: DqlStatementObserver | undefined, config: Pick<
   }
 }
 
+/**
+ * With a host, a statement that reaches beyond the connection's tables (a file, the environment, an
+ * extension, a setting) is refused before it runs (engine-guard.ts); the engine's own refusal of one
+ * reads the same plain way. A statement a person or a model writes (any purpose but `platform`, which only
+ * DQL's own code sets) must also only read: one statement, no change to data, objects or settings.
+ */
+function engineChecked(engine: boolean | undefined, sql: string, config: Pick<ConnectionConfig, 'driver' | 'allowedDirectories'>, purpose?: QueryPurpose): void {
+  if (!engine) return;
+  const refusal = hostedStatementRefusal(sql, config.driver, config.allowedDirectories ?? [], { readOnly: purpose !== 'platform' });
+  if (refusal) throw new RowPolicyRefusedError(refusal);
+}
+
+async function engineRefusalReadable<R>(engine: boolean | undefined, run: () => Promise<R>): Promise<R> {
+  if (!engine) return run();
+  try {
+    return await run();
+  } catch (error) {
+    if (isEngineRestrictionError(error)) throw new RowPolicyRefusedError(HOSTED_STATEMENT_REFUSED);
+    throw error;
+  }
+}
+
 /** A connector whose statements — direct, streamed, or in a consistent read scope — pass the policy. */
-function guardConnector(connector: DatabaseConnector, policy: DqlRowPolicy | undefined, config: ConnectionConfig, observe?: DqlStatementObserver): DatabaseConnector {
-  if (!policy && !observe) return connector;
-  const checked = (sql: string, params: unknown[], purpose?: QueryPurpose) => (policy ? applyRowPolicy(policy, sql, params, config, purpose) : Promise.resolve({ sql, params }));
+function guardConnector(connector: DatabaseConnector, policy: DqlRowPolicy | undefined, config: ConnectionConfig, observe?: DqlStatementObserver, hosted?: boolean, engine?: boolean): DatabaseConnector {
+  if (!policy && !observe && !hosted && !engine) return connector;
+  const checked = (sql: string, params: unknown[], purpose?: QueryPurpose): Promise<{ sql: string; params: unknown[]; groupRows?: DqlGroupRowsCheck }> => {
+    try {
+      engineChecked(engine, sql, config, purpose);
+    } catch (error) {
+      return Promise.reject(error);
+    }
+    return policy ? applyRowPolicy(policy, sql, params, config, purpose) : Promise.resolve({ sql, params });
+  };
   const target = connector as DatabaseConnector & { openConsistentReadScope?: () => Promise<{ execute: DatabaseConnector['execute'] }> };
+  const execute = (sql: string, params: unknown[] = [], options?: QueryExecutionOptions) => timed(observe, config, options?.purpose, async () => {
+    const allowed = await checked(sql, params, options?.purpose);
+    // The engine's own refusal reads plainly, a warehouse failure too (runHosted); the smallest-group check runs on what the warehouse returned.
+    return { run: async () => checkedGroupRows(await runHosted(hosted, () => engineRefusalReadable(engine, () => target.execute(allowed.sql, allowed.params.length ? allowed.params : undefined, options)), sql, allowed.sql, options), allowed.groupRows) };
+  });
+  const stream = (sql: string, params: unknown[] = [], options?: QueryExecutionOptions) => {
+    const run = target.stream!.bind(target);
+    return (async function* guarded() {
+      const allowed = await checked(sql, params, options?.purpose);
+      const batches: QueryBatch[] = [];
+      try {
+        if (!allowed.groupRows) {
+          yield* run(allowed.sql, allowed.params.length ? allowed.params : undefined, options);
+          return;
+        }
+        for await (const batch of run(allowed.sql, allowed.params.length ? allowed.params : undefined, options)) batches.push(batch);
+      } catch (error) {
+        const readable = engine && isEngineRestrictionError(error) ? new RowPolicyRefusedError(HOSTED_STATEMENT_REFUSED) : error;
+        throw hosted ? hostedFailure(readable, sql, allowed.sql, options) : readable;
+      }
+      // Every group is checked before any row is handed over: the batches are held, then passed on.
+      const checkedBatches = batches.map((batch) => checkedGroupRows(batch, allowed.groupRows));
+      yield* checkedBatches;
+    })();
+  };
+  /**
+   * The connector's catalog lookups (listTables, listColumns) run their statements through the same check as any
+   * other, as metadata (HH-3, HH-6): the observer hears of them and the policy sees them, never the raw driver.
+   */
+  const asMetadata = (options?: QueryExecutionOptions): QueryExecutionOptions => ({ ...options, purpose: 'metadata' });
+  const metadataView: DatabaseConnector = new Proxy(target, {
+    get(object, property) {
+      if (property === 'execute') return (sql: string, params: unknown[] = [], options?: QueryExecutionOptions) => execute(sql, params, asMetadata(options));
+      if (property === 'stream' && typeof object.stream === 'function') return (sql: string, params: unknown[] = [], options?: QueryExecutionOptions) => stream(sql, params, asMetadata(options));
+      const value = Reflect.get(object, property, object);
+      return typeof value === 'function' ? value.bind(metadataView) : value;
+    },
+  });
   return new Proxy(target, {
     get(object, property) {
-      if (property === 'execute') {
-        return (sql: string, params: unknown[] = [], options?: QueryExecutionOptions) => timed(observe, config, options?.purpose, async () => {
-          const allowed = await checked(sql, params, options?.purpose);
-          return { run: () => object.execute(allowed.sql, allowed.params.length ? allowed.params : undefined, options) };
-        });
+      if (property === 'execute') return execute;
+      if (property === 'listTables' || property === 'listColumns') {
+        const lookup = Reflect.get(object, property, object);
+        return typeof lookup === 'function' ? lookup.bind(metadataView) : lookup;
       }
-      if (property === 'stream' && typeof object.stream === 'function') {
-        return (sql: string, params: unknown[] = [], options?: QueryExecutionOptions) => {
-          const stream = object.stream!.bind(object);
-          return (async function* guarded() {
-            const allowed = await checked(sql, params, options?.purpose);
-            yield* stream(allowed.sql, allowed.params.length ? allowed.params : undefined, options);
-          })();
-        };
-      }
+      if (property === 'stream' && typeof object.stream === 'function') return stream;
       if (property === 'openConsistentReadScope' && typeof object.openConsistentReadScope === 'function') {
         return async () => {
           const scope = await object.openConsistentReadScope!();
@@ -233,7 +461,7 @@ function guardConnector(connector: DatabaseConnector, policy: DqlRowPolicy | und
               if (key === 'execute') {
                 return (sql: string, params: unknown[] = [], options?: QueryExecutionOptions) => timed(observe, config, options?.purpose, async () => {
                   const allowed = await checked(sql, params, options?.purpose);
-                  return { run: () => inner.execute(allowed.sql, allowed.params.length ? allowed.params : undefined, options) };
+                  return { run: async () => checkedGroupRows(await runHosted(hosted, () => engineRefusalReadable(engine, () => inner.execute(allowed.sql, allowed.params.length ? allowed.params : undefined, options)), sql, allowed.sql, options), allowed.groupRows) };
                 });
               }
               const value = Reflect.get(inner, key, inner);
@@ -253,6 +481,18 @@ export interface HostQueryHooks {
   credentials?: DqlCredentialsHook;
   /** HH-6: told of each statement's outcome and duration (no SQL, no values). */
   statements?: DqlStatementObserver;
+  /**
+   * A host is present: a statement the warehouse refuses is told by its
+   * diagnosis and a reference, its own words kept in the server's log
+   * (WarehouseStatementError).
+   */
+  hosted?: boolean;
+  /**
+   * With a host: the engine reaches the connection's database only. DuckDB and file connections open
+   * restricted, and a statement that reads a file, the environment or a setting, or loads an extension,
+   * is refused (engine-guard.ts).
+   */
+  engine?: boolean;
 }
 
 /**
@@ -263,9 +503,13 @@ export interface HostQueryHooks {
  * statement is checked once.
  */
 export function withHostQueryHooks<T extends QueryExecutor>(executor: T, hooks: HostQueryHooks): T {
-  const { rowPolicy, credentials, statements } = hooks;
-  if (!rowPolicy && !credentials && !statements) return executor;
-  const personConnection = (config: ConnectionConfig, purpose?: QueryPurpose) => (credentials ? resolvePersonConnection(credentials, config, purpose) : Promise.resolve(config));
+  const { rowPolicy, credentials, statements, hosted, engine } = hooks;
+  if (!rowPolicy && !credentials && !statements && !hosted && !engine) return executor;
+  // The person's connection (HH-4), then, with a host, the engine restricted; a host's overlay cannot lift it.
+  const personConnection = async (config: ConnectionConfig, purpose?: QueryPurpose) => {
+    const connection = credentials ? await resolvePersonConnection(credentials, config, purpose) : config;
+    return engine ? restrictedEngineConnection(connection) : connection;
+  };
   return new Proxy(executor, {
     get(target, property, receiver) {
       const own = Reflect.get(target, property, target);
@@ -273,8 +517,9 @@ export function withHostQueryHooks<T extends QueryExecutor>(executor: T, hooks: 
       if (property === 'executePositional') {
         return (sql: string, paramValues: unknown[], config: ConnectionConfig, options?: QueryExecutionOptions) => timed(statements, config, options?.purpose, async () => {
           const connection = await personConnection(config, options?.purpose);
-          const allowed = rowPolicy ? await applyRowPolicy(rowPolicy, sql, paramValues ?? [], connection, options?.purpose) : { sql, params: paramValues };
-          return { run: () => target.executePositional(allowed.sql, allowed.params, connection, options) };
+          engineChecked(engine, sql, connection, options?.purpose);
+          const allowed: { sql: string; params: unknown[]; groupRows?: DqlGroupRowsCheck } = rowPolicy ? await applyRowPolicy(rowPolicy, sql, paramValues ?? [], connection, options?.purpose) : { sql, params: paramValues };
+          return { run: async () => checkedGroupRows(await runHosted(hosted, () => engineRefusalReadable(engine, () => target.executePositional(allowed.sql, allowed.params, connection, options)), sql, allowed.sql, options), allowed.groupRows) };
         });
       }
       if (property === 'executeQuery') {
@@ -284,7 +529,7 @@ export function withHostQueryHooks<T extends QueryExecutor>(executor: T, hooks: 
       if (property === 'getConnector') {
         return async (config: ConnectionConfig) => {
           const connection = await personConnection(config);
-          return guardConnector(await target.getConnector(connection), rowPolicy, connection, statements);
+          return guardConnector(await target.getConnector(connection), rowPolicy, connection, statements, hosted, engine);
         };
       }
       return own.bind(target);

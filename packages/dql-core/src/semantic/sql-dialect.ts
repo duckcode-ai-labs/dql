@@ -153,7 +153,8 @@ class BigQueryDialect implements SQLDialect {
   }
 
   quoteIdentifier(name: string): string {
-    return `\`${name.replace(/`/g, '\\`')}\``;
+    // BigQuery reads backslash escapes inside backticks: a backslash is escaped too, or it would escape the closing one.
+    return `\`${name.replace(/\\/g, '\\\\').replace(/`/g, '\\`')}\``;
   }
 
   currentTimestamp(): string {
@@ -339,7 +340,8 @@ class ClickHouseDialect implements SQLDialect {
   }
 
   quoteIdentifier(name: string): string {
-    return `"${name.replace(/"/g, '""')}"`;
+    // ClickHouse reads backslash escapes inside quoted names: a backslash is escaped too, or it could escape the closing quote.
+    return `"${name.replace(/\\/g, '\\\\').replace(/"/g, '""')}"`;
   }
 
   currentTimestamp(): string {

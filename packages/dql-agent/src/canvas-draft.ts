@@ -9,7 +9,7 @@
  */
 import type { DashboardCanvas, StoryBindingCatalog } from '@duckcodeailabs/dql-core';
 import { checkCanvasHtml } from '@duckcodeailabs/dql-core';
-import type { StoryDraftComplete, StoryDraftInput } from './story-draft.js';
+import { promptBindings, type StoryDraftComplete, type StoryDraftInput } from './story-draft.js';
 
 export type CanvasDraftInput = StoryDraftInput;
 
@@ -33,7 +33,9 @@ export const CANVAS_DRAFT_SYSTEM_PROMPT = [
 ].join('\n');
 
 export function canvasDraftUserPrompt(input: CanvasDraftInput): string {
-  const bindings = Object.values(input.catalog).slice(0, 80).map((binding) => (
+  // Outside the privacy boundary a grouped tile's members are named by position, never by member (story-draft.ts).
+  const shown = promptBindings(input.catalog, input.includeValues).catalog;
+  const bindings = Object.values(shown).slice(0, 80).map((binding) => (
     `${binding.key} — ${binding.label}${input.includeValues ? ` (now ${binding.display})` : ''}`
   ));
   return [
@@ -64,6 +66,7 @@ export async function draftCanvasPage(input: CanvasDraftInput, complete: StoryDr
   const issues: string[] = [];
   let attempts = 0;
   const tileIds = new Set(input.tiles.map((tile) => tile.tileId));
+  const shown = promptBindings(input.catalog, input.includeValues);
   if (complete && Object.keys(input.catalog).length > 0) {
     const messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [
       { role: 'system', content: CANVAS_DRAFT_SYSTEM_PROMPT },
@@ -78,13 +81,14 @@ export async function draftCanvasPage(input: CanvasDraftInput, complete: StoryDr
         break;
       }
       const html = extractHtml(reply);
-      const checked = checkCanvasHtml(html, { catalog: input.catalog, tileIds });
+      const checked = checkCanvasHtml(html, { catalog: shown.catalog, tileIds });
       const problems = checked.issues.map((issue) => issue.message);
       if (!html) problems.push('The reply had no HTML.');
       if (checked.bindings.length === 0 && checked.tiles.length === 0) problems.push('The page shows no data: use <dql-value> or <dql-tile>.');
       if (problems.length === 0) {
+        const placed = shown.neutral ? withRealBindings(checked.html, shown.realKey) : checked.html;
         return {
-          canvas: { version: 1, html: checked.html, generatedBy: 'ai', ...(options.model ? { model: options.model } : {}) },
+          canvas: { version: 1, html: placed, generatedBy: 'ai', ...(options.model ? { model: options.model } : {}) },
           generatedBy: 'ai',
           attempts,
           issues: [],
@@ -137,4 +141,11 @@ export function deterministicCanvasPage(input: Pick<CanvasDraftInput, 'catalog' 
   ].join('');
   const checked = checkCanvasHtml(html);
   return { version: 1, html: checked.html, generatedBy: 'deterministic' };
+}
+
+const unescapeAttribute = (value: string) => value.replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
+
+/** A checked page with each position-named binding (`bind="tile.column[group 1]"`) placed back as its real key. */
+function withRealBindings(html: string, realKey: (key: string) => string): string {
+  return html.replace(/(<dql-value\b[^>]*?\bbind=)(["'])([^"']*)\2/gi, (_whole, head: string, quote: string, key: string) => `${head}"${esc(realKey(unescapeAttribute(key)))}"`);
 }

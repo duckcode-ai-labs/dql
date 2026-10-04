@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { buildStoryBindingCatalog } from '@duckcodeailabs/dql-core';
-import { draftStoryNarrative, deterministicStoryNarrative, storyDraftUserPrompt, type StoryDraftInput } from './story-draft.js';
+import { draftStoryNarrative, deterministicStoryNarrative, promptBindings, storyDraftUserPrompt, type StoryDraftInput } from './story-draft.js';
 
 const catalog = buildStoryBindingCatalog([
   { tileId: 'revenue', status: 'ok', result: { columns: ['revenue'], rows: [{ revenue: 130 }], columnsMeta: [{ name: 'revenue', kind: 'currency', unit: 'USD' }] } },
@@ -54,5 +54,38 @@ describe('story drafting (RFC 0008 step 8)', () => {
     expect(offline.generatedBy).toBe('deterministic');
     const text = deterministicStoryNarrative(input).blocks.find((block) => block.kind === 'text');
     expect(text && text.kind === 'text' && text.markdown).toBe('Revenue is {{revenue.revenue}}. Why revenue moved in March changed by {{why.change}} ({{why.change_percent}}) against the period before; the largest move was {{why.top_member}} ({{why.top_member_change}}) by {{why.top_dimension}}.');
+  });
+});
+
+describe('a story drafted by a model outside the privacy boundary', () => {
+  const grouped = buildStoryBindingCatalog([{
+    tileId: 'claims-by-member', status: 'ok', title: 'Open claims by member',
+    result: { columns: ['member_name', 'open_claims', 'paid'], rows: [{ member_name: 'Member-Name-Ana Ruiz', open_claims: 3, paid: 10 }, { member_name: 'Member-Name-Bo Lind', open_claims: 2, paid: 4 }] },
+  }]);
+  const outside: StoryDraftInput = { pageTitle: 'Claims', catalog: grouped, tiles: [{ tileId: 'claims-by-member', title: 'Open claims by member', kind: 'table' }], includeValues: false };
+
+  it('names a grouped tile\'s members by position, never by member, in keys and labels', () => {
+    const prompt = storyDraftUserPrompt(outside);
+    expect(prompt).not.toContain('Member-Name');
+    expect(prompt).toContain('{{claims-by-member.open_claims[group 1]}} — Open claims by member — open claims for group 1');
+    expect(prompt).toContain('{{claims-by-member.paid[group 2]}}');
+    // A model inside the boundary keeps the real keys and values.
+    expect(storyDraftUserPrompt({ ...outside, includeValues: true })).toContain('Member-Name-Ana Ruiz');
+    const shown = promptBindings(grouped, false);
+    expect(Object.values(shown.catalog).every((binding) => !JSON.stringify(binding).includes('Member-Name'))).toBe(true);
+    expect(shown.realKey('claims-by-member.open_claims[group 2]')).toBe('claims-by-member.open_claims[Member-Name-Bo Lind]');
+  });
+
+  it('keeps the real bindings in the draft it accepts, and checks the model against what it was shown', async () => {
+    const seen: string[] = [];
+    const replies = [
+      '{"blocks":[{"kind":"text","markdown":"3 open claims for {{claims-by-member.leader}}."}]}',
+      '{"blocks":[{"kind":"text","markdown":"The first group has {{claims-by-member.open_claims[group 1]}} open claims; the second {{claims-by-member.open_claims[group 2]}}."}]}',
+    ];
+    const result = await draftStoryNarrative(outside, async (messages) => { seen.push(messages.map((message) => message.content).join('\n')); return replies.shift()!; });
+    expect(result).toMatchObject({ generatedBy: 'ai', attempts: 2 });
+    for (const prompt of seen) expect(prompt).not.toContain('Member-Name');
+    const text = result.narrative.blocks.find((block) => block.kind === 'text');
+    expect(text && text.kind === 'text' && text.markdown).toBe('The first group has {{claims-by-member.open_claims[Member-Name-Ana Ruiz]}} open claims; the second {{claims-by-member.open_claims[Member-Name-Bo Lind]}}.');
   });
 });

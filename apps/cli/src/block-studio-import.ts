@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { basename, extname, join, relative, resolve } from 'node:path';
+import { currentRecordOwner, ownedBy } from './host/record-owner.js';
 
 export type BlockStudioImportSourceKind =
   | 'raw-sql-file'
@@ -175,6 +176,8 @@ export interface BlockStudioImportManifest {
     tags: string[];
   };
   candidateIds: string[];
+  /** With a host (RFC 0010): the person who imported; its SQL and preview rows are read only by them. */
+  ownerId?: string;
 }
 
 export interface BlockStudioImportSession extends BlockStudioImportManifest {
@@ -212,6 +215,8 @@ export interface BlockStudioImportSessionSummary {
 export interface CreateBlockStudioImportOptions {
   sourceKind?: BlockStudioImportSourceKind | 'raw-sql';
   inputPath?: string;
+  /** Which files under the import path may be read (a hosted server: project content only); others are skipped. */
+  fileAllowed?: (absolutePath: string) => boolean;
   inputMode?: BlockStudioImportInputMode;
   sources?: BlockStudioImportSource[];
   domain?: string;
@@ -278,11 +283,22 @@ export function createBlockStudioImportSession(
   return session;
 }
 
-export function loadBlockStudioImportSession(projectRoot: string, importId: string): BlockStudioImportSession {
-  const root = importRoot(projectRoot, importId);
-  const manifestPath = join(root, 'manifest.json');
-  if (!existsSync(manifestPath)) throw new Error(`Import session not found: ${importId}`);
+/**
+ * RFC 0010: with a host, an import session (its SQL, candidates and preview rows, run as the importer) is the
+ * importer's. Someone else's, or one kept before the host, reads as not found. Returns the manifest, or null when
+ * the session does not exist yet.
+ */
+function ownImportManifest(projectRoot: string, importId: string): BlockStudioImportManifest | null {
+  const manifestPath = join(importRoot(projectRoot, importId), 'manifest.json');
+  if (!existsSync(manifestPath)) return null;
   const manifest = JSON.parse(readFileSync(manifestPath, 'utf-8')) as BlockStudioImportManifest;
+  if (!ownedBy(manifest.ownerId, currentRecordOwner())) throw new Error(`Import session not found: ${importId}`);
+  return manifest;
+}
+
+export function loadBlockStudioImportSession(projectRoot: string, importId: string): BlockStudioImportSession {
+  const manifest = ownImportManifest(projectRoot, importId);
+  if (!manifest) throw new Error(`Import session not found: ${importId}`);
   const candidates = manifest.candidateIds.map((candidateId) => readBlockStudioImportCandidate(projectRoot, importId, candidateId));
   return { ...manifest, candidates };
 }
@@ -317,6 +333,7 @@ export function listBlockStudioImportSessions(projectRoot: string): BlockStudioI
 }
 
 export function deleteBlockStudioImportSession(projectRoot: string, importId: string): void {
+  ownImportManifest(projectRoot, importId);
   rmSync(importRoot(projectRoot, importId), { recursive: true, force: true });
 }
 
@@ -327,6 +344,8 @@ export function clearBlockStudioImportSessions(projectRoot: string): number {
   for (const entry of readdirSync(root, { withFileTypes: true })) {
     if (!entry.isDirectory()) continue;
     if (!/^imp_[A-Za-z0-9_-]+$/.test(entry.name)) continue;
+    // With a host, only the person's own sessions.
+    try { ownImportManifest(projectRoot, entry.name); } catch { continue; }
     rmSync(join(root, entry.name), { recursive: true, force: true });
     removed += 1;
   }
@@ -334,6 +353,8 @@ export function clearBlockStudioImportSessions(projectRoot: string): number {
 }
 
 export function writeBlockStudioImportSession(projectRoot: string, session: BlockStudioImportSession): void {
+  const existing = ownImportManifest(projectRoot, session.id);
+  const owner = currentRecordOwner();
   const root = importRoot(projectRoot, session.id);
   const candidatesDir = join(root, 'candidates');
   mkdirSync(candidatesDir, { recursive: true });
@@ -347,6 +368,7 @@ export function writeBlockStudioImportSession(projectRoot: string, session: Bloc
     updatedAt: new Date().toISOString(),
     defaults: session.defaults,
     candidateIds: session.candidates.map((candidate) => candidate.id),
+    ...(existing?.ownerId ? { ownerId: existing.ownerId } : typeof owner === 'string' ? { ownerId: owner } : {}),
   };
   writeFileSync(join(root, 'manifest.json'), JSON.stringify(manifest, null, 2) + '\n', 'utf-8');
   for (const candidate of session.candidates) {
@@ -359,9 +381,18 @@ export function writeBlockStudioImportCandidate(
   importId: string,
   candidate: BlockStudioImportCandidate,
 ): void {
+  ownImportManifest(projectRoot, importId);
   const candidatesDir = join(importRoot(projectRoot, importId), 'candidates');
   mkdirSync(candidatesDir, { recursive: true });
-  writeFileSync(join(candidatesDir, `${candidate.id}.json`), JSON.stringify(candidate, null, 2) + '\n', 'utf-8');
+  writeFileSync(join(candidatesDir, candidateFile(candidate.id)), JSON.stringify(candidate, null, 2) + '\n', 'utf-8');
+}
+
+/** A candidate id DQL made: one file name in the import's folder, never a path. */
+function candidateFile(candidateId: string): string {
+  if (typeof candidateId !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9_.:-]{0,199}$/.test(candidateId) || candidateId.includes('..')) {
+    throw new Error('Import candidate not found.');
+  }
+  return `${candidateId}.json`;
 }
 
 export function readBlockStudioImportCandidate(
@@ -369,7 +400,8 @@ export function readBlockStudioImportCandidate(
   importId: string,
   candidateId: string,
 ): BlockStudioImportCandidate {
-  const candidatePath = join(importRoot(projectRoot, importId), 'candidates', `${candidateId}.json`);
+  ownImportManifest(projectRoot, importId);
+  const candidatePath = join(importRoot(projectRoot, importId), 'candidates', candidateFile(candidateId));
   if (!existsSync(candidatePath)) throw new Error(`Import candidate not found: ${candidateId}`);
   return JSON.parse(readFileSync(candidatePath, 'utf-8')) as BlockStudioImportCandidate;
 }
@@ -1509,7 +1541,7 @@ function collectSqlSources(projectRoot: string, options: CreateBlockStudioImport
   const inputPath = resolveInputPath(projectRoot, options.inputPath ?? '');
   const sourceKind = resolveSourceKind(inputPath, options.sourceKind);
   const stats = statSync(inputPath);
-  const files = stats.isDirectory() ? walkSqlFiles(inputPath) : [inputPath];
+  const files = (stats.isDirectory() ? walkSqlFiles(inputPath) : [inputPath]).filter((file) => !options.fileAllowed || options.fileAllowed(file));
   if (files.length === 0) throw new Error('No .sql files found to import.');
   return {
     sourceKind,

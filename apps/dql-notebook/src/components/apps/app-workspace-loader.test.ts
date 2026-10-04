@@ -290,4 +290,24 @@ describe('a refused App (RFC 0010 HH-12)', () => {
     await settle();
     expect(errors).toEqual([{ message: 'You don\'t have access to Claims.', refusal: { next: { label: 'Ask for access', href: '/e/apps/claims/access' } } }]);
   });
+
+  it('says when the project has no such App or page (404), apart from a page that could not be read', async () => {
+    const seen: Array<{ message: string; problem?: unknown }> = [];
+    for (const failure of [Object.assign(new Error('App not found'), { status: 404 }), Object.assign(new Error('boom'), { status: 500 }), new Error('Failed to fetch')]) {
+      beginPersistedAppWorkspaceLoad({
+        appId: 'claims-weekly',
+        dashboardId: 'overview',
+        loadApp: async () => null,
+        loadDashboard: async () => { throw failure; },
+        onApp: () => undefined,
+        onDashboard: () => undefined,
+        onDashboardError: (message, _refusal, problem) => { seen.push({ message, problem }); },
+      });
+      await settle();
+      await settle();
+    }
+    // Without a host the words are as before; the flag lets a host say where the App is (HH-9 `appNotFound`).
+    const unchanged = 'This dashboard page could not be read from the local project. Check that the server is running, then retry.';
+    expect(seen).toEqual([{ message: unchanged, problem: { notFound: true } }, { message: unchanged, problem: undefined }, { message: unchanged, problem: undefined }]);
+  });
 });

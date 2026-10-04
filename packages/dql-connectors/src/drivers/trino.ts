@@ -1,6 +1,6 @@
 import type { DatabaseConnector, ConnectionConfig, TableInfo, ColumnInfo } from '../connector.js';
 import type { QueryExecutionOptions, QueryResult, ColumnMeta, ColumnType, Row } from '../result-types.js';
-import { boundedResult, inlineParameters, redactSecrets, sqlLiteral, withDeadline } from './shared.js';
+import { boundedResult, inlineParameters, redactSecrets, withDeadline } from './shared.js';
 
 interface TrinoPayload {
   id?: string;
@@ -140,10 +140,12 @@ export class TrinoConnector implements DatabaseConnector {
     let sql = `SELECT table_schema, table_name, column_name, data_type, ordinal_position
        FROM ${this.informationSchema()}.columns
        WHERE table_schema <> 'information_schema'`;
-    if (schema) sql += ` AND table_schema = ${sqlLiteral(schema)}`;
-    if (table) sql += ` AND table_name = ${sqlLiteral(table)}`;
+    // Names travel as values the driver binds (Trino strings take no escapes but a doubled quote).
+    const params: unknown[] = [];
+    if (schema) { params.push(schema); sql += ` AND table_schema = ?`; }
+    if (table) { params.push(table); sql += ` AND table_name = ?`; }
     sql += ` ORDER BY table_schema, table_name, ordinal_position`;
-    const result = await this.execute(sql);
+    const result = await this.execute(sql, params);
     return result.rows.map((row) => ({
       schema: String(row['table_schema'] ?? ''),
       table: String(row['table_name'] ?? ''),

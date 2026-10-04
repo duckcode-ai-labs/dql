@@ -190,5 +190,5 @@ function panelStyle(t: Theme, align: 'start' | 'end'): React.CSSProperties {
 }
 
 function labelStyle(t: Theme): React.CSSProperties {
-  return { fontSize: 10.5, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', color: t.textMuted, marginBottom: 6 };
+  return { fontSize: 11, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', color: t.textMuted, marginBottom: 6 };
 }

@@ -3,14 +3,5 @@
         "*.parquet": "duckdb.dataFileViewer",
         "*.csv": "duckdb.dataFileViewer",
         "*.tsv": "duckdb.dataFileViewer"
-    },
-    "duckdb.databases": [
-        {
-            "alias": "duckdb-demo",
-            "type": "file",
-            "path": "/Users/Kranthi/Downloads/duckdb-demo.duckdb",
-            "attached": false
-        }
-    ],
-    "duckdb.defaultDatabase": "duckdb-demo"
+    }
 }

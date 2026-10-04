@@ -10,7 +10,7 @@ import type { AgentProvider, ProviderName } from './types.js';
 import { ClaudeProvider, normalizeAnthropicBaseUrl } from './claude.js';
 import { OpenAIProvider } from './openai.js';
 import { GeminiProvider, normalizeGeminiBaseUrl } from './gemini.js';
-import { OllamaProvider } from './ollama.js';
+import { OllamaProvider, ollamaBaseUrl, ollamaNotRunning, DEFAULT_OLLAMA_BASE_URL } from './ollama.js';
 
 export { extractProviderUsage, extractStreamedClaudeUsage, recordProviderUsage, setProviderUsageListener, type ProviderUsage, type ProviderUsageLine, type ProviderUsageListener } from './usage-ledger.js';
 export { DEFAULT_MAX_OUTPUT_TOKENS } from './types.js';
@@ -36,7 +36,7 @@ export type {
 } from './types.js';
 export { streamOrGenerate } from './types.js';
 export { PROVIDER_DISPATCH_PHYSICAL_CEILING, providerDispatchLimit, prepareProviderHttpDispatch, completeProviderHttpDispatch, fetchProviderHttpDispatch } from './dispatch.js';
-export { ClaudeProvider, OpenAIProvider, GeminiProvider, OllamaProvider, normalizeAnthropicBaseUrl, normalizeGeminiBaseUrl };
+export { ClaudeProvider, OpenAIProvider, GeminiProvider, OllamaProvider, normalizeAnthropicBaseUrl, normalizeGeminiBaseUrl, ollamaBaseUrl, ollamaNotRunning, DEFAULT_OLLAMA_BASE_URL };
 export { runAnthropicNativeToolLoop, anthropicToolLoopPost, type AnthropicToolLoopTransport } from './claude.js';
 export {
   bedrockClaudeTransport,

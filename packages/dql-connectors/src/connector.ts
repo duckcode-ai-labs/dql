@@ -48,6 +48,20 @@ export interface ConnectionConfig {
   /** SQL Server / Fabric: accept a self-signed server certificate. */
   trustServerCertificate?: boolean;
   filepath?: string;
+  /**
+   * DuckDB and file connections, with a host: folders whose files a statement
+   * may still read once the engine is restricted (`restrictExternalAccess`),
+   * for example a data folder mounted for this connection. None by default.
+   */
+  allowedDirectories?: string[];
+  /**
+   * DuckDB and file connections: set by DQL when it serves people through a
+   * host (RFC 0010). The engine then reads no files (beyond
+   * `allowedDirectories`), no environment, installs and loads no extensions
+   * and opens no network connection, and its settings are locked, after the
+   * database itself is open.
+   */
+  restrictExternalAccess?: boolean;
   projectId?: string;
   account?: string;
   warehouse?: string;

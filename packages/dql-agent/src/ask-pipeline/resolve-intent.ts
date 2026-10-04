@@ -12,6 +12,7 @@ import {
   type IntentUnresolved,
 } from './intent.js';
 import { samePhysicalRelation } from './physical-binding.js';
+import { priorWithoutValues } from './prior-values.js';
 import { normalizeVocabularyText, renderCard, suggestSameGrainColumns, suggestSameRelationFields, trigramSimilarity, type VocabularyEntry, type VocabularyIndex, type VocabularyKind } from './vocabulary.js';
 
 /**
@@ -42,6 +43,11 @@ export interface ResolveIntentInput {
   /** False when the prior turn was blocked: its question stands, its result does not exist. */
   priorExecuted?: boolean;
   priorAnswerSummary?: string;
+  /**
+   * Host: the earlier reading's values may not reach this model (RFC 0010 HH-5). The model reads them named by
+   * position (prior-values.ts) and its reading gets the real values back before anything else reads it.
+   */
+  hidePriorValues?: boolean;
   /** Host: skip the full-question clause check (research branches phrase hypotheses, not questions). */
   clauseCoverage?: boolean;
   /**
@@ -1915,9 +1921,11 @@ export async function resolveIntent(input: ResolveIntentInput): Promise<IntentRe
     const entry = input.vocabulary.get(ref);
     return entry ? renderCard(entry) : undefined;
   };
+  // Outside the privacy boundary the model reads the earlier reading with its values named by position.
+  const shownPrior = input.hidePriorValues && input.prior ? priorWithoutValues(input.prior) : undefined;
   const messages: AgentMessage[] = [
     { role: 'system', content: system },
-    ...(input.prior ? [{ role: 'user' as const, content: `${renderPrior(input.prior, input.priorExecuted === false ? undefined : input.priorAnswerSummary, input.priorExecuted !== false)}${renderConversation(input.conversation)}` }] : []),
+    ...(input.prior ? [{ role: 'user' as const, content: `${renderPrior(shownPrior?.prior ?? input.prior, input.priorExecuted === false ? undefined : input.priorAnswerSummary, input.priorExecuted !== false)}${renderConversation(input.conversation)}` }] : []),
     { role: 'user', content: `QUESTION: ${input.question}` },
   ];
   let attempts = 0;
@@ -1966,6 +1974,8 @@ export async function resolveIntent(input: ResolveIntentInput): Promise<IntentRe
       messages.push({ role: 'assistant', content: reply.raw }, { role: 'user', content: correctionMessage(parsed.errors, unseenCard) });
       continue;
     }
+    // The earlier values the model read by position are the real ones again before anything reads its reading.
+    if (shownPrior) parsed.intent = shownPrior.restoreIntent(parsed.intent);
     if (parsed.intent.kind === 'conversation') {
       // A why/should question over the previous analysis is not small talk:
       // a conversational reply would judge or explain from rows it cannot

@@ -78,7 +78,8 @@ Where it differs from the sections below, this list is authoritative:
      account. BigQuery's connector is still outside the default connector
      package, so its extractor takes effect when that connector ships.
    - *Query-history evidence* is opt-in: `--query-history`, or "Use query
-     history" in Modeling. It reads Snowflake `QUERY_HISTORY`, PostgreSQL
+     history" in Modeling (not with a host: a hosted statement does not read
+     other sessions' queries, RFC 0010). It reads Snowflake `QUERY_HISTORY`, PostgreSQL
      `pg_stat_statements`, Databricks `system.query.history` and BigQuery
      `JOBS_BY_PROJECT`. Query text is parsed in memory and dropped; only
      join pairs and counts are kept, and a join seen fewer than twice is

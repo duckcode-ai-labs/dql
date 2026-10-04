@@ -56,7 +56,8 @@ import {
   type AppStudioBuildDraft,
 } from '../../api/client';
 import { isViewerLink } from '../../api/server-auth';
-import { hostAllows, useHostPage, useHostUi } from '../../host/host-ui';
+import { hostAllows, hostReader, useHostPage, useHostUi } from '../../host/host-ui';
+import { appLibraryWords, type LibraryFilter } from './app-library-words';
 import type { AppSummary, AppWorkspaceExperience, AppWorkspaceSection } from '../../store/types';
 import { themes, type ThemeMode } from '../../themes/notebook-theme';
 import { AiSidePanel, AI_SIDE_PANEL_EXPANDED_WIDTH } from '../agent/AiSidePanel';
@@ -113,7 +114,6 @@ type AppSurface = 'library' | 'create' | 'workspace';
 type AppExperience = AppWorkspaceExperience;
 type BuilderMode = 'ai' | 'classic';
 type AppSection = AppWorkspaceSection;
-type LibraryFilter = 'all' | 'drafts' | 'private' | 'shared' | 'fav';
 type DashboardFilter = NonNullable<DashboardDocumentResponse['dashboard']['filters']>[number];
 type DashboardLayoutItem = DashboardDocumentResponse['dashboard']['layout']['items'][number];
 type DashboardNavigationEntry = {
@@ -220,14 +220,6 @@ const AGENT_SKILLS: AgentSkillCard[] = [
   },
 ];
 
-const FILTER_LABELS: Record<LibraryFilter, string> = {
-  all: 'All',
-  drafts: 'Local drafts',
-  private: 'Private',
-  shared: 'Shared',
-  fav: 'Favourites',
-};
-
 function normalizeAppTheme(themeMode: string): 'obsidian' | 'paper' | 'white' {
   if (themeMode === 'obsidian' || themeMode === 'dark' || themeMode === 'midnight') return 'obsidian';
   if (themeMode === 'white' || themeMode === 'arctic') return 'white';
@@ -268,6 +260,8 @@ export function AppsView(): JSX.Element {
   const [dashboardLoadError, setDashboardLoadError] = useState<string | null>(null);
   /** Set when the host refused this person the App (HH-12), with where to ask. */
   const [dashboardRefusal, setDashboardRefusal] = useState<{ next?: { label: string; href: string } } | null>(null);
+  /** The project has no such App or page (404), as opposed to a page that could not be read. */
+  const [dashboardMissing, setDashboardMissing] = useState(false);
   const [workspaceLoadAttempt, setWorkspaceLoadAttempt] = useState(0);
   const [builderMode, setBuilderMode] = useState<BuilderMode>('ai');
   const [builderExploreGaps, setBuilderExploreGaps] = useState(false);
@@ -474,6 +468,7 @@ export function AppsView(): JSX.Element {
       setDashboardDoc(null);
       setDashboardLoadError(null);
       setDashboardRefusal(null);
+      setDashboardMissing(false);
       setAppLoading(false);
       return;
     }
@@ -481,28 +476,31 @@ export function AppsView(): JSX.Element {
       setDashboardDoc(null);
       setDashboardLoadError(null);
       setDashboardRefusal(null);
+      setDashboardMissing(false);
       setAppLoading(false);
       return;
     }
     setAppLoading(true);
     setDashboardLoadError(null);
     setDashboardRefusal(null);
+    setDashboardMissing(false);
     setDashboardDoc(null);
     setAppDoc((current) => current?.app.id === state.activeAppId ? current : null);
     return beginPersistedAppWorkspaceLoad({
       appId: state.activeAppId,
       dashboardId: state.activeDashboardId,
       loadApp: api.getApp,
-      loadDashboard: api.getDashboard,
+      loadDashboard: (appId, dashboardId) => api.getDashboard(appId, dashboardId, { throwNotFound: true }),
       onApp: (document) => setAppDoc(document),
       onDashboard: (document) => {
         setDashboardDoc(document);
         setAppLoading(false);
       },
-      onDashboardError: (message, refusal) => {
+      onDashboardError: (message, refusal, problem) => {
         setDashboardDoc(null);
         setDashboardLoadError(message);
         setDashboardRefusal(refusal ?? null);
+        setDashboardMissing(!!problem?.notFound);
         setAppLoading(false);
       },
     });
@@ -1172,6 +1170,7 @@ export function AppsView(): JSX.Element {
           loading={appLoading}
           dashboardLoadError={dashboardLoadError}
           dashboardRefusal={dashboardRefusal}
+          dashboardMissing={dashboardMissing}
           experience={experience}
           section={section}
           explainOpen={explainOpen}
@@ -1342,7 +1341,10 @@ function AppLibrarySurface({
     : [];
   const hasResults = visibleDrafts.length > 0 || apps.length > 0;
   // Under a host (RFC 0010 HH-9), people who may not author Apps read them.
-  const canAuthor = hostAllows(useHostUi(), 'app.author');
+  const hostUi = useHostUi();
+  const canAuthor = hostAllows(hostUi, 'app.author');
+  const reader = hostReader(hostUi);
+  const words = appLibraryWords(reader);
   return (
     <main className="dql-apps-wrap">
       <div id="app-studio-launcher" hidden={!launchExpanded || !canAuthor}>
@@ -1359,7 +1361,7 @@ function AppLibrarySurface({
         <div>
           <span className="dql-app-eyebrow">Your workspace</span>
           <h2 id="app-library-title">Apps</h2>
-          <p>Local drafts and Project-published Apps live together here, with their visibility and trust state always clear.</p>
+          <p>{words.intro}</p>
         </div>
         <div className="dql-apps-library-summary" aria-label="App library summary">
           {canAuthor ? (
@@ -1374,17 +1376,21 @@ function AppLibrarySurface({
               {launchExpanded ? 'Hide new App form' : 'Build new App'}
             </button>
           ) : null}
-          <span><strong>{localDrafts.length}</strong> local draft{localDrafts.length === 1 ? '' : 's'}</span>
-          <span><strong>{counts.private}</strong> private</span>
-          <span><strong>{counts.shared}</strong> shared</span>
+          {words.localCounts ? (
+            <>
+              <span><strong>{localDrafts.length}</strong> local draft{localDrafts.length === 1 ? '' : 's'}</span>
+              <span><strong>{counts.private}</strong> private</span>
+              <span><strong>{counts.shared}</strong> shared</span>
+            </>
+          ) : <span><strong>{counts.shared}</strong> shared App{counts.shared === 1 ? '' : 's'}</span>}
         </div>
       </section>
 
       <div className="dql-apps-libbar">
         <div className="dql-apps-filter-tabs">
-          {(['all', 'drafts', 'private', 'shared', 'fav'] as LibraryFilter[]).map((value) => (
+          {words.filters.map((value) => (
             <button key={value} className={filter === value ? 'on' : ''} onClick={() => onFilter(value)}>
-              {FILTER_LABELS[value]} <span>{counts[value]}</span>
+              {words.label(value)} <span>{counts[value]}</span>
             </button>
           ))}
         </div>
@@ -1395,9 +1401,9 @@ function AppLibrarySurface({
       </div>
 
       {loading && allApps.length === 0 && localDrafts.length === 0 ? (
-        <EmptyPanel title="Loading Apps..." detail="Reading local app files from this DQL project." />
+        <EmptyPanel title="Loading Apps..." detail={words.loadingDetail} />
       ) : !hasResults ? (
-        <EmptyPanel title="No Apps match this view." detail="Change the filter or start a new App above. New work always begins as a local private draft." />
+        <EmptyPanel title="No Apps match this view." detail={words.emptyDetail} />
       ) : (
         <div className="dql-apps-grid" aria-label="App library">
           {visibleDrafts.map((draft) => (
@@ -1412,6 +1418,7 @@ function AppLibrarySurface({
               onOpen={() => onOpenApp(app, 'view')}
               onEdit={canAuthor ? () => onOpenApp(app, 'build') : undefined}
               onDelete={canAuthor ? () => onDeleteApp(app) : undefined}
+              reader={reader}
             />
           ))}
         </div>
@@ -1458,6 +1465,7 @@ function AppCard({
   onOpen,
   onEdit,
   onDelete,
+  reader = false,
 }: {
   app: AppSummary;
   favorite: boolean;
@@ -1466,6 +1474,8 @@ function AppCard({
   /** Absent for someone who only reads Apps. */
   onEdit?: () => void;
   onDelete?: () => void;
+  /** A hosted reader: no local drafts or local insights on the card. */
+  reader?: boolean;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const certified = app.certification === 'certified' || app.lifecycle === 'certified';
@@ -1476,11 +1486,11 @@ function AppCard({
   const trustLabel = certified ? 'Certified app' : draftCount > 0 || researchCount > 0 || aiPinCount > 0 ? 'Review needed' : 'Draft app';
   return (
     <article className="dql-app-card">
-      <div className="dql-app-card-body" onClick={onOpen} role="button" tabIndex={0}>
+      <div className="dql-app-card-body" onClick={onOpen}>
         <div className="dql-app-card-top">
           <div className="dql-app-card-labels">
             <span className="dql-app-eyebrow">{app.domain || 'Domain'}</span>
-            <span className={`dql-app-visibility ${shared ? 'shared' : 'private'}`}>{shared ? <Users size={12} /> : <ShieldCheck size={12} />}{shared ? 'Shared Project' : 'Private Project'}</span>
+            <span className={`dql-app-visibility ${shared ? 'shared' : 'private'}`}>{shared ? <Users size={12} /> : <ShieldCheck size={12} />}{reader ? (shared ? 'Shared' : 'Private') : shared ? 'Shared Project' : 'Private Project'}</span>
           </div>
           <button
             type="button"
@@ -1489,7 +1499,8 @@ function AppCard({
               event.stopPropagation();
               onToggleFavorite();
             }}
-            aria-label={favorite ? 'Remove favourite' : 'Add favourite'}
+            aria-label={favorite ? `Remove ${app.name} from favourites` : `Add ${app.name} to favourites`}
+            aria-pressed={favorite}
           >
             <Star size={14} strokeWidth={1.8} />
           </button>
@@ -1497,26 +1508,34 @@ function AppCard({
         <StatusSeal tone={certified ? 'certified' : draftCount > 0 ? 'draft' : 'agentic'}>
           {certified ? 'certified' : draftCount > 0 ? 'mixed' : app.lifecycle ?? 'draft'}
         </StatusSeal>
-        <h3>{app.name}</h3>
-        <p>{cleanStakeholderCopy(app.description || `${app.name} consumption surface for ${app.domain}.`)}</p>
+        <h3>
+          <a
+            className="dql-app-card-link"
+            href={`/?app=${encodeURIComponent(app.id)}`}
+            onClick={(event) => { event.preventDefault(); event.stopPropagation(); onOpen(); }}
+          >
+            {app.name}
+          </a>
+        </h3>
+        <p>{cleanStakeholderCopy(app.description || appLibraryWords(reader).appNote(app))}</p>
         <div className="dql-app-card-mini">
           <MiniMetric label="Pages" value={String(app.dashboards.length)} />
           <MiniMetric label="Books" value={String(app.notebooks?.length ?? 0)} />
-          <MiniMetric label="Drafts" value={String(draftCount)} />
+          {reader ? null : <MiniMetric label="Drafts" value={String(draftCount)} />}
         </div>
         <div className="dql-app-card-signals">
           <span><ShieldCheck size={13} /> {trustLabel}</span>
           <span><Search size={13} /> {researchCount} analysis</span>
-          <span><Sparkles size={13} /> {aiPinCount} local insights</span>
+          {reader ? null : <span><Sparkles size={13} /> {aiPinCount} local insights</span>}
         </div>
       </div>
       <div className="dql-app-card-depth">
         <span>{primaryOwner(app)}</span>
-        <button type="button" className="dql-app-card-act" onClick={onOpen} title="View app">
+        <button type="button" className="dql-app-card-act" onClick={onOpen} title="View app" aria-label={`View ${app.name}`}>
           <Eye size={12} /> View
         </button>
         {onEdit ? (
-          <button type="button" className="dql-app-card-act" onClick={onEdit} title="Edit app">
+          <button type="button" className="dql-app-card-act" onClick={onEdit} title="Edit app" aria-label={`Edit ${app.name}`}>
             <Pencil size={12} /> Edit
           </button>
         ) : null}
@@ -2116,6 +2135,7 @@ function AppWorkspaceSurface({
   loading,
   dashboardLoadError,
   dashboardRefusal,
+  dashboardMissing,
   experience,
   section,
   explainOpen,
@@ -2154,6 +2174,8 @@ function AppWorkspaceSurface({
   loading: boolean;
   dashboardLoadError: string | null;
   dashboardRefusal: { next?: { label: string; href: string } } | null;
+  /** The project has no such App or page (a host may say where it is). */
+  dashboardMissing: boolean;
   experience: AppExperience;
   section: AppSection;
   explainOpen: boolean;
@@ -2526,7 +2548,8 @@ function AppWorkspaceSurface({
             <span>Apps</span>
           </button>
         )}
-        <span className="dql-app-crumb"><b>{workspaceAppId ?? 'app'}</b></span>
+        {/* A reader sees the App's name; its id is for the people who build it. */}
+        <span className="dql-app-crumb"><b>{hostReader(hostUi) ? (tidyTitle(workspaceAppName) || workspaceAppId || 'App') : (workspaceAppId ?? 'app')}</b></span>
         <StatusSeal tone={certification.allCertified ? 'certified' : 'draft'}>
           {certification.allCertified ? 'All certified' : `${certifiedCount} of ${certification.total} certified`}
         </StatusSeal>
@@ -2637,7 +2660,7 @@ function AppWorkspaceSurface({
             ) : (
               <h1>{tidyTitle(onDashboards ? dashboardDoc?.dashboard.metadata.title : workspaceAppName) || 'App'}</h1>
             )}
-            <p>{cleanStakeholderCopy((onDashboards ? dashboardDoc?.dashboard.metadata.description : metadataApp?.description) ?? 'Local DQL App')}</p>
+            <p>{cleanStakeholderCopy((onDashboards ? dashboardDoc?.dashboard.metadata.description : metadataApp?.description) ?? (hostReader(hostUi) ? '' : 'Local DQL App'))}</p>
           </div>
           <div className="dql-app-nav-row">
             <AppWorkspaceTabs
@@ -2771,6 +2794,20 @@ function AppWorkspaceSurface({
                     onClick={() => { hostPage.openPage({ id: `refusal-${dashboardRefusal.next!.href}`, label: dashboardRefusal.next!.label, href: dashboardRefusal.next!.href }); dispatch({ type: 'SET_MAIN_VIEW', view: 'host_page' }); }}
                   >
                     {dashboardRefusal.next.label}
+                  </button>
+                ) : null}
+              </div>
+            ) : section === 'dashboards' && dashboardLoadError && dashboardMissing && hostUi.host && hostUi.appNotFound ? (
+              // HH-9 `appNotFound`: with a host the App may be elsewhere; the host says where, in its words.
+              <div role="alert" style={{ display: 'grid', justifyItems: 'start', gap: 10 }}>
+                <EmptyPanel title="This App isn't available here" detail={hostUi.appNotFound.message} />
+                {hostUi.appNotFound.next ? (
+                  <button
+                    type="button"
+                    className="dql-apps-btn dql-apps-btn-primary"
+                    onClick={() => { const next = hostUi.host && hostUi.appNotFound?.next; if (!next) return; hostPage.openPage({ id: `missing-${next.href}`, label: next.label, href: next.href }); dispatch({ type: 'SET_MAIN_VIEW', view: 'host_page' }); }}
+                  >
+                    {hostUi.appNotFound.next.label}
                   </button>
                 ) : null}
               </div>

@@ -4,6 +4,7 @@ export * from './physical-binding.js';
 export * from './vocabulary-from-pack.js';
 export * from './block-contract.js';
 export * from './resolve-intent.js';
+export * from './prior-values.js';
 export * from './prepare/index.js';
 export * from './prepare/sql-checks.js';
 export * from './execute.js';

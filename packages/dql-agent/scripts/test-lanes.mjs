@@ -50,8 +50,9 @@ const REQUIRED_TEST_FILES = [
 // 174 with Claude on Bedrock and Vertex (RFC 0010 HH-5, +1 file, +8 tests);
 // 175 with the tool gate (RFC 0010 HH-7, +1 file, +2 tests);
 // 176 with knowledge sources (RFC 0010 HH-15, +1 file, +14 tests);
-// 177 with stores that answer with Promises (RFC 0010 HH-6, +1 file, +3 tests).
-const EXPECTED_TEST_FILES = 177;
+// 177 with stores that answer with Promises (RFC 0010 HH-6, +1 file, +3 tests);
+// 178 with context-pack retention (bounded metadata cache, +1 file, +3 tests).
+const EXPECTED_TEST_FILES = 179;
 // Keep the aggregate receipt exact. The Ask pipeline suites (intent contract,
 // vocabulary, governed defaults and host proofs, prepare tiers), the engine,
 // observability, retrieval, semantic-proof, research-ledger, conversation and
@@ -65,7 +66,15 @@ const EXPECTED_TEST_FILES = 177;
 // 2337 on main;
 // 2340 with stores that answer with Promises: async conversation helpers and host run records (RFC 0010 HH-6, +3 tests);
 // 2343 with retired blocks answered from their replacement (replacedBy, +3 tests).
-const EXPECTED_TESTS = 2343;
+// 2344 with figures read however they are written (knowledge/figures.ts, +1 test);
+// 2347 with context-pack retention (bounded metadata cache, +3 tests);
+// 2353 with warehouse failures said plainly and cited answers keeping their reading (+3 Ask pipeline, +3 knowledge);
+// 2354 with answer-tier counts of a person's own conversations (+1 test).
+// 2360 with the local-model rule (Ollama contacts its one base URL, +3 tests) and drafts outside the privacy
+// boundary naming grouped members by position (+2 story, +1 page).
+// 2363 (179 files) with a follow-up's earlier values named by position outside the privacy boundary
+// (prior-values.test.ts, +3 tests).
+const EXPECTED_TESTS = 2363;
 
 function discoverTestFiles(directory) {
   return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {

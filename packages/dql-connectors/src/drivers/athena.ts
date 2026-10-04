@@ -1,6 +1,6 @@
 import type { DatabaseConnector, ConnectionConfig, TableInfo, ColumnInfo } from '../connector.js';
 import type { QueryExecutionOptions, QueryResult, ColumnMeta, ColumnType, Row } from '../result-types.js';
-import { boundedResult, inlineParameters, loadDependency, redactSecrets, sqlLiteral, withDeadline } from './shared.js';
+import { boundedResult, inlineParameters, loadDependency, redactSecrets, withDeadline } from './shared.js';
 
 /** The part of `@aws-sdk/client-athena` this connector uses; the package is loaded at connect time. */
 interface AthenaDatum { VarCharValue?: string }
@@ -149,9 +149,10 @@ export class AthenaConnector implements DatabaseConnector {
   }
 
   async listTables(): Promise<TableInfo[]> {
-    const where = this.database ? `table_schema = ${sqlLiteral(this.database)}` : `table_schema <> 'information_schema'`;
+    const where = this.database ? 'table_schema = ?' : `table_schema <> 'information_schema'`;
     const result = await this.execute(
       `SELECT table_schema, table_name, table_type FROM information_schema.tables WHERE ${where} ORDER BY table_schema, table_name`,
+      this.database ? [this.database] : [],
     );
     return result.rows.map((row) => ({
       schema: String(row['table_schema'] ?? ''),
@@ -162,11 +163,13 @@ export class AthenaConnector implements DatabaseConnector {
 
   async listColumns(schema?: string, table?: string): Promise<ColumnInfo[]> {
     const db = schema ?? this.database;
+    // Names travel as values the driver binds, never inside the statement's text.
+    const params: unknown[] = [];
     let sql = `SELECT table_schema, table_name, column_name, data_type, ordinal_position FROM information_schema.columns WHERE `;
-    sql += db ? `table_schema = ${sqlLiteral(db)}` : `table_schema <> 'information_schema'`;
-    if (table) sql += ` AND table_name = ${sqlLiteral(table)}`;
+    if (db) { params.push(db); sql += 'table_schema = ?'; } else sql += `table_schema <> 'information_schema'`;
+    if (table) { params.push(table); sql += ` AND table_name = ?`; }
     sql += ` ORDER BY table_schema, table_name, ordinal_position`;
-    const result = await this.execute(sql);
+    const result = await this.execute(sql, params);
     return result.rows.map((row) => ({
       schema: String(row['table_schema'] ?? ''),
       table: String(row['table_name'] ?? ''),

@@ -47,6 +47,9 @@ export class DuckDBConnector implements DatabaseConnector {
       const setup = database.connect();
       try {
         await executeDuckDBConnection(setup, database, 'PRAGMA disable_checkpoint_on_shutdown');
+        // A host that must not download code at run time (DQL_DUCKDB_AUTOINSTALL=off): DuckDB uses only the
+        // extensions already installed, and a statement that needs another one fails instead of fetching it.
+        if (duckDBAutoinstallOff()) await executeDuckDBConnection(setup, database, 'SET autoinstall_known_extensions = false');
       } catch (error) {
         await closeDuckDBConnection(setup);
         await closeDuckDBDatabase(database, false);
@@ -55,6 +58,14 @@ export class DuckDBConnector implements DatabaseConnector {
       await closeDuckDBConnection(setup);
       return database;
     });
+    if (config.restrictExternalAccess) {
+      try {
+        await restrictDuckDBDatabase(db, config.allowedDirectories ?? []);
+      } catch (error) {
+        await release();
+        throw error;
+      }
+    }
     this.db = db;
     this.connection = db.connect();
     this.releaseDatabase = release;
@@ -89,7 +100,10 @@ export class DuckDBConnector implements DatabaseConnector {
     };
     try {
       if (context.schema) await executeDuckDBConnection(connection, db, `SET schema = ${quoteDuckDBString(context.schema)}`);
-      if (context.timeZone) await executeDuckDBConnection(connection, db, `SET TimeZone = ${quoteDuckDBString(context.timeZone)}`);
+      // A restricted database's settings are locked: its time zone is then already the one every connection has.
+      if (context.timeZone && (await readDuckDBSessionContext(connection, db)).timeZone !== context.timeZone) {
+        await executeDuckDBConnection(connection, db, `SET TimeZone = ${quoteDuckDBString(context.timeZone)}`);
+      }
       await executeDuckDBConnection(connection, db, 'BEGIN TRANSACTION');
     } catch (error) {
       await closeDuckDBConnection(connection);
@@ -290,6 +304,66 @@ function quoteDuckDBString(value: string): string {
 }
 
 /**
+ * RESTRICTED ENGINE (RFC 0010, with a host). Applied once to an open
+ * database, which every connector on the same file shares: no extension is
+ * installed or loaded on demand, no file outside the database is read or
+ * written (COPY, ATTACH, file readers, replacement scans), and the settings
+ * are locked, so no statement can turn any of it back on. DuckDB versions
+ * with `allowed_directories` (1.2 and later) keep the connection's allowed
+ * folders readable in the engine itself; on DuckDB 1.1, which has no such
+ * setting, a connection that names allowed folders keeps external access and
+ * relies on DQL's statement check (the host's second layer) for them.
+ * Restriction only ever tightens: a database restricted once stays so.
+ */
+export interface DuckDBRestriction {
+  /** Whether the engine itself refuses files outside the database. */
+  externalAccess: 'off' | 'allowed-directories' | 'statement-check';
+}
+
+const restrictedDuckDBDatabases = new WeakMap<object, Promise<DuckDBRestriction>>();
+
+export function restrictDuckDBDatabase(database: any, allowedDirectories: readonly string[]): Promise<DuckDBRestriction> {
+  const existing = restrictedDuckDBDatabases.get(database);
+  if (existing) return existing;
+  const pending = (async (): Promise<DuckDBRestriction> => {
+    const setup = database.connect();
+    const run = (sql: string) => executeDuckDBConnection(setup, database, sql);
+    try {
+      await run('SET autoinstall_known_extensions = false');
+      await run('SET autoload_known_extensions = false');
+      // Not every DuckDB version has this setting; extensions cannot be installed once external access is off anyway.
+      await run('SET allow_community_extensions = false').catch(() => undefined);
+      const folders = allowedDirectories.filter((folder) => typeof folder === 'string' && folder.trim() !== '');
+      let engineAllowList = false;
+      if (folders.length) {
+        const list = folders.map((folder) => quoteDuckDBString(folder.endsWith('/') ? folder : `${folder}/`)).join(', ');
+        try {
+          await run(`SET allowed_directories = [${list}]`);
+          engineAllowList = true;
+        } catch {
+          // DuckDB 1.1: no allow-list in the engine.
+        }
+      }
+      const keepExternalAccess = folders.length > 0 && !engineAllowList;
+      if (!keepExternalAccess) await run('SET enable_external_access = false');
+      else {
+        // External access stays on for the allowed folders: extensions are kept out another way, by a folder
+        // and a repository that cannot exist, so nothing can be installed or loaded.
+        const nowhere = process.platform === 'win32' ? 'NUL\\dql-no-extensions' : '/dev/null/dql-no-extensions';
+        await run(`SET extension_directory = ${quoteDuckDBString(nowhere)}`);
+        await run(`SET custom_extension_repository = ${quoteDuckDBString(nowhere)}`);
+      }
+      await run('SET lock_configuration = true');
+      return { externalAccess: keepExternalAccess ? 'statement-check' : engineAllowList ? 'allowed-directories' : 'off' };
+    } finally {
+      await closeDuckDBConnection(setup);
+    }
+  })();
+  restrictedDuckDBDatabases.set(database, pending);
+  return pending;
+}
+
+/**
  * duckdb-node's `Database#close` only drops the Database handle. Every
  * Connection and every Statement (`Statement#finalize` is a no-op in 1.1)
  * still holds the native instance, which lives on until garbage collection.
@@ -311,6 +385,15 @@ interface SharedDuckDBDatabase {
 
 const sharedDuckDBDatabases = new Map<string, SharedDuckDBDatabase>();
 const closingDuckDBDatabases = new Map<string, Promise<void>>();
+
+/**
+ * DQL_DUCKDB_AUTOINSTALL=off (or false, 0): DuckDB never downloads an
+ * extension on first use (by default it fetches a known extension, such as
+ * httpfs for a URL, from its extension repository). Unset: DuckDB's default.
+ */
+export function duckDBAutoinstallOff(env: NodeJS.ProcessEnv = process.env): boolean {
+  return /^(off|false|0|no)$/i.test(env.DQL_DUCKDB_AUTOINSTALL?.trim() ?? '');
+}
 
 async function acquireDuckDBDatabase(
   key: string | null,
@@ -435,10 +518,12 @@ export function resolveDuckDBModule(module: unknown): { Database: new (path: str
 /**
  * When a query fails because a table/catalog is missing, the most common cause is
  * an empty database or a connection pointed at the wrong `.duckdb` file. Append a
- * one-line hint so the user isn't left guessing.
+ * one-line hint so the user isn't left guessing. Only for a missing table,
+ * view or schema: a function or a column the database does not have is not
+ * fixed by building models.
  */
 function withMissingTableHint(message: string): string {
-  if (/does not exist|Catalog Error|Table with name|Referenced table/i.test(message)) {
+  if (/(?:Table|View|Schema|Catalog) with name\b[^\n]*\bdoes not exist/i.test(message)) {
     return `${message}\nHint: that table isn't in this database — it may be empty or the connection may point at the wrong .duckdb file. Build your dbt models (e.g. \`dbt build\`) to populate it, then retry.`;
   }
   return message;

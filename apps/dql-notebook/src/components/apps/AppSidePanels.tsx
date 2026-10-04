@@ -2,6 +2,7 @@ import React, { type ReactNode } from 'react';
 import { Blocks, BookOpenText, Bot, FileText, LayoutDashboard, ShieldCheck, Workflow } from 'lucide-react';
 import type { AppDocumentSummary } from '../../api/client';
 import { AppAudienceEditor } from './AppAudienceEditor';
+import { useHostUi } from '../../host/host-ui';
 
 /**
  * Read-only side panels for the App workspace (notebooks, pins, drafts,
@@ -46,9 +47,12 @@ export function NotebookListPanel({ appDoc }: { appDoc: AppDocumentSummary | nul
 
 export function AiPinsPanel({ appDoc }: { appDoc: AppDocumentSummary | null }) {
   const pins = appDoc?.aiPins ?? [];
-  if (!pins.length) return <EmptyPanel title="No pinned insights yet." detail="Use Copilot from a dashboard page, create analysis, then add useful reviewed insights to this App." />;
+  // With a host an AI pin is its pinner's own: say so where pins are listed.
+  const hosted = useHostUi().host;
+  if (!pins.length) return <EmptyPanel title="No pinned insights yet." detail={hosted ? 'Pins you make from Copilot are yours alone: only you see them. Keep one as a live tile to share it.' : 'Use Copilot from a dashboard page, create analysis, then add useful reviewed insights to this App.'} />;
   return (
     <div className="dql-app-simple-list">
+      {hosted ? <p className="dql-app-panel-note">Only you see these pins. Keep one as a live tile to share it.</p> : null}
       {pins.map((pin) => (
         <PanelCard key={pin.id} icon={<Bot size={16} />}>
           <b>{pin.title}</b>

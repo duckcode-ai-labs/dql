@@ -4,7 +4,8 @@ import { createEmailNotifier } from './email.js';
 import { createFileNotifier } from './file.js';
 import { createSlackNotifier } from './slack.js';
 import { createWebhookNotifier } from './webhook.js';
-import { currentHostHooks } from '../../host/request-context.js';
+import { scopedHostHooks } from '../../host/request-context.js';
+import { logUnderReference } from '../../host/plain-errors.js';
 
 /** A delivery target: compiled block notifications, or an App schedule's webhook. */
 export type DeliveryTarget = NotificationIR | { type: 'webhook'; recipients: string[] };
@@ -34,18 +35,24 @@ export async function dispatchNotifications(
   payload: NotifierPayload,
   projectRoot: string,
 ): Promise<NotificationDispatchResult[]> {
-  // The current request's server's sink first: a host's previews and Production share a process.
-  const scopedHooks = currentHostHooks();
-  const activeSink = scopedHooks ? (scopedHooks.delivery ?? null) : deliverySink;
+  // The current work's server's sink (none for a server without a host): a host's previews and Production share a
+  // process, and a server without hooks may run beside them. The process-wide sink is only for work outside them.
+  const scoped = scopedHostHooks();
+  const activeSink = scoped ? (scoped.hooks?.delivery ?? null) : deliverySink;
   if (activeSink) {
     const sink = activeSink;
     const delivered: NotificationDispatchResult[] = [];
     for (const n of notifications) {
       try {
-        const result = await sink({ type: n.type, recipients: n.recipients, payload });
-        delivered.push({ type: n.type, recipients: n.recipients, delivered: result.delivered === true, ...(result.error ? { error: result.error } : {}) });
+        const result: unknown = await sink({ type: n.type, recipients: n.recipients, payload });
+        // Only `{ delivered: true }` is delivered; any other answer is not. The host's own reason (a text) is kept.
+        const answer = result && typeof result === 'object' ? result as { delivered?: unknown; error?: unknown } : {};
+        const reason = typeof answer.error === 'string' && answer.error.trim() ? answer.error.trim().slice(0, 300) : undefined;
+        delivered.push({ type: n.type, recipients: n.recipients, delivered: answer.delivered === true, ...(reason ? { error: reason } : answer.delivered === true ? {} : { error: 'The host did not say it delivered this message.' }) });
       } catch (error) {
-        delivered.push({ type: n.type, recipients: n.recipients, delivered: false, error: error instanceof Error ? error.message : String(error) });
+        // A sink that fails (or does not answer in time) is "not delivered"; its own words go to the log under a reference.
+        const reference = logUnderReference('A host delivery failed', error);
+        delivered.push({ type: n.type, recipients: n.recipients, delivered: false, error: `The host could not deliver this message (reference ${reference}).` });
       }
     }
     return delivered;

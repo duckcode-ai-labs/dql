@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { describeDialectForPrompt } from './sql-dialect.js';
+import { describeDialectForPrompt, getDialect } from './sql-dialect.js';
 
 describe('describeDialectForPrompt (W1.5)', () => {
   it('describes DuckDB conventions (LIMIT at end, ILIKE, double-quote)', () => {
@@ -28,5 +28,17 @@ describe('describeDialectForPrompt (W1.5)', () => {
   it('falls back to the DuckDB dialect for an unknown/blank driver', () => {
     expect(describeDialectForPrompt('')).toContain('duckdb');
     expect(describeDialectForPrompt('nonsense')).toContain('nonsense');
+  });
+});
+
+describe('quoted names keep their closing quote on every engine', () => {
+  it('escapes a backslash where the engine reads backslash escapes in quoted names (BigQuery, ClickHouse)', () => {
+    expect(getDialect('bigquery').quoteIdentifier('a\\')).toBe('`a\\\\`');
+    expect(getDialect('bigquery').quoteIdentifier('a`b')).toBe('`a\\`b`');
+    expect(getDialect('clickhouse').quoteIdentifier('a\\')).toBe('"a\\\\"');
+    expect(getDialect('clickhouse').quoteIdentifier('a"b')).toBe('"a""b"');
+    // Engines whose quoted names take no backslash escapes double the quote only.
+    expect(getDialect('postgresql').quoteIdentifier('a\\"b')).toBe('"a\\""b"');
+    expect(getDialect('mysql').quoteIdentifier('a`b')).toBe('`a``b`');
   });
 });

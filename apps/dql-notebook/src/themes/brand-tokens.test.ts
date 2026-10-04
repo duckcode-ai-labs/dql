@@ -63,6 +63,21 @@ describe('DuckCode brand tokens', () => {
     expect(contrast(token(themes.paper, 'text-tertiary'), token(themes.paper, 'bg-2'))).toBeGreaterThanOrEqual(4.5);
   });
 
+  it('keeps secondary and tertiary text at WCAG AA (4.5:1) on every page surface, in every theme', () => {
+    // Obsidian is the :root default; paper and white define their own surfaces.
+    const surfaces = ['bg-0', 'bg-1', 'bg-2', 'bg-3', 'bg-canvas'];
+    const low: string[] = [];
+    for (const [name, block] of Object.entries(themes)) {
+      for (const text of ['text-secondary', 'text-tertiary']) {
+        for (const surface of surfaces) {
+          const ratio = contrast(token(block, text), token(block, surface));
+          if (ratio < 4.5) low.push(`${name} --${text} on --${surface}: ${ratio.toFixed(2)}`);
+        }
+      }
+    }
+    expect(low).toEqual([]);
+  });
+
   it('has no gradient brand mark and no leftover purple accent anywhere in the UI source', () => {
     expect(TOKENS).not.toMatch(/\.brand-mark\s*\{[^}]*gradient/);
     const offenders = [

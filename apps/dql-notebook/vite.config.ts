@@ -1,9 +1,11 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
+import { fontLicence } from '@duckcodeailabs/dql-ui/font-licence'
 
 export default defineConfig({
-  plugins: [react(), tailwindcss()],
+  // fontLicence: Inter's licence ships beside the font files in dist/assets.
+  plugins: [react(), tailwindcss(), fontLicence()],
   server: {
     port: 5174,
     // Proxy all /api/* requests to the running dql notebook server

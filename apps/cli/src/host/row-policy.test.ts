@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { cpSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, symlinkSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, symlinkSync } from 'node:fs';
 import type { Server } from 'node:http';
 import { tmpdir } from 'node:os';
 import { dirname, join, relative, resolve } from 'node:path';
@@ -8,7 +8,8 @@ import { describe, expect, it } from 'vitest';
 import { QueryExecutor, type ConnectionConfig, type DatabaseConnector, type QueryResult } from '@duckcodeailabs/dql-connectors';
 import { startLocalServer } from '../local-runtime.js';
 import { withRequestContext, type DqlHostHooks, type DqlModelProvider, type DqlPrincipal } from './request-context.js';
-import { CredentialsRefusedError, RowPolicyRefusedError, withHostQueryHooks, withRowPolicy, type DqlCredentialsHook, type DqlQueryContext, type DqlRowPolicy } from './row-policy.js';
+import { composeFailedText, statementFailure } from '@duckcodeailabs/dql-agent';
+import { CredentialsRefusedError, RowPolicyRefusedError, WarehouseStatementError, withHostQueryHooks, withRowPolicy, type DqlCredentialsHook, type DqlQueryContext, type DqlRowPolicy } from './row-policy.js';
 
 /**
  * RFC 0010 HH-3: one query path. With a host row policy, every statement the
@@ -124,6 +125,61 @@ describe('the one query path (RFC 0010 HH-3)', () => {
     await expect(refused.executePositional('SELECT 1', [], connection)).rejects.toThrow('Claims data is restricted.');
   });
 
+  it('refuses in its own words, never repeating it, when the policy answers with something that is not one of its two shapes', async () => {
+    const answer = 'SELECT id FROM claims /* rewrite-text-7c1d */';
+    for (const junk of [answer, 42, true, [answer], null, undefined]) {
+      const inner = new RecordingExecutor();
+      const executor = withRowPolicy(inner, (() => junk) as unknown as DqlRowPolicy);
+      const refusal = await executor.executePositional('SELECT * FROM claims', [], connection).then(() => undefined, (error: unknown) => error);
+      expect(refusal, String(junk)).toBeInstanceOf(RowPolicyRefusedError);
+      expect((refusal as Error).message).toBe('DQL could not check what you may see, so it did not run this query.');
+      expect(inner.ran).toEqual([]);
+    }
+  });
+
+  it('hands over a grouped result only when every group holds the host\'s minimum of rows, on every way a statement runs', async () => {
+    const rowsOf = (counts: number[]) => counts.map((n, index) => ({ diagnosis: `D${index}`, n: 10 + index, HOST_GROUP_ROWS: n }));
+    let counts = [7, 5];
+    const result = () => ({ columns: [{ name: 'diagnosis', type: 'string' }, { name: 'n', type: 'number' }, { name: 'HOST_GROUP_ROWS', type: 'number' }], rows: rowsOf(counts), rowCount: counts.length, executionTime: 0 }) as unknown as QueryResult;
+    class Grouped extends RecordingExecutor {
+      override async executePositional(_sql: string, _values: unknown[], _config?: ConnectionConfig): Promise<QueryResult> { return result(); }
+      override async getConnector(_config?: ConnectionConfig): Promise<DatabaseConnector> {
+        return {
+          driverName: 'duckdb',
+          async execute() { return result(); },
+          async *stream() { yield { columns: result().columns, rows: result().rows.slice(0, 1), rowCount: 1, byteCount: 1 }; yield { columns: result().columns, rows: result().rows.slice(1), rowCount: 1, byteCount: 1 }; },
+          async openConsistentReadScope() { return { id: 's', async execute() { return result(); }, async close() {} }; },
+          async ping() { return true; },
+        } as unknown as DatabaseConnector;
+      }
+    }
+    const check = { column: 'host_group_rows', minimum: 5, refusal: 'Some groups are too small for the model.' };
+    const executor = withRowPolicy(new Grouped(), (query) => ({ sql: query.sql, groupRows: check }));
+    const runAll = async () => {
+      const connector = await executor.getConnector(connection);
+      const scope = await (connector as unknown as { openConsistentReadScope(): Promise<{ execute(sql: string): Promise<QueryResult> }> }).openConsistentReadScope();
+      const streamed: Array<Record<string, unknown>> = [];
+      for await (const batch of connector.stream!('SELECT 1')) streamed.push(...batch.rows);
+      return [(await executor.executePositional('SELECT 1', [], connection)).rows, (await connector.execute('SELECT 1')).rows, (await scope.execute('SELECT 1')).rows, streamed];
+    };
+    // Every group big enough: the rows pass, without the count column, whatever case the engine gave it.
+    for (const rows of await runAll()) expect(rows).toEqual([{ diagnosis: 'D0', n: 10 }, { diagnosis: 'D1', n: 11 }]);
+    expect((await executor.executePositional('SELECT 1', [], connection)).columns.map((column) => column.name)).toEqual(['diagnosis', 'n']);
+    // One group too small: refused on every path, no row handed over (a stream holds its batches until the check).
+    counts = [7, 1];
+    await expect(executor.executePositional('SELECT 1', [], connection)).rejects.toThrow('Some groups are too small for the model.');
+    const connector = await executor.getConnector(connection);
+    await expect(connector.execute('SELECT 1')).rejects.toBeInstanceOf(RowPolicyRefusedError);
+    const handed: unknown[] = [];
+    await expect((async () => { for await (const batch of connector.stream!('SELECT 1')) handed.push(...batch.rows); })()).rejects.toBeInstanceOf(RowPolicyRefusedError);
+    expect(handed).toEqual([]);
+    // A row with no count, or a check the host got wrong, is refused too.
+    counts = [7, Number.NaN];
+    await expect(executor.executePositional('SELECT 1', [], connection)).rejects.toBeInstanceOf(RowPolicyRefusedError);
+    const malformed = withRowPolicy(new Grouped(), (query) => ({ sql: query.sql, groupRows: { column: '', minimum: 0, refusal: 'x' } }));
+    await expect(malformed.executePositional('SELECT 1', [], connection)).rejects.toThrow('could not check what you may see');
+  });
+
   it('has no other way to a warehouse in server code: no second executor, pool or connector', () => {
     const src = resolve(here, '..');
     const files: string[] = [];
@@ -196,6 +252,18 @@ describe('whose credentials (RFC 0010 HH-4)', () => {
     }
     const inner = new RecordingExecutor();
     await withRequestContext({ principal: dev, requestId: 'r3' }, () => expect(withHostQueryHooks(inner, { credentials }).executePositional('SELECT 1', [], service)).rejects.toThrow('Reconnect to Snowflake to run this query.'));
+  });
+
+  it('refuses in its own words, never repeating it, when the hook answers with a bare value instead of a connection', async () => {
+    const token = 'token-text-5e2a';
+    for (const junk of [token, 7, [token], { connection: token }, { connection: [token] }, { connection: null }]) {
+      const inner = new RecordingExecutor();
+      const executor = withHostQueryHooks(inner, { credentials: (() => junk) as unknown as DqlCredentialsHook });
+      const refusal = await executor.executePositional('SELECT 1', [], service).then(() => undefined, (error: unknown) => error);
+      expect(refusal, JSON.stringify(junk)).toBeInstanceOf(CredentialsRefusedError);
+      expect((refusal as Error).message).toBe('DQL could not get your warehouse sign-in. Reconnect and try again.');
+      expect(inner.ran).toEqual([]);
+    }
   });
 
   it('leaves the executor untouched without host query hooks', () => {
@@ -335,6 +403,132 @@ describe('where a chart\'s values came from (RFC 0010 HH-5)', () => {
       rmSync(projectRoot, { recursive: true, force: true });
     }
   }, 120_000);
+
+  duckDbIt('finds the chart a person ran when the host marks the question for the model, and hands its rows over only inside the boundary', async () => {
+    const projectRoot = mkdtempSync(join(tmpdir(), 'dql-chart-owner-'));
+    const databasePath = join(projectRoot, 'app-datasets-pilot.duckdb');
+    const connection: ConnectionConfig = { driver: 'duckdb', filepath: databasePath, moduleSearchPaths: [connectorRoot!] };
+    const executor = new QueryExecutor();
+    const servers: Server[] = [];
+    const people: Record<string, DqlPrincipal> = {
+      analyst: { id: 'u-analyst', kind: 'person', email: 'analyst@example.test', appGrants: { 'commerce-pilot': 'execute' }, source: 'host' },
+      other: { id: 'u-other', kind: 'person', email: 'other@example.test', appGrants: { 'commerce-pilot': 'execute' }, source: 'host' },
+    };
+    const prompts: string[] = [];
+    const model = { name: 'claude', available: async () => true, generate: async (messages: Array<{ content: string }>) => { prompts.push(messages.map((message) => message.content).join('\n')); return 'Answered from the chart.'; } } as unknown as DqlModelProvider;
+    let inBoundary = false;
+    // Like a host that marks every request whose values go to a model (an Ask, a question about a chart).
+    const hooks = (declared: boolean): DqlHostHooks => ({
+      resolvePrincipal: (req) => {
+        const person = people[String(req.headers['x-test-person'] ?? '')];
+        if (!person) return null;
+        return /\/ask$/.test(req.url ?? '') ? { ...person, attributes: { ...(person.attributes ?? {}), forModel: true } } : person;
+      },
+      rowPolicy: ({ sql }) => ({ sql }),
+      modelProvider: () => ({ id: 'anthropic', provider: model }),
+      isInBoundary: () => inBoundary,
+      ...(declared ? { purposeAttributes: ['forModel'] } : {}),
+    });
+    try {
+      cpSync(fixtureRoot, projectRoot, { recursive: true });
+      mkdirSync(join(projectRoot, '.dql', 'connectors'), { recursive: true });
+      symlinkSync(join(connectorRoot!, 'node_modules'), join(projectRoot, '.dql', 'connectors', 'node_modules'), 'dir');
+      execFileSync(process.execPath, [seedWarehouse, '--seed', join(projectRoot, 'seeds', 'seed.json'), '--connector-root', connectorRoot!, '--out', databasePath], { stdio: 'pipe' });
+      const serve = async (declared: boolean) => {
+        const port = await startLocalServer({ rootDir: projectRoot, projectRoot, executor, connection, preferredPort: 0, hostHooks: hooks(declared), captureServer: (created) => { servers.push(created); } });
+        return async (person: string, path: string, body: unknown) => {
+          const response = await fetch(`http://127.0.0.1:${port}${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-test-person': person }, body: JSON.stringify(body) });
+          const text = await response.text();
+          return { status: response.status, body: text ? JSON.parse(text) : undefined, text };
+        };
+      };
+      const runAndAsk = async (post: Awaited<ReturnType<typeof serve>>, asker = 'analyst') => {
+        const run = await post('analyst', '/api/apps/commerce-pilot/dashboards/overview/run', {});
+        expect(run.status, run.text).toBe(200);
+        const tile = (run.body.tiles as Array<{ tileId: string; status: string; tileType?: string }>).find((candidate) => candidate.status === 'ok' && candidate.tileType === 'dataset');
+        expect(tile).toBeTruthy();
+        return post(asker, '/api/apps/commerce-pilot/ask', { question: 'What stands out?', dashboardId: 'overview', tileId: tile!.tileId, runId: run.body.runId });
+      };
+
+      const post = await serve(true);
+      // Outside the boundary: answered from the chart without the model; no row reaches it.
+      inBoundary = false;
+      const outside = await runAndAsk(post);
+      expect(outside.status, outside.text).toBe(200);
+      expect(outside.text).toContain('outside the privacy boundary');
+      expect(prompts).toEqual([]);
+      // Inside the boundary: the model phrases it from the chart's own context.
+      inBoundary = true;
+      const inside = await runAndAsk(post);
+      expect(inside.status, inside.text).toBe(200);
+      expect(inside.body.answer ?? inside.text).toContain('Answered from the chart.');
+      expect(prompts).toHaveLength(1);
+      expect(prompts[0]).toContain('governedChartContext');
+      // Someone else never asks about another person's chart.
+      const stranger = await runAndAsk(post, 'other');
+      expect(stranger.text).toContain('no longer current');
+      expect(prompts).toHaveLength(1);
+
+      // A host that does not say which attributes are its marks: the marked question is someone else's, as before.
+      const undeclared = await serve(false);
+      expect((await runAndAsk(undeclared)).text).toContain('no longer current');
+    } finally {
+      await Promise.all(servers.map((server) => new Promise<void>((done) => server.close(() => done()))));
+      await executor.disconnect();
+      rmSync(projectRoot, { recursive: true, force: true });
+    }
+  }, 180_000);
+});
+
+describe('Dataset grain proofs are each person\'s with a host (their row rules decided them)', () => {
+  duckDbIt('keeps a page run\'s grain proof in the person\'s own file, never as shared evidence; without a host, as before', async () => {
+    const projectRoot = mkdtempSync(join(tmpdir(), 'dql-proofs-'));
+    const databasePath = join(projectRoot, 'app-datasets-pilot.duckdb');
+    const connection: ConnectionConfig = { driver: 'duckdb', filepath: databasePath, moduleSearchPaths: [connectorRoot!] };
+    const executor = new QueryExecutor();
+    const servers: Server[] = [];
+    const people: Record<string, DqlPrincipal> = {
+      ca: { id: 'u-ca', kind: 'person', email: 'ca@example.test', attributes: { region: 'CA' }, appGrants: { 'commerce-pilot': 'execute' }, source: 'host' },
+      us: { id: 'u-us', kind: 'person', email: 'us@example.test', attributes: { region: 'US' }, appGrants: { 'commerce-pilot': 'execute' }, source: 'host' },
+    };
+    const shared = join(projectRoot, '.dql', 'local', 'datasets', 'proofs.json');
+    const personal = join(projectRoot, '.dql', 'local', 'private', 'datasets', 'proofs');
+    const proofFiles = () => (existsSync(personal) ? readdirSync(personal).sort() : []);
+    try {
+      cpSync(fixtureRoot, projectRoot, { recursive: true });
+      mkdirSync(join(projectRoot, '.dql', 'connectors'), { recursive: true });
+      symlinkSync(join(connectorRoot!, 'node_modules'), join(projectRoot, '.dql', 'connectors', 'node_modules'), 'dir');
+      execFileSync(process.execPath, [seedWarehouse, '--seed', join(projectRoot, 'seeds', 'seed.json'), '--connector-root', connectorRoot!, '--out', databasePath], { stdio: 'pipe' });
+      const serve = async (hostHooks?: DqlHostHooks) => {
+        const port = await startLocalServer({ rootDir: projectRoot, projectRoot, executor, connection, preferredPort: 0, ...(hostHooks ? { hostHooks } : {}), captureServer: (created) => { servers.push(created); } });
+        return async (person: string) => {
+          const response = await fetch(`http://127.0.0.1:${port}/api/apps/commerce-pilot/dashboards/overview/run`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-test-person': person }, body: '{}' });
+          return { status: response.status, text: await response.text() };
+        };
+      };
+      // Without a host: one local proofs file, as before.
+      const local = await serve();
+      expect((await local('')).status).toBe(200);
+      expect(existsSync(shared)).toBe(true);
+      expect(proofFiles()).toEqual([]);
+      // With a host: what was shared is moved aside at start, and each person's run proves into their own file.
+      const hosted = await serve({
+        resolvePrincipal: (req) => people[String(req.headers['x-test-person'] ?? '')] ?? null,
+        rowPolicy: ({ sql }) => ({ sql }),
+      });
+      expect(existsSync(shared)).toBe(false);
+      expect(existsSync(join(projectRoot, '.dql', 'local', 'private', 'datasets', 'shared-proofs-before-host.json'))).toBe(true);
+      expect((await hosted('ca')).status).toBe(200);
+      expect(proofFiles()).toHaveLength(1);
+      expect((await hosted('us')).status).toBe(200);
+      expect(proofFiles()).toHaveLength(2);
+      expect(existsSync(shared)).toBe(false);
+    } finally {
+      await Promise.all(servers.map((server) => new Promise<void>((done) => server.close(() => done()))));
+      await executor.disconnect();
+      rmSync(projectRoot, { recursive: true, force: true });
+    }
+  }, 180_000);
 });
 
 describe('each person on their own warehouse sign-in (RFC 0010 HH-4)', () => {
@@ -395,4 +589,210 @@ describe('each person on their own warehouse sign-in (RFC 0010 HH-4)', () => {
       rmSync(projectRoot, { recursive: true, force: true });
     }
   }, 120_000);
+});
+
+describe('a statement the warehouse refuses, with a host (RFC 0010 HH-3)', () => {
+  const connection: ConnectionConfig = { driver: 'duckdb', filepath: ':memory:' };
+  const priya: DqlPrincipal = { id: 'u-priya', kind: 'person', email: 'priya@example.test', attributes: { region: 'West' }, source: 'host' };
+  // A region rule (`region = {user.region} OR {user.region} = 'All'`), put in place of the table it guards.
+  const regionRule: DqlRowPolicy = ({ principal, sql }) => {
+    const region = String(principal?.attributes?.region ?? '').replace(/'/g, "''");
+    return { sql: sql.replace(/\bFROM main\.claims\b/gi, `FROM (SELECT * FROM main.claims WHERE (region = '${region}' OR '${region}' = 'All')) AS "claims"`) };
+  };
+  /** A warehouse that quotes the statement it was sent, as DuckDB's LINE excerpt does. */
+  class QuotingExecutor extends RecordingExecutor {
+    constructor(private readonly said: (sent: string) => Error) { super(); }
+    override async executePositional(sql: string, _values?: unknown[], _config?: ConnectionConfig, _options?: unknown): Promise<QueryResult> { throw this.said(sql); }
+    override async getConnector(_config?: ConnectionConfig): Promise<DatabaseConnector> {
+      const said = this.said;
+      return {
+        driverName: 'duckdb',
+        async execute(sql: string) { throw said(sql); },
+        async *stream(sql: string) { throw said(sql); },
+        async openConsistentReadScope() { return { id: 's1', async execute(sql: string) { throw said(sql); }, async close() {} }; },
+        async ping() { return true; },
+      } as unknown as DatabaseConnector;
+    }
+  }
+  const binder = (sent: string) => Object.assign(new Error(`DuckDB query failed: Binder Error: Referenced column "status" not found in FROM clause!\nCandidate bindings: "claims.claim_status"\nLINE 1: ${sent.slice(20, 110)}...\n                 ^`), { code: 'CONNECTOR_QUERY_FAILED', sqlState: '42703' });
+  const quiet = <T>(run: (lines: string[]) => Promise<T>) => async () => {
+    const lines: string[] = [];
+    const warn = console.warn;
+    console.warn = (...args: unknown[]) => { lines.push(args.map(String).join(' ')); };
+    try { return await run(lines); } finally { console.warn = warn; }
+  };
+  const statement = 'SELECT region, COUNT(*) AS n FROM main.claims WHERE status = \'open\' GROUP BY region';
+
+  it('carries the diagnosis and a reference on, never the rewrite; the warehouse\'s words go to the log under the reference', quiet(async (lines) => {
+    const executor = withHostQueryHooks(new QuotingExecutor(binder), { rowPolicy: regionRule, hosted: true });
+    const failed = await withRequestContext({ principal: priya, requestId: 'w1' }, () => executor.executePositional(statement, [], connection).then(() => null, (error: unknown) => error)) as WarehouseStatementError;
+    expect(failed).toBeInstanceOf(WarehouseStatementError);
+    expect(failed.message).toMatch(/^DuckDB query failed: Binder Error: Referenced column "status" not found in FROM clause!\nCandidate bindings: "claims\.claim_status" \(reference [a-z]{8}\)$/);
+    expect(failed.message).not.toMatch(/West|'All'|LINE \d/);
+    expect(failed.warehouseDiagnosis).not.toMatch(/West|LINE/);
+    expect(failed).toMatchObject({ code: 'CONNECTOR_QUERY_FAILED', sqlState: '42703' });
+    expect((failed as Error & { cause?: unknown }).cause).toBeUndefined();
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toContain(`reference ${failed.warehouseReference}`);
+    // The log keeps the warehouse's diagnosis, the failure's kind and the statement's own tables; never the excerpt of
+    // the statement sent (the host's predicate), nor the person's values from the rewrite.
+    expect(lines[0]).toContain('Referenced column "status" not found');
+    expect(lines[0]).toMatch(/column_missing; tables: main\.claims\)/);
+    expect(lines[0]).not.toContain('LINE 1:');
+    expect(lines[0]).not.toMatch(/West|'All'|region =/);
+    // A driver that echoes the whole statement, and one that prints the rule's value bare.
+    const echo = withHostQueryHooks(new QuotingExecutor((sent) => new Error(`Error running ${sent}\nfilter on region West failed`)), { rowPolicy: regionRule, hosted: true });
+    const echoed = await withRequestContext({ principal: priya, requestId: 'w2' }, () => echo.executePositional(statement, [], connection).then(() => null, (error: unknown) => error)) as Error;
+    expect(echoed.message).toMatch(/^Error running \[the statement\]\nfilter on region … failed \(reference [a-z]{8}\)$/);
+    // The connector, its stream and a consistent read scope take the same path.
+    const connector = await withRequestContext({ principal: priya, requestId: 'w3' }, () => executor.getConnector(connection));
+    for (const attempt of [
+      () => connector.execute(statement),
+      async () => { for await (const _ of connector.stream!(statement)) { /* nothing */ } },
+      async () => (await (connector as unknown as { openConsistentReadScope(): Promise<{ execute(sql: string): Promise<unknown> }> }).openConsistentReadScope()).execute(statement),
+    ]) {
+      const error = await withRequestContext({ principal: priya, requestId: 'w4' }, () => attempt().then(() => null, (caught: unknown) => caught)) as Error;
+      expect(error).toBeInstanceOf(WarehouseStatementError);
+      expect(error.message).not.toMatch(/West|'All'|LINE \d/);
+    }
+  }));
+
+  it('logs no start of a rewrite value an engine cut short, in its excerpt or in its words', quiet(async (lines) => {
+    // DuckDB cuts its LINE excerpt, and with it the second copy of the rule's value ('Wes...').
+    const cut = () => new Error("DuckDB query failed: Catalog Error: Table with name claimz does not exist near 'Wes...'\nLINE 1: ...FROM \"claims\" WHERE (region = '…' OR 'Wes...\n                 ^");
+    const executor = withHostQueryHooks(new QuotingExecutor(cut), { rowPolicy: regionRule, hosted: true });
+    const failed = await withRequestContext({ principal: priya, requestId: 'c1' }, () => executor.executePositional(statement, [], connection).then(() => null, (error: unknown) => error)) as WarehouseStatementError;
+    expect(failed).toBeInstanceOf(WarehouseStatementError);
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toContain(`reference ${failed.warehouseReference}`);
+    expect(lines[0]).not.toMatch(/Wes|LINE 1|region =/);
+    expect(failed.message).not.toMatch(/Wes/);
+  }));
+
+  it('leaves the warehouse\'s other words whole when the rewrite added a number: the number goes as a token only, never every digit like it', quiet(async (lines) => {
+    // A rule that adds a bare number (tier <> 0) beside the region value.
+    const tiered: DqlRowPolicy = async (query) => ({ sql: `${(await regionRule(query) as { sql: string }).sql} AND tier <> 0` });
+    const conversion = () => new Error("DuckDB query failed: Conversion Error: Could not convert string 'M-0003' to INT32 at position 0 for region 'West'");
+    const executor = withHostQueryHooks(new QuotingExecutor(conversion), { rowPolicy: tiered, hosted: true });
+    const failed = await withRequestContext({ principal: priya, requestId: 'n1' }, () => executor.executePositional(statement, [], connection).then(() => null, (error: unknown) => error)) as WarehouseStatementError;
+    expect(failed).toBeInstanceOf(WarehouseStatementError);
+    expect(failed.warehouseDiagnosis).toContain("Could not convert string 'M-0003' to INT32");
+    // The rewrite's own values are left out, the number as a whole token included.
+    expect(failed.warehouseDiagnosis).toMatch(/at position … for region '…'$/);
+    expect(failed.message).not.toMatch(/West/);
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toContain("'M-0003' to INT32");
+    expect(lines[0]).not.toMatch(/West/);
+    // A mask the rewrite added ('****') is not a value: a masked value quoted by the warehouse stays whole.
+    const masking: DqlRowPolicy = async (query) => ({ sql: (await regionRule(query) as { sql: string }).sql.replace(/^SELECT region/, "SELECT CASE WHEN region IS NULL THEN NULL ELSE '****' END AS region") });
+    const masked = withHostQueryHooks(new QuotingExecutor(() => new Error("DuckDB query failed: Conversion Error: Could not convert string '**** ****** 0003' to INT32")), { rowPolicy: masking, hosted: true });
+    const maskedFailure = await withRequestContext({ principal: priya, requestId: 'n2' }, () => masked.executePositional(statement, [], connection).then(() => null, (error: unknown) => error)) as WarehouseStatementError;
+    expect(maskedFailure.warehouseDiagnosis).toContain("Could not convert string '**** ****** 0003' to INT32");
+  }));
+
+  it('with the host\'s smallest-group check too: a group too small is the host\'s refusal in its own words (no reference, nothing logged); a warehouse failure stays plain with a reference, on every path', quiet(async (lines) => {
+    const check = { column: 'host_group_rows', minimum: 5, refusal: 'Some groups are too small for the model.' };
+    // The region rule's rewrite and the group check, as a host answers for a grouped question for the model.
+    const groupedRule: DqlRowPolicy = async (query) => ({ ...(await regionRule(query) as { sql: string }), groupRows: check });
+    const small = () => ({ columns: [{ name: 'region', type: 'string' }, { name: 'n', type: 'number' }, { name: 'host_group_rows', type: 'number' }], rows: [{ region: 'West', n: 1, host_group_rows: 1 }], rowCount: 1, executionTime: 0 }) as unknown as QueryResult;
+    class SmallGroups extends RecordingExecutor {
+      override async executePositional(_sql: string, _values?: unknown[], _config?: ConnectionConfig, _options?: unknown): Promise<QueryResult> { return small(); }
+      override async getConnector(_config?: ConnectionConfig): Promise<DatabaseConnector> {
+        return {
+          driverName: 'duckdb',
+          async execute() { return small(); },
+          async *stream() { yield { columns: small().columns, rows: small().rows, rowCount: 1, byteCount: 1 }; },
+          async openConsistentReadScope() { return { id: 's2', async execute() { return small(); }, async close() {} }; },
+          async ping() { return true; },
+        } as unknown as DatabaseConnector;
+      }
+    }
+    const paths = (executor: QueryExecutor, requestId: string) => withRequestContext({ principal: priya, requestId }, async () => {
+      const connector = await executor.getConnector(connection);
+      const scope = await (connector as unknown as { openConsistentReadScope(): Promise<{ execute(sql: string): Promise<unknown> }> }).openConsistentReadScope();
+      const handed: unknown[] = [];
+      const outcomes: unknown[] = [];
+      for (const attempt of [
+        () => executor.executePositional(statement, [], connection),
+        () => connector.execute(statement),
+        async () => { for await (const batch of connector.stream!(statement)) handed.push(...batch.rows); },
+        () => scope.execute(statement),
+      ]) outcomes.push(await attempt().then(() => null, (caught: unknown) => caught));
+      return { outcomes, handed };
+    });
+    const refused = await paths(withHostQueryHooks(new SmallGroups(), { rowPolicy: groupedRule, hosted: true }), 'g1');
+    for (const outcome of refused.outcomes) {
+      expect(outcome).toBeInstanceOf(RowPolicyRefusedError);
+      expect(outcome).not.toBeInstanceOf(WarehouseStatementError);
+      expect((outcome as Error).message).toBe('Some groups are too small for the model.');
+    }
+    expect(refused.handed).toEqual([]);
+    expect(lines).toEqual([]);
+    const failing = await paths(withHostQueryHooks(new QuotingExecutor(binder), { rowPolicy: groupedRule, hosted: true }), 'g2');
+    for (const outcome of failing.outcomes) {
+      expect(outcome).toBeInstanceOf(WarehouseStatementError);
+      expect((outcome as Error).message).toMatch(/\(reference [bcdfghjkmnpqrstvwxz]{8}\)$/);
+      expect((outcome as Error).message).not.toMatch(/West|'All'|LINE \d|host_group_rows/);
+    }
+    // The warehouse's words are in the log only, one line per failure under its reference, without the rule's values.
+    expect(lines).toHaveLength(failing.outcomes.length);
+    failing.outcomes.forEach((outcome, index) => expect(lines[index]).toContain(`reference ${(outcome as WarehouseStatementError).warehouseReference}`));
+    expect(lines.join('\n')).not.toMatch(/West|'All'/);
+  }));
+
+  it('passes on as before: a statement the host did not rewrite (with a reference), a refusal, a cancellation, a deadline, and everything without a host', quiet(async (lines) => {
+    const plain = withHostQueryHooks(new QuotingExecutor((sent) => new Error(`Catalog Error: Table with name claimz does not exist!\nLINE 1: ${sent}`)), { rowPolicy: regionRule, hosted: true });
+    const unchanged = await withRequestContext({ principal: priya, requestId: 'p1' }, () => plain.executePositional('SELECT * FROM main.claimz', [], connection).then(() => null, (error: unknown) => error)) as WarehouseStatementError;
+    expect(unchanged.message).toMatch(/^Catalog Error: Table with name claimz does not exist!\nLINE 1: SELECT \* FROM main\.claimz \(reference [a-z]{8}\)$/);
+    const refusing = withHostQueryHooks(new QuotingExecutor(binder), { rowPolicy: () => ({ refuse: 'Claims data is restricted.' }), hosted: true });
+    await expect(withRequestContext({ principal: priya, requestId: 'p2' }, () => refusing.executePositional(statement, [], connection))).rejects.toBeInstanceOf(RowPolicyRefusedError);
+    for (const stop of [Object.assign(new Error('aborted'), { name: 'AbortError' }), new Error('DuckDB query was cancelled.'), new Error('DuckDB query exceeded the 500ms deadline.')]) {
+      const stopping = withHostQueryHooks(new QuotingExecutor(() => stop), { rowPolicy: regionRule, hosted: true });
+      await expect(withRequestContext({ principal: priya, requestId: 'p3' }, () => stopping.executePositional(statement, [], connection))).rejects.toBe(stop);
+    }
+    const raw = binder('x');
+    await expect(withHostQueryHooks(new QuotingExecutor(() => raw), { rowPolicy: regionRule }).executePositional(statement, [], connection)).rejects.toBe(raw);
+    expect(withHostQueryHooks(new RecordingExecutor(), {})).not.toBe(withHostQueryHooks(new RecordingExecutor(), { hosted: true }));
+    expect(lines).toHaveLength(1);
+  }));
+
+  duckDbIt('on a real warehouse with a region rule: every kind of failure reads plainly in Ask and never names the rule or the person\'s region', quiet(async (lines) => {
+    const dir = mkdtempSync(join(tmpdir(), 'dql-warehouse-failures-'));
+    const real: ConnectionConfig = { driver: 'duckdb', filepath: join(dir, 'claims.duckdb'), moduleSearchPaths: [connectorRoot!] };
+    const inner = new QueryExecutor();
+    try {
+      await inner.executePositional("CREATE TABLE main.claims AS SELECT * FROM (VALUES ('C-1', 'West', 'open'), ('C-2', 'Northeast', 'open')) AS t(claim_id, region, claim_status)", [], real);
+      const executor = withHostQueryHooks(inner, { rowPolicy: regionRule, hosted: true });
+      const failing: Array<[string, RegExp]> = [
+        // The column was renamed under the statement (a certified block after a dbt refactor).
+        [statement, /^A column this answer reads \(status\) is not in the claims table on the warehouse\. The table may have changed since the answer was defined\. Ask your administrator about reference [a-z]{8}\.$/],
+        // A function this warehouse does not have.
+        ["SELECT region, ISNULL(claim_status, '') AS s FROM main.claims", /^The statement calls a function \(ISNULL\) that this warehouse does not have\. Rephrase the question\. Ask your administrator about reference [a-z]{8}\.$/i],
+        // An alias the statement never declared.
+        ['SELECT x.region FROM main.claims c', /^The warehouse could not run this statement\. Ask your administrator about reference [a-z]{8}\.$/],
+        // A value of the wrong type.
+        ["SELECT region FROM main.claims WHERE claim_id + 1 > 0", /^The warehouse could not run this statement\. Ask your administrator about reference [a-z]{8}\.$/],
+        // A table that is not there.
+        ['SELECT * FROM main.claimz', /^The warehouse does not have main\.claimz, although the catalog lists it\. Ask your administrator about reference [a-z]{8}\.$/],
+      ];
+      for (const [sql, said] of failing) {
+        const error = await withRequestContext({ principal: priya, requestId: `r-${sql.length}` }, () => executor.executePositional(sql, [], real).then(() => null, (caught: unknown) => caught));
+        expect(error, sql).toBeInstanceOf(WarehouseStatementError);
+        // What a notebook cell would show: never the rule; the excerpt only of a statement the rule left as written.
+        expect((error as Error).message, sql).not.toMatch(/West|'All'/);
+        if (sql.includes('main.claims ') || sql.endsWith('main.claims')) expect((error as Error).message, sql).not.toMatch(/LINE \d/);
+        const failed = statementFailure(error, { sql });
+        const text = composeFailedText('execute', failed.message, failed.warehouse);
+        expect(text, sql).toMatch(said);
+        expect(`${text} ${failed.message}`, sql).not.toMatch(/West|'All'|Binder Error|Catalog Error|Conversion Error|DuckDB query failed|LINE \d|\^|dbt build/);
+      }
+      expect(lines).toHaveLength(failing.length);
+      expect(lines.every((line) => /reference [a-z]{8}/.test(line))).toBe(true);
+      // The rule's values never reach the log, even where DuckDB's excerpt cuts a literal in two.
+      expect(lines.join('\n')).not.toMatch(/West|'All'/);
+    } finally {
+      await inner.disconnect();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }), 60_000);
 });

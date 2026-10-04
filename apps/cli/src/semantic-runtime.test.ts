@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -731,12 +731,21 @@ describe('explainMissingSemanticRuntime (actionable config diagnosis)', () => {
     process.env.DBT_CLOUD_SEMANTIC_LAYER_HOST = 'fake.getdbt.invalid';
     process.env.DBT_CLOUD_ENVIRONMENT_ID = '123';
     process.env.DBT_CLOUD_SERVICE_TOKEN = 'nope';
+    // The probe is answered in-process as an unreachable host: nothing is looked up or connected off this machine.
+    const asked: string[] = [];
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+      asked.push(new URL(String(input instanceof Request ? input.url : input)).hostname);
+      throw new TypeError('fetch failed');
+    }));
     try {
       const { explainMissingSemanticRuntime } = await import('./semantic-runtime.js');
       const msg = await explainMissingSemanticRuntime(root);
       expect(msg).toContain('dbt Cloud is configured');
       expect(msg).toContain('Test & save');
+      expect(asked.length).toBeGreaterThan(0);
+      expect(asked.every((host) => host === 'fake.getdbt.invalid')).toBe(true);
     } finally {
+      vi.unstubAllGlobals();
       if (priorEnv.host === undefined) delete process.env.DBT_CLOUD_SEMANTIC_LAYER_HOST; else process.env.DBT_CLOUD_SEMANTIC_LAYER_HOST = priorEnv.host;
       if (priorEnv.env === undefined) delete process.env.DBT_CLOUD_ENVIRONMENT_ID; else process.env.DBT_CLOUD_ENVIRONMENT_ID = priorEnv.env;
       if (priorEnv.token === undefined) delete process.env.DBT_CLOUD_SERVICE_TOKEN; else process.env.DBT_CLOUD_SERVICE_TOKEN = priorEnv.token;

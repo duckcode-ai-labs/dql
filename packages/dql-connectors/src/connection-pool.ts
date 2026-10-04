@@ -51,6 +51,8 @@ export function createConnectionConfigKey(config: ConnectionConfig): string {
     sshTunnel: config.sshTunnel,
     tlsServername: config.tlsServername,
     filepath: config.filepath,
+    allowedDirectories: config.allowedDirectories,
+    restrictExternalAccess: config.restrictExternalAccess,
     projectId: config.projectId,
     account: config.account,
     warehouse: config.warehouse,

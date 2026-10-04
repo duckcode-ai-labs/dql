@@ -146,4 +146,38 @@ describe('rendered App digests and monitors (RFC 0008 step 10)', () => {
     expect(alerts).toHaveLength(1);
     expect(alerts[0].subject).toContain('fell 41% since the last run ($145 → $85)');
   });
+
+  it('with a host, compares each run with the last run as the same person: a run someone else starts does not set the baseline', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'dql-app-digest-'));
+    roots.push(root);
+    cpSync(FIXTURE, root, { recursive: true });
+    const appPath = join(root, 'apps/commerce-pilot/dql.app.json');
+    const app = JSON.parse(readFileSync(appPath, 'utf8'));
+    app.schedules = [{ id: 'daily', cron: '0 8 * * *', dashboard: 'overview', deliver: [{ kind: 'webhook', url: 'https://hooks.example.test/daily' }] }];
+    writeFileSync(appPath, JSON.stringify(app, null, 2));
+    // The run-as person sees 145 then 150; someone with wider rules who starts a run in between sees 9,000.
+    let revenue = 145;
+    const runtime = vi.fn(async () => new Response(JSON.stringify({ tiles: [runTile('order-lines-dataset-kpi', [{ revenue }])] }), { status: 200 }));
+    const pageRunner = createRuntimePageRunner('http://127.0.0.1:9', runtime as unknown as typeof fetch);
+    const webhook = vi.fn(async () => new Response('', { status: 200 }));
+    vi.stubGlobal('fetch', webhook);
+    const run = (baselineOwner: string) => runAppDashboard('commerce-pilot', 'overview', {
+      executor: new QueryExecutor(), connection: { driver: 'duckdb' }, projectRoot: root, trigger: 'cron', scheduleId: 'daily', pageRunner, baselineOwner,
+    });
+    const sent = () => webhook.mock.calls.map((call) => JSON.parse(((call as unknown as [string, RequestInit])[1].body as string)) as { markdown: string });
+    await run('p-runas');
+    revenue = 9_000;
+    await run('p-wider');
+    // The wider run compared with no baseline of its own: it says nothing of the run-as person's figure.
+    expect(sent().at(-1)!.markdown).not.toContain('$145');
+    revenue = 150;
+    await run('p-runas');
+    const last = sent().at(-1)!.markdown;
+    expect(last).toContain('(was $145)');
+    expect(last).not.toContain('9,000');
+    expect(readDigestState(root, 'commerce-pilot', 'daily~p-runas')?.values['order-lines-dataset-kpi.revenue']).toMatchObject({ value: 150 });
+    expect(readDigestState(root, 'commerce-pilot', 'daily~p-wider')?.values['order-lines-dataset-kpi.revenue']).toMatchObject({ value: 9_000 });
+    // Without a host (no person named) the schedule keeps its one baseline, as before.
+    expect(readDigestState(root, 'commerce-pilot', 'daily')).toBeNull();
+  });
 });

@@ -263,7 +263,7 @@ export function resolveSecretReferences<T extends object>(connection: T, project
  * A person's own connections for this project, outside git:
  * `.dql/local/private/connections.json` = `{ defaultConnection?, connections }`.
  * Each named connection replaces a shared one of the same name, and its
- * `defaultConnection` wins. A host's command line (DQL Enterprise's `dqle`)
+ * `defaultConnection` wins. A host's command line
  * writes the development copy an admin named here, so a laptop never needs
  * Production's credentials; without the file nothing changes.
  */

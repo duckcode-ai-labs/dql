@@ -134,7 +134,11 @@ my-dql-project/
   warehouse relation/column generation used by warm Ask, schema browsing, and
   semantic table mapping. It stores no credentials or sampled values. It never
   contains canonical chat history and SQLite is never the shared governed
-  source of truth.
+  source of truth. Ask's context packs (the question and the vocabulary an
+  answer was built from, for follow-ups and the run's trace) are kept bounded:
+  the newest 200, none older than 7 days, at most 64 MB in all
+  (`DQL_CONTEXT_PACK_MAX`, `DQL_CONTEXT_PACK_DAYS`, `DQL_CONTEXT_PACK_MAX_MB`).
+  Space freed by older packs is reused; `VACUUM` shrinks the file.
 - **`.dql/imports/`** — local import review sessions. AI SQL imports follow
   `extract -> parameterize -> match/reuse -> validate -> review -> certify`.
   The session stores draft candidates, parameter decisions, evidence, and

@@ -9,7 +9,7 @@
  * fallback, so the author always gets a valid story.
  */
 import type { DashboardNarrative, DashboardNarrativeBlock, StoryBindingCatalog } from '@duckcodeailabs/dql-core';
-import { MAX_STORY_BLOCKS, validateStoryText } from '@duckcodeailabs/dql-core';
+import { MAX_STORY_BLOCKS, STORY_BINDING_PATTERN, validateStoryText } from '@duckcodeailabs/dql-core';
 
 export interface StoryDraftInput {
   pageTitle: string;
@@ -20,10 +20,47 @@ export interface StoryDraftInput {
   catalog: StoryBindingCatalog;
   tiles: Array<{ tileId: string; title: string; kind: string }>;
   /**
-   * Whether the model may see current values. True only for a model on this
-   * machine; a hosted model gets binding names and labels, never results.
+   * Whether the model may see current values. True only for a model inside
+   * the privacy boundary; any other model gets binding names and labels,
+   * never results — and a grouped tile's members are results too, so its
+   * bindings reach that model named by position ("group 1"), never by member.
    */
   includeValues: boolean;
+}
+
+/**
+ * The bindings as a model outside the privacy boundary may read them. A grouped tile's per-member bindings carry
+ * the member (a result value: a region, a person's name) in their key and label; here they are named by position
+ * instead — `{{tile.column[group 1]}}`, "… for group 1" — and `realKey` maps each such key back once a draft has
+ * passed its checks. Every other binding is unchanged. With values allowed, the catalog is returned as it is.
+ */
+export function promptBindings(catalog: StoryBindingCatalog, includeValues: boolean): { catalog: StoryBindingCatalog; realKey: (key: string) => string; neutral: boolean } {
+  if (includeValues) return { catalog, realKey: (key) => key, neutral: false };
+  const shown: StoryBindingCatalog = {};
+  const real = new Map<string, string>();
+  const groups = new Map<string, Map<string, number>>();
+  for (const binding of Object.values(catalog)) {
+    const rest = binding.key.startsWith(`${binding.tileId}.`) ? binding.key.slice(binding.tileId.length + 1) : '';
+    const open = rest.indexOf('[');
+    if (open <= 0 || !rest.endsWith(']')) {
+      // Its key and label name no member; its value (a leader's name, a figure) stays here.
+      shown[binding.key] = { ...binding, value: null, display: '' };
+      continue;
+    }
+    const column = rest.slice(0, open);
+    const member = rest.slice(open + 1, -1);
+    const members = groups.get(binding.tileId) ?? new Map<string, number>();
+    groups.set(binding.tileId, members);
+    if (!members.has(member)) members.set(member, members.size + 1);
+    const position = members.get(member)!;
+    const key = `${binding.tileId}.${column}[group ${position}]`;
+    const suffix = ` for ${member}`;
+    const label = binding.label.endsWith(suffix) ? `${binding.label.slice(0, -suffix.length)} for group ${position}` : `${binding.tileId} ${column}, group ${position}`;
+    // No value, display or member text travels with it.
+    shown[key] = { key, tileId: binding.tileId, label, kind: binding.kind, value: null, display: '', ...(binding.unit ? { unit: binding.unit } : {}) };
+    real.set(key, binding.key);
+  }
+  return { catalog: shown, realKey: (key) => real.get(key) ?? key, neutral: real.size > 0 };
 }
 
 export type StoryDraftComplete = (messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>) => Promise<string>;
@@ -48,7 +85,8 @@ export const STORY_DRAFT_SYSTEM_PROMPT = [
 ].join('\n');
 
 export function storyDraftUserPrompt(input: StoryDraftInput): string {
-  const bindings = Object.values(input.catalog).slice(0, 80).map((binding) => (
+  const shown = promptBindings(input.catalog, input.includeValues).catalog;
+  const bindings = Object.values(shown).slice(0, 80).map((binding) => (
     `{{${binding.key}}} — ${binding.label}${input.includeValues ? ` (now ${binding.display})` : ''}`
   ));
   const lines = [
@@ -109,6 +147,8 @@ function parseJsonReply(text: string): unknown {
 export async function draftStoryNarrative(input: StoryDraftInput, complete: StoryDraftComplete | null, options: { model?: string } = {}): Promise<StoryDraftResult> {
   const issues: string[] = [];
   let attempts = 0;
+  // The model reads (and is checked against) the bindings as it may see them; the draft is mapped back after.
+  const shown = promptBindings(input.catalog, input.includeValues);
   if (complete && Object.keys(input.catalog).length > 0) {
     const messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [
       { role: 'system', content: STORY_DRAFT_SYSTEM_PROMPT },
@@ -122,10 +162,13 @@ export async function draftStoryNarrative(input: StoryDraftInput, complete: Stor
         issues.push(`The model did not answer: ${error instanceof Error ? error.message : String(error)}`);
         break;
       }
-      const checked = validateStoryBlocks(parseJsonReply(reply), input);
+      const checked = validateStoryBlocks(parseJsonReply(reply), { catalog: shown.catalog, tiles: input.tiles });
       if (checked.issues.length === 0) {
+        const blocks = shown.neutral
+          ? checked.blocks.map((block) => (block.kind === 'text' ? { ...block, markdown: block.markdown.replace(STORY_BINDING_PATTERN, (_whole, key: string) => `{{${shown.realKey(key.trim())}}}`) } : block))
+          : checked.blocks;
         return {
-          narrative: { version: 1, presentation: 'story', blocks: checked.blocks, generatedBy: 'ai', ...(options.model ? { model: options.model } : {}) },
+          narrative: { version: 1, presentation: 'story', blocks, generatedBy: 'ai', ...(options.model ? { model: options.model } : {}) },
           generatedBy: 'ai',
           attempts,
           issues: [],

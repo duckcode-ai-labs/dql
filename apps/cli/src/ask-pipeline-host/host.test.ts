@@ -1576,3 +1576,67 @@ describe('preferred joins are hints for AI-written SQL, never gates', () => {
     expect(joinHintUsed('SELECT customer_id FROM dev.orders', keys)).toBe(false);
   });
 });
+
+describe('a follow-up\'s earlier answer and the thread\'s memory reach the model only inside the privacy boundary (RFC 0010 HH-5)', () => {
+  const FIGURE = 'CANARY-FIGURE-8812';
+  const prior = { intent: JSON.parse(analytics) as AnalyticalIntentV1, summary: `Revenue was ${FIGURE}.`, executed: true };
+  const followUp = (provider: ReturnType<typeof scripted>, valuesMayReachModel?: () => boolean) => createAskPipelineRouteExecutor({
+    projectRoot: '/tmp/none',
+    executor: {} as QueryExecutor,
+    resolveConnection: async () => { throw new Error('No database connection is configured yet.'); },
+    getSemanticLayer: () => undefined,
+    getManifest: () => ({ manifest: undefined as never, snapshotId: 'snapshot:test' }),
+    selectProvider: async () => provider,
+    compileSemantic: async () => { throw new Error('no semantic layer'); },
+    priorIntent: () => prior,
+    conversation: () => ({ summary: `Earlier answers: ${FIGURE} in the West.`, pendingClarification: `Which of ${FIGURE}-members?` }),
+    ...(valuesMayReachModel ? { valuesMayReachModel } : {}),
+  })({
+    runId: 'run-follow-up', request: { question: 'And by region?', requestedMode: 'ask', threadId: 'thread-1' } as AgentRunRequest,
+    route: 'generated_answer', maxRepairAttempts: 0, attempt: 0, emit: () => {},
+  });
+
+  it('outside the boundary the model reads the earlier reading, never its answer or the thread\'s memory', async () => {
+    const outside = scripted([conversation]);
+    await followUp(outside, () => false);
+    expect(outside.calls.length).toBeGreaterThan(0);
+    expect(JSON.stringify(outside.calls)).not.toContain(FIGURE);
+    expect(JSON.stringify(outside.calls)).toContain('Total revenue.');
+  });
+
+  it('inside the boundary (and without the rule: single-user, the chosen model) they are carried as before', async () => {
+    const inside = scripted([conversation]);
+    await followUp(inside, () => true);
+    expect(JSON.stringify(inside.calls)).toContain(FIGURE);
+    const noRule = scripted([conversation]);
+    await followUp(noRule);
+    expect(JSON.stringify(noRule.calls)).toContain(FIGURE);
+  });
+
+  it('outside the boundary the earlier reading\'s restriction values (a member, as typed or as stored) are named by position, never sent', async () => {
+    const MEMBER = 'CANARY-MEMBER-5520';
+    const earlier = { ...(JSON.parse(analytics) as AnalyticalIntentV1), reading: `Total revenue for ${MEMBER}.`, filters: [{ ref: 'dimension:customers.customer_name', op: 'eq' as const, values: [MEMBER], source: 'question' as const }] };
+    const ask = (provider: ReturnType<typeof scripted>, valuesMayReachModel: () => boolean) => createAskPipelineRouteExecutor({
+      projectRoot: '/tmp/none',
+      executor: {} as QueryExecutor,
+      resolveConnection: async () => { throw new Error('No database connection is configured yet.'); },
+      getSemanticLayer: () => undefined,
+      getManifest: () => ({ manifest: undefined as never, snapshotId: 'snapshot:test' }),
+      selectProvider: async () => provider,
+      compileSemantic: async () => { throw new Error('no semantic layer'); },
+      priorIntent: () => ({ intent: earlier, executed: true, drafted: true, sql: `SELECT SUM(price) FROM dev.order_items WHERE customer_name = '${MEMBER}'` }),
+      valuesMayReachModel,
+    })({
+      runId: 'run-member', request: { question: 'And by month?', requestedMode: 'ask', threadId: 'thread-2' } as AgentRunRequest,
+      route: 'generated_answer', maxRepairAttempts: 0, attempt: 0, emit: () => {},
+    });
+    const outside = scripted([conversation]);
+    await ask(outside, () => false);
+    expect(outside.calls.length).toBeGreaterThan(0);
+    expect(JSON.stringify(outside.calls)).not.toContain(MEMBER);
+    expect(JSON.stringify(outside.calls)).toContain('[value 1]');
+    const inside = scripted([conversation]);
+    await ask(inside, () => true);
+    expect(JSON.stringify(inside.calls)).toContain(MEMBER);
+  });
+});

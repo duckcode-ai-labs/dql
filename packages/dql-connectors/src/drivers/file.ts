@@ -27,6 +27,9 @@ export class FileConnector implements DatabaseConnector {
     const duckdbConfig: ConnectionConfig = {
       driver: 'duckdb',
       filepath: config.filepath ?? ':memory:',
+      // A host's restriction (and the folders it still allows) holds for file connections too.
+      ...(config.restrictExternalAccess ? { restrictExternalAccess: true } : {}),
+      ...(config.allowedDirectories?.length ? { allowedDirectories: config.allowedDirectories } : {}),
     };
     await this.duckdb.connect(duckdbConfig);
   }
@@ -43,11 +46,13 @@ export class FileConnector implements DatabaseConnector {
     return this.duckdb.ping();
   }
 
+  // The catalog lookups are DuckDB's, run through this connector's own `execute`, so whoever wraps this connector
+  // (a host's statement check, RFC 0010) sees their statements too.
   async listTables(): Promise<TableInfo[]> {
-    return this.duckdb.listTables();
+    return DuckDBConnector.prototype.listTables.call(this);
   }
 
   async listColumns(schema?: string, table?: string): Promise<ColumnInfo[]> {
-    return this.duckdb.listColumns(schema, table);
+    return DuckDBConnector.prototype.listColumns.call(this, schema, table);
   }
 }

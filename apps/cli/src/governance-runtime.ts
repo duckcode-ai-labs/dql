@@ -11,7 +11,7 @@ import {
   defaultPersonaRegistry,
   mergePersonaVariables,
 } from '@duckcodeailabs/dql-project';
-import { currentPrincipal, hostPrincipalPolicyIdentity, hostPrincipalVariables, hostUserContext, type DqlPrincipal } from './host/request-context.js';
+import { currentPrincipal, hostPrincipalPolicyIdentity, hostPrincipalRunOwner, hostPrincipalVariables, hostUserContext, type DqlPrincipal } from './host/request-context.js';
 
 export class DQLAccessDeniedError extends Error {
   constructor(message: string) {
@@ -39,11 +39,25 @@ export function activePersonaAppId(): string | undefined {
  * with different RLS values must never share a cached or proven result.
  */
 export function activePersonaPolicyFingerprint(): string {
+  return personaFingerprint(hostPrincipalPolicyIdentity());
+}
+
+/**
+ * Who ran something, to find that run again later (a chart a person asks
+ * about): the same as `activePersonaPolicyFingerprint` for the App persona,
+ * but with the signed-in person's identity alone, not where this request's
+ * values go (RFC 0010 `purposeAttributes`). Without a host the two are equal.
+ * Never a cache or proof key.
+ */
+export function activePersonaRunOwnerFingerprint(): string {
+  return personaFingerprint(hostPrincipalRunOwner());
+}
+
+function personaFingerprint(host: Record<string, unknown> | undefined): string {
   const persona = defaultPersonaRegistry.active;
   const sorted = (record: Record<string, unknown> | undefined) => Object.fromEntries(
     Object.entries(record ?? {}).sort(([left], [right]) => left.localeCompare(right)),
   );
-  const host = hostPrincipalPolicyIdentity();
   return createHash('sha256').update(JSON.stringify({
     version: 1,
     appId: persona?.appId ?? 'global',

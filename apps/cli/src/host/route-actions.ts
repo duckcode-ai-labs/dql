@@ -41,6 +41,35 @@ const AUTHORING_FAMILIES = [
   '/api/app-datasets', '/api/lineage',
 ];
 
+/** Families whose routes are asking or investigating; a route under them not listed below is classed as a change. */
+const ASK_FAMILIES = ['/api/agent-runs', '/api/ask', '/api/ai', '/api/agent', '/api/llm', '/api/research-plan', '/api/notebook/research'];
+
+/** Non-GET routes that ask: they write only the person's own runs, threads, notes and traces. */
+const ASK_ROUTES: ReadonlyArray<string | RegExp> = [
+  '/api/agent-runs',
+  '/api/agent-runs/request-certification',
+  /^\/api\/agent-runs\/[^/]+\/(cancel|repair-execution|analytical-repair)$/,
+  '/api/semantic-query',
+  '/api/llm/run',
+  '/api/ai/sql-draft/preview',
+  // Building a notebook cell with AI returns SQL and writes nothing.
+  '/api/ai/build/cell',
+  // A recorded correction writes a candidate hint and its trace into the project (.dql/hints, .dql/traces): it is
+  // a change to the project (project.write), made where changes are made, not part of asking.
+  // A person's own notes; notes for everyone are checked as project.write by the route itself.
+  '/api/agent/memory',
+  '/api/agent/threads',
+  '/api/agent/threads/search',
+  /^\/api\/agent\/threads\/[^/]+(\/(archive|promote))?$/,
+];
+
+/** Non-GET routes that investigate. */
+const RESEARCH_ROUTES: ReadonlyArray<string | RegExp> = [
+  '/api/research-plan',
+  '/api/notebook/research',
+  /^\/api\/notebook\/research\/[^/]+(\/[^/]+)?$/,
+];
+
 function under(path: string, family: string): boolean {
   return path === family || path.startsWith(`${family}/`);
 }
@@ -77,6 +106,8 @@ function actionFor(method: string, path: string): DqlAction {
   if (under(path, '/api/connections') || path === '/api/test-connection') return read ? 'project.read' : 'connection.manage';
   if (path === '/api/persona') return read ? 'project.read' : 'app.author';
   if (under(path, '/api/settings') || under(path, '/api/server') || under(path, '/api/semantic-runtime')) return read ? 'project.read' : 'settings.manage';
+  // Setting the project up and installing drivers run programs on the server (dbt, npm): the server's administrator's.
+  if (!read && (under(path, '/api/onboarding') || under(path, '/api/connectors'))) return 'settings.manage';
   if (under(path, '/api/git')) return read ? 'project.read' : 'git.review';
 
   // Trust decisions. Every route that can leave something certified is a
@@ -115,14 +146,23 @@ function actionFor(method: string, path: string): DqlAction {
   }
 
   // What the app shows around its screens and one's own answers' facts (HH-9, HH-10): reading.
-  if (under(path, '/api/host')) return 'project.read';
+  if (under(path, '/api/host')) return read || path === '/api/host/answer-status' ? 'project.read' : 'project.write';
 
-  // Asking and investigating. Asking for certification is part of asking:
-  // the requester is whoever is signed in.
-  if (!read && (under(path, '/api/agent-runs') || under(path, '/api/ask') || path === '/api/semantic-query'
-    || path === '/api/llm/run' || under(path, '/api/ai') || path === '/api/agent/learnings/correction')) return 'ask';
-  if (!read && (under(path, '/api/research-plan') || under(path, '/api/notebook/research'))) return 'research';
-  if (!read && under(path, '/api/agent')) return 'ask';
+  // Asking and investigating, route by route: each of these keeps its effects to the person's own runs,
+  // threads and notes (runtime state, never the project's files). Asking for certification is part of
+  // asking: the requester is whoever is signed in. Anything else under these families changes the
+  // project, so it is an authoring action (and Production's read-only rule applies to it).
+  // Promoting a research run writes a draft block into the project: authoring, not investigating.
+  if (!read && /^\/api\/notebook\/research\/[^/]+\/promote-dql$/.test(path)) return 'dataset.author';
+  if (!read) {
+    if (ASK_ROUTES.some((route) => (typeof route === 'string' ? path === route : route.test(path)))) return 'ask';
+    if (RESEARCH_ROUTES.some((route) => (typeof route === 'string' ? path === route : route.test(path)))) return 'research';
+    // Building with AI writes a draft block, or rewrites one in place: authoring, like any other edit.
+    if (path === '/api/ai/build') return 'dataset.author';
+    // Applying an App autopilot change writes the App's files.
+    if (/^\/api\/agent-runs\/[^/]+\/app-autopilot-changes\/[^/]+\/apply$/.test(path)) return 'app.author';
+    if (ASK_FAMILIES.some((family) => under(path, family))) return 'project.write';
+  }
 
   // SQL the person writes themselves.
   if (!read && (path === '/api/query' || path === '/api/notebook/execute' || path === '/api/dql/artifacts/execute')) return 'query.run';

@@ -27,6 +27,12 @@ export interface LocalOperation<TResult = unknown> {
   progress: number;
   message: string;
   cancellable: boolean;
+  /**
+   * Who started it (RFC 0010): the person a host placed, recorded when the
+   * operation was created inside their request. Absent for work nobody asked
+   * for and without a host.
+   */
+  ownerId?: string;
   result?: TResult;
   error?: LocalOperationError;
   createdAt: string;
@@ -50,6 +56,7 @@ interface OperationRow {
   progress: number;
   message: string;
   cancellable: number;
+  owner_id?: string | null;
   result_json: string | null;
   error_json: string | null;
   created_at: string;
@@ -68,8 +75,10 @@ export class LocalOperationCoordinator {
   private readonly listeners = new Set<OperationListener>();
   private readonly controllers = new Map<string, AbortController>();
   private closed = false;
+  private readonly ownerOf: () => string | undefined;
 
-  constructor(dbPath: string) {
+  constructor(dbPath: string, options: { ownerOf?: () => string | undefined } = {}) {
+    this.ownerOf = options.ownerOf ?? (() => undefined);
     mkdirSync(dirname(dbPath), { recursive: true });
     this.db = new Database(dbPath);
     this.db.pragma('journal_mode = WAL');
@@ -93,6 +102,9 @@ export class LocalOperationCoordinator {
       CREATE INDEX IF NOT EXISTS idx_local_operations_updated
         ON local_operations(updated_at DESC);
     `);
+    // Operations recorded before owners were kept have none.
+    const columns = this.db.prepare('PRAGMA table_info(local_operations)').all() as Array<{ name: string }>;
+    if (!columns.some((column) => column.name === 'owner_id')) this.db.exec('ALTER TABLE local_operations ADD COLUMN owner_id TEXT');
 
     const now = new Date().toISOString();
     const interrupted: LocalOperationError = {
@@ -118,6 +130,7 @@ export class LocalOperationCoordinator {
     cancellable?: boolean;
   }): LocalOperation {
     const now = new Date().toISOString();
+    const ownerId = this.ownerOf();
     const operation: LocalOperation = {
       id: `op_${randomUUID()}`,
       type: input.type,
@@ -128,6 +141,7 @@ export class LocalOperationCoordinator {
       progress: 0,
       message: input.message ?? 'Queued.',
       cancellable: input.cancellable ?? true,
+      ...(ownerId ? { ownerId } : {}),
       createdAt: now,
       updatedAt: now,
     };
@@ -221,19 +235,23 @@ export class LocalOperationCoordinator {
     return row ? operationFromRow(row) : null;
   }
 
-  list(limit = 50): LocalOperation[] {
-    const bounded = Math.max(1, Math.min(100, Math.floor(limit)));
+  /** The latest operations; with `ownerId`, only that person's. */
+  list(limit = 50, filter: { ownerId?: string } = {}): LocalOperation[] {
+    const bounded = Math.max(1, Math.min(100, Math.floor(Number.isFinite(limit) ? limit : 50)));
+    const owned = filter.ownerId !== undefined;
+    const ownerClause = owned ? 'AND owner_id = ?' : '';
+    const ownerArgs = owned ? [filter.ownerId] : [];
     const activeRows = this.db.prepare(`
       SELECT * FROM local_operations
-      WHERE status IN ('queued', 'running')
+      WHERE status IN ('queued', 'running') ${ownerClause}
       ORDER BY updated_at DESC, created_at DESC, id DESC
-    `).all() as OperationRow[];
+    `).all(...ownerArgs) as OperationRow[];
     const terminalRows = this.db.prepare(`
       SELECT * FROM local_operations
-      WHERE status NOT IN ('queued', 'running')
+      WHERE status NOT IN ('queued', 'running') ${ownerClause}
       ORDER BY updated_at DESC, created_at DESC, id DESC
       LIMIT ?
-    `).all(bounded) as OperationRow[];
+    `).all(...ownerArgs, bounded) as OperationRow[];
     return [...activeRows, ...terminalRows]
       .sort((left, right) => (
         right.updated_at.localeCompare(left.updated_at)
@@ -275,8 +293,8 @@ export class LocalOperationCoordinator {
     this.db.prepare(`
       INSERT INTO local_operations (
         id, type, scope, resource_revision, status, phase, progress, message,
-        cancellable, result_json, error_json, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        cancellable, result_json, error_json, created_at, updated_at, owner_id
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET
         resource_revision = excluded.resource_revision,
         status = excluded.status,
@@ -301,6 +319,7 @@ export class LocalOperationCoordinator {
       operation.error === undefined ? null : JSON.stringify(operation.error),
       operation.createdAt,
       operation.updatedAt,
+      operation.ownerId ?? null,
     );
   }
 
@@ -332,6 +351,7 @@ function operationFromRow(row: OperationRow): LocalOperation {
     progress: row.progress,
     message: row.message,
     cancellable: row.cancellable === 1,
+    ...(row.owner_id ? { ownerId: row.owner_id } : {}),
     ...(row.result_json ? { result: safeJson(row.result_json) } : {}),
     ...(row.error_json ? { error: safeJson(row.error_json) as LocalOperationError } : {}),
     createdAt: row.created_at,

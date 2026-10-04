@@ -29,8 +29,11 @@ type PersistedAppWorkspaceLoad = {
   loadDashboard: (appId: string, dashboardId: string) => Promise<DashboardDocumentResponse | null>;
   onApp: (document: AppDocumentSummary | null) => void;
   onDashboard: (document: DashboardDocumentResponse) => void;
-  /** `refused` when the host refused this person; `next` is where it sends them (HH-12). */
-  onDashboardError: (message: string, refusal?: { next?: { label: string; href: string } }) => void;
+  /**
+   * `refusal` when the host refused this person; `next` is where it sends them (HH-12). `notFound`: this project has
+   * no such App or page (a host may say where it is instead, HH-9 `appNotFound`).
+   */
+  onDashboardError: (message: string, refusal?: { next?: { label: string; href: string } }, problem?: { notFound: true }) => void;
 };
 
 /**
@@ -74,7 +77,8 @@ export function beginPersistedAppWorkspaceLoad(input: PersistedAppWorkspaceLoad)
         input.onDashboardError(refusal.message, refusal.next ? { next: refusal.next } : {});
         return;
       }
-      input.onDashboardError('This dashboard page could not be read from the local project. Check that the server is running, then retry.');
+      const notFound = error instanceof Error && (error as { status?: unknown }).status === 404;
+      input.onDashboardError('This dashboard page could not be read from the local project. Check that the server is running, then retry.', undefined, notFound ? { notFound: true } : undefined);
     });
   return () => { current = false; };
 }

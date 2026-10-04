@@ -51,3 +51,21 @@ describe('governed HTML drafting (RFC 0008 step 9)', () => {
     expect(template.html).toContain('<dql-tile tile="trend"></dql-tile>');
   });
 });
+
+describe('a governed page drafted by a model outside the privacy boundary', () => {
+  it('shows a grouped tile\'s members by position only, and places the real bindings in the page it accepts', async () => {
+    const outside: CanvasDraftInput = {
+      pageTitle: 'Claims',
+      catalog: buildStoryBindingCatalog([{ tileId: 'by-member', status: 'ok', result: { columns: ['member_name', 'open_claims'], rows: [{ member_name: 'Member-Name-Ana Ruiz', open_claims: 3 }, { member_name: 'Member-Name-Bo Lind', open_claims: 2 }] } }], { 'by-member': 'Open claims by member' }),
+      tiles: [{ tileId: 'by-member', title: 'Open claims by member', kind: 'table' }],
+      includeValues: false,
+    };
+    const prompt = canvasDraftUserPrompt(outside);
+    expect(prompt).not.toContain('Member-Name');
+    expect(prompt).toContain('by-member.open_claims[group 2] — Open claims by member — open claims for group 2');
+    const result = await draftCanvasPage(outside, async () => '<p>Second group <dql-value bind="by-member.open_claims[group 2]"></dql-value></p>');
+    expect(result.generatedBy).toBe('ai');
+    expect(result.canvas.html).toContain('<dql-value bind="by-member.open_claims[Member-Name-Bo Lind]"></dql-value>');
+    expect(checkCanvasHtml(result.canvas.html, { catalog: outside.catalog, tileIds: new Set(['by-member']) }).issues).toEqual([]);
+  });
+});

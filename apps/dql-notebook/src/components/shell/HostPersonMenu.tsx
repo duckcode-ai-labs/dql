@@ -27,7 +27,7 @@ export function HostPersonMenu() {
   return (
     <div ref={ref} style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 8 }}>
       {hostUi.environment ? (
-        <span style={{ font: '500 11px/1 var(--font-mono, "JetBrains Mono", monospace)', padding: '4px 8px', borderRadius: 999, background: 'var(--accent-dim)', color: 'var(--accent)', whiteSpace: 'nowrap' }}>
+        <span style={{ font: '500 11px/1 var(--font-mono, "JetBrains Mono", monospace)', padding: '4px 8px', borderRadius: 999, background: 'var(--accent-dim)', color: 'color-mix(in srgb, var(--accent) 80%, var(--text-primary))', whiteSpace: 'nowrap' }}>
           {hostUi.environment}
         </span>
       ) : null}

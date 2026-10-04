@@ -59,7 +59,8 @@ describe('run ownership', () => {
       count(options?: { ownerId?: string }) { return this.list(undefined, options).length; },
     };
     let who: DqlPrincipal | null = { id: 'u-priya', kind: 'person', source: 'host' };
-    const owned = withRunOwnership(store, () => who);
+    // The owner as a request context gives it (currentRecordOwner): a host person's id; no filter for the local user.
+    const owned = withRunOwnership(store, () => (who && who.source !== 'local' ? who.id : undefined));
     owned.save({ id: 'a' });
     who = { id: 'u-dan', kind: 'person', source: 'host' };
     owned.save({ id: 'b' });

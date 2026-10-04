@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -85,9 +85,15 @@ describe('resolveNotebookConnection', () => {
     }
   });
 
-  it('reads one metadata statement through its own connection, and nothing else', async () => {
+  // Needs the DuckDB driver (DQL_APP_DATASETS_DUCKDB_CONNECTOR_ROOT), as the other real-DuckDB tests: without it the
+  // server would install the driver from the npm registry at start, and the suite reaches nothing off this machine.
+  const duckDbRoot = process.env.DQL_APP_DATASETS_DUCKDB_CONNECTOR_ROOT?.trim();
+  (duckDbRoot ? it : it.skip)('reads one metadata statement through its own connection, and nothing else', async () => {
     const root = mkdtempSync(join(tmpdir(), 'dql-notebook-metadata-'));
     writeFileSync(join(root, 'dql.config.json'), JSON.stringify({ project: 'metadata-test', connections: { default: { driver: 'duckdb', filepath: ':memory:' } } }));
+    // The project's connector folder holds the local driver, as an install would leave it.
+    mkdirSync(join(root, '.dql', 'connectors'), { recursive: true });
+    symlinkSync(join(duckDbRoot!, 'node_modules'), join(root, '.dql', 'connectors', 'node_modules'), 'dir');
     const runtime = await startProjectRuntime(root, { preferredPort: 0 });
     try {
       expect(await runtime.metadataQuery("SELECT 'claims' AS table_name")).toEqual({ columns: ['table_name'], rows: [{ table_name: 'claims' }] });

@@ -455,15 +455,22 @@ export class ConversationStore {
    * tier-distribution surface so you can see the governance ladder shift upward
    * (more certified/semantic answers) as usage compounds.
    */
-  tierDistribution(options: { limit?: number } = {}): {
+  tierDistribution(options: { limit?: number; ownerId?: string } = {}): {
     total: number;
     byRouteTier: Record<string, number>;
     byTerminalLane: Record<string, number>;
   } {
     const limit = options.limit ?? 500;
-    const rows = this.db.prepare(`
-      SELECT * FROM conversation_turns ORDER BY created_at DESC LIMIT ?
-    `).all(limit) as TurnRow[];
+    // With an owner (a host's signed-in person): only the turns of their own threads.
+    const rows = (options.ownerId !== undefined
+      ? this.db.prepare(`
+          SELECT * FROM conversation_turns
+          WHERE thread_id IN (SELECT id FROM conversation_threads WHERE owner_id = ?)
+          ORDER BY created_at DESC LIMIT ?
+        `).all(options.ownerId, limit)
+      : this.db.prepare(`
+          SELECT * FROM conversation_turns ORDER BY created_at DESC LIMIT ?
+        `).all(limit)) as TurnRow[];
     const byRouteTier: Record<string, number> = {};
     const byTerminalLane: Record<string, number> = {};
     let total = 0;

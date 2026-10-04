@@ -6,9 +6,11 @@
 
 import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, readlinkSync, renameSync, rmSync, statSync, writeFileSync, type Dirent, type Stats } from 'node:fs';
 import { createHash, randomUUID } from 'node:crypto';
-import { join, dirname, relative, basename } from 'node:path';
+import { join, dirname, relative, basename, sep } from 'node:path';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { hostActor } from './host/request-context.js';
+import { currentRecordOwner, ownedBy } from './host/record-owner.js';
+import { pinForReader, previewWithoutFigures, WITHHELD_ANSWER } from './host/answer-figures.js';
 import type {
   AgentAnswer,
   AgentResultPayload,
@@ -90,6 +92,23 @@ interface Ctx {
   datasetsEnabled?: boolean;
   /** With a host (RFC 0010): whether the person may open this App; the list shows only those. */
   mayViewApp?: (appId: string) => Promise<boolean>;
+  /** HH-14: whether the host keeps needs-review figures from the person asking (the runtime's one decision). */
+  answerFiguresRule?: () => Promise<'show' | 'withhold_review'>;
+  /**
+   * With a host: whether figures read from these tables could differ for another reader (a row rule, column
+   * policy or tag protection applies). Absent without a host, where an answer's text is saved as before.
+   */
+  figuresDependOnReader?: (relations: string[] | undefined) => Promise<boolean>;
+  /**
+   * With a host: whether this reader may keep reading an earlier static answer tile's text on this App (those who
+   * replace such tiles: the App's authors and stewards). Others read a placeholder (pageForReader).
+   */
+  mayKeepAnswerText?: (appId: string) => Promise<boolean>;
+  /**
+   * One of the signed-in person's own Ask answers (never anyone else's): the tables its SQL read (absent when
+   * DQL cannot list them all), and that SQL, for a live tile.
+   */
+  askRunReads?: (runId: string) => Promise<{ relations?: string[]; sql?: string; question?: string } | null>;
   executeSql?: (sql: string) => Promise<unknown>;
   generateInvestigationSql?: (input: AppInvestigationGenerationRequest) => Promise<AppInvestigationGenerationResult>;
   runNotebook?: (appId: string, notebookPath: string) => Promise<void>;
@@ -350,6 +369,35 @@ export interface AppBuildCommitHooks {
   narrate?: (input: NarrateInput) => Promise<NarrateResult>;
 }
 
+/**
+ * The App storage for this request: analysis memos, App conversations and AI pins are each person's with a host (they
+ * hold questions, answers and results computed under that person's row rules), read and kept only for them; Apps
+ * and their files are the App's.
+ */
+/** HH-14: whether this request's person is kept from needs-review figures (an analysis memo is always review-required). */
+async function memoFiguresWithheld(ctx: Ctx): Promise<boolean> {
+  return (await ctx.answerFiguresRule?.()) === 'withhold_review';
+}
+
+/**
+ * HH-14: an analysis memo as a person the host keeps needs-review figures from reads it, until it is certified: its
+ * question, SQL and result shape, never a value or a sentence written from one.
+ */
+function investigationForReader(investigation: LocalAppInvestigation, withheld: boolean): LocalAppInvestigation & { figuresWithheld?: true } {
+  if (!withheld || investigation.reviewStatus === 'certified') return investigation;
+  const { summary: _summary, recommendation: _recommendation, metrics: _metrics, driverCards: _cards, evidence: _evidence, reportSections: _sections, ...rest } = investigation;
+  const previews = (investigation.resultPreviews ?? []).map((preview) => {
+    const record = preview && typeof preview === 'object' ? preview as Record<string, unknown> : {};
+    const { result: _result, rows: _rows, ...kept } = record;
+    return { ...kept, result: previewWithoutFigures(preview) ?? { columns: [], rowCount: 0, rows: [] } };
+  });
+  return { ...rest, resultPreviews: previews, driverCards: [], reportSections: [], summary: WITHHELD_ANSWER, figuresWithheld: true };
+}
+
+function openAppStorage(projectRoot: string): LocalAppStorage {
+  return new LocalAppStorage(defaultLocalAppsDbPath(projectRoot), { owner: currentRecordOwner() });
+}
+
 export async function handleAppsApi(ctx: Ctx): Promise<boolean> {
   const { req, res, path, projectRoot } = ctx;
 
@@ -409,7 +457,7 @@ export async function handleAppsApi(ctx: Ctx): Promise<boolean> {
   }
 
   if (req.method === 'GET' && path === '/api/app-builds') {
-    const storage = new LocalAppStorage(defaultLocalAppsDbPath(projectRoot));
+    const storage = openAppStorage(projectRoot);
     try {
       const drafts = storage.listAppBuildDrafts().flatMap((stored) => {
         const migrated = migrateLegacyAppBuildDraft(projectRoot, stored);
@@ -522,6 +570,12 @@ export async function handleAppsApi(ctx: Ctx): Promise<boolean> {
       );
       const operations = await bindServerIssuedPreviewReceipts(current, authorityBoundOperations, ctx.verifyAppBuildPreview);
       const next = applyAppBuildDraftOperations(current, body.expectedRevision ?? -1, operations);
+      // An Ask answer's text added by an edit is held to the same rule as one added from Ask.
+      const added = await addedStaticAnswerTilesInDraft(current, next, ctx.figuresDependOnReader);
+      if (added.length) {
+        sendJson(res, 409, { ok: false, code: 'ANSWER_FIGURES_DEPEND_ON_READER', error: ANSWER_FIGURES_DEPEND_ON_READER, tiles: added.map((tile) => tile.tileId) });
+        return true;
+      }
       writeStoredAppBuildDraft(projectRoot, next, {
         expectedRevision: current.revision,
         operations,
@@ -772,8 +826,30 @@ export async function handleAppsApi(ctx: Ctx): Promise<boolean> {
   if (askResultMatch && req.method === 'POST') {
     try {
       const id = decodeURIComponent(askResultMatch[1]);
-      const body = await readJson<AppBuildAskResultInput>(req);
-      const result = addAskResultToAppBuildDraft(projectRoot, id, body);
+      let body = await readJson<AppBuildAskResultInput>(req);
+      // With a host, the answer is the person's own run: what it read decides whether its text may be shown to others.
+      const runId = cleanString(body.runId);
+      const reads = runId && ctx.askRunReads ? await ctx.askRunReads(runId) : null;
+      const hosted = Boolean(ctx.figuresDependOnReader);
+      if (body.mode === 'live') {
+        if (!reads?.sql) {
+          sendJson(res, 400, { ok: false, code: 'ANSWER_HAS_NO_LIVE_FORM', error: 'DQL has no SQL for this answer that it could run for each reader, so it cannot add it as a live tile.' });
+          return true;
+        }
+        // A live tile runs the answer's SQL for each reader; it carries no figures of its own.
+        body = { ...body, sql: reads.sql, dqlSource: undefined, certifiedBlockId: undefined };
+      } else if (hosted && isStaticAnswerResult(body) && await ctx.figuresDependOnReader!(reads?.relations)) {
+        sendJson(res, 409, {
+          ok: false,
+          code: 'ANSWER_FIGURES_DEPEND_ON_READER',
+          error: ANSWER_FIGURES_DEPEND_ON_READER,
+          // The way forward: a live tile, which runs the answer's SQL for each reader.
+          ways: reads?.sql ? [{ id: 'live', label: 'Add as a live tile' }] : [],
+          details: { ways: reads?.sql ? [{ id: 'live', label: 'Add as a live tile' }] : [] },
+        });
+        return true;
+      }
+      const result = addAskResultToAppBuildDraft(projectRoot, id, body, { hosted, ...(reads?.relations ? { relations: reads.relations } : {}) });
       sendJson(res, result.deduped ? 200 : 201, result);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -961,7 +1037,7 @@ export async function handleAppsApi(ctx: Ctx): Promise<boolean> {
       sendJson(res, 409, { ok: false, error: 'APP_BUILD_REVISION_CONFLICT: refresh before preflight.' });
       return true;
     }
-    const errors = await preflightAppBuildRequestErrors(projectRoot, current, ctx.verifyAppBuildPreview, ctx.resolveDatasetSourceAuthority);
+    const errors = await preflightAppBuildRequestErrors(projectRoot, current, ctx.verifyAppBuildPreview, ctx.resolveDatasetSourceAuthority, ctx.figuresDependOnReader);
     if (errors.length) {
       sendJson(res, 400, {
         ok: false,
@@ -991,7 +1067,7 @@ export async function handleAppsApi(ctx: Ctx): Promise<boolean> {
         sendJson(res, 409, { ok: false, error: 'APP_BUILD_REVISION_CONFLICT: refresh the Build Frame before committing.' });
         return true;
       }
-      const errors = await preflightAppBuildRequestErrors(projectRoot, current, ctx.verifyAppBuildPreview, ctx.resolveDatasetSourceAuthority);
+      const errors = await preflightAppBuildRequestErrors(projectRoot, current, ctx.verifyAppBuildPreview, ctx.resolveDatasetSourceAuthority, ctx.figuresDependOnReader);
       if (errors.length) {
         sendJson(res, 400, {
           ok: false,
@@ -1016,6 +1092,30 @@ export async function handleAppsApi(ctx: Ctx): Promise<boolean> {
       const message = err instanceof Error ? err.message : String(err);
       sendJson(res, message.includes('already exists') ? 409 : 400, { ok: false, error: message });
     }
+    return true;
+  }
+
+  // With a host: published tiles that show an Ask answer's text with its author's figures, where those figures
+  // depend on who is looking. Ids and titles only, for the stewards who replace them with live tiles.
+  if (req.method === 'GET' && path === '/api/app-answer-tiles') {
+    const depends = ctx.figuresDependOnReader;
+    if (!depends) {
+      sendJson(res, 200, { tiles: [] });
+      return true;
+    }
+    const tiles: Array<{ appId: string; appName: string; pageId: string; pageTitle: string; tileId: string; title?: string; notice: string }> = [];
+    for (const app of collectAppsList(projectRoot)) {
+      if (ctx.mayViewApp && !(await ctx.mayViewApp(app.id).catch(() => false))) continue;
+      const loaded = loadAppById(projectRoot, app.id);
+      for (const page of loaded?.dashboards ?? []) {
+        const dashboard = loadDashboardForApp(projectRoot, app.id, page.id)?.dashboard;
+        if (!dashboard) continue;
+        for (const tile of await staticAnswerTilesShownToOthers([{ id: dashboard.id, layout: dashboard.layout }], depends)) {
+          tiles.push({ appId: app.id, appName: app.name, pageId: dashboard.id, pageTitle: dashboard.metadata.title, tileId: tile.tileId, ...(tile.title ? { title: tile.title } : {}), notice: STATIC_ANSWER_TILE_NOTICE });
+        }
+      }
+    }
+    sendJson(res, 200, { tiles });
     return true;
   }
 
@@ -1404,7 +1504,7 @@ export async function handleAppsApi(ctx: Ctx): Promise<boolean> {
       sendJson(res, 404, { error: `App "${appId}" not found` });
       return true;
     }
-    const storage = new LocalAppStorage(defaultLocalAppsDbPath(projectRoot));
+    const storage = openAppStorage(projectRoot);
     try {
       if (req.method === 'GET') {
         sendJson(res, 200, { conversations: storage.listAppConversations(appId) });
@@ -1441,7 +1541,7 @@ export async function handleAppsApi(ctx: Ctx): Promise<boolean> {
   if (m) {
     const appId = decodeURIComponent(m[1]);
     const conversationId = decodeURIComponent(m[2]);
-    const storage = new LocalAppStorage(defaultLocalAppsDbPath(projectRoot));
+    const storage = openAppStorage(projectRoot);
     try {
       const conversation = storage.getAppConversation(conversationId);
       if (!conversation || conversation.appId !== appId) {
@@ -1489,11 +1589,12 @@ export async function handleAppsApi(ctx: Ctx): Promise<boolean> {
       sendJson(res, 404, { error: `App "${appId}" not found` });
       return true;
     }
-    const storage = new LocalAppStorage(defaultLocalAppsDbPath(projectRoot));
+    const storage = openAppStorage(projectRoot);
     try {
       if (req.method === 'GET') {
         const dashboardId = ctx.url.searchParams.get('dashboardId') ?? undefined;
-        sendJson(res, 200, { investigations: dedupeAppInvestigationsForDisplay(storage.listAppInvestigations(appId, dashboardId)) });
+        const withheld = await memoFiguresWithheld(ctx);
+        sendJson(res, 200, { investigations: dedupeAppInvestigationsForDisplay(storage.listAppInvestigations(appId, dashboardId)).map((item) => investigationForReader(item, withheld)) });
         return true;
       }
       if (req.method === 'POST') {
@@ -1514,7 +1615,8 @@ export async function handleAppsApi(ctx: Ctx): Promise<boolean> {
           context: body.context,
           generatedSql: body.generatedSql,
         });
-        if (body.run !== false) {
+        const withheld = await memoFiguresWithheld(ctx);
+        if (body.run !== false && !withheld) {
           investigation = storage.updateAppInvestigation(investigation.id, {
             status: 'running',
             reviewStatus: 'needs_review',
@@ -1522,7 +1624,7 @@ export async function handleAppsApi(ctx: Ctx): Promise<boolean> {
           }) ?? investigation;
           scheduleAppInvestigationRun(ctx, appId, investigation.id, body);
         }
-        sendJson(res, 201, { ok: true, investigation });
+        sendJson(res, 201, { ok: true, investigation: investigationForReader(investigation, withheld) });
         return true;
       }
     } catch (err) {
@@ -1537,7 +1639,7 @@ export async function handleAppsApi(ctx: Ctx): Promise<boolean> {
   if (m) {
     const appId = decodeURIComponent(m[1]);
     const investigationId = decodeURIComponent(m[2]);
-    const storage = new LocalAppStorage(defaultLocalAppsDbPath(projectRoot));
+    const storage = openAppStorage(projectRoot);
     try {
       const investigation = storage.getAppInvestigation(investigationId);
       if (!investigation || investigation.appId !== appId) {
@@ -1545,7 +1647,7 @@ export async function handleAppsApi(ctx: Ctx): Promise<boolean> {
         return true;
       }
       if (req.method === 'GET') {
-        sendJson(res, 200, { investigation });
+        sendJson(res, 200, { investigation: investigationForReader(investigation, await memoFiguresWithheld(ctx)) });
         return true;
       }
     } catch (err) {
@@ -1560,7 +1662,7 @@ export async function handleAppsApi(ctx: Ctx): Promise<boolean> {
   if (m && req.method === 'POST') {
     const appId = decodeURIComponent(m[1]);
     const investigationId = decodeURIComponent(m[2]);
-    const storage = new LocalAppStorage(defaultLocalAppsDbPath(projectRoot));
+    const storage = openAppStorage(projectRoot);
     try {
       const investigation = storage.getAppInvestigation(investigationId);
       if (!investigation || investigation.appId !== appId) {
@@ -1568,8 +1670,10 @@ export async function handleAppsApi(ctx: Ctx): Promise<boolean> {
         return true;
       }
       const body = await readJson<AppInvestigationRunRequest>(req);
-      const updated = await runAppInvestigation(ctx, storage, investigation, body);
-      sendJson(res, 200, { ok: true, investigation: updated });
+      // HH-14: a memo whose figures would be withheld from this person is not run for them.
+      const withheld = await memoFiguresWithheld(ctx);
+      const updated = withheld ? investigation : await runAppInvestigation(ctx, storage, investigation, body);
+      sendJson(res, 200, { ok: true, investigation: investigationForReader(updated, withheld) });
     } catch (err) {
       sendJson(res, 500, { error: err instanceof Error ? err.message : String(err) });
     } finally {
@@ -1582,7 +1686,7 @@ export async function handleAppsApi(ctx: Ctx): Promise<boolean> {
   if (m && req.method === 'POST') {
     const appId = decodeURIComponent(m[1]);
     const investigationId = decodeURIComponent(m[2]);
-    const storage = new LocalAppStorage(defaultLocalAppsDbPath(projectRoot));
+    const storage = openAppStorage(projectRoot);
     try {
       const investigation = storage.getAppInvestigation(investigationId);
       if (!investigation || investigation.appId !== appId) {
@@ -1625,7 +1729,9 @@ export async function handleAppsApi(ctx: Ctx): Promise<boolean> {
       }
       const pinId = typeof created.pin === 'object' && created.pin && 'id' in created.pin ? String((created.pin as { id: unknown }).id) : '';
       const updated = pinId ? storage.markAppInvestigationPinned(investigationId, pinId) : investigation;
-      sendJson(res, 200, { ...created, investigation: updated });
+      // HH-14: the new pin and its memo as this person may read them.
+      const withheld = await memoFiguresWithheld(ctx);
+      sendJson(res, 200, { ...created, ...(created.pin ? { pin: pinForReader(created.pin as LocalAiPin, withheld) } : {}), investigation: updated ? investigationForReader(updated, withheld) : updated });
     } catch (err) {
       sendJson(res, 500, { error: err instanceof Error ? err.message : String(err) });
     } finally {
@@ -1639,9 +1745,10 @@ export async function handleAppsApi(ctx: Ctx): Promise<boolean> {
     const appId = decodeURIComponent(m[1]);
     if (req.method === 'GET') {
       const dashboardId = ctx.url.searchParams.get('dashboardId') ?? undefined;
-      const storage = new LocalAppStorage(defaultLocalAppsDbPath(projectRoot));
+      const storage = openAppStorage(projectRoot);
       try {
-        sendJson(res, 200, { pins: storage.listAiPins(appId, dashboardId) });
+        const withheld = await memoFiguresWithheld(ctx);
+        sendJson(res, 200, { pins: storage.listAiPins(appId, dashboardId).map((pin) => pinForReader(pin, withheld)) });
       } finally {
         storage.close();
       }
@@ -1655,7 +1762,10 @@ export async function handleAppsApi(ctx: Ctx): Promise<boolean> {
           sendJson(res, 400, { error: created.error });
           return true;
         }
-        sendJson(res, 201, created);
+        // With a host, a pin is its pinner's own, not the App's; HH-14 decides what of it the pinner reads.
+        const withheld = await memoFiguresWithheld(ctx);
+        const shown = withheld && created.pin ? { ...created, pin: pinForReader(created.pin as LocalAiPin, true) } : created;
+        sendJson(res, 201, currentRecordOwner() !== undefined ? { ...shown, notice: AI_PIN_ONLY_YOU } : shown);
       } catch (err) {
         sendJson(res, 500, { error: (err as Error).message });
       }
@@ -1666,10 +1776,10 @@ export async function handleAppsApi(ctx: Ctx): Promise<boolean> {
   m = path.match(/^\/api\/apps\/([^/]+)\/ai-pins\/([^/]+)\/refresh$/);
   if (m && req.method === 'POST') {
     const pinId = decodeURIComponent(m[2]);
-    const storage = new LocalAppStorage(defaultLocalAppsDbPath(projectRoot));
+    const storage = openAppStorage(projectRoot);
     try {
       const pin = storage.getAiPin(pinId);
-      if (!pin) {
+      if (!pin || pin.appId !== decodeURIComponent(m[1])) {
         sendJson(res, 404, { error: `AI pin "${pinId}" not found` });
         return true;
       }
@@ -1685,10 +1795,13 @@ export async function handleAppsApi(ctx: Ctx): Promise<boolean> {
       }
       const result = await ctx.executeSql(pin.sql);
       const updated = storage.updateAiPinResult(pinId, result);
-      sendJson(res, 200, { ok: true, pin: updated });
+      // HH-14: a refreshed AI-written pin carries needs-review figures; the person reads it as they may.
+      const withheld = await memoFiguresWithheld(ctx);
+      sendJson(res, 200, { ok: true, pin: updated ? pinForReader(updated, withheld) : updated });
     } catch (err) {
       const pin = storage.updateAiPinResult(pinId, undefined, err instanceof Error ? err.message : String(err));
-      sendJson(res, 500, { error: err instanceof Error ? err.message : String(err), pin });
+      const withheld = await memoFiguresWithheld(ctx).catch(() => true);
+      sendJson(res, 500, { error: err instanceof Error ? err.message : String(err), pin: pin ? pinForReader(pin, withheld) : pin });
     } finally {
       storage.close();
     }
@@ -1718,6 +1831,11 @@ export async function handleAppsApi(ctx: Ctx): Promise<boolean> {
     const dashboardId = decodeURIComponent(m[2]);
     try {
       const body = await readJson<{ layout?: DashboardDocument['layout']; items?: DashboardGridItem[] }>(req);
+      const refusal = await addedStaticAnswerTilesRefusal(projectRoot, appId, dashboardId, body, ctx.figuresDependOnReader);
+      if (refusal) {
+        sendJson(res, 409, refusal);
+        return true;
+      }
       const result = patchDashboardLayout(projectRoot, appId, dashboardId, body);
       if (!result.ok) {
         sendJson(res, 400, { error: result.error });
@@ -1791,7 +1909,8 @@ export async function handleAppsApi(ctx: Ctx): Promise<boolean> {
       sendJson(res, 404, { error: `App "${id}" not found` });
       return true;
     }
-    sendJson(res, 200, result);
+    const withheld = await memoFiguresWithheld(ctx);
+    sendJson(res, 200, withheld ? { ...result, investigations: (result.investigations as LocalAppInvestigation[]).map((item) => investigationForReader(item, true)), aiPins: (result.aiPins as LocalAiPin[]).map((pin) => pinForReader(pin, true)) } : result);
     return true;
   }
 
@@ -1835,12 +1954,18 @@ export async function handleAppsApi(ctx: Ctx): Promise<boolean> {
         sendJson(res, 404, { error: `Dashboard "${did}" not found in app "${id}"` });
         return true;
       }
-      sendJson(res, 200, result);
+      const dashboard = await pageForReader(result.dashboard, ctx.figuresDependOnReader, ctx.mayKeepAnswerText ? () => ctx.mayKeepAnswerText!(decodeURIComponent(id)) : undefined);
+      sendJson(res, 200, dashboard === result.dashboard ? result : { ...result, dashboard });
       return true;
     }
     if (req.method === 'PUT' || req.method === 'POST') {
       try {
         const body = await readJson(req);
+        const refusal = await addedStaticAnswerTilesRefusal(projectRoot, id, did, body, ctx.figuresDependOnReader);
+        if (refusal) {
+          sendJson(res, 409, refusal);
+          return true;
+        }
         const written = await writeDashboard(projectRoot, id, did, body);
         if (!written.ok) {
           sendJson(res, 400, { error: written.error });
@@ -2619,7 +2744,9 @@ export function getAppAiBuildSession(projectRoot: string, id: string): AppAiBuil
   const path = join(appAiBuildSessionDir(projectRoot), `${clean}.json`);
   if (!existsSync(path)) return null;
   try {
-    return JSON.parse(readFileSync(path, 'utf-8')) as AppAiBuildSession;
+    const session = JSON.parse(readFileSync(path, 'utf-8')) as AppAiBuildSession & { ownerId?: string };
+    // With a host, a build session (its prompt, plan, preview rows and answer) is the person's who started it.
+    return ownedBy(session.ownerId, currentRecordOwner()) ? session : null;
   } catch {
     return null;
   }
@@ -4502,7 +4629,8 @@ function attachGeneratedDraftAnalyses(
         '  type = "custom"',
         '  status = "review"',
         `  owner = "${escapeDqlString(plan.owner)}"`,
-        `  description = "${escapeDqlString((tile.answer ?? tile.question ?? tile.title).slice(0, 240))}"`,
+        // With a host, a draft block is project content: it says what it answers, not one person's figures.
+        `  description = "${escapeDqlString(((currentRecordOwner() !== undefined ? undefined : tile.answer) ?? tile.question ?? tile.title).slice(0, 240))}"`,
         tile.question ? `  llmContext = "${escapeDqlString(`App-scoped exploratory analysis. Question: ${tile.question}`)}"` : '',
         tile.question ? `  examples = [{ question = "${escapeDqlString(tile.question)}" }]` : '',
         '  caveats = ["AI-generated app draft. Validate joins, filters, grain, and business interpretation before promotion or publication."]',
@@ -5058,7 +5186,7 @@ async function routeAppAskQuestion(
       };
     }
 
-    const storage = new LocalAppStorage(defaultLocalAppsDbPath(ctx.projectRoot));
+    const storage = openAppStorage(ctx.projectRoot);
     try {
       let investigation = createOrReuseAppInvestigation(storage, {
         appId,
@@ -5081,7 +5209,9 @@ async function routeAppAskQuestion(
           routeDecision: decision,
         },
       });
-      investigation = await runAppInvestigation(ctx, storage, investigation, { context: investigation.context });
+      // HH-14: a memo whose figures would be withheld from this person is opened, not run, for them.
+      const withheld = await memoFiguresWithheld(ctx);
+      if (!withheld) investigation = await runAppInvestigation(ctx, storage, investigation, { context: investigation.context });
       return {
         ok: true,
         route: 'investigation',
@@ -5091,7 +5221,7 @@ async function routeAppAskQuestion(
         citations,
         followUps: ['Review the memo', 'Add reviewed result to this app', 'Create a draft DQL block'],
         decision,
-        investigation,
+        investigation: investigationForReader(investigation, withheld),
       };
     } finally {
       storage.close();
@@ -5638,7 +5768,7 @@ export function renameApp(
  * Set who an App is for (RFC 0010, HH-16): the identity-provider groups in
  * `audienceGroups`, and optionally the audience in words. Only those two
  * fields of `dql.app.json` change; everything else is kept as written. With a
- * host that follows git, this runs in a draft space and reaches Production
+ * host that follows git, this runs in a private workspace and reaches Production
  * through review like any other change.
  */
 export function setAppAudience(
@@ -6660,7 +6790,7 @@ function appAutopilotProposalDir(projectRoot: string, draftId: string): string {
 function writeAppAutopilotChange(projectRoot: string, proposal: AppAutopilotChangeProposal): void {
   assertStoredAppAutopilotChange(proposal);
   const { appliedAt: _appliedAt, appliedRevision: _appliedRevision, ...immutableProposal } = proposal;
-  const storage = new LocalAppStorage(defaultLocalAppsDbPath(projectRoot));
+  const storage = openAppStorage(projectRoot);
   try {
     storage.saveAppAutopilotChange({
       id: immutableProposal.id,
@@ -6682,7 +6812,7 @@ function loadAppAutopilotChange(
   proposalId: string,
 ): AppAutopilotChangeProposal | null {
   if (!/^[a-z0-9_:-]+$/i.test(draftId) || !/^[a-z0-9_:-]+$/i.test(proposalId)) return null;
-  const storage = new LocalAppStorage(defaultLocalAppsDbPath(projectRoot));
+  const storage = openAppStorage(projectRoot);
   try {
     const stored = storage.getAppAutopilotChange(draftId, proposalId);
     if (stored) {
@@ -6798,7 +6928,7 @@ export async function applyAppAutopilotChange(
   const operations = await bindServerResolvedDatasetSourceOperations(projectRoot, current, proposal.operations, resolver);
   const next = applyAppBuildDraftOperations(current, current.revision, operations);
   try {
-    const storage = new LocalAppStorage(defaultLocalAppsDbPath(projectRoot));
+    const storage = openAppStorage(projectRoot);
     try {
       const applied = storage.applyAppBuildDraftWithAutopilotChange(next, {
         expectedRevision: current.revision,
@@ -7574,6 +7704,125 @@ export interface AppBuildAskResultInput {
   dqlSource?: string;
   sql?: string;
   visualization?: string;
+  /** The Ask answer (the person's own run): what it read, and its SQL for a live tile. */
+  runId?: string;
+  /** `live`: a tile that runs the answer's SQL for each reader, instead of its text. */
+  mode?: 'text' | 'live';
+}
+
+/** With a host, an AI pin is per person and not shared App content. */
+export const AI_PIN_ONLY_YOU = 'Only you see this pin; keep it as a live tile to share it.';
+
+/** Refused where an answer's figures depend on who is looking (with a host). */
+export const ANSWER_FIGURES_DEPEND_ON_READER = 'This answer\'s figures depend on who is looking. Add it as a live tile instead.';
+/** What other readers read in place of such a tile until a steward replaces it. */
+export const STATIC_ANSWER_TILE_PLACEHOLDER = 'This answer\'s figures depend on who is looking. A steward needs to replace it with a live tile.';
+
+/**
+ * With a host: a page as this reader may see it. An Ask answer published as text before the rule (its author's
+ * figures, where figures depend on who is looking) shows the placeholder instead, wherever the page goes (the
+ * reader, page runs and what is made from them: stories, snapshots, digests, agents), unless the reader may
+ * replace it (mayKeep). Without a host the page is unchanged.
+ */
+export async function pageForReader<T extends { layout: { items: unknown[] } }>(
+  page: T,
+  depends: Ctx['figuresDependOnReader'],
+  mayKeep?: () => Promise<boolean>,
+): Promise<T> {
+  if (!depends) return page;
+  const shown = await staticAnswerTilesShownToOthers([{ id: '', layout: page.layout }], depends);
+  if (!shown.length) return page;
+  if (mayKeep && await mayKeep().catch(() => false)) return page;
+  const withheld = new Set(shown.map((tile) => tile.tileId));
+  return {
+    ...page,
+    layout: {
+      ...page.layout,
+      items: page.layout.items.map((tile) => (withheld.has(String((tile as { i?: unknown }).i ?? ''))
+        ? { ...(tile as Record<string, unknown>), text: { markdown: STATIC_ANSWER_TILE_PLACEHOLDER }, figuresWithheld: 'depends_on_reader' }
+        : tile)),
+    },
+  };
+}
+
+/** What stewards read beside such a tile already published. */
+export const STATIC_ANSWER_TILE_NOTICE = 'This tile shows an Ask answer\'s text with the figures its author saw, and those figures depend on who is looking. Replace it with a live tile, which runs for each reader.';
+const ANSWER_RELATION = 'answer_relation';
+
+/** An Ask answer added as its text: no certified block, DQL or SQL that could run for each reader. */
+function isStaticAnswerResult(input: AppBuildAskResultInput): boolean {
+  return !cleanString(input.certifiedBlockId) && !cleanString(input.dqlSource) && !cleanString(input.sql);
+}
+
+/** A tile that shows an Ask answer's written text (the figures its author saw), not a query run for each reader. */
+export function isStaticAnswerTile(tile: unknown): boolean {
+  if (!tile || typeof tile !== 'object') return false;
+  const record = tile as { text?: unknown; sourceEvidence?: unknown };
+  if (!record.text || typeof record.text !== 'object') return false;
+  return Array.isArray(record.sourceEvidence) && record.sourceEvidence.some((evidence) => typeof (evidence as { source?: unknown })?.source === 'string'
+    && ((evidence as { source: string }).source.startsWith('ask:')));
+}
+
+/** The tables the answer behind such a tile read, as recorded when it was added; undefined when not known. */
+function staticAnswerTileRelations(tile: unknown): string[] | undefined {
+  const evidence = Array.isArray((tile as { sourceEvidence?: unknown })?.sourceEvidence) ? (tile as { sourceEvidence: unknown[] }).sourceEvidence : [];
+  const relations = evidence
+    .filter((entry) => (entry as { kind?: unknown })?.kind === ANSWER_RELATION && typeof (entry as { source?: unknown }).source === 'string')
+    .map((entry) => (entry as { source: string }).source);
+  return relations.length ? relations : undefined;
+}
+
+/** The static answer tiles on these pages whose figures would differ for another reader. */
+async function staticAnswerTilesShownToOthers(
+  pages: Array<{ id: string; layout: { items: unknown[] } }>,
+  depends: Ctx['figuresDependOnReader'],
+): Promise<Array<{ pageId: string; tileId: string; title?: string }>> {
+  if (!depends) return [];
+  const found: Array<{ pageId: string; tileId: string; title?: string }> = [];
+  for (const page of pages) {
+    for (const tile of page.layout?.items ?? []) {
+      if (!isStaticAnswerTile(tile)) continue;
+      if (!(await depends(staticAnswerTileRelations(tile)))) continue;
+      const record = tile as { i?: unknown; title?: unknown };
+      found.push({ pageId: page.id, tileId: String(record.i ?? ''), ...(typeof record.title === 'string' ? { title: record.title } : {}) });
+    }
+  }
+  return found;
+}
+
+const staticAnswerKey = (tile: unknown) => `${String((tile as { i?: unknown }).i ?? '')}\u0000${String((tile as { text?: { markdown?: unknown } }).text?.markdown ?? '')}`;
+
+/** Static answer tiles a draft edit adds (ones already in the draft, unchanged, may stay or move). */
+async function addedStaticAnswerTilesInDraft(
+  current: AppBuildDraft,
+  next: AppBuildDraft,
+  depends: Ctx['figuresDependOnReader'],
+): Promise<Array<{ pageId: string; tileId: string }>> {
+  if (!depends) return [];
+  const kept = new Set(current.pages.flatMap((page) => page.layout.items).filter(isStaticAnswerTile).map(staticAnswerKey));
+  return staticAnswerTilesShownToOthers(next.pages.map((page) => ({
+    id: page.id,
+    layout: { items: page.layout.items.filter((tile) => isStaticAnswerTile(tile) && !kept.has(staticAnswerKey(tile))) },
+  })), depends);
+}
+
+/** A page write that adds such a tile (one already on the page, unchanged, may stay). */
+async function addedStaticAnswerTilesRefusal(
+  projectRoot: string,
+  appId: string,
+  dashboardId: string,
+  payload: unknown,
+  depends: Ctx['figuresDependOnReader'],
+): Promise<{ ok: false; code: string; error: string; tiles: string[] } | null> {
+  if (!depends || !payload || typeof payload !== 'object') return null;
+  const body = payload as { layout?: { items?: unknown }; items?: unknown };
+  const items = Array.isArray(body.layout?.items) ? body.layout!.items as unknown[] : Array.isArray(body.items) ? body.items : [];
+  const key = staticAnswerKey;
+  const current = loadDashboardForApp(projectRoot, decodeURIComponent(appId), decodeURIComponent(dashboardId))?.dashboard.layout.items ?? [];
+  const kept = new Set(current.filter(isStaticAnswerTile).map(key));
+  const added = items.filter((tile) => isStaticAnswerTile(tile) && !kept.has(key(tile)));
+  const refused = await staticAnswerTilesShownToOthers([{ id: dashboardId, layout: { items: added } }], depends);
+  return refused.length ? { ok: false, code: 'ANSWER_FIGURES_DEPEND_ON_READER', error: ANSWER_FIGURES_DEPEND_ON_READER, tiles: refused.map((tile) => tile.tileId) } : null;
 }
 
 /**
@@ -7586,6 +7835,7 @@ export function addAskResultToAppBuildDraft(
   projectRoot: string,
   draftId: string,
   input: AppBuildAskResultInput,
+  options: { hosted?: boolean; relations?: string[] } = {},
 ): { ok: true; draft: AppBuildDraft; pageId: string; tileId: string; deduped: boolean } {
   const draft = loadStoredAppBuildDraft(projectRoot, draftId);
   if (!draft) throw new Error('App Build Draft not found.');
@@ -7654,7 +7904,8 @@ export function addAskResultToAppBuildDraft(
       '  type = "custom"',
       '  status = "review"',
       '  owner = "local-ask"',
-      `  description = "${escapeDqlString(answer || question || title)}"`,
+      // With a host, a live tile's source says what it answers, not the figures its author saw.
+      `  description = "${escapeDqlString((options.hosted ? question || title : answer || question || title).slice(0, 2_000))}"`,
       question ? `  llmContext = "${escapeDqlString(`Ask result: ${question}`)}"` : '',
       '  caveats = ["Ask-generated local analysis. Validate joins, grain, filters, and interpretation before promotion."]',
       '  tags = ["app-scoped", "ask-generated", "needs-review"]',
@@ -7730,7 +7981,11 @@ export function addAskResultToAppBuildDraft(
       viz: { type: 'text' },
       title,
       sourceClass: 'narrative',
-      sourceEvidence: [{ source: `ask:${identity}`, reason: 'Saved from Ask as an editable review-required narrative.', kind: 'text', trustState: 'review_required' }],
+      sourceEvidence: [
+        { source: `ask:${identity}`, reason: 'Saved from Ask as an editable review-required narrative.', kind: 'text', trustState: 'review_required' },
+        // The tables the answer read, so DQL can tell later whether its figures depend on who is looking.
+        ...(options.relations ?? []).map((relation) => ({ source: relation, reason: 'A table the answer read.', kind: ANSWER_RELATION })),
+      ],
       review: { status: 'required' },
       trustState: 'review_required',
       reviewStatus: 'review_required',
@@ -7795,7 +8050,7 @@ function applyAppStudioTemplate(
 export function loadStoredAppBuildDraft(projectRoot: string, id: string): AppBuildDraft | null {
   const clean = cleanString(id);
   if (!clean || !/^[a-z0-9_:-]+$/i.test(clean)) return null;
-  const storage = new LocalAppStorage(defaultLocalAppsDbPath(projectRoot));
+  const storage = openAppStorage(projectRoot);
   try {
     const stored = storage.getAppBuildDraft(clean);
     if (stored) {
@@ -7821,7 +8076,7 @@ export function writeStoredAppBuildDraft(
   draft: AppBuildDraft,
   input: { expectedRevision?: number; operations?: AppBuildDraftOperation[] } = {},
 ): void {
-  const storage = new LocalAppStorage(defaultLocalAppsDbPath(projectRoot));
+  const storage = openAppStorage(projectRoot);
   try {
     storage.saveAppBuildDraft(draft, input);
   } finally {
@@ -8002,7 +8257,7 @@ export function deleteStoredAppBuildDraft(
   projectRoot: string,
   draft: AppBuildDraft,
 ): { ok: true; id: string; recoveryId: string; recoverableUntilRestart: false } {
-  const storage = new LocalAppStorage(defaultLocalAppsDbPath(projectRoot));
+  const storage = openAppStorage(projectRoot);
   let deleted: ReturnType<LocalAppStorage['deleteAppBuildDraft']>;
   try {
     deleted = storage.deleteAppBuildDraft(draft.id);
@@ -8035,7 +8290,7 @@ export function deleteStoredAppBuildDraft(
       mkdirSync(dirname(localArtifactsDir), { recursive: true });
       renameSync(recoveryArtifactsDir, localArtifactsDir);
     }
-    const restore = new LocalAppStorage(defaultLocalAppsDbPath(projectRoot));
+    const restore = openAppStorage(projectRoot);
     try { restore.restoreAppBuildDraft(deleted.draft, deleted.operations); } finally { restore.close(); }
     rmSync(recoveryDir, { recursive: true, force: true });
     throw error;
@@ -8055,7 +8310,7 @@ function restoreStoredAppBuildDraft(
   if (payload.kind !== 'app_build_draft' || !payload.draft) return { ok: false, status: 400, error: 'App draft recovery bundle is invalid.' };
   const recoveredArtifactsDir = join(recoveryDir, 'artifacts');
   const localArtifactsDir = join(projectRoot, '.dql', 'local', 'app-builds', payload.draft.id);
-  const storage = new LocalAppStorage(defaultLocalAppsDbPath(projectRoot));
+  const storage = openAppStorage(projectRoot);
   let artifactsRestored = false;
   try {
     if (storage.getAppBuildDraft(payload.draft.id)) return { ok: false, status: 409, error: `App Build Draft already exists: ${payload.draft.id}` };
@@ -8198,8 +8453,13 @@ async function preflightAppBuildRequestErrors(
   draft: AppBuildDraft,
   verifyPreview: Ctx['verifyAppBuildPreview'],
   resolver?: Ctx['resolveDatasetSourceAuthority'],
+  figuresDependOnReader?: Ctx['figuresDependOnReader'],
 ): Promise<string[]> {
   const errors = preflightStoredAppBuildDraft(projectRoot, draft);
+  // An Ask answer's text with its author's figures is not published where they depend on who is looking.
+  for (const tile of await staticAnswerTilesShownToOthers(draft.pages, figuresDependOnReader)) {
+    errors.push(`${tile.pageId}/${tile.tileId}: ${ANSWER_FIGURES_DEPEND_ON_READER}`);
+  }
   // Local draft state is not authority for Dataset lifecycle. Re-resolve the
   // active catalog before a preflight or publish request so a source that was
   // downgraded after an earlier run cannot publish through a forged source
@@ -8521,8 +8781,15 @@ export function commitStoredAppBuildDraft(
 
 function writeAppAiBuildSession(projectRoot: string, session: AppAiBuildSession): void {
   const dir = appAiBuildSessionDir(projectRoot);
+  const owner = currentRecordOwner();
+  const path = join(dir, `${session.id}.json`);
+  // With a host, a session id someone else holds (or one from before the host) is not written over.
+  if (owner !== undefined && existsSync(path) && !getAppAiBuildSession(projectRoot, session.id)) {
+    throw new Error('APP_AI_BUILD_NOT_FOUND: that App build session was not found.');
+  }
+  if (owner === null) throw new Error('APP_AI_BUILD_NOT_FOUND: sign in to build an App.');
   mkdirSync(dir, { recursive: true });
-  writeFileSync(join(dir, `${session.id}.json`), JSON.stringify(session, null, 2) + '\n', 'utf-8');
+  writeFileSync(path, JSON.stringify({ ...session, ...(owner ? { ownerId: owner } : {}) }, null, 2) + '\n', 'utf-8');
 }
 
 function appBuildWarnings(validation: unknown, plan: Record<string, unknown>): string[] {
@@ -8899,7 +9166,7 @@ export function deleteAppPackage(
     }, null, 2) + '\n', 'utf-8');
   } catch (error) {
     if (localArchive) {
-      const storage = new LocalAppStorage(defaultLocalAppsDbPath(projectRoot));
+      const storage = openAppStorage(projectRoot);
       try { storage.restoreAppState(localArchive); } finally { storage.close(); }
     }
     if (!existsSync(loaded.appDir) && existsSync(packageDir)) renameSync(packageDir, loaded.appDir);
@@ -8943,7 +9210,7 @@ export function restoreAppPackage(
   try {
     const localStatePath = join(recoveryDir, 'local-state.json');
     if (existsSync(localStatePath)) {
-      const storage = new LocalAppStorage(defaultLocalAppsDbPath(projectRoot));
+      const storage = openAppStorage(projectRoot);
       try {
         storage.restoreAppState(JSON.parse(readFileSync(localStatePath, 'utf-8')));
       } finally {
@@ -9964,7 +10231,7 @@ function scheduleAppInvestigationRun(
   const runContext: Ctx = { ...ctx };
   setTimeout(() => {
     void (async () => {
-      const storage = new LocalAppStorage(defaultLocalAppsDbPath(runContext.projectRoot));
+      const storage = openAppStorage(runContext.projectRoot);
       try {
         const current = storage.getAppInvestigation(investigationId);
         if (!current || current.appId !== appId) return;
@@ -11625,7 +11892,7 @@ function createAiPinTile(
   if (!loaded) return { ok: false, error: `Dashboard "${dashboardId}" not found in app "${appId}"` };
   const title = cleanString(input.title) || 'AI result';
   const tileId = cleanString(input.tileId) || nextTileId(loaded.dashboard, slugify(title) || 'ai-pin');
-  const storage = new LocalAppStorage(defaultLocalAppsDbPath(projectRoot));
+  const storage = openAppStorage(projectRoot);
   try {
     const existing = findExistingAiPinTile(storage, loaded.dashboard, appId, dashboardId, title, input);
     if (existing) {
@@ -11796,10 +12063,10 @@ function promoteAiPinToDraftBlock(
 ): { ok: true; pin: unknown; blockPath: string } | { ok: false; error: string } {
   const loaded = loadAppById(projectRoot, appId);
   if (!loaded) return { ok: false, error: `App "${appId}" not found` };
-  const storage = new LocalAppStorage(defaultLocalAppsDbPath(projectRoot));
+  const storage = openAppStorage(projectRoot);
   try {
     const pin = storage.getAiPin(pinId);
-    if (!pin) return { ok: false, error: `AI pin "${pinId}" not found` };
+    if (!pin || pin.appId !== appId) return { ok: false, error: `AI pin "${pinId}" not found` };
     if (!pin.sql) return { ok: false, error: 'AI pin has no SQL to promote' };
     const blockName = slugify(pin.title) || pin.id;
     const analysisPlan = pin.analysisPlan && typeof pin.analysisPlan === 'object'
@@ -11822,7 +12089,8 @@ function promoteAiPinToDraftBlock(
       '  type = "custom"',
       '  status = "review"',
       `  owner = "${escapeDqlString(loaded.app.owners[0] ?? `${process.env.USER ?? 'analyst'}@local`)}"`,
-      `  description = "${escapeDqlString(pin.answer.slice(0, 240))}"`,
+      // With a host, a draft block is project content: it says what it answers, not the pinner's figures.
+      `  description = "${escapeDqlString((currentRecordOwner() !== undefined ? pin.question || pin.title : pin.answer).slice(0, 240))}"`,
       sourceContext ? `  llmContext = "${escapeDqlString(sourceContext.slice(0, 800))}"` : '',
       pin.question ? `  examples = [{ question = "${escapeDqlString(pin.question)}" }]` : '',
       '  caveats = ["AI-generated draft. Validate joins, filters, grain, and business interpretation before certification."]',
@@ -11839,8 +12107,10 @@ function promoteAiPinToDraftBlock(
       '',
     ].join('\n');
     writeFileSync(blockPath, source, 'utf-8');
-    const updated = storage.markAiPinPromoted(pinId, relative(projectRoot, blockPath));
-    return { ok: true, pin: updated, blockPath: relative(projectRoot, blockPath) };
+    // The draft's place in the project, as every other route names files: relative to the project, with `/`.
+    const projectPath = relative(projectRoot, blockPath).split(sep).join('/');
+    const updated = storage.markAiPinPromoted(pinId, projectPath);
+    return { ok: true, pin: updated, blockPath: projectPath };
   } finally {
     storage.close();
   }
@@ -12253,7 +12523,7 @@ function listAiPins(projectRoot: string, appId: string): unknown[] {
   const dbPath = defaultLocalAppsDbPath(projectRoot);
   if (!existsSync(dbPath)) return [];
   try {
-    const storage = new LocalAppStorage(dbPath);
+    const storage = openAppStorage(projectRoot);
     try {
       return dedupeLocalAiPins(storage.listAiPins(appId));
     } finally {
@@ -12282,7 +12552,7 @@ function listAppInvestigations(projectRoot: string, appId: string): unknown[] {
   const dbPath = defaultLocalAppsDbPath(projectRoot);
   if (!existsSync(dbPath)) return [];
   try {
-    const storage = new LocalAppStorage(dbPath);
+    const storage = openAppStorage(projectRoot);
     try {
       return dedupeAppInvestigationsForDisplay(storage.listAppInvestigations(appId));
     } finally {

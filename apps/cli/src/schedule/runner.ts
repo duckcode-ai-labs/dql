@@ -148,7 +148,15 @@ export async function runBlock(absPath: string, options: RunOptions): Promise<Ru
 export async function runAppDashboard(
   appId: string,
   dashboardId: string,
-  options: RunOptions & { scheduleId?: string; pageRunner?: AppPageRunner },
+  options: RunOptions & {
+    scheduleId?: string;
+    pageRunner?: AppPageRunner;
+    /**
+     * With a host: whose figures this run read (the person it ran as). The digest compares a run with the
+     * last run as the same person, so a run someone else starts neither reads nor sets the schedule's baseline.
+     */
+    baselineOwner?: string;
+  },
 ): Promise<RunRecord> {
   const projectRoot = options.projectRoot ?? findProjectRoot(process.cwd());
   const trigger = options.trigger ?? 'manual';
@@ -194,7 +202,7 @@ export async function runAppDashboard(
       tiles.map((tile) => (tile.raw ?? { tileId: tile.tileId, status: tile.status })) as unknown as StoryBindingTileInput[],
       Object.fromEntries(items.map((item) => [item.i, item.title])),
     );
-    const stateKey = options.scheduleId ?? `manual-${dashboardId}`;
+    const stateKey = digestStateKey(options.scheduleId ?? `manual-${dashboardId}`, options.baselineOwner);
     const previous = readDigestState(projectRoot, appId, stateKey);
     const digest = buildAppDigest({
       appTitle: app.name ?? appId,
@@ -277,4 +285,9 @@ export async function runAppDashboard(
 
   writeRunRecord(projectRoot, record);
   return record;
+}
+
+/** A schedule's digest baseline, kept per person it ran as when a host names one (`<schedule>~<person>`). */
+export function digestStateKey(scheduleKey: string, baselineOwner?: string): string {
+  return baselineOwner ? `${scheduleKey}~${baselineOwner}` : scheduleKey;
 }

@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import type { AgentProvider, ProviderRunOptions } from '../providers/types.js';
-import { executeCandidate, fillPeriodGaps, type ExecuteDeps, type ExecutedRows } from './execute.js';
+import { executeCandidate, fillPeriodGaps, statementFailure, type ExecuteDeps, type ExecutedRows } from './execute.js';
 import { describeIntent, intentExecutionFingerprint, intentRefs, type AnalyticalIntentV1, type IntentPredicate } from './intent.js';
 import { composeAnsweredText, composeFailedText, composeGapText, describeResultColumns, labelFor, type AskStoryStepV1, type ContextLedgerV1, type GapKind, type PipelineOutcome, type PipelineReceipt } from './outcomes.js';
 import { prepare, type PrepareDeps, type PreparedCandidate, type PreparedRefusal, type PrepareResult } from './prepare/index.js';
@@ -37,6 +37,8 @@ export interface RunAskPipelineInput {
   /** False when the prior turn was blocked: its question stands, its result does not exist. */
   priorExecuted?: boolean;
   priorAnswerSummary?: string;
+  /** The earlier reading's values may not reach this model (RFC 0010 HH-5): it reads them named by position. */
+  hidePriorValues?: boolean;
   guidance?: string;
   /** The governed meaning the user picked from a clarification's options. */
   selection?: { ref: string; label?: string };
@@ -824,7 +826,8 @@ export async function runAskPipeline(input: RunAskPipelineInput): Promise<Pipeli
       lastFailure = executed;
       step('execute', executed.code === 'execution_failed' ? (attempt === 1 ? 'The warehouse rejected the draft: correcting it once' : 'The warehouse rejected the corrected draft') : 'The drafted query was not accepted', 'failed', { detail: executed.message, ms: runMs });
       if (executed.code !== 'execution_failed') break;
-      previous = { sql: candidate.sql, error: executed.message };
+      // A host keeps the warehouse's words from the answer; the corrective draft still gets its diagnosis.
+      previous = { sql: candidate.sql, error: executed.repair ?? executed.message };
     }
     if (firstEmpty) return noRowsAtAll(firstEmpty.executed) ? emptyGap() : answerWith(firstEmpty.candidate, firstEmpty.executed, firstEmpty.runMs);
     // Two warehouse rejections: the warehouse's own words are the answer, not
@@ -906,7 +909,7 @@ export async function runAskPipeline(input: RunAskPipelineInput): Promise<Pipeli
   const aiSqlAvailable = Boolean(input.prepareDeps.draftSql && (input.explorationOptIn || input.explorationAuto));
   const resolveStarted = now();
   let resolution: IntentResolution = settled ? settledResolution(settled.intent, input.vocabulary) : await resolveIntent({
-    question: input.question, vocabulary: input.vocabulary, provider: input.provider, prior: input.prior, priorExecuted: input.priorExecuted, priorAnswerSummary: input.priorAnswerSummary, clauseCoverage: input.clauseCoverage, budgetMs: remaining(), ...(input.selection ? { selection: input.selection } : {}),
+    question: input.question, vocabulary: input.vocabulary, provider: input.provider, prior: input.prior, priorExecuted: input.priorExecuted, ...(input.hidePriorValues ? { hidePriorValues: true } : {}), priorAnswerSummary: input.priorAnswerSummary, clauseCoverage: input.clauseCoverage, budgetMs: remaining(), ...(input.selection ? { selection: input.selection } : {}),
     guidance: memberGuidance(input), cardBudget: input.cardBudget, providerOptions, now,
     renderedCards, ...(input.conversation ? { conversation: input.conversation } : {}),
     maxAttempts: remaining() > 15_000 ? 2 : 1,
@@ -1130,7 +1133,7 @@ export async function runAskPipeline(input: RunAskPipelineInput): Promise<Pipeli
       intent = grounded.intent;
       if (grounded.notes.length) receipt.grounding = grounded.notes;
     } catch (error) {
-      receipt.grounding = [`literal grounding skipped: ${error instanceof Error ? error.message : String(error)}`];
+      receipt.grounding = [`literal grounding skipped: ${statementFailure(error).message}`];
     }
     mark('ground', groundStarted);
   }
@@ -1273,7 +1276,7 @@ export async function runAskPipeline(input: RunAskPipelineInput): Promise<Pipeli
     resolution = await resolveIntent({
       coverageQuestion: input.question,
       question: `${input.question}\n\nThe previous interpretation could not be prepared. ${repairable.tier === 'certified' ? 'The certified block is not applicable: ' : 'The engine said: '}${repairable.message}. ${repairable.tier === 'certified' ? 'Express the analysis with metric, entity and dimension refs instead of the block.' : 'Choose refs the engine can bind.'}`,
-      vocabulary: input.vocabulary, provider: input.provider, prior: input.prior, priorExecuted: input.priorExecuted, guidance: input.guidance, cardBudget: input.cardBudget, providerOptions, now, maxAttempts: 1, clauseCoverage: input.clauseCoverage, aiLane: aiSqlAvailable, ...(input.selection ? { selection: input.selection } : {}),
+      vocabulary: input.vocabulary, provider: input.provider, prior: input.prior, priorExecuted: input.priorExecuted, ...(input.hidePriorValues ? { hidePriorValues: true } : {}), guidance: input.guidance, cardBudget: input.cardBudget, providerOptions, now, maxAttempts: 1, clauseCoverage: input.clauseCoverage, aiLane: aiSqlAvailable, ...(input.selection ? { selection: input.selection } : {}),
       renderedCards, ...(input.conversation ? { conversation: input.conversation } : {}),
       // The repair is held to the original question's obligations.
       ...(resolution.status === 'resolved' && resolution.ledger ? { ledger: resolution.ledger, ledgerRound: round + 1 } : {}),

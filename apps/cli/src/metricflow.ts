@@ -22,6 +22,17 @@ export interface MetricFlowSpawnResult {
   timedOut?: boolean;
 }
 
+/**
+ * The environment MetricFlow runs with. A server many people use (a host) installs a narrower one: where programs
+ * are, a home, a locale and dbt's own DBT_* settings (the warehouse settings its profile reads), and nothing else
+ * from the server's environment.
+ */
+let childEnvironment: () => NodeJS.ProcessEnv | undefined = () => undefined;
+export function setMetricFlowChildEnvironment(environment: () => NodeJS.ProcessEnv | undefined): void {
+  childEnvironment = environment;
+}
+const metricFlowBaseEnv = (): NodeJS.ProcessEnv => childEnvironment() ?? process.env;
+
 export function runMetricFlow(
   bin: string,
   args: string[],
@@ -186,7 +197,7 @@ export function resolveMetricFlowCli(projectRoot?: string): MetricFlowCliResolut
     if (cached) return cached;
     const result = spawnSync(candidate.bin, ['--version'], {
       encoding: 'utf-8',
-      env: process.env,
+      env: metricFlowBaseEnv(),
       timeout: 10_000,
     });
     if (!result.error && result.status === 0) {
@@ -265,7 +276,7 @@ export async function listMetricFlowDimensions(
     timeoutMs: METRICFLOW_DIMENSION_TIMEOUT_MS,
     ...(request.signal ? { signal: request.signal } : {}),
     env: {
-      ...process.env,
+      ...metricFlowBaseEnv(),
       ...(request.profilesDir ? { DBT_PROFILES_DIR: resolve(request.projectRoot, request.profilesDir) } : {}),
     },
   });
@@ -461,7 +472,7 @@ export async function compileMetricFlowQuery(request: MetricFlowQueryRequest): P
         ),
         ...(request.signal ? { signal: request.signal } : {}),
         env: {
-          ...process.env,
+          ...metricFlowBaseEnv(),
           ...(spawnRequest.profilesDir
             ? { DBT_PROFILES_DIR: resolve(spawnRequest.projectRoot, spawnRequest.profilesDir) }
             : {}),

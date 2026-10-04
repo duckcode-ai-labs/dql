@@ -2913,6 +2913,42 @@ function metadataRoute(item: MetadataObject): ManifestCrossDomainRoute | null {
   };
 }
 
+/**
+ * How many Ask context packs the metadata cache keeps. A pack (the question,
+ * the vocabulary and evidence the answer was built from) serves a follow-up
+ * and the run's trace, not history: without a bound, every question added
+ * hundreds of kilobytes to `.dql/cache/metadata.sqlite` for good. Newest
+ * first, the cache keeps packs younger than `days`, at most `max` of them,
+ * and at most `bytes` of payload (the newest is always kept).
+ * DQL_CONTEXT_PACK_DAYS, DQL_CONTEXT_PACK_MAX and DQL_CONTEXT_PACK_MAX_MB
+ * change the defaults (7 days, 200 packs, 64 MB).
+ */
+export interface ContextPackRetention { days: number; max: number; bytes: number }
+
+export const CONTEXT_PACK_RETENTION: Readonly<ContextPackRetention> = { days: 7, max: 200, bytes: 64 * 1024 * 1024 };
+
+export function contextPackRetention(env: NodeJS.ProcessEnv = process.env): ContextPackRetention {
+  const positive = (value: string | undefined, fallback: number) => {
+    const parsed = Number(value?.trim());
+    return value?.trim() && Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+  };
+  return {
+    days: positive(env.DQL_CONTEXT_PACK_DAYS, CONTEXT_PACK_RETENTION.days),
+    max: Math.floor(positive(env.DQL_CONTEXT_PACK_MAX, CONTEXT_PACK_RETENTION.max)),
+    bytes: Math.floor(positive(env.DQL_CONTEXT_PACK_MAX_MB, CONTEXT_PACK_RETENTION.bytes / (1024 * 1024)) * 1024 * 1024),
+  };
+}
+
+/**
+ * Pruning is housekeeping: after every 20 packs written to a cache file, or
+ * the first written 30 s after the last prune, per process (the catalog is
+ * opened per request, so it is not done on open). It reads only sizes and
+ * dates, never a payload.
+ */
+const CONTEXT_PACK_PRUNE_EVERY = 20;
+const CONTEXT_PACK_PRUNE_EVERY_MS = 30_000;
+const contextPackPrunes = new Map<string, { at: number; inserts: number }>();
+
 export class MetadataCatalog {
   private readonly db: Database.Database;
 
@@ -2927,6 +2963,26 @@ export class MetadataCatalog {
     this.db.pragma('journal_mode = WAL');
     this.db.pragma('foreign_keys = ON');
     this.initSchema();
+  }
+
+  /** Drop context packs beyond the retention (see ContextPackRetention); returns how many went. */
+  pruneContextPacks(retention: ContextPackRetention = contextPackRetention(), now: Date = new Date()): number {
+    const cutoff = new Date(now.getTime() - retention.days * 86_400_000).toISOString();
+    let removed = this.db.prepare(
+      'DELETE FROM context_packs WHERE created_at < ? AND id <> (SELECT id FROM context_packs ORDER BY created_at DESC, rowid DESC LIMIT 1)',
+    ).run(cutoff).changes;
+    removed += this.db.prepare(
+      'DELETE FROM context_packs WHERE id IN (SELECT id FROM context_packs ORDER BY created_at DESC, rowid DESC LIMIT -1 OFFSET ?)',
+    ).run(Math.max(1, retention.max)).changes;
+    removed += this.db.prepare(`
+      DELETE FROM context_packs WHERE id IN (
+        SELECT id FROM (
+          SELECT id, size, SUM(size) OVER (ORDER BY created_at DESC, rowid DESC ROWS UNBOUNDED PRECEDING) AS running
+            FROM (SELECT id, created_at, rowid, coalesce(payload_bytes, LENGTH(payload_json)) AS size FROM context_packs)
+        ) WHERE running - size >= ?
+      )
+    `).run(retention.bytes).changes;
+    return removed;
   }
 
   private initSchema(): void {
@@ -3113,6 +3169,9 @@ export class MetadataCatalog {
       INSERT OR REPLACE INTO metadata_state (key, value)
       VALUES ('runtime_value_index_count', '0')
     `).run();
+    // Each context pack's size, so keeping them under a byte bound reads no payload (older caches: added here).
+    const packColumns = this.db.prepare('PRAGMA table_info(context_packs)').all() as Array<{ name: string }>;
+    if (!packColumns.some((column) => column.name === 'payload_bytes')) this.db.exec('ALTER TABLE context_packs ADD COLUMN payload_bytes INTEGER');
   }
 
   rebuild(snapshot: MetadataSnapshot): void {
@@ -3921,19 +3980,32 @@ export class MetadataCatalog {
   insertContextPack(pack: Omit<LocalContextPack, 'id'>): string {
     const id = `ctx_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
     const now = new Date().toISOString();
+    const payload = JSON.stringify(pack);
     this.db.prepare(`
       INSERT INTO context_packs (
-        id, question, focus_object_key, mode, trust_label, payload_json, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?)
+        id, question, focus_object_key, mode, trust_label, payload_json, created_at, payload_bytes
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       id,
       pack.question,
       pack.focusObjectKey,
       pack.mode,
       pack.trustLabel,
-      JSON.stringify(pack),
+      payload,
       now,
+      payload.length,
     );
+    const last = contextPackPrunes.get(this.dbPath) ?? { at: 0, inserts: 0 };
+    last.inserts += 1;
+    contextPackPrunes.set(this.dbPath, last);
+    if (last.inserts >= CONTEXT_PACK_PRUNE_EVERY || Date.now() - last.at >= CONTEXT_PACK_PRUNE_EVERY_MS) {
+      contextPackPrunes.set(this.dbPath, { at: Date.now(), inserts: 0 });
+      try {
+        this.pruneContextPacks();
+      } catch {
+        // Pruning is housekeeping: it never fails an answer.
+      }
+    }
     return id;
   }
 

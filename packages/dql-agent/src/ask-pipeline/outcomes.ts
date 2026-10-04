@@ -1,5 +1,5 @@
 import { describeIntent, type AnalyticalIntentV1 } from './intent.js';
-import type { ExecutedRows, ResultColumnMeta, WarehouseFailure } from './execute.js';
+import { relationName, type ExecutedRows, type ResultColumnMeta, type WarehouseFailure } from './execute.js';
 import type { PreparedCandidate, PreparedRefusal } from './prepare/types.js';
 import type { VocabularyIndex } from './vocabulary.js';
 import type { InvestigationReceiptV1 } from '../research/investigation/types.js';
@@ -335,19 +335,46 @@ export function composeGapText(gap: GapKind, message: string, nearest: string[],
   return `No governed query was run because ${because}: ${message}.${near}${offer}`;
 }
 
+/**
+ * What a person reads when a query could not be completed. A warehouse
+ * failure is said in its class's words: a missing or unreadable table names
+ * only tables the statement reads; a column or function the warehouse lacks
+ * is said as such, never as a table "the connection cannot see".
+ *
+ * Without a host the warehouse's own words follow, for the person running
+ * the project. With a host (`warehouse.reference`), they stay in the host's
+ * log: the answer gives the reference to ask an administrator about, and
+ * nothing of the statement the host sent (RFC 0010 HH-3).
+ */
 export function composeFailedText(stage: 'resolve' | 'prepare' | 'execute', message: string, warehouse?: WarehouseFailure): string {
   const where = stage === 'resolve' ? 'while reading the question' : stage === 'prepare' ? 'while preparing the query; no warehouse query ran' : 'on the warehouse';
   if (stage === 'execute' && warehouse) {
     const named = warehouse.relations.length ? ` ${warehouse.relations.join(', ')}` : '';
+    const hosted = Boolean(warehouse.reference);
+    const column = warehouse.column ? ` (${warehouse.column})` : '';
+    const table = warehouse.relations.length === 1 ? `the ${relationName(warehouse.relations[0]!)} table` : 'its table';
     const lead = warehouse.class === 'warehouse_suspended'
-      ? 'The warehouse is not running, so the query could not execute. Resume it and ask the same question again.'
+      ? hosted
+        ? 'The warehouse is not running, so the query could not execute. Ask the same question again once it is running.'
+        : 'The warehouse is not running, so the query could not execute. Resume it and ask the same question again.'
       : warehouse.class === 'relation_missing'
-        ? `The connection cannot see${named || ' the table this query needs'}, although the catalog lists it. The catalog and the warehouse disagree; refresh the catalog or point the connection at the database that has it.`
+        ? hosted
+          ? `The warehouse does not have${named || ' a table this answer reads'}, although the catalog lists it.`
+          : `The connection cannot see${named || ' the table this query needs'}, although the catalog lists it. The catalog and the warehouse disagree; refresh the catalog or point the connection at the database that has it.`
         : warehouse.class === 'relation_denied'
-          ? `This connection is not allowed to read${named || ' the table this query needs'}. Grant it access, or ask with data it can read.`
+          ? hosted
+            ? `This connection is not allowed to read${named || ' the table this answer needs'}.`
+            : `This connection is not allowed to read${named || ' the table this query needs'}. Grant it access, or ask with data it can read.`
           : warehouse.class === 'catalog_stale'
             ? `No query was sent:${named || ' a table this query needs'} is already known to be missing on this connection.`
-            : undefined;
+            : warehouse.class === 'column_missing'
+              ? `A column this answer reads${column} is not in ${table} on the warehouse. The table may have changed since the answer was defined${hosted ? '.' : '; refresh the catalog, or update the block or model that names it.'}`
+              : warehouse.class === 'function_missing'
+                ? `The statement calls a function${warehouse.function ? ` (${warehouse.function})` : ''} that this warehouse does not have. ${hosted ? 'Rephrase the question.' : 'Rephrase the question, or name a function this warehouse supports.'}`
+                : hosted
+                  ? 'The warehouse could not run this statement.'
+                  : undefined;
+    if (lead && hosted) return `${lead} Ask your administrator about reference ${warehouse.reference}.`;
     if (lead) return `${lead} The warehouse said: ${message}`;
   }
   return `This could not be completed ${where}: ${message}`;
