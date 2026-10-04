@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "test": "vitest run --passWithNoTests --hookTimeout 30000",
+    "test": "vitest run --passWithNoTests --hookTimeout 30000 --testTimeout 20000",
     "preview": "vite preview",
     "clean": "rm -rf dist"
   },

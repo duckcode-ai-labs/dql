@@ -1,46 +1,50 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { tileQueryHash } from '@duckcodeailabs/dql-core/apps/tile-query';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
+import type * as AppStudioV2Module from './AppStudioV2';
+
+// AppStudioV2 pulls in most of the Studio (charts, the AI panel, every builder
+// panel), so its first import can take several seconds on a busy machine. Load
+// it once here, under the hook timeout, so that time is not charged to
+// whichever test happens to run first.
+let studio: typeof AppStudioV2Module;
+
+beforeAll(async () => {
+  vi.stubGlobal('window', { location: { origin: 'http://127.0.0.1:3000' } });
+  studio = await import('./AppStudioV2');
+});
 
 async function studioTilePreview() {
-  vi.stubGlobal('window', { location: { origin: 'http://127.0.0.1:3000' } });
-  return (await import('./AppStudioV2')).StudioTilePreview;
+  return studio.StudioTilePreview;
 }
 
 async function datasetSourceAuthoringDialog() {
-  vi.stubGlobal('window', { location: { origin: 'http://127.0.0.1:3000' } });
-  return (await import('./AppStudioV2')).DatasetSourceAuthoringDialog;
+  return studio.DatasetSourceAuthoringDialog;
 }
 
 async function datasetSourceRebindReviewDialog() {
-  vi.stubGlobal('window', { location: { origin: 'http://127.0.0.1:3000' } });
-  return (await import('./AppStudioV2')).DatasetSourceRebindReviewDialog;
+  return studio.DatasetSourceRebindReviewDialog;
 }
 
 async function datasetTileBuilder() {
-  vi.stubGlobal('window', { location: { origin: 'http://127.0.0.1:3000' } });
-  return (await import('./AppStudioV2')).DatasetTileBuilder;
+  return studio.DatasetTileBuilder;
 }
 
 async function appAutopilotReviewCard() {
-  vi.stubGlobal('window', { location: { origin: 'http://127.0.0.1:3000' } });
-  return (await import('./AppStudioV2')).AppAutopilotReviewCard;
+  return studio.AppAutopilotReviewCard;
 }
 
 async function appAutopilotRepairShortcut() {
-  vi.stubGlobal('window', { location: { origin: 'http://127.0.0.1:3000' } });
-  const module = await import('./AppStudioV2');
   return {
-    availability: module.appAutopilotRepairShortcutAvailability,
-    examplePrompts: module.appAutopilotExamplePrompts,
-    context: module.appAutopilotContext,
-    presentationContextKey: module.appAutopilotPresentationContextKey,
+    availability: studio.appAutopilotRepairShortcutAvailability,
+    examplePrompts: studio.appAutopilotExamplePrompts,
+    context: studio.appAutopilotContext,
+    presentationContextKey: studio.appAutopilotPresentationContextKey,
   };
 }
 
 async function componentInspector() {
-  vi.stubGlobal('window', { location: { origin: 'http://127.0.0.1:3000' } });
-  return (await import('./AppStudioV2')).ComponentInspector;
+  return studio.ComponentInspector;
 }
 
 describe('Studio Dataset mark interaction (APP-041)', () => {
