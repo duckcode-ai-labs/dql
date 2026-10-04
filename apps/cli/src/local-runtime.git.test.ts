@@ -58,9 +58,22 @@ function postJson(url: string, body: unknown): Promise<Response> {
   return fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
 }
 
+/**
+ * `git init` plus a repository-local identity. Commits made by the server
+ * (`/api/git/commit`) read it; without one they depend on the machine's global
+ * git config, and a CI runner that has none answers 400 ("Author identity
+ * unknown").
+ */
+function initRepo(dir: string): void {
+  git(dir, ['init']);
+  git(dir, ['config', 'user.name', 'DQL Test']);
+  git(dir, ['config', 'user.email', 'dql-test@example.invalid']);
+  git(dir, ['config', 'commit.gpgsign', 'false']);
+}
+
 function committedProject(prefix: string): string {
   const dir = tempProject(prefix);
-  git(dir, ['init']);
+  initRepo(dir);
   git(dir, ['add', '-A']);
   git(dir, ['commit', '-m', 'first']);
   return dir;
@@ -130,7 +143,7 @@ describe('a project inside a bigger repository reviews only itself', () => {
   it('scopes status and stage-all to the project folder', async () => {
     const repo = mkdtempSync(join(tmpdir(), 'dql-git-nested-'));
     tempDirs.push(repo);
-    git(repo, ['init']);
+    initRepo(repo);
     writeFileSync(join(repo, 'README.md'), '# parent repo\n');
     git(repo, ['add', '-A']);
     git(repo, ['commit', '-m', 'parent']);
