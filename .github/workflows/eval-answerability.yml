@@ -82,6 +82,7 @@ jobs:
           PROJ: ${{ runner.temp }}/answerability-proj
 
       - name: Start the runtime against the fixture
+        id: runtime
         run: |
           # The project path is REQUIRED: `dql notebook` resolves a project from
           # it, and starting from the workspace root fails with "No DQL project
@@ -113,22 +114,68 @@ jobs:
           # report cassette provenance without inspecting provider payloads.
           DQL_EVAL_CASSETTE_DIR: ${{ runner.temp }}/answerability-proj/test-cassettes/answerability
         run: |
+          # The report is printed whether or not a gate fails: under `bash -e`
+          # a failing eval used to end the step before its report was shown.
+          status=0
           node "$GITHUB_WORKSPACE/apps/cli/dist/index.js" agent eval agent-evals/answerability.agent-evals.yml \
             --via runtime --runtime-url http://127.0.0.1:3479 \
             --max-false-refusal 0.05 --min-refusal-recall 1 \
-            --format json > "$GITHUB_WORKSPACE/answerability-report.json"
+            --format json > "$GITHUB_WORKSPACE/answerability-report.json" || status=$?
           cat "$GITHUB_WORKSPACE/answerability-report.json"
+          exit "$status"
 
       - name: Routing taxonomy suite
+        # Runs even when the answerability gate failed, so one red run shows
+        # both suites. It still fails the job on its own gate.
+        if: ${{ !cancelled() && steps.runtime.outcome == 'success' }}
         working-directory: ${{ runner.temp }}/answerability-proj
         env:
           DQL_EVAL_CASSETTE_DIR: ${{ runner.temp }}/answerability-proj/test-cassettes/answerability
         run: |
+          status=0
           node "$GITHUB_WORKSPACE/apps/cli/dist/index.js" agent eval agent-evals/routing-taxonomy.agent-evals.yml \
             --via runtime --runtime-url http://127.0.0.1:3479 \
             --max-false-refusal 0.05 --min-refusal-recall 1 \
-            --format json > "$GITHUB_WORKSPACE/routing-report.json"
+            --format json > "$GITHUB_WORKSPACE/routing-report.json" || status=$?
           cat "$GITHUB_WORKSPACE/routing-report.json"
+          exit "$status"
+
+      - name: Explain failing cases
+        # A case's report entry says THAT it refused; the runtime's own run
+        # summary says WHY (for example a cassette miss naming the missing
+        # key). Print both while the runtime is still up.
+        if: ${{ failure() && steps.runtime.outcome == 'success' }}
+        run: |
+          node --input-type=module <<'EOF'
+          import { existsSync, readFileSync } from 'node:fs';
+          for (const file of ['answerability-report.json', 'routing-report.json']) {
+            if (!existsSync(file)) continue;
+            let report;
+            try { report = JSON.parse(readFileSync(file, 'utf8')); } catch (error) {
+              console.log(`## ${file}: not JSON (${error.message})`);
+              continue;
+            }
+            console.log(`## ${file}: ${report.passed}/${report.total} passed`);
+            for (const result of report.results ?? []) {
+              console.log(`  ${result.passed ? 'PASS' : 'FAIL'}  ${result.name}`);
+              console.log(`        kind=${result.kind} route=${result.route} providerDispatches=${result.providerDispatchCount ?? 'n/a'}`);
+              for (const failure of result.failures ?? []) console.log(`        - ${failure}`);
+            }
+          }
+          try {
+            const response = await fetch('http://127.0.0.1:3479/api/agent-runs?limit=100', { signal: AbortSignal.timeout(10_000) });
+            const { runs = [] } = await response.json();
+            console.log(`## runtime runs (${runs.length}, newest first)`);
+            for (const run of runs) {
+              console.log(`  [${run.status}/${run.route}] ${run.question}`);
+              console.log(`        ${String(run.summary ?? '').replace(/\s+/g, ' ').slice(0, 400)}`);
+            }
+          } catch (error) {
+            console.log(`Could not read runs from the runtime: ${error.message}`);
+          }
+          EOF
+          echo "## runtime.log (last 200 lines)"
+          tail -n 200 runtime.log || true
 
       - name: Summarise the headline numbers
         if: always()
