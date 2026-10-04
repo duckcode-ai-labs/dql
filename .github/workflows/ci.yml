@@ -27,7 +27,10 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
-      - run: pnpm test
+      # --continue: Turbo otherwise stops every other package's tests at the
+      # first failing package, so one failure hides the next. The job still
+      # fails if any package fails.
+      - run: pnpm test -- --continue
 
   # --- create-dql-app smoke test ---
   # Guards the "5 minutes to first dashboard" demo gate.
