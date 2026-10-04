@@ -5,24 +5,18 @@ block "top_beverage_customers" {
   type = "custom"
   status = "certified"
   description = "Top customers ranked by beverage revenue, with beverage order count and product variety. One row per customer."
-  owner = "analytics@jaffle.shop"
   tags = ["beverage", "customer", "revenue", "ranking"]
+  owner = "analytics@jaffle.shop"
+  terms = ["Customer", "Revenue", "Beverage", "Order"]
   pattern = "ranking"
   grain = "one row per customer in the beverage purchase ranking"
   entities = ["order_item", "product"]
-  terms = ["Customer", "Revenue", "Beverage", "Order"]
   outputs = ["customer_name", "beverage_revenue", "beverage_orders", "beverage_product_types"]
   dimensions = ["customer_name"]
-  allowedFilters = []
   sourceSystems = ["dbt:customers", "dbt:order_items", "dbt:products"]
-  replacementFor = []
-  reviewCadence = "monthly"
   llmContext = "Use for questions about top customers who bought beverages or different beverage types. Rank by beverage_revenue, and include beverage_product_types so the answer explains variety as distinct beverage products."
-  examples = [
-    { question = "Who are the top customers by beverage revenue?" },
-    { question = "Which customers bought the most different types of beverage product?" }
-  ]
-
+  reviewCadence = "monthly"
+  examples = [{ question = "Who are the top customers by beverage revenue?" }, { question = "Which customers bought the most different types of beverage product?" }]
   query = """
     SELECT
       customers.customer_name,
@@ -41,11 +35,9 @@ block "top_beverage_customers" {
     ORDER BY beverage_revenue DESC, beverage_product_types DESC, customer_name
     LIMIT 10
   """
-
   visualization {
     chart = "table"
   }
-
   tests {
     assert row_count > 0
   }

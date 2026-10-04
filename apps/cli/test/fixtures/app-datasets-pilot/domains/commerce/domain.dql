@@ -3,6 +3,6 @@
 domain "Commerce" {
   id = "commerce"
   owner = "commerce@example.test"
-  description = "A deterministic local fixture for field-based governed App tiles."
   reviewCadence = "quarterly"
+  description = "A deterministic local fixture for field-based governed App tiles."
 }

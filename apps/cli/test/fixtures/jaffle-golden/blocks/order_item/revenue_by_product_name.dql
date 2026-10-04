@@ -1,8 +1,10 @@
+// dql-format: 1
+
 block "revenue_by_product_name" {
-  status = "draft"
   domain = "order_item"
   type = "semantic"
+  status = "draft"
   description = "TOtal revenue by product"
-  metric = "revenue"
+  metrics = ["revenue"]
   dimensions = ["product_name"]
 }

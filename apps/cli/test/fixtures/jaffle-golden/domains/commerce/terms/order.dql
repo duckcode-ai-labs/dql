@@ -5,8 +5,8 @@ term "Order" {
   type = "entity"
   status = "certified"
   description = "One completed Jaffle Shop order in the orders mart."
-  owner = "analytics@jaffle.shop"
   tags = ["entity", "commerce"]
+  owner = "analytics@jaffle.shop"
   identifiers = ["order_id"]
   synonyms = ["purchase", "transaction"]
   businessOwner = "Jaffle Shop Growth Team"

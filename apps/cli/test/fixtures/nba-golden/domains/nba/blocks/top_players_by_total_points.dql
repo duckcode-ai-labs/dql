@@ -5,8 +5,8 @@ block "top_players_by_total_points" {
   type = "custom"
   status = "certified"
   description = "Top players by summed points across games dated in a calendar-year range, with the number of game records. One row per player name."
-  owner = "sports-analytics@nba.test"
   tags = ["nba", "players", "scoring", "ranking"]
+  owner = "sports-analytics@nba.test"
   pattern = "ranking"
   grain = "player_name"
   entities = ["player", "game"]
@@ -19,18 +19,14 @@ block "top_players_by_total_points" {
     top_n = "dynamic"
   }
   sourceSystems = ["dbt:player_game_stats"]
-  reviewCadence = "monthly"
   llmContext = "Ranks players by total points over games dated between season_start and season_end (calendar years), returning top_n rows. Groups by player name."
-  examples = [
-    { question = "Who are the top players by total points in 2016 and 2017?" }
-  ]
-
+  reviewCadence = "monthly"
+  examples = [{ question = "Who are the top players by total points in 2016 and 2017?" }]
   params {
     season_start = 2016
     season_end = 2017
     top_n = 5
   }
-
   query = """
     SELECT
       player_name,
@@ -43,11 +39,9 @@ block "top_players_by_total_points" {
     ORDER BY total_points DESC, player_name ASC
     LIMIT ${top_n}
   """
-
   visualization {
     chart = "table"
   }
-
   tests {
     assert row_count > 0
   }

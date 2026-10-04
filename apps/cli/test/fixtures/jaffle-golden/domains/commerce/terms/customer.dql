@@ -5,8 +5,8 @@ term "Customer" {
   type = "entity"
   status = "certified"
   description = "A Jaffle Shop customer represented by one row in the customers mart."
-  owner = "analytics@jaffle.shop"
   tags = ["entity", "commerce"]
+  owner = "analytics@jaffle.shop"
   identifiers = ["customer_id"]
   synonyms = ["buyer", "shopper"]
   businessOwner = "Jaffle Shop Growth Team"

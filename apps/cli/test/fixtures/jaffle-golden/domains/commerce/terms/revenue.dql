@@ -5,8 +5,8 @@ term "Revenue" {
   type = "metric"
   status = "certified"
   description = "Gross money paid for Jaffle Shop orders, including tax when the orders mart is used. Product revenue from order_items excludes tax."
-  owner = "analytics@jaffle.shop"
   tags = ["metric", "commerce"]
+  owner = "analytics@jaffle.shop"
   synonyms = ["sales", "gross revenue"]
   businessOwner = "Jaffle Shop Growth Team"
   businessRules = ["Use dev.orders.order_total for gross order revenue.", "Use dev.order_items.product_price for product and beverage revenue."]

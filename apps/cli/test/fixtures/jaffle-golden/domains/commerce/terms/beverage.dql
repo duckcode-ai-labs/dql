@@ -5,8 +5,8 @@ term "Beverage" {
   type = "category"
   status = "certified"
   description = "A product where dev.products.is_drink_item is true."
-  owner = "analytics@jaffle.shop"
   tags = ["product", "beverage"]
+  owner = "analytics@jaffle.shop"
   synonyms = ["drink", "drinks"]
   businessOwner = "Jaffle Shop Growth Team"
   businessRules = ["Filter on products.is_drink_item = true for beverage analysis."]

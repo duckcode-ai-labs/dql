@@ -4,10 +4,9 @@ block "Customer daily Dataset" {
   domain = "commerce"
   type = "custom"
   status = "certified"
-  owner = "commerce@example.test"
   description = "Certified customer-day Dataset for mapped filters and trend tiles."
   tags = ["customers", "revenue", "app-datasets"]
-
+  owner = "commerce@example.test"
   grain = {
     entities = ["customer_day"]
     keys = ["customer_day_id", "order_date"]
@@ -16,38 +15,34 @@ block "Customer daily Dataset" {
     timeBucketBy = "order_date"
     aggregate = true
   }
-
   fields {
     customer_day_id { role = "key", type = "string" }
     customer_id { role = "dimension", type = "string" }
-    order_date { role = "time", type = "date", grains = ["day", "month"], primary = true }
-    region { role = "dimension", type = "string" }
-    daily_revenue { role = "attribute", type = "number" }
     daily_margin { role = "attribute", type = "number" }
     daily_orders { role = "attribute", type = "number" }
+    daily_revenue { role = "attribute", type = "number" }
+    order_date { role = "time", type = "date", grains = ["day", "month"], primary = true }
+    region { role = "dimension", type = "string" }
   }
-
   measures {
-    revenue { agg = "sum", from = "daily_revenue", additive = "additive", allowedAggs = ["sum"], format = "currency", currency = "USD" }
-    margin { agg = "sum", from = "daily_margin", additive = "additive", allowedAggs = ["sum"], format = "currency", currency = "USD" }
-    order_count { agg = "sum", from = "daily_orders", additive = "additive", allowedAggs = ["sum"], format = "number" }
-    margin_rate { agg = "ratio", numerator = "daily_margin", denominator = "daily_revenue", additive = "non_additive", allowedAggs = ["ratio"], format = "percent" }
     average_order_value { agg = "ratio", numerator = "daily_revenue", denominator = "daily_orders", additive = "non_additive", allowedAggs = ["ratio"], format = "currency", currency = "USD" }
+    margin { agg = "sum", from = "daily_margin", additive = "additive", allowedAggs = ["sum"], format = "currency", currency = "USD" }
+    margin_rate { agg = "ratio", numerator = "daily_margin", denominator = "daily_revenue", additive = "non_additive", allowedAggs = ["ratio"], format = "percent" }
+    order_count { agg = "sum", from = "daily_orders", additive = "additive", allowedAggs = ["sum"], format = "number" }
+    revenue { agg = "sum", from = "daily_revenue", additive = "additive", allowedAggs = ["sum"], format = "currency", currency = "USD" }
   }
-
   query = """
-SELECT
-  customer_id || ':' || CAST(CAST(order_date AS DATE) AS VARCHAR) AS customer_day_id,
-  customer_id,
-  CAST(order_date AS DATE) AS order_date,
-  region,
-  SUM(net_amount) AS daily_revenue,
-  SUM(margin_amount) AS daily_margin,
-  COUNT(DISTINCT order_id) AS daily_orders
-FROM order_lines
-GROUP BY customer_id, CAST(order_date AS DATE), region
-"""
-
+    SELECT
+      customer_id || ':' || CAST(CAST(order_date AS DATE) AS VARCHAR) AS customer_day_id,
+      customer_id,
+      CAST(order_date AS DATE) AS order_date,
+      region,
+      SUM(net_amount) AS daily_revenue,
+      SUM(margin_amount) AS daily_margin,
+      COUNT(DISTINCT order_id) AS daily_orders
+    FROM order_lines
+    GROUP BY customer_id, CAST(order_date AS DATE), region
+  """
   visualization {
     chart = "line"
   }
