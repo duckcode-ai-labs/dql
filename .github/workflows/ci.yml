@@ -27,10 +27,24 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
+        id: build
       # --continue: Turbo otherwise stops every other package's tests at the
       # first failing package, so one failure hides the next. The job still
       # fails if any package fails.
+      # DQL_AGENT_TEST_LANE=ordinary: dql-agent runs only its ordinary lane
+      # here; its heavy lane runs in the next step (see there).
       - run: pnpm test -- --continue
+        env:
+          DQL_AGENT_TEST_LANE: ordinary
+      # The dql-agent heavy lane (catalog.test.ts, project-state.test.ts)
+      # builds 4,000-model indexes and asserts a wall-clock retrieval bound
+      # (PERF-001/PERF-002). Inside `pnpm test` it shared the runner with the
+      # CLI suite and measured about three times slower, so it runs here on
+      # its own, after every other suite has finished. It runs even when the
+      # step above failed, so one red run reports both.
+      - name: dql-agent heavy lane (alone)
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: pnpm --filter @duckcodeailabs/dql-agent run test:heavy
 
   # --- create-dql-app smoke test ---
   # Guards the "5 minutes to first dashboard" demo gate.

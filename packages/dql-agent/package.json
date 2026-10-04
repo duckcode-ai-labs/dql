@@ -15,6 +15,7 @@
   "scripts": {
     "build": "rm -rf dist tsconfig.tsbuildinfo && tsc -b",
     "test": "node ./scripts/test-lanes.mjs",
+    "test:heavy": "node ./scripts/test-lanes.mjs --lane=heavy",
     "clean": "rm -rf dist tsconfig.tsbuildinfo",
     "prepublishOnly": "pnpm run build"
   },

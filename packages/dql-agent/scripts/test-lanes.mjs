@@ -12,6 +12,14 @@
  * executes the two heavy files serially in a separate Vitest process. The
  * aggregate JSON receipts
  * prove the complete, non-skipped suite still ran exactly once.
+ *
+ * `--lane=ordinary` or `--lane=heavy` (or DQL_AGENT_TEST_LANE) runs one lane
+ * and audits that lane against its own pinned counts. CI uses this: the
+ * ordinary lane runs inside `pnpm test` with every other package, and the
+ * heavy lane runs in its own step once nothing else is running, because its
+ * wall-clock retrieval bound (catalog.test.ts, PERF-001/PERF-002) measured
+ * about three times slower while the CLI suite shared the runner. With no
+ * lane named, both lanes run, as before.
  */
 
 import { spawnSync } from 'node:child_process';
@@ -75,6 +83,23 @@ const EXPECTED_TEST_FILES = 179;
 // 2363 (179 files) with a follow-up's earlier values named by position outside the privacy boundary
 // (prior-values.test.ts, +3 tests).
 const EXPECTED_TESTS = 2363;
+// The heavy lane's share of EXPECTED_TESTS (catalog.test.ts 72 + project-state.test.ts 4), pinned so
+// a lane run on its own (CI runs the two lanes as separate steps) is audited as exactly as both together.
+// The ordinary lane's share is the difference: 2287.
+const EXPECTED_HEAVY_TESTS = 76;
+
+const LANES = ['all', 'ordinary', 'heavy'];
+function requestedLane() {
+  const flagIndex = process.argv.findIndex((arg) => arg === '--lane' || arg.startsWith('--lane='));
+  const fromFlag = flagIndex < 0
+    ? undefined
+    : process.argv[flagIndex].includes('=')
+      ? process.argv[flagIndex].slice('--lane='.length)
+      : process.argv[flagIndex + 1];
+  const lane = (fromFlag ?? process.env.DQL_AGENT_TEST_LANE ?? 'all').trim() || 'all';
+  if (!LANES.includes(lane)) throw new Error(`Unknown test lane "${lane}"; expected one of ${LANES.join(', ')}.`);
+  return lane;
+}
 
 function discoverTestFiles(directory) {
   return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
@@ -117,30 +142,45 @@ function laneSummary(report) {
   };
 }
 
-function assertAggregate({ ordinary, heavy }) {
-  const summaries = [ordinary, heavy].map(laneSummary);
+/**
+ * Audit the lanes that ran. With both lanes, the receipts must cover every
+ * discovered test file exactly once (EXPECTED_TESTS). With one lane, they must
+ * cover exactly that lane's files and its pinned share of the tests, so the two
+ * CI steps together still prove the whole suite ran once.
+ */
+function assertLanes({ ordinary, heavy }) {
+  const ordinarySummary = ordinary ? laneSummary(ordinary) : undefined;
+  const heavySummary = heavy ? laneSummary(heavy) : undefined;
+  const summaries = [ordinarySummary, heavySummary].filter(Boolean);
   const paths = summaries.flatMap((summary) => summary.paths);
   const uniquePaths = new Set(paths);
   const heavyPaths = new Set(HEAVY_TEST_FILES.map((file) => realpathSync(join(packageRoot, file))));
   const discoveredPaths = new Set(discoverTestFiles(join(packageRoot, 'src')).map((file) => realpathSync(file)));
   const requiredPaths = REQUIRED_TEST_FILES.map((file) => realpathSync(join(packageRoot, file)));
+  const expectedPaths = new Set([...discoveredPaths].filter((path) => heavyPaths.has(path)
+    ? Boolean(heavySummary)
+    : Boolean(ordinarySummary)));
+  const expectedTests = (ordinarySummary ? EXPECTED_TESTS - EXPECTED_HEAVY_TESTS : 0)
+    + (heavySummary ? EXPECTED_HEAVY_TESTS : 0);
 
   const failures = [];
   if (discoveredPaths.size !== EXPECTED_TEST_FILES) {
     failures.push(`discovered ${discoveredPaths.size} test files; expected ${EXPECTED_TEST_FILES}`);
   }
-  if (paths.length !== EXPECTED_TEST_FILES || uniquePaths.size !== EXPECTED_TEST_FILES) {
-    failures.push(`ran ${paths.length} file receipts / ${uniquePaths.size} unique files; expected ${EXPECTED_TEST_FILES} exactly once`);
+  if (paths.length !== expectedPaths.size || uniquePaths.size !== expectedPaths.size) {
+    failures.push(`ran ${paths.length} file receipts / ${uniquePaths.size} unique files; expected ${expectedPaths.size} exactly once`);
   }
-  if (paths.some((path) => !discoveredPaths.has(path)) || [...discoveredPaths].some((path) => !uniquePaths.has(path))) {
-    failures.push('Vitest file receipts do not exactly match the discovered test-file set');
+  if (paths.some((path) => !expectedPaths.has(path)) || [...expectedPaths].some((path) => !uniquePaths.has(path))) {
+    failures.push('Vitest file receipts do not exactly match the discovered test-file set for the lanes that ran');
   }
-  if (requiredPaths.some((path) => !discoveredPaths.has(path) || !uniquePaths.has(path))) {
+  if (ordinarySummary && requiredPaths.some((path) => !discoveredPaths.has(path) || !uniquePaths.has(path))) {
     failures.push('required Ask V2 test files were not included exactly once in the package lanes');
   }
-  if (summaries[0].paths.some((path) => heavyPaths.has(path))
-    || heavyPaths.size !== summaries[1].paths.length
-    || summaries[1].paths.some((path) => !heavyPaths.has(path))) {
+  if (ordinarySummary?.paths.some((path) => heavyPaths.has(path))) {
+    failures.push('heavy files ran in the ordinary lane');
+  }
+  if (heavySummary && (heavyPaths.size !== heavySummary.paths.length
+    || heavySummary.paths.some((path) => !heavyPaths.has(path)))) {
     failures.push('heavy files were not run exactly once in the isolated lane');
   }
 
@@ -149,24 +189,28 @@ function assertAggregate({ ordinary, heavy }) {
   const totalFailed = summaries.reduce((sum, summary) => sum + summary.failed, 0);
   const totalPending = summaries.reduce((sum, summary) => sum + summary.pending, 0);
   const totalTodo = summaries.reduce((sum, summary) => sum + summary.todo, 0);
-  if (totalTests !== EXPECTED_TESTS || totalPassed !== EXPECTED_TESTS) {
-    failures.push(`ran ${totalPassed}/${totalTests} tests; expected ${EXPECTED_TESTS}/${EXPECTED_TESTS}`);
+  if (totalTests !== expectedTests || totalPassed !== expectedTests) {
+    failures.push(`ran ${totalPassed}/${totalTests} tests; expected ${expectedTests}/${expectedTests}`);
   }
   if (totalFailed !== 0 || totalPending !== 0 || totalTodo !== 0) {
     failures.push(`found failed=${totalFailed}, skipped=${totalPending}, todo=${totalTodo}; expected all tests to run and pass`);
   }
   if (failures.length > 0) throw new Error(`DQL Agent test-lane audit failed: ${failures.join('; ')}`);
 
+  const lanes = [
+    ordinarySummary ? `${ordinarySummary.files} ordinary bounded` : undefined,
+    heavySummary ? `${heavySummary.files} isolated serial` : undefined,
+  ].filter(Boolean).join(' + ');
   console.log(
-    `\nDQL Agent test-lane audit: ${uniquePaths.size}/${EXPECTED_TEST_FILES} files, `
-    + `${totalPassed}/${EXPECTED_TESTS} tests, no skips `
-    + `(${summaries[0].files} ordinary bounded + ${summaries[1].files} isolated serial).`,
+    `\nDQL Agent test-lane audit: ${uniquePaths.size}/${expectedPaths.size} files, `
+    + `${totalPassed}/${expectedTests} tests, no skips (${lanes}).`,
   );
 }
 
+const lane = requestedLane();
 const reportsDirectory = mkdtempSync(join(tmpdir(), 'dql-agent-test-lanes-'));
 try {
-  const ordinary = runLane({
+  const ordinary = lane === 'heavy' ? undefined : runLane({
     name: 'ordinary bounded',
     reportPath: join(reportsDirectory, 'ordinary.json'),
     // Under Turbo's workspace graph, even a percentage-based worker pool can
@@ -181,7 +225,7 @@ try {
       ...HEAVY_TEST_FILES.flatMap((file) => [`--exclude=${file}`]),
     ],
   });
-  const heavy = runLane({
+  const heavy = lane === 'ordinary' ? undefined : runLane({
     name: 'isolated heavy',
     reportPath: join(reportsDirectory, 'heavy.json'),
     args: [
@@ -191,7 +235,7 @@ try {
       ...HEAVY_TEST_FILES,
     ],
   });
-  assertAggregate({ ordinary, heavy });
+  assertLanes({ ordinary, heavy });
 } finally {
   rmSync(reportsDirectory, { recursive: true, force: true });
 }

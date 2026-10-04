@@ -6,7 +6,8 @@
       "outputs": ["dist/**"]
     },
     "test": {
-      "dependsOn": ["build"]
+      "dependsOn": ["build"],
+      "env": ["DQL_AGENT_TEST_LANE"]
     },
     "lint": {},
     "dev": {
