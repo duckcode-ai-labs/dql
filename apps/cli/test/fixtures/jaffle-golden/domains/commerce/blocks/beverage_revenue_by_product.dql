@@ -5,24 +5,18 @@ block "beverage_revenue_by_product" {
   type = "custom"
   status = "certified"
   description = "Beverage product revenue and item count. One row per beverage product."
-  owner = "analytics@jaffle.shop"
   tags = ["beverage", "product", "revenue", "ranking"]
+  owner = "analytics@jaffle.shop"
+  terms = ["Revenue", "Beverage"]
   pattern = "ranking"
   grain = "one row per beverage product"
   entities = ["order_item", "product"]
-  terms = ["Revenue", "Beverage"]
   outputs = ["product_name", "beverage_revenue", "items_sold"]
   dimensions = ["product_name"]
-  allowedFilters = []
   sourceSystems = ["dbt:order_items", "dbt:products"]
-  replacementFor = []
-  reviewCadence = "monthly"
   llmContext = "Use for the highest-revenue beverage products. Beverage revenue is SUM(dev.order_items.product_price), excluding tax. The products alias is intentional so the beverage predicate is unambiguous."
-  examples = [
-    { question = "Which beverage products generate the most revenue?" },
-    { question = "What are the top drinks by revenue?" }
-  ]
-
+  reviewCadence = "monthly"
+  examples = [{ question = "Which beverage products generate the most revenue?" }, { question = "What are the top drinks by revenue?" }]
   query = """
     SELECT
       products.product_name,
@@ -35,11 +29,9 @@ block "beverage_revenue_by_product" {
     GROUP BY 1
     ORDER BY beverage_revenue DESC, products.product_name
   """
-
   visualization {
     chart = "bar"
   }
-
   tests {
     assert row_count > 0
   }

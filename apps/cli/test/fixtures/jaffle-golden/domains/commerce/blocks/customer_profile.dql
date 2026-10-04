@@ -5,24 +5,19 @@ block "customer_profile" {
   type = "custom"
   status = "certified"
   description = "Customer lifetime profile. One row per customer."
-  owner = "analytics@jaffle.shop"
   tags = ["customer", "profile", "lifetime-value"]
+  owner = "analytics@jaffle.shop"
+  terms = ["Customer", "Revenue", "Order"]
   pattern = "entity_profile"
   grain = "one row per customer"
   entities = ["customer"]
-  terms = ["Customer", "Revenue", "Order"]
   outputs = ["customer_name", "customer_type", "count_lifetime_orders", "lifetime_spend", "first_ordered_at", "last_ordered_at"]
   dimensions = ["customer_name", "customer_type"]
   allowedFilters = ["customer_name"]
   sourceSystems = ["dbt:customers"]
-  replacementFor = []
-  reviewCadence = "monthly"
   llmContext = "Use for a complete customer profile. Filter by a specific customer_name when the user provides one; return business-friendly lifetime attributes rather than a query plan."
-  examples = [
-    { question = "Give me the complete profile for Matthew Meyer." },
-    { question = "What is this customer's lifetime spend and order history?" }
-  ]
-
+  reviewCadence = "monthly"
+  examples = [{ question = "Give me the complete profile for Matthew Meyer." }, { question = "What is this customer's lifetime spend and order history?" }]
   query = """
     SELECT
       customer_name,
@@ -34,11 +29,9 @@ block "customer_profile" {
     FROM dev.customers
     ORDER BY lifetime_spend DESC, customer_name
   """
-
   visualization {
     chart = "table"
   }
-
   tests {
     assert row_count > 0
   }

@@ -5,18 +5,16 @@ block "top_player_change_analysis_2016_2017" {
   type = "custom"
   status = "certified"
   description = "Review-required draft comparing the top scorers of calendar 2016 and 2017 by rank and total points."
-  owner = "sports-analytics@nba.test"
   tags = ["nba", "players", "scoring", "change-analysis", "review-required"]
+  owner = "sports-analytics@nba.test"
   pattern = "ranking"
   grain = "player_name"
   entities = ["player"]
   outputs = ["year", "player_rank", "player_name", "total_points"]
   dimensions = ["year", "player_name"]
-  allowedFilters = []
   sourceSystems = ["dbt:player_game_stats"]
-  reviewCadence = "monthly"
   llmContext = "Draft under review: ranks the top five scorers of each calendar year (2016, 2017) by total points."
-
+  reviewCadence = "monthly"
   query = """
     WITH player_year AS (
       SELECT CAST(strftime('%Y', game_date) AS INTEGER) AS year, player_name, SUM(pts) AS total_points
@@ -29,11 +27,9 @@ block "top_player_change_analysis_2016_2017" {
     )
     SELECT year, player_rank, player_name, total_points FROM ranked WHERE player_rank <= 5 ORDER BY year, player_rank
   """
-
   visualization {
     chart = "table"
   }
-
   tests {
     assert row_count > 0
   }
