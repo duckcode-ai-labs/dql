@@ -28,20 +28,40 @@ so the recording does not depend on memory.
 The question text below is copied from
 `apps/cli/test/ask-golden/questions.json`. The expected lane is what that file
 and its notes say should happen. **It is not verified.** The recording decides.
-An older run report in `apps/cli/test/ask-golden/baseline-report-authoritative_v2.json`
-(commit `f964bb5c`, 17 of 34 passing) shows `top-beverage-customers` blocked,
-so do not assume sequence 1 works on `main` today.
+The only run evidence in the repository is the older report
+`apps/cli/test/ask-golden/baseline-report-authoritative_v2.json` (commit
+`f964bb5c`, 17 of 34 passing). **At that commit all four candidate questions
+landed off the expected lane** (last column). It is old and on a different
+fixture, so it does not predict `main` today; it only says not to trust the
+"expected" column.
 
-| # | Moment | Exact question | Expected lane | Must be visible on screen |
-|---|--------|----------------|---------------|---------------------------|
-| 1 | Certified block | `who are the top customers for beverage product category` | Certified block `top_beverage_customers` | Certified label, block owner, then the **How it answered** tab opened |
-| 2 | Governed semantic metrics | `what is the average order value` | Semantic metric, no generated SQL | Governed label; the metric used shown in **How it answered** |
-| 3 | Generated SQL | `supply cost by product` | AI-written SQL | Badge **AI-generated**; the SQL tab |
-| 4 | Clarifying question | `who are the top customers` | Bounded clarification (gross or pretax spend) | The clarifying question, then the answer after you pick an option |
+| # | Moment | Exact question | Expected lane | Observed at `f964bb5c` (route / status / trust) | Must be visible on screen |
+|---|--------|----------------|---------------|-----------------------------------------------|---------------------------|
+| 1 | Certified block | `who are the top customers for beverage product category` | Certified block `top_beverage_customers` | `generated_answer` / `blocked` / `blocked` | Certified label, block owner, then the **How it answered** tab opened |
+| 2 | Governed semantic metrics | `what is the average order value` | Semantic metric, no generated SQL | `generated_answer` / `needs_review` / `review_required` | Governed label; the metric used shown in **How it answered** |
+| 3 | Generated SQL | `supply cost by product` | AI-written SQL | `generated_answer` / `blocked` / `blocked` | Badge **AI-generated**; the SQL tab |
+| 4 | Clarifying question | `who are the top customers` | Bounded clarification (gross or pretax spend) | `certified_answer` / `completed` / `certified` (answered by `customer_profile`, no clarification) | The clarifying question, then the answer after you pick an option |
 
 Questions 2 and 3 are candidates picked from the golden list, not from a run.
 If a candidate lands in the wrong lane, try another question from the same file
-and write down both attempts. Do not edit a question to force a lane.
+and write down both attempts. Do not edit a question to force a lane. This
+applies to all four sequences. Other candidates, with their observed outcome
+at `f964bb5c`:
+
+- Sequence 1 (certified): `revenue by month` (`certified_answer`, certified),
+  `beverage revenue by product` (`certified_answer`, certified). Both are
+  certified, but neither is the beverage-customer block.
+- Sequence 2 (governed): `total revenue` (`semantic_answer`, governed),
+  `how many orders are there` (`semantic_answer`, governed).
+- Sequence 3 (generated SQL): `which customers placed the most orders`
+  (`generated_answer`, `needs_review`). No candidate in the report ended
+  `completed` as generated SQL; this may need a new question.
+- Sequence 4 (clarification): `outcome: clarify_or_rows` also covers
+  `revenue by shopper` (not in the report, never observed), `total revenue`
+  and `beverage revenue` (both answered as governed, not clarified), and
+  `I need to get the bevereage catogery` (`needs_review`, no clarification).
+  **No question is known to produce a clarification.** If none does, mark
+  sequence 4 "not reproduced".
 
 ## Recording rules
 
