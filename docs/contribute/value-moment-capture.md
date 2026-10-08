@@ -87,6 +87,20 @@ For each sequence write one line: `reproduced`, `reproduced with a different
 question (say which)`, or `not reproduced (say why)`. The designer animates
 only the first two. The third becomes "illustration" or is cut.
 
+## Result log (fill in after each take)
+
+Status on 2026-10-08: an agent run with no GUI, no built `dql notebook` and no
+provider key could not record anything. All four are therefore
+`not reproduced (not attempted: no recording environment)`. Replace each line
+when @theo or @zara records it.
+
+| # | Status | Question actually typed | Label shown | Elapsed | Provider / model | DQL commit | Project commit | Files |
+|---|--------|-------------------------|-------------|---------|------------------|------------|----------------|-------|
+| 1 | not reproduced (not attempted) | | | | | | | |
+| 2 | not reproduced (not attempted) | | | | | | | |
+| 3 | not reproduced (not attempted) | | | | | | | |
+| 4 | not reproduced (not attempted) | | | | | | | |
+
 ## Not checked
 
 - No sequence was run. Lanes, labels and tab names come from reading the
