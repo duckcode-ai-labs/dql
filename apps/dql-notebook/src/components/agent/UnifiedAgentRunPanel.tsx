@@ -6390,7 +6390,9 @@ function TrustBadge({ run, t }: { run: AgentRun; t: Theme }) {
         ? 'Needs input'
       : run.trustState === 'blocked'
         ? 'Refused'
-        : 'AI-generated';
+        : run.trustState === 'governed' || run.trustState === 'grounded'
+          ? 'Governed'
+          : 'Needs review';
   return (
     <span style={{ border: `1px solid ${color}55`, color, background: `${color}12`, borderRadius: 999, padding: '3px 7px', fontSize: 10, fontWeight: 850 }}>
       {label}
