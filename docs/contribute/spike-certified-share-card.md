@@ -25,7 +25,8 @@ Source: `packages/dql-core/src/manifest/types.ts`, `ManifestBlock` (line 381).
 
 - `status` is an optional free string, not a fixed set. It can be missing.
 - Other statuses exist in the code: `deprecated` and `pending_recertification`
-  (`packages/dql-core/src/lineage/builder.ts:20`).
+  (`packages/dql-core/src/lineage/builder.ts:20`). The canonical status-to-label
+  mapping is `trustLabelIdForStatus` in `packages/dql-core/src/trust/labels.ts`.
 - `manifest.blocks` is keyed by name and keeps one block per name.
   `manifest.blockDeclarations` lists every declaration, including draft and
   review variants, but it is optional. Counting `blocks` alone would undercount
@@ -38,15 +39,22 @@ Source: `packages/dql-core/src/manifest/types.ts`, `ManifestBlock` (line 381).
 ## Counting rules (proposed)
 
 - Count `blockDeclarations` when present, else `Object.values(blocks)`.
-- `certified` counts as certified. `review` counts as review. `draft` counts as draft.
-- No `status`: count as draft. The repo already does this in
-  `packages/dql-core/src/manifest/retirement.ts:158` (`block.status ?? 'draft'`).
-- `pending_recertification`: count as review. Its certification needs a recheck,
-  and the reader UI already shows a stale certified tile as review
-  (`apps/dql-notebook/src/components/apps/reader-trust.test.ts:14`).
-- `deprecated`, and any status we do not recognise: left out of the three counts.
-  The card prints no footnote with names. It may print "N not counted" as a
-  number only.
+- Do not add a new status mapping. `summarizeTrust` calls the existing
+  `trustLabelIdForStatus` (`packages/dql-core/src/trust/labels.ts:228`), so the card
+  agrees with the badge, MCP and agent surfaces for the same block:
+  - `certified` (label `certified`; also `approved`) counts as certified.
+  - `reviewed` (label `reviewed`; also `review`, `research`) counts as review.
+  - `ai_generated` (label `ai_generated`; also `draft`, `draft_ready`, `generated`,
+    `pending`, `analyst_review_required`) counts as draft.
+  - `pending_recertification` is in the draft group in that function, so it counts
+    as draft, not review.
+- No `status`: count as draft. The function alone would send it to
+  `insufficient_context`, so pass `block.status ?? 'draft'`, as
+  `packages/dql-core/src/manifest/retirement.ts:158` already does.
+- Every other label (`conflict`, `insufficient_context`, and statuses such as
+  `deprecated`, `mixed`, `unknown`, `uncertified`, or any unrecognised string) is left
+  out of the three counts. The card prints no footnote with names. It may print
+  "N not counted" as a number only.
 - Zero blocks: write no image. Print "no blocks found" and exit non-zero.
   A card of three zeros is not worth sharing.
 
@@ -74,8 +82,11 @@ and would render as a box.
 
 ## Split
 
-1. `summarizeTrust(manifest)` in `packages/dql-core`, with tests for each rule
-   above, including missing status, duplicate names and an empty manifest.
+1. `summarizeTrust(manifest)` in `packages/dql-core`, built on
+   `trustLabelIdForStatus`, with tests for each rule above: one status per group
+   (including `approved`, `reviewed` and `pending_recertification`), missing status,
+   `deprecated` and unknown strings (not counted), duplicate names and an empty
+   manifest.
    About 80 lines.
 2. Card layout (pure, returns drawing instructions or SVG) plus the notebook
    button. About 200 lines.
