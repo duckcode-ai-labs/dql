@@ -56,10 +56,16 @@ at `f964bb5c`:
 - Sequence 3 (generated SQL): `which customers placed the most orders`
   (`generated_answer`, `needs_review`). No candidate in the report ended
   `completed` as generated SQL; this may need a new question.
-- Sequence 4 (clarification): `outcome: clarify_or_rows` also covers
-  `revenue by shopper` (not in the report, never observed), `total revenue`
-  and `beverage revenue` (both answered as governed, not clarified), and
-  `I need to get the bevereage catogery` (`needs_review`, no clarification).
+- Sequence 4 (clarification): `outcome: clarify_or_rows` in `questions.json`
+  also covers `revenue by shopper` (not in the report, never observed),
+  `total revenue` (answered as governed, not clarified),
+  `I need to get the bevereage catogery` (`needs_review`, no clarification),
+  `top 5 customers by revenue` (`generated_answer`, `blocked`),
+  `what is the total revenue for "Ryan Byrd"` (`generated_answer`, `blocked`),
+  `what is the "Ryan byrd" revenue by total revenue and beverage revenue? give me both`
+  (`generated_answer`, `needs_review`) and
+  `what is the average order value of customers first acquired in 2024`
+  (not in the report, never observed).
   **No question is known to produce a clarification.** If none does, mark
   sequence 4 "not reproduced".
 
