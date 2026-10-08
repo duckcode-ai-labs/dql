@@ -50,7 +50,7 @@ Source: `packages/dql-core/src/manifest/types.ts`, `ManifestBlock` (line 381).
 - Zero blocks: write no image. Print "no blocks found" and exit non-zero.
   A card of three zeros is not worth sharing.
 
-These rules are my default. The product owner left the choice to me.
+The product owner left these rules to the engineer, so they are the plan.
 
 ## Picture options
 
@@ -80,7 +80,8 @@ and would render as a box.
 2. Card layout (pure, returns drawing instructions or SVG) plus the notebook
    button. About 200 lines.
 3. `dql share-card` command: reads `dql-manifest.json`, warns if stale, writes SVG
-   (and PNG if option 1 is approved). About 120 lines plus the dependency.
+   only. About 120 lines, no new dependency. A later PR can add PNG once the
+   dependency is approved.
 
 ## Not checked
 
@@ -91,7 +92,10 @@ and would render as a box.
   (`manifestVersion` 1 and 2).
 - Whether `@resvg/resvg-wasm` licence and size are acceptable.
 
-## Open question for the owner
+## Decisions from the owner
 
-Approve a new dependency for CLI PNG output, or ship the notebook button and an
-SVG-only CLI first?
+- Blocks with no `status` count as draft. The owner left this to the engineer.
+- Ship the notebook button and an SVG-only CLI first. No new dependency now.
+  CLI PNG output waits for a separate approval of `@resvg/resvg-wasm`.
+  Until then, a user who wants a PNG from the CLI opens the SVG in a browser or
+  uses the notebook button.
