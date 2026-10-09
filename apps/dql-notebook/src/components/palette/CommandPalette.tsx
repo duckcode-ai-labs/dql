@@ -29,6 +29,7 @@ import {
   Play,
 } from 'lucide-react';
 import { useNotebook } from '../../store/NotebookStore';
+import { hostReadOnly, useHostUi } from '../../host/host-ui';
 import type { NotebookAction, AppMode } from '../../store/types';
 
 type PaletteMode = 'studio' | 'app' | 'both';
@@ -71,6 +72,7 @@ export function CommandPalette({
   onClose: () => void;
 }) {
   const { state, dispatch } = useNotebook();
+  const hostUi = useHostUi();
   const [q, setQ] = useState('');
   const [index, setIndex] = useState(0);
   const listRef = useRef<HTMLDivElement>(null);
@@ -159,24 +161,27 @@ export function CommandPalette({
     }
 
     // Create — authoring is Studio-only.
-    result.push(
-      {
+    // Hidden when the host only lets this person read (the create would be refused).
+    if (!hostReadOnly(hostUi, 'files')) {
+      result.push({
         id: 'notebook.new',
         label: 'New notebook…',
         group: 'Create',
         icon: FilePlus,
         mode: 'studio',
         run: wrap(() => d({ type: 'OPEN_NEW_NOTEBOOK_MODAL' })),
-      },
-      {
+      });
+    }
+    if (!hostReadOnly(hostUi, 'block_library')) {
+      result.push({
         id: 'block.new',
         label: 'New block…',
         group: 'Create',
         icon: BoxSelect,
         mode: 'studio',
         run: wrap(() => d({ type: 'OPEN_NEW_BLOCK_MODAL' })),
-      },
-    );
+      });
+    }
 
     // Theme — three explicit entries (v1.3.2 consolidation).
     const currentThemeKey: 'obsidian' | 'paper' | 'white' =
@@ -204,6 +209,7 @@ export function CommandPalette({
     state.dashboardMode,
     state.appMode,
     state.sidebarPanel,
+    hostUi,
     dispatch,
     onClose,
   ]);

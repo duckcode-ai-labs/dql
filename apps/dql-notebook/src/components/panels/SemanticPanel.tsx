@@ -21,6 +21,7 @@ import { MetricDetailPanel } from './MetricDetailPanel';
 import { SemanticSearchBar } from './SemanticSearchBar';
 import { SemanticTreeNode as TreeRow } from './SemanticTreeNode';
 import { SetupWizard } from '../modals/SetupWizard';
+import { hostReadOnly, useHostUi } from '../../host/host-ui';
 import { buildNotebookSemanticBlock } from './semantic-notebook-source';
 
 function PanelSectionHeader({ label, count, t }: { label: string; count?: number; t: Theme }) {
@@ -291,6 +292,7 @@ function flattenTreeRows(nodes: SemanticTreeNode[], expanded: Record<string, boo
 
 export function SemanticPanel() {
   const { state, dispatch } = useNotebook();
+  const hostUi = useHostUi();
   const t = themes[state.themeMode];
   const sl = state.semanticLayer;
 
@@ -773,12 +775,13 @@ export function SemanticPanel() {
           {sl.metrics.length} metrics · {sl.dimensions.length} dimensions
           {sl.lastSyncTime ? ` · synced ${new Date(sl.lastSyncTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : ''}
         </span>
-        <button
+        {/* Without an open block this button creates one, which a read-only viewer cannot do. */}
+        {(!hostReadOnly(hostUi, 'block_library') || state.activeFile?.type === 'block') && <button
           onClick={handleOpenStudio}
           style={{ background: t.accent, border: 'none', borderRadius: 4, color: '#fff', cursor: 'pointer', fontSize: 10, fontWeight: 600, fontFamily: t.font, padding: '2px 8px' }}
         >
           Open Studio
-        </button>
+        </button>}
         <button
           onClick={() => {
             setSelectMode((v) => !v);

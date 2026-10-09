@@ -1724,8 +1724,9 @@ export function BlockStudio() {
               semanticStats={semanticStats}
               semanticObjectCount={semanticObjectCount}
               databaseStats={databaseStats}
-              onCreateSql={() => beginManualDraft('custom')}
-              onCreateSemantic={() => beginManualDraft('semantic')}
+              onCreateSql={readOnlyBlocks ? undefined : () => beginManualDraft('custom')}
+              onCreateSemantic={readOnlyBlocks ? undefined : () => beginManualDraft('semantic')}
+              readOnlyReason={readOnlyBlocksReason}
               onImport={() => setWorkspaceMode('import')}
               onBuildDql={() => openAskAi({ kind: 'build', initialInput: 'Draft a reusable DQL block that ' })}
               t={t}
@@ -1802,7 +1803,7 @@ export function BlockStudio() {
                     handleDraftChange(appendSemanticRefToQuery(state.blockStudioDraft, ref));
                     setSemanticInsertChoice(null);
                   }}
-                  onCreateSemantic={() => dispatch({ type: 'OPEN_NEW_BLOCK_MODAL', blockType: 'semantic' })}
+                  onCreateSemantic={readOnlyBlocks ? undefined : () => dispatch({ type: 'OPEN_NEW_BLOCK_MODAL', blockType: 'semantic' })}
                   t={t}
                 />
               )}
@@ -2527,6 +2528,7 @@ function BlockStudioStartPage({
   databaseStats,
   onCreateSql,
   onCreateSemantic,
+  readOnlyReason,
   onImport,
   onBuildDql,
   t,
@@ -2544,28 +2546,29 @@ function BlockStudioStartPage({
   };
   semanticObjectCount: number;
   databaseStats: { schemas: number; tables: number; columns: number };
-  onCreateSql: () => void;
-  onCreateSemantic: () => void;
+  onCreateSql?: () => void;
+  onCreateSemantic?: () => void;
+  readOnlyReason?: string;
   onImport: () => void;
   onBuildDql: () => void;
   t: Theme;
 }) {
   const manualActions = [
-    {
+    onCreateSql && {
       title: 'Blank SQL block',
       detail: 'Start with an empty custom query.',
       action: onCreateSql,
       label: 'Create',
       Icon: Code2,
     },
-    {
+    onCreateSemantic && {
       title: 'Semantic block',
       detail: 'Build directly from governed metrics.',
       action: onCreateSemantic,
       label: 'Build',
       Icon: Blocks,
     },
-  ];
+  ].filter((card): card is NonNullable<typeof card> => Boolean(card));
   const dbtReady = Boolean(dbtStatus?.artifacts.manifest.exists);
   const semanticMetricCount = dbtStatus?.counts.metrics ?? semanticStats.metrics;
   const sourceSummary = dbtStatus
@@ -2607,15 +2610,20 @@ function BlockStudioStartPage({
           onClick={onImport}
           t={t}
         />
-        <PrimaryStartAction
-          title="Build manually"
-          detail="Use the visual semantic builder for multiple metrics, compatible dimensions, time grain, filters, and chart intent."
-          label="Open builder"
-          Icon={Blocks}
-          onClick={onCreateSemantic}
-          t={t}
-        />
+        {onCreateSemantic && (
+          <PrimaryStartAction
+            title="Build manually"
+            detail="Use the visual semantic builder for multiple metrics, compatible dimensions, time grain, filters, and chart intent."
+            label="Open builder"
+            Icon={Blocks}
+            onClick={onCreateSemantic}
+            t={t}
+          />
+        )}
       </div>
+      {readOnlyReason && !onCreateSemantic && (
+        <div style={{ fontSize: 12, color: t.textMuted, fontFamily: t.font }}>{readOnlyReason}</div>
+      )}
 
       <details style={importDisclosureStyle(t)}>
         <summary style={importSummaryStyle(t)}>Manual options</summary>
@@ -3856,7 +3864,7 @@ function BuilderNotice({
   databaseWarning: string | null;
   onDismiss: () => void;
   onInsertAdvanced: () => void;
-  onCreateSemantic: () => void;
+  onCreateSemantic?: () => void;
   t: Theme;
 }) {
   const message = semanticChoice
@@ -3867,7 +3875,7 @@ function BuilderNotice({
       <span style={{ fontSize: 12, color: t.textSecondary, lineHeight: 1.4, flex: 1, minWidth: 260 }}>{message}</span>
       {semanticChoice && (
         <>
-          <button onClick={onCreateSemantic} style={secondaryImportButtonStyle(t)}>Create Semantic Block</button>
+          {onCreateSemantic && <button onClick={onCreateSemantic} style={secondaryImportButtonStyle(t)}>Create Semantic Block</button>}
           <button onClick={onInsertAdvanced} style={primaryImportButtonStyle(t)}>Insert advanced ref</button>
         </>
       )}
