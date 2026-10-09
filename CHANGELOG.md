@@ -27,6 +27,17 @@ This project adheres to [Semantic Versioning](https://semver.org/).
   hook, and fail-closed handling of malformed answers; hooks belong to one
   server instance. The host package exports the statement check.
 
+### Certified answers first
+
+- A certified block now answers a question when it computes the same thing as
+  the metric the question resolved to, whatever its output column is called.
+  Ask compares the aggregate (including distinct), the column, the table, the
+  rows kept and the grouping. Anything that differs, or that Ask cannot read,
+  is not a match, and the trace says why in plain words. A block whose SQL is
+  too complex to compare can declare the metric it answers with
+  `metricMappings`; `dql compile` fails when the mapping names a metric that is
+  not in the semantic layer.
+
 ### Local models
 
 - The Ollama provider talks only to its configured base URL (the provider

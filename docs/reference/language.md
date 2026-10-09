@@ -104,6 +104,7 @@ Canonical block fields:
 | `allowedFilters` | Filters considered safe and meaningful for reuse |
 | `parameterPolicy` | Review intent for parameters: `dynamic`, `static`, `business`, `derived`, `optional`, or `ambiguous_review_required` |
 | `filterBindings` | Mapping from app/business filters to physical columns or expressions used by the block |
+| `metricMappings` | Which semantic metric an output column answers, and the rows it is read over: `open_claims { metric = "claim_count"  filter = "status = 'open'" }`. Ask reads a simple block's SQL and serves it as the certified answer when it computes the same thing as the question's metric; declare a mapping when the SQL is too complex to compare. `dql compile` fails when the metric is not in the semantic layer, the column is not an output, or the filter is not plain `column = value` conditions |
 | `sourceSystems` | Business source-system hints used in lineage and AI context |
 | `replacementFor` | Prior blocks or business questions this block replaces |
 | `replacedBy` | Deprecated blocks only: the block that replaces this one, by name or project-relative `.dql` path |

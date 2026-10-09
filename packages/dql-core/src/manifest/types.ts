@@ -445,6 +445,8 @@ export interface ManifestBlock {
   parameters?: ManifestBlockParameter[];
   /** Business/app filter to physical column or expression bindings. */
   filterBindings?: ManifestBlockFilterBinding[];
+  /** Output columns the block declares answer a semantic-layer metric, with the filter the metric is read under. */
+  metricMappings?: ManifestBlockMetricMapping[];
   /** Business/source systems represented by this block. */
   sourceSystems?: string[];
   /** Block names this block is intended to replace or supersede. */
@@ -611,6 +613,12 @@ export interface ManifestBlockParameterPolicy {
 export interface ManifestBlockFilterBinding {
   filter: string;
   binding: string;
+}
+
+export interface ManifestBlockMetricMapping {
+  output: string;
+  metric: string;
+  filter?: string;
 }
 
 export interface ManifestBlockParameter {

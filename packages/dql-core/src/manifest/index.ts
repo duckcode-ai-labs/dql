@@ -13,6 +13,7 @@ export {
 } from './builder.js';
 
 export { detectOutputDrift } from './output-drift.js';
+export { unreadableFilterParts, validateBlockMetricMappings } from './metric-mapping.js';
 export {
   DEPRECATED_ON_PATTERN,
   isDeprecatedStatus,
