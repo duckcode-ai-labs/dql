@@ -127,6 +127,7 @@ export function entails(block: VocabularyEntry, intent: AnalyticalIntentV1, voca
   // The block's grain must be the question's grain: a block that groups by a
   // column the question did not ask for returns more rows than the answer.
   if (!namesBlock) {
+    if (contract.grainUnparsed?.length) missing.push(`the block groups rows by ${contract.grainUnparsed.join(' and ')}, which is not the grain it selects, so its rows cannot be compared with the question`);
     const asked = new Set([...intent.groupBy.map((group) => groupColumn(group.ref, vocabulary)), ...intent.display.map((ref) => groupColumn(ref, vocabulary))].map(norm));
     const extra = (contract.groupBy.length ? contract.groupBy : contract.outputs.filter((output) => !contract.measures.some((m) => norm(m.output) === norm(output)))).filter((column) => !asked.has(norm(column)));
     if (extra.length) missing.push(`the block breaks the answer down by ${extra.join(', ')}, which the question did not ask for`);

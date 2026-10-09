@@ -38,6 +38,8 @@ export interface BlockContractV1 {
   staticScope: BlockContractPredicate[];
   /** WHERE/HAVING parts the reader could not turn into a predicate: the block restricts rows in a way the contract cannot state. */
   scopeUnparsed?: string[];
+  /** A GROUP BY that is not exactly the plain SELECT items: the real grain differs from `groupBy`, and no declaration vouches for it. */
+  grainUnparsed?: string[];
   /** The one table the block reads, when its FROM is a single plain relation (no join, subquery or list). */
   source?: string;
   allowedFilters: string[];
@@ -218,8 +220,21 @@ export function extractBlockContract(block: BlockDeclarationLike): BlockContract
   const fromMatch = fromText?.match(/^([A-Za-z_"`][\w."`$-]*)(?:\s+(?:as\s+)?[A-Za-z_]\w*)?$/i);
   const having = isSimple ? clause(body, 'HAVING', ['ORDER BY', 'LIMIT']) : undefined;
   const scope = parseScopePredicates(where);
+  const plainItems = items.filter((item) => !item.aggregate);
+  // The grain is what the SQL really groups by, not what it selects: a GROUP BY
+  // wider than the plain SELECT items returns more rows than the contract states.
+  const groupText = isSimple ? clause(body, 'GROUP BY', ['HAVING', 'ORDER BY', 'LIMIT']) : undefined;
+  const groupParts = groupText ? splitTopLevel(groupText, ',') : [];
+  const groupIndexes = groupParts.map((part) => {
+    if (/^\d+$/.test(part)) return Number(part) - 1 < items.length && !items[Number(part) - 1]!.aggregate ? plainItems.indexOf(items[Number(part) - 1]!) : -1;
+    const key = norm(part);
+    return plainItems.findIndex((item) => item.expr === key || item.output.toLowerCase() === key || norm(lastSegment(item.expr)) === key);
+  });
+  const groupMatches = groupParts.length === 1 && /^all$/i.test(groupParts[0]!)
+    || (groupIndexes.every((index) => index >= 0) && plainItems.every((_, index) => groupIndexes.includes(index)));
+  const grainUnparsed = groupText && !groupMatches ? [`GROUP BY ${groupText}`] : [];
   const scopeUnparsed = [...scope.unparsed, ...(having ? [`HAVING ${having}`] : [])];
-  const groupBy = items.filter((item) => !item.aggregate).map((item) => item.output);
+  const groupBy = plainItems.map((item) => item.output);
   const outputs = declaredOutputs.length ? declaredOutputs : items.map((item) => item.output);
   const relations = [...new Set([...(block.tableDependencies ?? []), ...(block.rawTableRefs ?? [])])];
   return {
@@ -231,6 +246,7 @@ export function extractBlockContract(block: BlockDeclarationLike): BlockContract
     groupBy: groupBy.length ? groupBy : block.dimensions ?? [],
     staticScope: scope.predicates,
     ...(scopeUnparsed.length ? { scopeUnparsed } : {}),
+    ...(grainUnparsed.length ? { grainUnparsed } : {}),
     ...(fromMatch ? { source: fromMatch[1]!.replace(/["`]/g, '') } : {}),
     allowedFilters: block.allowedFilters ?? [],
     parameters: (block.parameters ?? []).map((parameter) => (typeof parameter === 'string' ? parameter : parameter.name)),
