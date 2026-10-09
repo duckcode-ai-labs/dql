@@ -5613,27 +5613,30 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
       : null;
   };
   /**
+   * The one id the host hears for a certified block (HH-13): its Dataset `app:block:` id when the
+   * block has a file, else `block:`. Ask, the ranked catalog, the Research plan and suggestions all
+   * name a block to the host this way, so one host answer decides them all.
+   */
+  const hostBlockId = (block: { name: string; domain?: string; filePath?: string }): string => (block.filePath
+    ? `app:block:${block.domain || 'global'}:${createHash('sha256').update(`${block.filePath}\u0000${block.name}`).digest('hex').slice(0, 20)}`
+    : `block:${block.domain || 'global'}.${block.name}`);
+  /**
    * HH-13 for every model-context list of certified blocks and metrics (Research plan, App research,
    * conversation catalog, suggestions, explanations): a source the host keeps from this person is left
-   * out before its name or definition can reach a model or the plan shown to them. A block is asked
-   * about by both ids the host hears for it (`block:` as Ask does, and its Dataset `app:block:`), and
-   * is kept only when both are allowed. Without a host `sourceAccess`, nothing is filtered.
+   * out before its name or definition can reach a model or the plan shown to them. Without a host
+   * `sourceAccess`, nothing is filtered.
    */
   const admitPlanContext = async (blocks: Array<PlanBlock & { filePath?: string }>, metrics: Array<{ name?: string }> = []): Promise<{ blocks: PlanBlock[]; metrics: typeof metrics }> => {
     const plain = blocks.map(({ filePath: _filePath, ...block }) => block as PlanBlock);
     if (!hostHooks?.sourceAccess) return { blocks: plain, metrics };
-    const blockIds = (block: PlanBlock & { filePath?: string }): string[] => [
-      `block:${block.domain || 'global'}.${block.name}`,
-      ...(block.filePath ? [`app:block:${block.domain || 'global'}:${createHash('sha256').update(`${block.filePath}\u0000${block.name}`).digest('hex').slice(0, 20)}`] : []),
-    ];
     const metricId = (metric: { name?: string }): string => `metric:${metric.name ?? ''}`;
     const allowed = await hostAllowedSources(hostHooks, currentPrincipal(), [
-      ...blocks.flatMap((block) => blockIds(block).map((id) => ({ id, kind: 'block' as const, name: block.name, ...(block.domain ? { domain: block.domain } : {}), ...(block.filePath ? { path: block.filePath } : {}) }))),
+      ...blocks.map((block) => ({ id: hostBlockId(block), kind: 'block' as const, name: block.name, ...(block.domain ? { domain: block.domain } : {}), ...(block.filePath ? { path: block.filePath } : {}) })),
       ...metrics.map((metric) => ({ id: metricId(metric), kind: 'metric' as const, name: metric.name ?? '' })),
     ]);
     if (!allowed) return { blocks: plain, metrics };
     return {
-      blocks: blocks.filter((block) => blockIds(block).every((id) => allowed.has(id))).map(({ filePath: _filePath, ...block }) => block as PlanBlock),
+      blocks: blocks.filter((block) => allowed.has(hostBlockId(block))).map(({ filePath: _filePath, ...block }) => block as PlanBlock),
       metrics: metrics.filter((metric) => allowed.has(metricId(metric))),
     };
   };
@@ -7351,9 +7354,7 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
           return principal ? `${principal.id}:${[...(principal.groups ?? [])].sort().join(',')}` : 'nobody';
         },
         admit: async (source) => {
-          const blockId = (block: { name: string; domain?: string; sourcePath?: string }) => (block.sourcePath
-            ? `app:block:${block.domain || 'global'}:${createHash('sha256').update(`${block.sourcePath}\u0000${block.name}`).digest('hex').slice(0, 20)}`
-            : `block:${block.domain || 'global'}.${block.name}`);
+          const blockId = (block: { name: string; domain?: string; sourcePath?: string }) => hostBlockId({ name: block.name, domain: block.domain, filePath: block.sourcePath });
           const refs = [
             ...(source.blocks ?? []).map((block) => ({ id: blockId(block), kind: 'block' as const, name: block.name, ...(block.domain ? { domain: block.domain } : {}), ...(block.sourcePath ? { path: block.sourcePath } : {}) })),
             ...(source.metrics ?? []).map((metric) => ({ id: `metric:${metric.name}`, kind: 'metric' as const, name: metric.name })),
@@ -9126,14 +9127,21 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
 
   const buildRankedAgentRunCatalogContext = async (request: AgentRunRequest): Promise<string> => {
     const evidence = await memoizedAgentRunEvidence(request);
-    // HH-13: a certified block or metric this person may not use is not listed to the model.
+    // HH-13: a certified block or metric this person may not use is not listed to the model. A block
+    // is named to the host as Ask names it, by the Dataset id of its manifest file.
+    const manifestBlocks = Object.values(projectSnapshot().manifest?.blocks ?? {});
+    const candidateBlockId = (candidate: { name: string; domain?: string }): string => {
+      const found = manifestBlocks.find((block) => block.name === candidate.name && (block.domain || 'global') === (candidate.domain || 'global'))
+        ?? manifestBlocks.find((block) => block.name === candidate.name);
+      return hostBlockId({ name: candidate.name, domain: candidate.domain, filePath: found?.filePath });
+    };
     const refs = evidence.candidates.flatMap((candidate): Parameters<typeof hostAllowedSources>[2] => candidate.kind === 'certified_block'
-      ? [{ id: `block:${candidate.domain || 'global'}.${candidate.name}`, kind: 'block' as const, name: candidate.name, ...(candidate.domain ? { domain: candidate.domain } : {}) }]
+      ? [{ id: candidateBlockId(candidate), kind: 'block' as const, name: candidate.name, ...(candidate.domain ? { domain: candidate.domain } : {}) }]
       : candidate.kind === 'semantic_metric' ? [{ id: `metric:${candidate.name}`, kind: 'metric' as const, name: candidate.name }] : []);
     const allowed = await hostAllowedSources(hostHooks, currentPrincipal(), refs);
     const listed = allowed
       ? evidence.candidates.filter((candidate) => candidate.kind === 'certified_block'
-        ? allowed.has(`block:${candidate.domain || 'global'}.${candidate.name}`)
+        ? allowed.has(candidateBlockId(candidate))
         : candidate.kind !== 'semantic_metric' || allowed.has(`metric:${candidate.name}`))
       : evidence.candidates;
     return listed.map((candidate) => {
