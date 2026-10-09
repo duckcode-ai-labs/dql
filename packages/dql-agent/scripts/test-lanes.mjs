@@ -59,8 +59,9 @@ const REQUIRED_TEST_FILES = [
 // 175 with the tool gate (RFC 0010 HH-7, +1 file, +2 tests);
 // 176 with knowledge sources (RFC 0010 HH-15, +1 file, +14 tests);
 // 177 with stores that answer with Promises (RFC 0010 HH-6, +1 file, +3 tests);
-// 178 with context-pack retention (bounded metadata cache, +1 file, +3 tests).
-const EXPECTED_TEST_FILES = 179;
+// 178 with context-pack retention (bounded metadata cache, +1 file, +3 tests);
+// 180 with the Bedrock Converse provider (+1 file, +29 tests).
+const EXPECTED_TEST_FILES = 180;
 // Keep the aggregate receipt exact. The Ask pipeline suites (intent contract,
 // vocabulary, governed defaults and host proofs, prepare tiers), the engine,
 // observability, retrieval, semantic-proof, research-ledger, conversation and
@@ -81,11 +82,12 @@ const EXPECTED_TEST_FILES = 179;
 // 2360 with the local-model rule (Ollama contacts its one base URL, +3 tests) and drafts outside the privacy
 // boundary naming grouped members by position (+2 story, +1 page).
 // 2363 (179 files) with a follow-up's earlier values named by position outside the privacy boundary
-// (prior-values.test.ts, +3 tests).
-const EXPECTED_TESTS = 2363;
+// (prior-values.test.ts, +3 tests);
+// 2393 (180 files) with the Bedrock Converse provider (bedrock-converse.test.ts, +30 tests).
+const EXPECTED_TESTS = 2393;
 // The heavy lane's share of EXPECTED_TESTS (catalog.test.ts 72 + project-state.test.ts 4), pinned so
 // a lane run on its own (CI runs the two lanes as separate steps) is audited as exactly as both together.
-// The ordinary lane's share is the difference: 2287.
+// The ordinary lane's share is the difference: 2316.
 const EXPECTED_HEAVY_TESTS = 76;
 
 const LANES = ['all', 'ordinary', 'heavy'];

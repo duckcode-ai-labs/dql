@@ -12,7 +12,7 @@
  * thrown Errors with provider-prefixed messages.
  */
 
-export type ProviderName = 'claude' | 'openai' | 'gemini' | 'ollama';
+export type ProviderName = 'claude' | 'openai' | 'gemini' | 'ollama' | 'bedrock';
 
 export interface AgentMessage {
   role: 'system' | 'user' | 'assistant';

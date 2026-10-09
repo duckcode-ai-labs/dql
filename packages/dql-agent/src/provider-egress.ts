@@ -278,9 +278,16 @@ function isTrustedProviderWireArray(path: string[], value: unknown[]): boolean {
   if (joined === 'contents') return value.every(isGeminiContent);
   if (joined === 'tools') return value.every(isProviderTool);
   if (joined === 'input') return value.every(isProviderInputItem);
-  if (joined === 'system') return value.every(isProviderContentBlock);
+  if (joined === 'system') return value.every((item) => isProviderContentBlock(item) || isConverseTextBlock(item));
   if (joined === 'include') return value.every((item) => typeof item === 'string');
-  if (/^(?:messages|input)\.\*\.content$/.test(joined)) return value.every(isProviderContentBlock);
+  if (/^(?:messages|input)\.\*\.content$/.test(joined)) {
+    return value.every((item) => isProviderContentBlock(item) || isConverseContentBlock(item));
+  }
+  if (joined === 'toolconfig.tools') return value.every(isConverseToolSpec);
+  if (joined === 'inferenceconfig.stopsequences') return value.every((item) => typeof item === 'string');
+  if (/^messages\.\*\.content\.\*\.toolresult\.content$/.test(joined)) {
+    return value.every((item) => isConverseTextBlock(item) || (isPlainRecord(item) && 'json' in item));
+  }
   if (/^contents\.\*\.parts$/.test(joined)) return value.every(isGeminiPart);
   if (/^(?:messages|input)\.\*\.toolcalls$/.test(joined)) return value.every(isProviderToolCall);
   if (/^(?:messages|input)\.\*\.content\.\*\.content$/.test(joined)) return value.every(isProviderContentBlock);
@@ -293,7 +300,23 @@ function isTrustedProviderWireArray(path: string[], value: unknown[]): boolean {
 
 function isProviderToolSchemaPath(path: string[]): boolean {
   const joined = path.join('.');
-  return /^tools\.\*\.(?:function\.parameters|inputschema)(?:\.|$)/.test(joined);
+  return /^tools\.\*\.(?:function\.parameters|inputschema)(?:\.|$)/.test(joined)
+    || /^toolconfig\.tools\.\*\.toolspec\.inputschema\.json(?:\.|$)/.test(joined);
+}
+
+// Bedrock Converse wire shapes: blocks carry their kind as the key, not a `type`.
+function isConverseTextBlock(value: unknown): boolean {
+  return isPlainRecord(value) && typeof value.text === 'string';
+}
+
+function isConverseContentBlock(value: unknown): boolean {
+  return isConverseTextBlock(value) || (isPlainRecord(value) && (
+    isPlainRecord(value.toolUse) || isPlainRecord(value.toolResult) || isPlainRecord(value.reasoningContent)
+  ));
+}
+
+function isConverseToolSpec(value: unknown): boolean {
+  return isPlainRecord(value) && isPlainRecord(value.toolSpec);
 }
 
 function isValidProviderToolSchemaArray(keyword: string, value: unknown[]): boolean {

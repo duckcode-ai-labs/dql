@@ -70,6 +70,17 @@ export function extractProviderUsage(provider: ProviderName, body: unknown): Pro
       ...(thoughts ? { reasoningTokens: thoughts } : {}),
     };
   }
+  if (provider === 'bedrock') {
+    // Converse names them inputTokens/outputTokens; the cache counts appear only when caching is on.
+    const usage = reply.usage;
+    if (!usage || count(usage.inputTokens) === undefined) return undefined;
+    return {
+      inputTokens: usage.inputTokens,
+      outputTokens: count(usage.outputTokens) ?? 0,
+      ...(count(usage.cacheReadInputTokens) ? { cacheReadTokens: usage.cacheReadInputTokens } : {}),
+      ...(count(usage.cacheWriteInputTokens) ? { cacheWriteTokens: usage.cacheWriteInputTokens } : {}),
+    };
+  }
   if (provider === 'ollama') {
     // A local model costs nothing per token; the counts still show whether a
     // prompt fitted the context window.

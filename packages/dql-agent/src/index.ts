@@ -1475,7 +1475,10 @@ export type {
 } from "./grounding/value-index.js";
 export {
   bedrockClaudeTransport,
+  BedrockConverseProvider,
+  bedrockConverseTransport,
   createBedrockClaudeProvider,
+  createBedrockConverseProvider,
   createVertexClaudeProvider,
   defaultAwsCredentials,
   defaultGoogleAccessToken,
@@ -1484,6 +1487,7 @@ export {
   vertexHost,
   type AwsCredentials,
   type BedrockClaudeOptions,
+  type BedrockConverseOptions,
   type GoogleAccessToken,
   type VertexClaudeOptions,
   type ProviderHttpTransport,
