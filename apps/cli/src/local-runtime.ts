@@ -9127,7 +9127,7 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
   const buildRankedAgentRunCatalogContext = async (request: AgentRunRequest): Promise<string> => {
     const evidence = await memoizedAgentRunEvidence(request);
     // HH-13: a certified block or metric this person may not use is not listed to the model.
-    const refs = evidence.candidates.flatMap((candidate) => candidate.kind === 'certified_block'
+    const refs = evidence.candidates.flatMap((candidate): Parameters<typeof hostAllowedSources>[2] => candidate.kind === 'certified_block'
       ? [{ id: `block:${candidate.domain || 'global'}.${candidate.name}`, kind: 'block' as const, name: candidate.name, ...(candidate.domain ? { domain: candidate.domain } : {}) }]
       : candidate.kind === 'semantic_metric' ? [{ id: `metric:${candidate.name}`, kind: 'metric' as const, name: candidate.name }] : []);
     const allowed = await hostAllowedSources(hostHooks, currentPrincipal(), refs);
