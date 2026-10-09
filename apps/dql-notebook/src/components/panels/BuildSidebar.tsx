@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Blocks, Box, ChevronDown, ChevronRight, Database, FileText, Folder, FolderOpen, Layers, NotebookPen, Plus, Search, Trash2, Upload } from 'lucide-react';
 import { api, DqlApiError } from '../../api/client';
+import { hostReadOnly, useHostUi } from '../../host/host-ui';
 import { insertSemanticReference } from '../../editor/semantic-completions';
 import { controlStyle } from '../../themes/control-tokens';
 import { makeCell, useNotebook } from '../../store/NotebookStore';
@@ -73,6 +74,7 @@ export function BuildSidebar({ defaultTab, onOpenFile, tabs, onInsertText, onSem
   onCollapse?: () => void;
 }) {
   const { state, dispatch } = useNotebook();
+  const readOnlyFiles = hostReadOnly(useHostUi(), 'files');
   const t = themes[state.themeMode];
   // Respect the host's tab order (the prototype puts Blocks first in Block Studio).
   const visibleTabs = tabs
@@ -144,7 +146,7 @@ export function BuildSidebar({ defaultTab, onOpenFile, tabs, onInsertText, onSem
               }}
             />
           </div>
-          <button
+          {!readOnlyFiles && <button
             type="button"
             onClick={() => dispatch({ type: 'OPEN_NEW_NOTEBOOK_MODAL' })}
             title="Create notebook"
@@ -152,7 +154,7 @@ export function BuildSidebar({ defaultTab, onOpenFile, tabs, onInsertText, onSem
             style={{ width: 28, height: 28, flexShrink: 0, borderRadius: 7, border: `1px solid ${t.accent}55`, background: 'var(--accent-dim)', color: t.accent, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
           >
             <NotebookPen size={14} strokeWidth={2} aria-hidden="true" />
-          </button>
+          </button>}
         </div>
       ) : (
         <div style={{ padding: 8, borderBottom: `1px solid ${t.headerBorder}`, display: 'flex', gap: 6 }}>

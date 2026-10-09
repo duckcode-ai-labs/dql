@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { PanelFrame } from '@duckcodeailabs/dql-ui';
 import { useNotebook } from '../../store/NotebookStore';
+import { hostReadOnly, useHostUi } from '../../host/host-ui';
 import { themes } from '../../themes/notebook-theme';
 import type { NotebookFile } from '../../store/types';
 import {
@@ -144,6 +145,7 @@ function lineageNodeIdForFile(file: NotebookFile): string {
 
 export function FilesPanel({ onOpenFile }: FilesPanelProps) {
   const { state, dispatch } = useNotebook();
+  const readOnly = hostReadOnly(useHostUi(), 'files');
   const t = themes[state.themeMode];
 
   const [expandedFolders, setExpandedFolders] = useState<Record<string, boolean>>({
@@ -177,7 +179,7 @@ export function FilesPanel({ onOpenFile }: FilesPanelProps) {
     <PanelFrame
       title="Files"
       bodyPadding={0}
-      actions={(
+      actions={readOnly ? undefined : (
         <button
           type="button"
           onClick={() => dispatch({ type: 'OPEN_NEW_NOTEBOOK_MODAL' })}
@@ -201,7 +203,7 @@ export function FilesPanel({ onOpenFile }: FilesPanelProps) {
         const files = grouped[key];
         if (HIDE_WHEN_EMPTY[key] && files.length === 0) return null;
         const expanded = expandedFolders[key];
-        const onAdd = key === 'notebooks'
+        const onAdd = readOnly ? undefined : key === 'notebooks'
           ? () => dispatch({ type: 'OPEN_NEW_NOTEBOOK_MODAL' })
           : key === 'blocks'
             ? () => dispatch({ type: 'OPEN_NEW_BLOCK_MODAL' })

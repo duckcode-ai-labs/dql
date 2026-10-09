@@ -4,7 +4,7 @@ import { notebookStoreApi, useDispatch, useNotebookStore } from '../../store/Not
 import { themes } from '../../themes/notebook-theme';
 import type { Theme } from '../../themes/notebook-theme';
 import { HostPersonMenu } from './HostPersonMenu';
-import { hostReader, useHostUi } from '../../host/host-ui';
+import { hostReadOnly, hostReader, navKeyForView, readOnlyReason, useHostUi } from '../../host/host-ui';
 import { api } from '../../api/client';
 import { serializeDqlNotebook } from '../../utils/parse-workbook';
 import { useQueryExecution } from '../../hooks/useQueryExecution';
@@ -96,7 +96,8 @@ function DQLLogo({ t }: { t: Theme }) {
 
 export function Header() {
   // A hosted reader is not using a workbench: the product is just DQL to them (RFC 0010 HH-9 `audience`).
-  const productName = hostReader(useHostUi()) ? 'DQL' : 'DQL Workbench';
+  const hostUi = useHostUi();
+  const productName = hostReader(hostUi) ? 'DQL' : 'DQL Workbench';
   const state = useNotebookStore(useShallow((store) => ({
     activeBlockPath: store.activeBlockPath,
     activeFile: store.activeFile,
@@ -115,6 +116,8 @@ export function Header() {
     themeMode: store.themeMode,
   })));
   const dispatch = useDispatch();
+  const readOnlyKey = navKeyForView(state.mainView);
+  const readOnly = readOnlyKey !== null && hostReadOnly(hostUi, readOnlyKey);
   const t = themes[state.themeMode];
   const { executeAll } = useQueryExecution();
 
@@ -178,6 +181,7 @@ export function Header() {
   }, [exportDropdownOpen]);
 
   const startEditTitle = () => {
+    if (readOnly) return;
     setTitleDraft(state.notebookTitle);
     setEditingTitle(true);
   };
@@ -204,6 +208,8 @@ export function Header() {
   };
 
   const handleSave = useCallback(async () => {
+    // Read-only for this person: nothing to save (the host would refuse it).
+    if (readOnly) return;
     const runtime = notebookStoreApi.getState();
     if (runtime.mainView === 'block_studio') {
       // Block Studio owns its save: identity, validation, the certified-to-draft
@@ -241,7 +247,7 @@ export function Header() {
       const activePath = notebookStoreApi.getState().activeFile?.path;
       if (!activePath || !notebookSavePending(activePath)) dispatch({ type: 'SET_SAVING', saving: false });
     }
-  }, [dispatch]);
+  }, [dispatch, readOnly]);
 
   // Cmd/Ctrl+S keyboard shortcut
   useEffect(() => {
@@ -573,15 +579,16 @@ export function Header() {
         {/* Save */}
         <button
           onClick={handleSave}
-          disabled={!state.activeFile || state.savingFile}
+          disabled={!state.activeFile || state.savingFile || readOnly}
           onMouseEnter={() => setSaveHover(true)}
           onMouseLeave={() => setSaveHover(false)}
-          title="Save (Cmd+S)"
+          title={readOnly ? readOnlyReason(hostUi, readOnlyKey ?? 'files') : 'Save (Cmd+S)'}
           style={{
             ...btnBase,
             background: saveHover && state.activeFile ? t.btnHover : t.btnBg,
             color: savedFlash ? t.success : t.textSecondary,
-            opacity: !state.activeFile ? 0.4 : 1,
+            opacity: !state.activeFile || readOnly ? 0.4 : 1,
+            cursor: readOnly ? 'not-allowed' : 'pointer',
           }}
         >
           {state.savingFile ? (

@@ -81,7 +81,7 @@ import type {
   SkillPathSettings,
   Domain,
 } from '../store/types';
-import { reportServerAuthRejected, withServerAuthorization } from './server-auth';
+import { reportHostRefusal, reportServerAuthRejected, withServerAuthorization } from './server-auth';
 
 const EMPTY_PLAN = {
   totals: { modelsScanned: 0, businessModels: 0, plumbingExcluded: 0, metricsFound: 0 },
@@ -4023,7 +4023,13 @@ async function requestUncached<T>(path: string, options?: RequestInit): Promise<
   if (!res.ok) {
     reportServerAuthRejected(res.status, res.headers.get('x-dql-sign-in'));
     const text = await res.text().catch(() => '');
-    throw formatRequestError(res, text);
+    const failure = formatRequestError(res, text);
+    // A refused change shows the host's sentence and its next step, never a blank error.
+    reportHostRefusal(res.status, options?.method ?? 'GET', {
+      message: failure.message || 'The host did not allow this change.',
+      ...(failure instanceof DqlApiError && failure.next ? { next: failure.next } : {}),
+    });
+    throw failure;
   }
   // 204 No Content
   if (res.status === 204) return undefined as T;

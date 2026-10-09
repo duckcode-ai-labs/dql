@@ -112,6 +112,16 @@ export function rememberServerToken(token: string): void {
 }
 
 export const SERVER_AUTH_REQUIRED_EVENT = 'dql:server-auth-required';
+/** Fired when a host refuses a change (403): the host's sentence and, when it sent one, where to go (HH-12). */
+export const HOST_REFUSAL_EVENT = 'dql-host-refusal';
+export interface HostRefusalDetail { message: string; next?: { label: string; href: string } }
+
+export function reportHostRefusal(status: number, method: string, detail: HostRefusalDetail): boolean {
+  if (status !== 403 || method.toUpperCase() === 'GET' || typeof window === 'undefined') return false;
+  window.dispatchEvent(new CustomEvent<HostRefusalDetail>(HOST_REFUSAL_EVENT, { detail }));
+  return true;
+}
+
 let serverAuthRejected = false;
 let redirectingToSignIn = false;
 
