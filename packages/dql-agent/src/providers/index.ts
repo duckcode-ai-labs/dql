@@ -52,6 +52,12 @@ export {
   type GoogleAccessToken,
   type VertexClaudeOptions,
 } from './claude-cloud.js';
+export {
+  BedrockConverseProvider,
+  bedrockConverseTransport,
+  createBedrockConverseProvider,
+  type BedrockConverseOptions,
+} from './bedrock-converse.js';
 export type { ProviderHttpTransport } from './dispatch.js';
 export type { ReasoningEffort, GeminiReasoningStyle, ThinkingMode } from './reasoning-effort.js';
 export {
@@ -81,6 +87,8 @@ export function buildProvider(name: ProviderName): AgentProvider {
       return new GeminiProvider();
     case 'ollama':
       return new OllamaProvider();
+    case 'bedrock':
+      throw new Error('bedrock: needs a region and a model; the host builds it with createBedrockConverseProvider');
   }
 }
 
