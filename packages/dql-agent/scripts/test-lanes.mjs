@@ -83,8 +83,8 @@ const EXPECTED_TEST_FILES = 180;
 // boundary naming grouped members by position (+2 story, +1 page).
 // 2363 (179 files) with a follow-up's earlier values named by position outside the privacy boundary
 // (prior-values.test.ts, +3 tests);
-// 2392 (180 files) with the Bedrock Converse provider (bedrock-converse.test.ts, +29 tests).
-const EXPECTED_TESTS = 2392;
+// 2393 (180 files) with the Bedrock Converse provider (bedrock-converse.test.ts, +30 tests).
+const EXPECTED_TESTS = 2393;
 // The heavy lane's share of EXPECTED_TESTS (catalog.test.ts 72 + project-state.test.ts 4), pinned so
 // a lane run on its own (CI runs the two lanes as separate steps) is audited as exactly as both together.
 // The ordinary lane's share is the difference: 2316.

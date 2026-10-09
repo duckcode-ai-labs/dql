@@ -6,6 +6,7 @@ import {
   supportsReasoningEffort,
   type ProviderUsageLine,
 } from './index.js';
+import { prepareProviderWireEnvelopeForDispatch } from '../provider-egress.js';
 
 const AWS_EXAMPLE = { accessKeyId: 'AKIDEXAMPLE', secretAccessKey: 'wJalrXUtnFEMI/K7MDENG+bPxRfiCYEXAMPLEKEY' };
 const NOW = () => new Date('2026-10-08T12:00:00Z');
@@ -226,6 +227,36 @@ describe('Bedrock Converse: the tool loop', () => {
     const fetch = stubFetch(reply({ output: { message: { role: 'assistant', content: [{ text: 'plain' }] } }, stopReason: 'end_turn' }));
     expect(await provider().generateWithTools([{ role: 'user', content: 'x' }], [])).toBe('plain');
     expect(sent(fetch).body.toolConfig).toBeUndefined();
+  });
+});
+
+describe('Bedrock Converse: the host egress sanitizer', () => {
+  it('keeps system, the tool round trip and toolConfig when the host returns the sanitized envelope', async () => {
+    const tool = {
+      name: 'lookup_metric',
+      description: 'Look up a governed metric.',
+      inputSchema: { type: 'object', properties: { metric: { type: 'string', enum: ['revenue', 'cost'] } }, required: ['metric'] },
+      run: async () => ({ value: 42 }),
+    };
+    const fetch = stubFetch(
+      reply({ output: { message: { role: 'assistant', content: [{ toolUse: { toolUseId: 'tu-1', name: 'lookup_metric', input: { metric: 'revenue' } } }] } }, stopReason: 'tool_use' }),
+      reply({ output: { message: { role: 'assistant', content: [{ text: 'Revenue is 42.' }] } }, stopReason: 'end_turn' }),
+    );
+    const out = await provider({ inference: { stopSequences: ['END'] } }).generateWithTools(
+      [{ role: 'system', content: 'Use tools.' }, { role: 'user', content: 'What is revenue?' }],
+      [tool],
+      { onProviderDispatch: (event) => prepareProviderWireEnvelopeForDispatch(event.provider, event.envelope) },
+    );
+    expect(out).toBe('Revenue is 42.');
+    const first = sent(fetch, 0).body;
+    expect(first.system).toEqual([{ text: 'Use tools.' }]);
+    expect(first.messages).toEqual([{ role: 'user', content: [{ text: 'What is revenue?' }] }]);
+    expect(first.toolConfig.tools[0].toolSpec.inputSchema.json).toEqual(tool.inputSchema);
+    expect(first.inferenceConfig.stopSequences).toEqual(['END']);
+    const second = sent(fetch, 1).body;
+    expect(second.messages[1].content[0].toolUse.input).toEqual({ metric: 'revenue' });
+    expect(second.messages[2]).toEqual({ role: 'user', content: [{ toolResult: { toolUseId: 'tu-1', content: [{ text: '{"value":42}' }] } }] });
+    expect(second.toolConfig.tools).toHaveLength(1);
   });
 });
 
