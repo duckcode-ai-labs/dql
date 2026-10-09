@@ -186,8 +186,8 @@ export function HelpDocsPage() {
                 <div style={{ padding: '9px 13px', borderBottom: '1px solid var(--border-subtle)', color: t.textSecondary }}>Answered from a certified block — instant and trusted.</div>
                 <div style={{ padding: '9px 13px', borderBottom: '1px solid var(--border-subtle)', background: 'var(--bg-1)', fontWeight: 650, color: t.accent }}>Governed</div>
                 <div style={{ padding: '9px 13px', borderBottom: '1px solid var(--border-subtle)', color: t.textSecondary }}>Composed from semantic metrics and proven joins.</div>
-                <div style={{ padding: '9px 13px', background: 'var(--bg-1)', fontWeight: 650, color: 'var(--status-warning)' }}>AI-generated</div>
-                <div style={{ padding: '9px 13px', color: t.textSecondary }}>Fresh SQL grounded in your schema, verified, and clearly labeled.</div>
+                <div style={{ padding: '9px 13px', background: 'var(--bg-1)', fontWeight: 650, color: 'var(--status-warning)' }}>Needs review</div>
+                <div style={{ padding: '9px 13px', color: t.textSecondary }}>Fresh SQL generated from your schema and not yet reviewed, so check it before you rely on it.</div>
               </div>
             </div>
             <p style={para}>Click any artifact chip in the chat to inspect the result, chart, DQL, SQL, and the full trust trail. Good answers deserve <em>Save as block</em> — that&apos;s how the certified layer grows.</p>
