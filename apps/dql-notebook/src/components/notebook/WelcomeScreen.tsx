@@ -3,6 +3,7 @@ import React, { useMemo, useState } from 'react';
 import { ArrowRight, BookOpenText, Blocks, FileText, Home, ListChecks, Workflow, type LucideIcon } from 'lucide-react';
 import { useNotebook } from '../../store/NotebookStore';
 import { themes } from '../../themes/notebook-theme';
+import { hostReadOnly, useHostUi } from '../../host/host-ui';
 import type { NotebookFile } from '../../store/types';
 import {
   compareNotebookResearchSummaries,
@@ -44,6 +45,9 @@ const RESEARCH_OWNER_FOCUS_LIMIT = 3;
 export function WelcomeScreen({ onOpenFile, onOpenResearchFile }: WelcomeScreenProps) {
   const { state, dispatch } = useNotebook();
   const t = themes[state.themeMode];
+  const hostUi = useHostUi();
+  const readOnlyFiles = hostReadOnly(hostUi, 'files');
+  const readOnlyBlocks = hostReadOnly(hostUi, 'block_library');
   const fileSignature = state.files.map((file) => file.path).join('|');
   const { byPath: researchByNotebookPath, summaries, ownerSummaries } = useNotebookResearchSummary({ refreshKey: fileSignature });
   const notebookFilesByPath = useMemo(() => {
@@ -188,19 +192,23 @@ export function WelcomeScreen({ onOpenFile, onOpenResearchFile }: WelcomeScreenP
         </div>
 
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
-          <ActionButton
-            label="New Notebook"
-            Icon={BookOpenText}
-            primary
-            onClick={() => dispatch({ type: 'OPEN_NEW_NOTEBOOK_MODAL' })}
-            t={t}
-          />
-          <ActionButton
-            label="New Block"
-            Icon={Blocks}
-            onClick={() => dispatch({ type: 'OPEN_NEW_BLOCK_MODAL' })}
-            t={t}
-          />
+          {!readOnlyFiles && (
+            <ActionButton
+              label="New Notebook"
+              Icon={BookOpenText}
+              primary
+              onClick={() => dispatch({ type: 'OPEN_NEW_NOTEBOOK_MODAL' })}
+              t={t}
+            />
+          )}
+          {!readOnlyBlocks && (
+            <ActionButton
+              label="New Block"
+              Icon={Blocks}
+              onClick={() => dispatch({ type: 'OPEN_NEW_BLOCK_MODAL' })}
+              t={t}
+            />
+          )}
           <ActionButton
             label="Home"
             Icon={Home}

@@ -227,6 +227,7 @@ function NotebooksList({ t, onOpenFile, search, domain, onDomainChange }: {
   onDomainChange: (domain: string) => void;
 }) {
   const { state, dispatch } = useNotebook();
+  const readOnlyFiles = hostReadOnly(useHostUi(), 'files');
   const [pendingDelete, setPendingDelete] = useState<NotebookFile | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -307,8 +308,8 @@ function NotebooksList({ t, onOpenFile, search, domain, onDomainChange }: {
           nodes={notebookTree}
           activePath={state.activeFile?.path}
           onOpenFile={onOpenFile}
-          onDelete={(file) => { setDeleteError(null); setPendingDelete(file); }}
-          onPublish={(file) => void publish(file)}
+          onDelete={readOnlyFiles ? undefined : (file) => { setDeleteError(null); setPendingDelete(file); }}
+          onPublish={readOnlyFiles ? undefined : (file) => void publish(file)}
           publishingPath={publishing}
           t={t}
         />
@@ -355,8 +356,8 @@ function NotebookLibraryTree({
   nodes: FileLibraryTreeNode[];
   activePath?: string;
   onOpenFile: (file: NotebookFile) => void;
-  onDelete: (file: NotebookFile) => void;
-  onPublish: (file: NotebookFile) => void;
+  onDelete?: (file: NotebookFile) => void;
+  onPublish?: (file: NotebookFile) => void;
   publishingPath: string | null;
   t: Theme;
   depth?: number;
@@ -405,8 +406,8 @@ function NotebookFolder({
   node: Extract<FileLibraryTreeNode, { kind: 'folder' }>;
   activePath?: string;
   onOpenFile: (file: NotebookFile) => void;
-  onDelete: (file: NotebookFile) => void;
-  onPublish: (file: NotebookFile) => void;
+  onDelete?: (file: NotebookFile) => void;
+  onPublish?: (file: NotebookFile) => void;
   publishingPath: string | null;
   t: Theme;
   depth: number;
@@ -457,7 +458,7 @@ function NotebookFolder({
   );
 }
 
-function NotebookFileRow({
+export function NotebookFileRow({
   file,
   active,
   onOpenFile,
@@ -470,8 +471,8 @@ function NotebookFileRow({
   file: NotebookFile;
   active: boolean;
   onOpenFile: (file: NotebookFile) => void;
-  onDelete: (file: NotebookFile) => void;
-  onPublish: (file: NotebookFile) => void;
+  onDelete?: (file: NotebookFile) => void;
+  onPublish?: (file: NotebookFile) => void;
   publishing: boolean;
   t: Theme;
   depth: number;
@@ -482,7 +483,7 @@ function NotebookFileRow({
       <button
         type="button"
         onClick={() => onOpenFile(file)}
-        style={{ ...rowStyle(t, active), paddingLeft: 10 + depth * 14, paddingRight: isPrivate ? 54 : 30 }}
+        style={{ ...rowStyle(t, active), paddingLeft: 10 + depth * 14, paddingRight: (isPrivate && onPublish ? 24 : 0) + (onDelete ? 30 : 8) }}
         title={`${file.path}${file.ownerDomain ? ` · Owner domain: ${file.ownerDomain}` : ''}${isPrivate ? ' · Private: not in Git until you publish it' : ''}`}
       >
         <FileText size={13} color={t.textMuted} style={{ flexShrink: 0 }} />
@@ -501,7 +502,7 @@ function NotebookFileRow({
           </span>
         ) : null}
       </button>
-      {isPrivate ? (
+      {isPrivate && onPublish ? (
         <button
           type="button"
           className="dql-nb-publish"
@@ -518,20 +519,22 @@ function NotebookFileRow({
           <Upload size={12} />
         </button>
       ) : null}
-      <button
-        type="button"
-        className="dql-nb-delete"
-        onClick={(event) => { event.stopPropagation(); onDelete(file); }}
-        title={`Delete ${file.name}`}
-        aria-label={`Delete ${file.name}`}
-        style={{
-          position: 'absolute', right: 6, display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-          width: 22, height: 22, borderRadius: 5, border: '1px solid transparent',
-          background: 'transparent', color: t.textMuted, cursor: 'pointer', padding: 0,
-        }}
-      >
-        <Trash2 size={12} />
-      </button>
+      {onDelete ? (
+        <button
+          type="button"
+          className="dql-nb-delete"
+          onClick={(event) => { event.stopPropagation(); onDelete(file); }}
+          title={`Delete ${file.name}`}
+          aria-label={`Delete ${file.name}`}
+          style={{
+            position: 'absolute', right: 6, display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+            width: 22, height: 22, borderRadius: 5, border: '1px solid transparent',
+            background: 'transparent', color: t.textMuted, cursor: 'pointer', padding: 0,
+          }}
+        >
+          <Trash2 size={12} />
+        </button>
+      ) : null}
     </div>
   );
 }

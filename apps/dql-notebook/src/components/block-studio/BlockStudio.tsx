@@ -1743,7 +1743,7 @@ export function BlockStudio() {
               onOpenBuilder={() => setEditorMode('visual')}
               onOpenSource={() => setEditorMode('source')}
               onOpenReplacement={openReplacementBlock}
-              onDelete={() => state.activeBlockPath && requestDeleteBlock(state.activeBlockPath, state.blockStudioMetadata?.name || activeBlockName || state.activeBlockPath)}
+              onDelete={readOnlyBlocks ? undefined : () => state.activeBlockPath && requestDeleteBlock(state.activeBlockPath, state.blockStudioMetadata?.name || activeBlockName || state.activeBlockPath)}
               onRun={() => void handleRun()}
               onOpenHistory={() => {
                 setResultTab('history');
@@ -3013,7 +3013,7 @@ const PARAMETER_POLICY_OPTIONS = ['dynamic', 'static', 'business', 'derived', 'o
 // Read-only overview for an opened block: icon tile + mono name + status pill,
 // meta line, "Open in builder", stat strip, Outputs pills, Parameters table,
 // DQL source with "Open in DQL Source", Tests checklist, collapsed Lineage.
-function BlockDetailView({
+export function BlockDetailView({
   metadata,
   source,
   parameters,
@@ -3041,7 +3041,7 @@ function BlockDetailView({
   onOpenBuilder: () => void;
   onOpenSource: () => void;
   onOpenReplacement?: (path: string) => void;
-  onDelete: () => void;
+  onDelete?: () => void;
   onRun: () => void;
   onOpenHistory: () => void;
   t: Theme;
@@ -3101,9 +3101,11 @@ function BlockDetailView({
             <button type="button" onClick={onRun} disabled={running} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, height: 32, padding: '0 13px', borderRadius: 8, border: `1px solid ${t.headerBorder}`, background: t.cellBg, color: t.textSecondary, fontSize: 12.5, fontWeight: 600, cursor: 'pointer', fontFamily: t.font, opacity: running ? 0.7 : 1 }}>
               {running ? <Loader2 size={12} style={{ animation: 'dql-agent-run-spin 0.8s linear infinite' }} /> : <Play size={11} fill="currentColor" />} Run
             </button>
-            <button type="button" aria-label={`Delete ${name}`} title="Delete block" onClick={onDelete} style={{ width: 32, height: 32, borderRadius: 8, border: `1px solid ${t.error}55`, background: `${t.error}0d`, color: t.error, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
-              <Trash2 size={14} />
-            </button>
+            {onDelete ? (
+              <button type="button" aria-label={`Delete ${name}`} title="Delete block" onClick={onDelete} style={{ width: 32, height: 32, borderRadius: 8, border: `1px solid ${t.error}55`, background: `${t.error}0d`, color: t.error, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+                <Trash2 size={14} />
+              </button>
+            ) : null}
             <button type="button" title="History and metadata" onClick={onOpenHistory} style={{ width: 32, height: 32, borderRadius: 8, border: `1px solid ${t.headerBorder}`, background: t.cellBg, color: t.textMuted, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
               <MoreHorizontal size={15} />
             </button>
