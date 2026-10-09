@@ -5613,6 +5613,40 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
       : null;
   };
   /**
+   * The one id the host hears for a certified block (HH-13): its Dataset `app:block:` id when the
+   * block has a file, else `block:`. Ask, the ranked catalog, the Research plan and suggestions all
+   * name a block to the host this way, so one host answer decides them all.
+   */
+  const hostBlockId = (block: { name: string; domain?: string; filePath?: string }): string => (block.filePath
+    ? `app:block:${block.domain || 'global'}:${createHash('sha256').update(`${block.filePath}\u0000${block.name}`).digest('hex').slice(0, 20)}`
+    : `block:${block.domain || 'global'}.${block.name}`);
+  /**
+   * HH-13 for every model-context list of certified blocks and metrics (Research plan, App research,
+   * conversation catalog, suggestions, explanations): a source the host keeps from this person is left
+   * out before its name or definition can reach a model or the plan shown to them. Without a host
+   * `sourceAccess`, nothing is filtered.
+   */
+  const admitPlanContext = async (blocks: Array<PlanBlock & { filePath?: string }>, metrics: Array<{ name?: string }> = []): Promise<{ blocks: PlanBlock[]; metrics: typeof metrics }> => {
+    const plain = blocks.map(({ filePath: _filePath, ...block }) => block as PlanBlock);
+    if (!hostHooks?.sourceAccess) return { blocks: plain, metrics };
+    const metricId = (metric: { name?: string }): string => `metric:${metric.name ?? ''}`;
+    const allowed = await hostAllowedSources(hostHooks, currentPrincipal(), [
+      ...blocks.map((block) => ({ id: hostBlockId(block), kind: 'block' as const, name: block.name, ...(block.domain ? { domain: block.domain } : {}), ...(block.filePath ? { path: block.filePath } : {}) })),
+      ...metrics.map((metric) => ({ id: metricId(metric), kind: 'metric' as const, name: metric.name ?? '' })),
+    ]);
+    if (!allowed) return { blocks: plain, metrics };
+    return {
+      blocks: blocks.filter((block) => allowed.has(hostBlockId(block))).map(({ filePath: _filePath, ...block }) => block as PlanBlock),
+      metrics: metrics.filter((metric) => allowed.has(metricId(metric))),
+    };
+  };
+  /** The certified blocks (else every block, when none is certified) and metrics this person may use as model context. */
+  const admittedPlanContext = async (): Promise<{ blocks: PlanBlock[]; metrics: ReturnType<typeof loadSemanticMetrics> }> => {
+    const certified = collectPlanBlocks(projectRoot, { certifiedOnly: true });
+    const candidates = certified.length > 0 ? certified : collectPlanBlocks(projectRoot, { certifiedOnly: false });
+    return admitPlanContext(candidates, loadSemanticMetrics(projectRoot)) as Promise<{ blocks: PlanBlock[]; metrics: ReturnType<typeof loadSemanticMetrics> }>;
+  };
+  /**
    * With a host, whether this person may do an action that sees the server's own configuration
    * (`connection.manage`, `settings.manage`); without a host, the one user may.
    */
@@ -7320,9 +7354,7 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
           return principal ? `${principal.id}:${[...(principal.groups ?? [])].sort().join(',')}` : 'nobody';
         },
         admit: async (source) => {
-          const blockId = (block: { name: string; domain?: string; sourcePath?: string }) => (block.sourcePath
-            ? `app:block:${block.domain || 'global'}:${createHash('sha256').update(`${block.sourcePath}\u0000${block.name}`).digest('hex').slice(0, 20)}`
-            : `block:${block.domain || 'global'}.${block.name}`);
+          const blockId = (block: { name: string; domain?: string; sourcePath?: string }) => hostBlockId({ name: block.name, domain: block.domain, filePath: block.sourcePath });
           const refs = [
             ...(source.blocks ?? []).map((block) => ({ id: blockId(block), kind: 'block' as const, name: block.name, ...(block.domain ? { domain: block.domain } : {}), ...(block.sourcePath ? { path: block.sourcePath } : {}) })),
             ...(source.metrics ?? []).map((metric) => ({ id: `metric:${metric.name}`, kind: 'metric' as const, name: metric.name })),
@@ -7613,7 +7645,7 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
     const kind = routeDecision?.conversationalKind;
     const explainsTerm = routeDecision?.category !== 'general_knowledge'
       && kind !== 'greeting' && kind !== 'gratitude' && kind !== 'meta_capability'
-      && (buildAnalysisQuestionPlan(request.question).mode === 'definition' || Boolean(buildGovernedObjectExplanation(request.question)));
+      && (buildAnalysisQuestionPlan(request.question).mode === 'definition' || Boolean(await buildGovernedObjectExplanation(request.question)));
     if (!explainsTerm || result.status === 'cancelled') return result;
     let withheld: string[] = [];
     const session = await knowledgeSessionForRun(runId, request, (labels) => { withheld = labels; });
@@ -7634,8 +7666,8 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
     const kind = routeDecision?.conversationalKind ?? 'smalltalk';
     const isGeneralKnowledge = routeDecision?.category === 'general_knowledge';
     const answerKind = isGeneralKnowledge ? 'general_knowledge' : 'conversational';
-    const catalogContext = kind === 'answer_explanation' ? '' : buildAgentRunCatalogContext();
-    const suggestions = buildConversationSuggestions(projectRoot, kind);
+    const catalogContext = kind === 'answer_explanation' ? '' : await buildAgentRunCatalogContext();
+    const suggestions = buildConversationSuggestions(kind, kind === 'gratitude' || kind === 'answer_explanation' ? [] : await admittedPlanContext().then((context) => context.blocks, () => []));
     const nextActions: AgentRunNextAction[] = suggestions.map((prompt, index) => ({
       id: `suggest-question-${index + 1}`,
       label: prompt,
@@ -7662,7 +7694,7 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
     //
     // Returns undefined unless the question names something real, so a turn that
     // does not match keeps today's behaviour exactly.
-    if (!text) text = buildGovernedObjectExplanation(request.question);
+    if (!text) text = await buildGovernedObjectExplanation(request.question);
     if (text) {
       emitAnswerDelta?.(text);
     } else {
@@ -9095,7 +9127,24 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
 
   const buildRankedAgentRunCatalogContext = async (request: AgentRunRequest): Promise<string> => {
     const evidence = await memoizedAgentRunEvidence(request);
-    return evidence.candidates.map((candidate) => {
+    // HH-13: a certified block or metric this person may not use is not listed to the model. A block
+    // is named to the host as Ask names it, by the Dataset id of its manifest file.
+    const manifestBlocks = Object.values(projectSnapshot().manifest?.blocks ?? {});
+    const candidateBlockId = (candidate: { name: string; domain?: string }): string => {
+      const found = manifestBlocks.find((block) => block.name === candidate.name && (block.domain || 'global') === (candidate.domain || 'global'))
+        ?? manifestBlocks.find((block) => block.name === candidate.name);
+      return hostBlockId({ name: candidate.name, domain: candidate.domain, filePath: found?.filePath });
+    };
+    const refs = evidence.candidates.flatMap((candidate): Parameters<typeof hostAllowedSources>[2] => candidate.kind === 'certified_block'
+      ? [{ id: candidateBlockId(candidate), kind: 'block' as const, name: candidate.name, ...(candidate.domain ? { domain: candidate.domain } : {}) }]
+      : candidate.kind === 'semantic_metric' ? [{ id: `metric:${candidate.name}`, kind: 'metric' as const, name: candidate.name }] : []);
+    const allowed = await hostAllowedSources(hostHooks, currentPrincipal(), refs);
+    const listed = allowed
+      ? evidence.candidates.filter((candidate) => candidate.kind === 'certified_block'
+        ? allowed.has(candidateBlockId(candidate))
+        : candidate.kind !== 'semantic_metric' || allowed.has(`metric:${candidate.name}`))
+      : evidence.candidates;
+    return listed.map((candidate) => {
       const detail = candidate.definition ? `: ${candidate.definition}` : '';
       return `- ${candidate.id} [${candidate.trustTier}; ${candidate.compatibility}]${detail}`;
     }).join('\n');
@@ -9110,20 +9159,18 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
    * certified block and a raw model, the certified one is the authored
    * definition and the other is an implementation detail.
    */
-  const buildGovernedObjectExplanation = (question: string): string | undefined => {
+  const buildGovernedObjectExplanation = async (question: string): Promise<string | undefined> => {
     try {
-      const blocks = collectPlanBlocks(projectRoot, { certifiedOnly: true });
-      const certifiedNames = new Set(blocks.map((block) => block.name));
-      const all = [
-        ...blocks.map((block) => ({ block, status: 'certified' })),
-        ...collectPlanBlocks(projectRoot, { certifiedOnly: false })
-          .filter((block) => !certifiedNames.has(block.name))
-          .map((block) => ({ block, status: 'draft' })),
-      ];
+      const certified = collectPlanBlocks(projectRoot, { certifiedOnly: true });
+      const certifiedNames = new Set(certified.map((block) => block.name));
+      const everyBlock = collectPlanBlocks(projectRoot, { certifiedOnly: false });
+      // HH-13: only what this person may use is explained to them.
+      const admitted = await admitPlanContext([...certified, ...everyBlock.filter((block) => !certifiedNames.has(block.name))], loadSemanticMetrics(projectRoot));
+      const all = admitted.blocks.map((block) => ({ block, status: certifiedNames.has(block.name) ? 'certified' : 'draft' }));
       // Metrics as well as blocks. "How is revenue defined here?" names a
       // semantic metric, not a block, and answering it from the metric's own
       // description is the whole point of holding one.
-      const metricObjects = loadSemanticMetrics(projectRoot).map((metric) => ({
+      const metricObjects = (admitted.metrics as ReturnType<typeof loadSemanticMetrics>).map((metric) => ({
         objectKey: `semantic:metric:${metric.name}`,
         objectType: 'semantic_metric',
         name: metric.name,
@@ -9153,16 +9200,15 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
     }
   };
 
-  const buildAgentRunCatalogContext = (): string => {
+  const buildAgentRunCatalogContext = async (): Promise<string> => {
     try {
-      const blocks = collectPlanBlocks(projectRoot, { certifiedOnly: true });
-      const sourceBlocks = blocks.length > 0 ? blocks : collectPlanBlocks(projectRoot, { certifiedOnly: false });
+      const { blocks: sourceBlocks, metrics: admittedMetrics } = await admittedPlanContext();
       const blockLines = sourceBlocks.slice(0, 24).map((block) => {
         const domain = block.domain ? ` [${block.domain}]` : '';
         const detail = block.description ? `: ${block.description}` : '';
         return `- ${block.name}${domain}${detail}`;
       });
-      const metrics = loadSemanticMetrics(projectRoot).slice(0, 24);
+      const metrics = admittedMetrics.slice(0, 24);
       const metricLines = metrics.map((metric) => {
         const node = metric as { name?: string; label?: string; id?: string };
         return `- ${node.name ?? node.label ?? node.id ?? 'metric'}`;
@@ -22594,9 +22640,7 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
           runNotebook: (appId, notebookPath) => runNotebookForApp(appId, notebookPath),
           // P4: give the App ask lane a grounded research planner over the catalog.
           planResearch: async ({ question, isFollowUp }) => {
-            const metrics = loadSemanticMetrics(projectRoot);
-            let blocks = collectPlanBlocks(projectRoot, { certifiedOnly: true });
-            if (blocks.length === 0) blocks = collectPlanBlocks(projectRoot, { certifiedOnly: false });
+            const { blocks, metrics } = await admittedPlanContext();
             return planResearch({ question, metrics, blocks, isFollowUp });
           },
           // Two-phase app build gap-fill: bounded governed answers for uncovered
@@ -24728,9 +24772,7 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
           res.end(serializeJSON({ error: 'question is required' }));
           return;
         }
-        const metrics = loadSemanticMetrics(projectRoot);
-        let blocks = collectPlanBlocks(projectRoot, { certifiedOnly: true });
-        if (blocks.length === 0) blocks = collectPlanBlocks(projectRoot, { certifiedOnly: false });
+        const { blocks, metrics } = await admittedPlanContext();
         const plan = await planResearch({
           question,
           metrics,
@@ -40780,8 +40822,8 @@ function resolveBlockPathById(projectRoot: string, blockId: string): string | nu
  * each `.dql`. Certified-only by default — the planner builds an app from trusted
  * material and reports the rest as gaps.
  */
-function collectPlanBlocks(projectRoot: string, opts: { certifiedOnly?: boolean } = {}): PlanBlock[] {
-  const out: PlanBlock[] = [];
+function collectPlanBlocks(projectRoot: string, opts: { certifiedOnly?: boolean } = {}): Array<PlanBlock & { filePath: string }> {
+  const out: Array<PlanBlock & { filePath: string }> = [];
   const seen = new Set<string>();
   const stack = ['blocks', 'domains'].map((dir) => join(projectRoot, dir));
   while (stack.length > 0) {
@@ -40804,6 +40846,7 @@ function collectPlanBlocks(projectRoot: string, opts: { certifiedOnly?: boolean 
         metricRef: meta.metricRef || meta.metricsRef[0] || undefined,
         allowedFilters: meta.allowedFilters,
         dimensions: meta.dimensions,
+        filePath: relative(projectRoot, filePath).split(sep).join('/'),
       });
     }
   }
@@ -42682,16 +42725,9 @@ function resultAwareFollowUpQuestions(
   }));
 }
 
-function buildConversationSuggestions(projectRoot: string, kind: ConversationalKind): string[] {
+function buildConversationSuggestions(kind: ConversationalKind, blocks: PlanBlock[]): string[] {
   if (kind === 'gratitude' || kind === 'answer_explanation') return [];
-  let names: string[] = [];
-  try {
-    let blocks = collectPlanBlocks(projectRoot, { certifiedOnly: true });
-    if (blocks.length === 0) blocks = collectPlanBlocks(projectRoot, { certifiedOnly: false });
-    names = blocks.slice(0, 3).map((block) => block.name).filter(Boolean);
-  } catch {
-    names = [];
-  }
+  const names = blocks.slice(0, 3).map((block) => block.name).filter(Boolean);
   if (names.length === 0) {
     return [
       'What is total revenue?',
