@@ -20,22 +20,33 @@ export function unreadableFilterParts(filter: string): string[] {
 export function validateBlockMetricMappings(
   blocks: Record<string, ManifestBlock>,
   metrics: Record<string, ManifestMetric>,
+  /**
+   * False when the project's metrics live in an external semantic provider
+   * (dbt/MetricFlow, Cube, Snowflake) that this build does not load: a name
+   * cannot be checked here, so Ask checks it against the live metric instead.
+   */
+  options: { metricsKnown?: boolean } = {},
 ): ManifestDiagnostic[] {
   const diagnostics: ManifestDiagnostic[] = [];
+  const checkNames = options.metricsKnown !== false || Object.keys(metrics).length > 0;
   const metricNames = new Set(Object.values(metrics).map((metric) => metric.name.toLowerCase()));
   for (const block of Object.values(blocks)) {
     if (!block.metricMappings?.length) continue;
     const error = (message: string) => diagnostics.push({ kind: 'semantic', filePath: block.filePath, severity: 'error', message: `Block "${block.name}" metricMappings: ${message}` });
     const outputs = new Set([...(block.declaredOutputs ?? []), ...(block.outputContract ?? []).map((output) => output.name)].map((name) => name.toLowerCase()));
     const seen = new Set<string>();
+    let noOutputsReported = false;
     for (const mapping of block.metricMappings) {
       const key = mapping.output.toLowerCase();
       if (seen.has(key)) error(`"${mapping.output}" is mapped more than once.`);
       seen.add(key);
-      if (!metricNames.has(mapping.metric.toLowerCase())) {
+      if (checkNames && !metricNames.has(mapping.metric.toLowerCase())) {
         error(`"${mapping.output}" maps to metric "${mapping.metric}", which is not in the semantic layer${metricNames.size === 0 ? ' (the project has no semantic-layer metrics)' : ''}.`);
       }
-      if (outputs.size > 0 && !outputs.has(key)) error(`"${mapping.output}" is not an output column of the block (${[...outputs].join(', ')}).`);
+      if (!block.declaredOutputs?.length) {
+        if (!noOutputsReported) error('the block must declare its outputs (outputs = [...]) so Ask can check the rows it returns against the question.');
+        noOutputsReported = true;
+      } else if (outputs.size > 0 && !outputs.has(key)) error(`"${mapping.output}" is not an output column of the block (${[...outputs].join(', ')}).`);
       const unreadable = mapping.filter ? unreadableFilterParts(mapping.filter) : [];
       if (unreadable.length) error(`the filter for "${mapping.output}" has parts that are not "column = value" conditions: ${unreadable.join('; ')}.`);
     }

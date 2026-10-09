@@ -94,8 +94,17 @@ export function entails(block: VocabularyEntry, intent: AnalyticalIntentV1, voca
   for (const group of intent.groupBy) {
     const entry = vocabulary.get(group.ref);
     const column = entry?.physical?.column ?? entry?.name ?? leaf(group.ref);
+    const graining = group.role === 'time' && group.grain;
+    if (graining && !namesBlock) {
+      // A time grain is never assumed: the block must provably truncate that
+      // column to that grain, or its rows are a different grain than the question's.
+      if (truncatedOutput(contract, column, group.grain!)) continue;
+      if (outputs.has(norm(column))) missing.push(`the block groups by ${column}, not by ${group.grain}, which cannot be compared with the question; it would need to select date_trunc('${group.grain}', ${column})`);
+      else missing.push(`grouping by ${column} by ${group.grain} is not an output of the block (${contract.outputs.join(', ')})`);
+      continue;
+    }
     if (!outputs.has(norm(column))) missing.push(`grouping by ${column} is not an output of the block (${contract.outputs.join(', ')})`);
-    if (group.role === 'time' && group.grain) caveats.push(`time grain ${group.grain} is assumed to match the block's own grouping`);
+    if (graining) caveats.push(`time grain ${group.grain} is assumed to match the block's own grouping`);
   }
   for (const ref of intent.display) {
     const entry = vocabulary.get(ref);
@@ -128,7 +137,10 @@ export function entails(block: VocabularyEntry, intent: AnalyticalIntentV1, voca
   // column the question did not ask for returns more rows than the answer.
   if (!namesBlock) {
     if (contract.grainUnparsed?.length) missing.push(`the block groups rows by ${contract.grainUnparsed.join(' and ')}, which is not the grain it selects, so its rows cannot be compared with the question`);
-    const asked = new Set([...intent.groupBy.map((group) => groupColumn(group.ref, vocabulary)), ...intent.display.map((ref) => groupColumn(ref, vocabulary))].map(norm));
+    const asked = new Set([
+      ...intent.groupBy.map((group) => (group.role === 'time' && group.grain ? truncatedOutput(contract, groupColumn(group.ref, vocabulary), group.grain) : undefined) ?? groupColumn(group.ref, vocabulary)),
+      ...intent.display.map((ref) => groupColumn(ref, vocabulary)),
+    ].map(norm));
     const extra = (contract.groupBy.length ? contract.groupBy : contract.outputs.filter((output) => !contract.measures.some((m) => norm(m.output) === norm(output)))).filter((column) => !asked.has(norm(column)));
     if (extra.length) missing.push(`the block breaks the answer down by ${extra.join(', ')}, which the question did not ask for`);
   }
@@ -175,9 +187,17 @@ function groupColumn(ref: string, vocabulary: VocabularyIndex): string {
   return entry?.physical?.column ?? entry?.name ?? leaf(ref);
 }
 
+/** The block output that is `date_trunc('<grain>', <column>)`, when it has one. */
+function truncatedOutput(contract: NonNullable<VocabularyEntry['contract']>, column: string, grain: string): string | undefined {
+  return contract.truncations?.find((item) => norm(item.column) === norm(column) && item.grain === grain.toLowerCase() && contract.outputs.some((output) => norm(output) === norm(item.output)))?.output;
+}
+
 /** The block measure that declares it answers this metric, when it does. */
 function declaredMeasure(entry: VocabularyEntry | undefined, contract: NonNullable<VocabularyEntry['contract']>): BlockContractMeasure | undefined {
   if (!entry || (entry.kind !== 'metric' && entry.kind !== 'measure')) return undefined;
+  // A declaration vouches for the metric, not for the grain: with no outputs the
+  // block's rows cannot be compared with the question, so nothing is vouched for.
+  if (contract.outputs.length === 0) return undefined;
   const wanted = norm(entry.sourceId ?? entry.name);
   return contract.measures.find((measure) => measure.declaredMetric && norm(measure.declaredMetric.metric) === wanted);
 }
@@ -219,6 +239,7 @@ function matchMeasure(ref: string, entry: VocabularyEntry | undefined, contract:
   const declared = declaredMeasure(entry, contract);
   if (declared?.declaredMetric) return { missing: [], impliedScope: declared.declaredMetric.filter.map((predicate) => ({ ...predicate, declared: true })) };
   const miss = (reason: string) => ({ missing: [reason], impliedScope: [] as ImpliedScope[] });
+  if (contract.outputs.length === 0 && contract.measures.some((measure) => measure.declaredMetric)) return miss('the block declares a metric mapping but no outputs, so the rows it returns cannot be compared with the question; declare its outputs');
   if (!entry?.physical) return miss(`${name} has no definition over a table that can be compared with the block`);
   const shape = metricShape(entry.physical);
   if (!shape.aggregate || !shape.column || !shape.readable) return miss(`${name} is not a plain aggregate over one column (${shape.aggregate ?? 'no aggregate'} of ${entry.physical.expr ?? entry.physical.column ?? 'unknown'}), so it cannot be compared with the block; the block can declare it with metricMappings`);

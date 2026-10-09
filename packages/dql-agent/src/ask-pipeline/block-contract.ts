@@ -40,6 +40,8 @@ export interface BlockContractV1 {
   scopeUnparsed?: string[];
   /** A GROUP BY that is not exactly the plain SELECT items: the real grain differs from `groupBy`, and no declaration vouches for it. */
   grainUnparsed?: string[];
+  /** Outputs that are `date_trunc('<grain>', <column>)`: the only way the contract can prove a block's time grain. */
+  truncations?: Array<{ output: string; grain: string; column: string }>;
   /** The one table the block reads, when its FROM is a single plain relation (no join, subquery or list). */
   source?: string;
   allowedFilters: string[];
@@ -236,6 +238,10 @@ export function extractBlockContract(block: BlockDeclarationLike): BlockContract
   const scopeUnparsed = [...scope.unparsed, ...(having ? [`HAVING ${having}`] : [])];
   const groupBy = plainItems.map((item) => item.output);
   const outputs = declaredOutputs.length ? declaredOutputs : items.map((item) => item.output);
+  const truncations = plainItems.flatMap((item) => {
+    const match = item.expr.match(/^date_trunc\(\s*'([a-z]+)'\s*,\s*([a-z_][a-z0-9_."`]*)\s*\)$/);
+    return match ? [{ output: item.output, grain: match[1]!, column: lastSegment(match[2]!) }] : [];
+  });
   const relations = [...new Set([...(block.tableDependencies ?? []), ...(block.rawTableRefs ?? [])])];
   return {
     version: 1,
@@ -247,6 +253,7 @@ export function extractBlockContract(block: BlockDeclarationLike): BlockContract
     staticScope: scope.predicates,
     ...(scopeUnparsed.length ? { scopeUnparsed } : {}),
     ...(grainUnparsed.length ? { grainUnparsed } : {}),
+    ...(truncations.length ? { truncations } : {}),
     ...(fromMatch ? { source: fromMatch[1]!.replace(/["`]/g, '') } : {}),
     allowedFilters: block.allowedFilters ?? [],
     parameters: (block.parameters ?? []).map((parameter) => (typeof parameter === 'string' ? parameter : parameter.name)),

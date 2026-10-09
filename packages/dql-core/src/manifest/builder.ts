@@ -308,7 +308,9 @@ export function buildManifest(options: ManifestBuildOptions): DQLManifest {
   const semanticDir = resolveSemanticPath(projectRoot, config);
   const { metrics, dimensions } = loadSemanticDefinitions(projectRoot, semanticDir);
   // A block that declares which metric it answers must name a real one.
-  diagnostics.push(...validateBlockMetricMappings(blocks, metrics));
+  diagnostics.push(...validateBlockMetricMappings(blocks, metrics, {
+    metricsKnown: (!config.semanticLayer?.provider || config.semanticLayer.provider === 'dql') && config.modeling?.mode !== 'dbt-first',
+  }));
 
   // Collect all source tables
   const sources = collectSources(blocks, notebooks, metrics, dimensions);
