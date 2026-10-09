@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { useNotebook } from '../store/NotebookStore';
 import { api } from '../api/client';
+import { hostReadOnly, useHostUi } from '../host/host-ui';
 import type { Cell, RunSnapshot, RunSnapshotCell } from '../store/types';
 
 const DEBOUNCE_MS = 600;
@@ -41,13 +42,15 @@ function snapshotSignature(cells: Cell[]): string {
  */
 export function useRunSnapshotAutosave(): void {
   const { state } = useNotebook();
+  // A read-only viewer may run cells, but the snapshot is a project write the host refuses; skip it rather than raise a refusal nobody asked for.
+  const readOnly = hostReadOnly(useHostUi(), 'files');
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastSignature = useRef<string>('');
   const lastPath = useRef<string | null>(null);
 
   useEffect(() => {
     const path = state.activeFile?.path ?? null;
-    if (!path) return;
+    if (!path || readOnly) return;
 
     // When the notebook changes, reset the signature so we don't save stale.
     if (path !== lastPath.current) {
@@ -74,5 +77,5 @@ export function useRunSnapshotAutosave(): void {
         timer.current = null;
       }
     };
-  }, [state.cells, state.activeFile?.path]);
+  }, [state.cells, state.activeFile?.path, readOnly]);
 }

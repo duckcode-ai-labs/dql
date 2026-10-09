@@ -254,19 +254,53 @@ export function hostReader(state: HostUiState): boolean {
 /** Which DQL action each navigation destination needs under a host. */
 export const NAV_CAPABILITY: Record<string, string[]> = {
   ask: ['ask'],
-  files: ['project.write'],
-  block_library: ['dataset.author'],
-  lineage: ['dataset.author'],
-  domains: ['dataset.author'],
+  // Anyone who may read the project sees these four; without the write action below they open read-only.
+  files: ['project.read', 'project.write'],
+  block_library: ['project.read', 'dataset.author'],
+  lineage: ['project.read', 'dataset.author'],
+  domains: ['project.read', 'dataset.author'],
   ask_observability: ['hint.review'],
   git: ['git.review'],
   settings: ['settings.manage', 'connection.manage'],
+};
+
+/** The action that lets a person edit on each of those screens. */
+export const NAV_WRITE_CAPABILITY: Record<string, string> = {
+  files: 'project.write',
+  block_library: 'dataset.author',
+  lineage: 'dataset.author',
+  domains: 'dataset.author',
 };
 
 export function navItemAllowed(state: HostUiState, key: string): boolean {
   const needs = NAV_CAPABILITY[key];
   if (!state.host || !needs) return true;
   return needs.some((action) => hostAllows(state, action));
+}
+
+/** A screen the person may open but not edit: under a host, without that screen's write action. Never without a host. */
+export function hostReadOnly(state: HostUiState, key: string): boolean {
+  const write = NAV_WRITE_CAPABILITY[key];
+  return !!write && state.host && !hostAllows(state, write);
+}
+
+/** The one-line reason a read-only screen gives: the host's own sentence when it sent one. */
+export function readOnlyReason(state: HostUiState, key: string): string {
+  const write = NAV_WRITE_CAPABILITY[key];
+  return (write && hostRefusal(state, write)?.reason) || 'Read-only: you can look here, but changes are not allowed.';
+}
+
+/** Which of those screens the main view is showing, if any. */
+export function navKeyForView(mainView: string): string | null {
+  switch (mainView) {
+    case 'notebook': return 'files';
+    case 'block_studio': return 'block_library';
+    case 'lineage':
+    case 'lineage_detail': return 'lineage';
+    case 'domains':
+    case 'modeling': return 'domains';
+    default: return null;
+  }
 }
 
 /** Post an answer action to the host; returns the message to show. */

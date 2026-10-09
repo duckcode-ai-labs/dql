@@ -11,6 +11,7 @@ import { ActivityBar } from './ActivityBar';
 import { Sidebar } from './Sidebar';
 import { Header } from './Header';
 import { HostBanner } from './HostBanner';
+import { HostRefusalNotice, ReadOnlyStrip } from './HostReadOnly';
 import { DevPanel } from './DevPanel';
 import { api, type SetupLaunchResponse } from '../../api/client';
 import { parseNotebookFile } from '../../utils/parse-workbook';
@@ -293,6 +294,8 @@ export function AppShell() {
       <HostBanner />
       {/* Header spans full width */}
       <Header />
+      <HostRefusalNotice />
+      <ReadOnlyStrip mainView={state.mainView} />
 
       {/* Body row: ActivityBar + Sidebar + Main.
           v1.3 Track 5 — ActivityBar + Sidebar hidden in App mode. */}

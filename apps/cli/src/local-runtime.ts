@@ -17167,7 +17167,7 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
           res.end(serializeJSON({ host: false }));
           return;
         }
-        const actions: DqlAction[] = ['project.write', 'dataset.author', 'dataset.certify', 'hint.review', 'app.author', 'app.publish', 'ask', 'research', 'query.run', 'export', 'schedule.manage', 'git.review', 'connection.manage', 'settings.manage'];
+        const actions: DqlAction[] = ['project.read', 'project.write', 'dataset.author', 'dataset.certify', 'hint.review', 'app.author', 'app.publish', 'ask', 'research', 'query.run', 'export', 'schedule.manage', 'git.review', 'connection.manage', 'settings.manage'];
         const capabilities: Record<string, boolean> = {};
         // For an action the person may not take: the host's reason and where to go (HH-12), so a screen can say so up front.
         const refusals: Record<string, { reason?: string; next?: { label: string; href: string } }> = {};
