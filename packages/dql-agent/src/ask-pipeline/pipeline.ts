@@ -1524,7 +1524,16 @@ export async function runAskPipeline(input: RunAskPipelineInput): Promise<Pipeli
   input.preparationCache?.set(cacheKey, candidate);
   receipt.executed = { tier: candidate.tier, sqlFingerprint: fingerprintSql(candidate.sql), rowCount: executed.result.rowCount, ms: Math.round(executed.result.executionTimeMs), proofs: executed.proofs };
   timings.total = Math.round(now() - started);
-  const described: ExecutedRows = { ...executed.result, columnsMeta: describeResultColumns(intent, executed.result, input.vocabulary) };
+  // A certified block matched by meaning names its columns its own way; the
+  // ones it was matched on are read as the question's measure and period.
+  const blockRefs = new Map((candidate.outputRefs ?? []).map((item) => [item.output.toLowerCase(), item.ref]));
+  const columnsMeta = describeResultColumns(intent, executed.result, input.vocabulary).map((meta) => {
+    const ref = blockRefs.get(meta.name.toLowerCase());
+    if (!ref) return meta;
+    const grain = intent.groupBy.find((group) => group.ref === ref && group.role === 'time')?.grain;
+    return { ...meta, ref, ...(grain ? { kind: 'date' as const, grain } : {}) };
+  });
+  const described: ExecutedRows = { ...executed.result, columnsMeta };
   // A series must cover the period it claims: a month the warehouse returned
   // no rows for is a month with nothing in it, not a month left out.
   const filled = fillPeriodGaps(intent, described);

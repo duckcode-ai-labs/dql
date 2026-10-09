@@ -24,6 +24,8 @@ export interface EntailmentVerdict {
   identityNote?: string;
   /** The output column a time window is applied over, when the block has one. */
   windowColumn?: string;
+  /** Block outputs matched by meaning to the question's own refs, so the rows can be read under the names the question used. */
+  outputRefs?: Array<{ output: string; ref: string }>;
 }
 
 const norm = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, '');
@@ -45,12 +47,14 @@ export function entails(block: VocabularyEntry, intent: AnalyticalIntentV1, voca
   // declares for a metric, and the base filter the metric's own definition carries.
   // The question must ask for them, or the block answers a narrower question.
   const impliedScope: ImpliedScope[] = [];
+  const outputRefs: Array<{ output: string; ref: string }> = [];
   if (!namesBlock) {
     for (const measure of intent.measures) {
       const entry = vocabulary.get(measure.ref);
       const verdict = matchMeasure(measure.ref, entry, contract);
       missing.push(...verdict.missing);
       impliedScope.push(...verdict.impliedScope);
+      if (verdict.output) outputRefs.push({ output: verdict.output, ref: measure.ref });
       if (measure.scope?.length) {
         for (const predicate of measure.scope) {
           const column = leaf(predicate.ref);
@@ -98,7 +102,11 @@ export function entails(block: VocabularyEntry, intent: AnalyticalIntentV1, voca
     if (graining && !namesBlock) {
       // A time grain is never assumed: the block must provably truncate that
       // column to that grain, or its rows are a different grain than the question's.
-      if (truncatedOutput(contract, column, group.grain!)) continue;
+      const truncated = truncatedOutput(contract, column, group.grain!);
+      if (truncated) {
+        outputRefs.push({ output: truncated, ref: group.ref });
+        continue;
+      }
       if (outputs.has(norm(column))) missing.push(`the block groups by ${column}, not by ${group.grain}, which cannot be compared with the question; it would need to select date_trunc('${group.grain}', ${column})`);
       else missing.push(`grouping by ${column} by ${group.grain} is not an output of the block (${contract.outputs.join(', ')})`);
       continue;
@@ -166,7 +174,7 @@ export function entails(block: VocabularyEntry, intent: AnalyticalIntentV1, voca
     caveats.push(`the block returns at most ${contract.limit} rows`);
   }
   if (!contract.structural) caveats.push('the block SQL could not be read structurally; only its declarations were checked');
-  return { ok: missing.length === 0, missing, caveats, ...(identityNote ? { identityNote } : {}), ...(windowColumn ? { windowColumn } : {}) };
+  return { ok: missing.length === 0, missing, caveats, ...(identityNote ? { identityNote } : {}), ...(windowColumn ? { windowColumn } : {}), ...(outputRefs.length ? { outputRefs } : {}) };
 }
 
 type ImpliedScope = BlockContractPredicate & { declared?: boolean };
@@ -234,10 +242,10 @@ function metricShape(physical: NonNullable<VocabularyEntry['physical']>): Metric
  * do not matter; its aggregate, column, table and the rows it keeps do. Any
  * difference, or anything the reader cannot see, is a miss with the reason.
  */
-function matchMeasure(ref: string, entry: VocabularyEntry | undefined, contract: NonNullable<VocabularyEntry['contract']>): { missing: string[]; impliedScope: ImpliedScope[] } {
+function matchMeasure(ref: string, entry: VocabularyEntry | undefined, contract: NonNullable<VocabularyEntry['contract']>): { missing: string[]; impliedScope: ImpliedScope[]; output?: string } {
   const name = entry?.name ?? leaf(ref);
   const declared = declaredMeasure(entry, contract);
-  if (declared?.declaredMetric) return { missing: [], impliedScope: declared.declaredMetric.filter.map((predicate) => ({ ...predicate, declared: true })) };
+  if (declared?.declaredMetric) return { missing: [], impliedScope: declared.declaredMetric.filter.map((predicate) => ({ ...predicate, declared: true })), output: declared.output };
   const miss = (reason: string) => ({ missing: [reason], impliedScope: [] as ImpliedScope[] });
   if (contract.outputs.length === 0 && contract.measures.some((measure) => measure.declaredMetric)) return miss('the block declares a metric mapping but no outputs, so the rows it returns cannot be compared with the question; declare its outputs');
   if (!entry?.physical) return miss(`${name} has no definition over a table that can be compared with the block`);
@@ -255,7 +263,7 @@ function matchMeasure(ref: string, entry: VocabularyEntry | undefined, contract:
   if (!sameRelation(contract.source, shape.relation!)) return miss(`${name} reads ${shape.relation}, the block reads ${contract.source}`);
   const absent = shape.scope.filter((predicate) => !contract.staticScope.some((scope) => norm(scope.column) === norm(predicate.column) && scopeMatches(scope.op, scope.values, predicate.op, predicate.values)));
   if (absent.length) return miss(`${name} only counts rows where ${absent.map(describePredicate).join(' and ')}; the block does not keep only those rows`);
-  return { missing: [], impliedScope: shape.scope };
+  return { missing: [], impliedScope: shape.scope, output: block.output };
 }
 
 function scopeMatches(op: string, values: string[], intentOp: string, intentValues: Array<string | number | boolean>): boolean {
@@ -343,6 +351,7 @@ export function prepareCertified(intent: AnalyticalIntentV1, vocabulary: Vocabul
         tier: 'certified', trust: 'certified', sql, ...(params.length ? { params } : {}), sourceRef: block.ref,
         // The DQL the answer ran is the certified block itself, as it is saved.
         ...(prepared && 'source' in prepared && prepared.source ? { artifact: { kind: 'certified_block', name: block.name, source: prepared.source, ...(prepared.sourcePath ? { sourcePath: prepared.sourcePath } : {}), persistence: 'saved', trustState: 'certified', compiledSql: sql } } : {}),
+        ...(verdict.outputRefs ? { outputRefs: verdict.outputRefs } : {}),
         proof: [`${block.ref} entails the intent: ${block.contract?.measures.map((m) => m.output).join(', ') || 'declared outputs'}${block.contract?.staticScope.length ? ` with scope ${block.contract.staticScope.map((s) => `${s.column} ${s.op}`).join(', ')}` : ''}${applied.length ? `; ${applied.length} declared filter${applied.length > 1 ? 's' : ''} applied over its output` : ''}`, ...(prepared?.parameters.length ? [`parameters bound: ${prepared.parameters.map((parameter) => `${parameter.name} = ${JSON.stringify(parameter.value)} (${parameter.source})`).join(', ')}`] : []), ...verdict.caveats],
       };
       if (identityOnly) {
