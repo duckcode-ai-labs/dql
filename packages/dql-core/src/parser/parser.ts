@@ -1259,6 +1259,7 @@ export class Parser {
     let allowedFilters: string[] | undefined;
     let parameterPolicy: BlockDeclNode['parameterPolicy'] | undefined;
     let filterBindings: BlockDeclNode['filterBindings'] | undefined;
+    let metricMappings: BlockDeclNode['metricMappings'] | undefined;
     let sourceSystems: string[] | undefined;
     let replacementFor: string[] | undefined;
     let params: BlockParamsNode | undefined;
@@ -1434,6 +1435,12 @@ export class Parser {
         && this.current().value === 'filterBindings'
       ) {
         filterBindings = this.parseBlockFilterBindings();
+      } else if (
+        this.check(TokenType.Identifier)
+        && this.current().value === 'metricMappings'
+        && this.tokens[this.pos + 1]?.type === TokenType.LeftBrace
+      ) {
+        metricMappings = this.parseBlockMetricMappings();
       } else if (
         this.check(TokenType.Identifier)
         && this.current().value === 'fields'
@@ -1741,7 +1748,7 @@ export class Parser {
           continue;
         }
         this.error(
-          `Unexpected token '${this.current().value}' inside block. Expected 'domain', 'type', 'status', 'datalex_contract', 'metric', 'metrics', 'dimensions', 'description', 'tags', 'owner', 'terms', 'pattern', 'grain', 'fields', 'measures', 'entities', 'outputs', 'allowedFilters', 'parameterPolicy', 'filterBindings', 'sourceSystems', 'replacementFor', 'params', 'query', 'visualization', 'tests', 'llmContext', 'invariants', 'examples', 'businessOutcome', 'businessOwner', 'decisionUse', 'reviewCadence', 'businessRules', 'caveats', 'replacedBy', 'deprecatedOn', Tier-2 draft metadata fields, or '}'.`,
+          `Unexpected token '${this.current().value}' inside block. Expected 'domain', 'type', 'status', 'datalex_contract', 'metric', 'metrics', 'dimensions', 'description', 'tags', 'owner', 'terms', 'pattern', 'grain', 'fields', 'measures', 'entities', 'outputs', 'allowedFilters', 'parameterPolicy', 'filterBindings', 'metricMappings', 'sourceSystems', 'replacementFor', 'params', 'query', 'visualization', 'tests', 'llmContext', 'invariants', 'examples', 'businessOutcome', 'businessOwner', 'decisionUse', 'reviewCadence', 'businessRules', 'caveats', 'replacedBy', 'deprecatedOn', Tier-2 draft metadata fields, or '}'.`,
         );
         this.advance();
       }
@@ -1780,6 +1787,7 @@ export class Parser {
       allowedFilters,
       parameterPolicy,
       filterBindings,
+      metricMappings,
       sourceSystems,
       replacementFor,
       params,
@@ -1998,6 +2006,36 @@ export class Parser {
         binding: binding.value,
         span: this.makeSpan(entryStart, this.previousSpan()),
       });
+    }
+    this.expect(TokenType.RightBrace);
+    return entries;
+  }
+
+  private parseBlockMetricMappings(): NonNullable<BlockDeclNode['metricMappings']> {
+    const entries: NonNullable<BlockDeclNode['metricMappings']> = [];
+    this.expect(TokenType.Identifier);
+    this.expect(TokenType.LeftBrace);
+    while (!this.check(TokenType.RightBrace) && !this.isAtEnd()) {
+      if (this.check(TokenType.Comma)) { this.advance(); continue; }
+      const entryStart = this.currentSpan();
+      const output = this.consumeDatasetPropertyName('metricMappings');
+      this.expect(TokenType.LeftBrace);
+      let metric: string | undefined;
+      let filter: string | undefined;
+      while (!this.check(TokenType.RightBrace) && !this.isAtEnd()) {
+        if (this.check(TokenType.Comma)) { this.advance(); continue; }
+        const property = this.consumeDatasetPropertyName(`metricMappings ${output.value}`);
+        this.expect(TokenType.Equals);
+        if (property.value === 'metric') metric = this.expectStringLike().value.trim();
+        else if (property.value === 'filter') filter = this.expectStringLike().value.trim();
+        else {
+          this.error(`Unknown metricMappings property '${property.value}' on ${output.value}. Expected 'metric' or 'filter'.`);
+          this.skipDatasetPropertyValue();
+        }
+      }
+      this.expect(TokenType.RightBrace);
+      if (!metric) this.error(`metricMappings entry ${output.value} requires metric.`);
+      else entries.push({ output: output.value, metric, ...(filter ? { filter } : {}), span: this.makeSpan(entryStart, this.previousSpan()) });
     }
     this.expect(TokenType.RightBrace);
     return entries;

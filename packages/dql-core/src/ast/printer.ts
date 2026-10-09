@@ -161,6 +161,7 @@ function printBlockDecl(node: BlockDeclNode, indent: number): string {
   if (node.allowedFilters) result += `${prefix}  allowedFilters = [${node.allowedFilters.map(t => `"${t}"`).join(', ')}]\n`;
   if (node.sourceSystems) result += `${prefix}  sourceSystems = [${node.sourceSystems.map(t => `"${t}"`).join(', ')}]\n`;
   if (node.replacementFor) result += `${prefix}  replacementFor = [${node.replacementFor.map(t => `"${t}"`).join(', ')}]\n`;
+  if (node.metricMappings?.length) result += `${prefix}  metricMappings = [${node.metricMappings.map(m => `${m.output} -> ${m.metric}${m.filter ? ` where ${m.filter}` : ''}`).join(', ')}]\n`;
   if (node.replacedBy) result += `${prefix}  replacedBy = "${node.replacedBy}"\n`;
   if (node.deprecatedOn) result += `${prefix}  deprecatedOn = "${node.deprecatedOn}"\n`;
   const metricRefs = node.metricsRef ?? (node.metricRef !== undefined ? [node.metricRef] : undefined);

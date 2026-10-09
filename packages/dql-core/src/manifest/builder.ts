@@ -16,6 +16,7 @@ import { parseDatasetAggregateExpression } from '../datasets/aggregate-expressio
 import { extractColumnLineage, type ColumnLineageResult } from '../lineage/column-lineage.js';
 import { detectOutputDrift } from './output-drift.js';
 import { validateBlockRetirements } from './retirement.js';
+import { validateBlockMetricMappings } from './metric-mapping.js';
 import { buildLineageGraph } from '../lineage/builder.js';
 import { detectDomainFlows, getDomainTrustOverview } from '../lineage/domain-lineage.js';
 import { loadSemanticLayerFromDir } from '../semantic/index.js';
@@ -306,6 +307,10 @@ export function buildManifest(options: ManifestBuildOptions): DQLManifest {
   // Load semantic layer
   const semanticDir = resolveSemanticPath(projectRoot, config);
   const { metrics, dimensions } = loadSemanticDefinitions(projectRoot, semanticDir);
+  // A block that declares which metric it answers must name a real one.
+  diagnostics.push(...validateBlockMetricMappings(blocks, metrics, {
+    metricsKnown: (!config.semanticLayer?.provider || config.semanticLayer.provider === 'dql') && config.modeling?.mode !== 'dbt-first',
+  }));
 
   // Collect all source tables
   const sources = collectSources(blocks, notebooks, metrics, dimensions);
@@ -2977,6 +2982,13 @@ function blockDeclToManifestBlock(block: any, filePath: string): ManifestBlock {
       ? block.filterBindings.map((entry: { filter: string; binding: string }) => ({
           filter: entry.filter,
           binding: entry.binding,
+        }))
+      : undefined,
+    metricMappings: Array.isArray(block.metricMappings) && block.metricMappings.length > 0
+      ? block.metricMappings.map((entry: { output: string; metric: string; filter?: string }) => ({
+          output: entry.output,
+          metric: entry.metric,
+          ...(entry.filter ? { filter: entry.filter } : {}),
         }))
       : undefined,
     sourceSystems: Array.isArray(block.sourceSystems) ? block.sourceSystems : undefined,

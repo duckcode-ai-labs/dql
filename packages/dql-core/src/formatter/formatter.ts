@@ -311,6 +311,16 @@ function formatBlock(node: BlockDeclNode, level: number, state: FormatState): st
     }
     lines.push(`${indent(level + 1, state)}}`);
   }
+  if (node.metricMappings && node.metricMappings.length > 0) {
+    lines.push(`${indent(level + 1, state)}metricMappings {`);
+    for (const entry of node.metricMappings) {
+      lines.push(`${indent(level + 2, state)}${entry.output} {`);
+      lines.push(`${indent(level + 3, state)}metric = ${quote(entry.metric)}`);
+      if (entry.filter) lines.push(`${indent(level + 3, state)}filter = ${quote(entry.filter)}`);
+      lines.push(`${indent(level + 2, state)}}`);
+    }
+    lines.push(`${indent(level + 1, state)}}`);
+  }
   if (node.sourceSystems && node.sourceSystems.length > 0) {
     lines.push(`${indent(level + 1, state)}sourceSystems = [${node.sourceSystems.map(quote).join(', ')}]`);
   }

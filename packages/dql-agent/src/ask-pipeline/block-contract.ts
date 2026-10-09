@@ -16,6 +16,8 @@ export interface BlockContractMeasure {
   expr?: string;
   /** Source column the aggregate reads, when it is a plain column. */
   sourceColumn?: string;
+  /** The semantic metric the block declares this output answers (`metricMappings`), validated at compile time. */
+  declaredMetric?: { metric: string; filter: BlockContractPredicate[] };
 }
 
 export interface BlockContractPredicate {
@@ -34,6 +36,14 @@ export interface BlockContractV1 {
   groupBy: string[];
   /** Predicates hard-coded in the WHERE clause. */
   staticScope: BlockContractPredicate[];
+  /** WHERE/HAVING parts the reader could not turn into a predicate: the block restricts rows in a way the contract cannot state. */
+  scopeUnparsed?: string[];
+  /** A GROUP BY that is not exactly the plain SELECT items: the real grain differs from `groupBy`, and no declaration vouches for it. */
+  grainUnparsed?: string[];
+  /** Outputs that are `date_trunc('<grain>', <column>)`: the only way the contract can prove a block's time grain. */
+  truncations?: Array<{ output: string; grain: string; column: string }>;
+  /** The one table the block reads, when its FROM is a single plain relation (no join, subquery or list). */
+  source?: string;
   allowedFilters: string[];
   parameters: string[];
   orderBy?: Array<{ column: string; direction: 'asc' | 'desc' }>;
@@ -58,6 +68,8 @@ export interface BlockDeclarationLike {
   entities?: string[];
   tableDependencies?: string[];
   rawTableRefs?: string[];
+  /** Declared `metricMappings`: output column -> semantic metric, and the filter that metric is read under. */
+  metricMappings?: Array<{ output: string; metric: string; filter?: string }>;
 }
 
 const norm = (value: string) => value.toLowerCase().replace(/\s+/g, ' ').trim();
@@ -148,6 +160,18 @@ function parseSelectItem(item: string): { output: string; expr: string; aggregat
 
 const COMPARATORS: Record<string, BlockContractPredicate['op']> = { '=': 'eq', '<>': 'neq', '!=': 'neq', '>': 'gt', '>=': 'gte', '<': 'lt', '<=': 'lte' };
 
+/** The predicates in a WHERE-style text, and the AND-parts that could not be read as one. */
+export function parseScopePredicates(where: string | undefined): { predicates: BlockContractPredicate[]; unparsed: string[] } {
+  const unparsed: string[] = [];
+  if (!where) return { predicates: [], unparsed };
+  const predicates = splitAnd(where).flatMap((part) => {
+    const read = parsePredicates(part);
+    if (read.length === 0) unparsed.push(part);
+    return read;
+  });
+  return { predicates, unparsed };
+}
+
 function parsePredicates(where: string | undefined): BlockContractPredicate[] {
   if (!where) return [];
   return splitAnd(where).flatMap((part): BlockContractPredicate[] => {
@@ -179,11 +203,45 @@ export function extractBlockContract(block: BlockDeclarationLike): BlockContract
   const orderBy = isSimple ? clause(body, 'ORDER BY', ['LIMIT']) : undefined;
   const limitText = isSimple ? clause(body, 'LIMIT', []) : undefined;
   const limit = limitText && /^\d+$/.test(limitText.trim()) ? Number(limitText.trim()) : undefined;
-  const measures = items
+  const declared = (output: string): Pick<BlockContractMeasure, 'declaredMetric'> => {
+    const mapping = block.metricMappings?.find((candidate) => candidate.output.toLowerCase() === output.toLowerCase());
+    if (!mapping) return {};
+    // A declared filter that cannot be read would silently widen the mapping: it vouches for nothing.
+    const filter = parseScopePredicates(mapping.filter);
+    return filter.unparsed.length ? {} : { declaredMetric: { metric: mapping.metric, filter: filter.predicates } };
+  };
+  const measures: BlockContractMeasure[] = items
     .filter((item) => item.aggregate)
-    .map((item) => ({ output: item.output, aggregate: item.aggregate, expr: item.expr, ...(item.sourceColumn ? { sourceColumn: item.sourceColumn } : {}) }));
-  const groupBy = items.filter((item) => !item.aggregate).map((item) => item.output);
+    .map((item) => ({ output: item.output, aggregate: item.aggregate, expr: item.expr, ...(item.sourceColumn ? { sourceColumn: item.sourceColumn } : {}), ...declared(item.output) }));
+  // A mapping may name an output the reader cannot see as a plain aggregate (a
+  // complex expression): for that column the declaration is the contract.
+  for (const mapping of block.metricMappings ?? []) {
+    if (!measures.some((measure) => measure.output.toLowerCase() === mapping.output.toLowerCase())) measures.push({ output: mapping.output, ...declared(mapping.output) });
+  }
+  const fromText = isSimple ? clause(body, 'FROM', ['WHERE', 'GROUP BY', 'ORDER BY', 'LIMIT', 'HAVING']) : undefined;
+  const fromMatch = fromText?.match(/^([A-Za-z_"`][\w."`$-]*)(?:\s+(?:as\s+)?[A-Za-z_]\w*)?$/i);
+  const having = isSimple ? clause(body, 'HAVING', ['ORDER BY', 'LIMIT']) : undefined;
+  const scope = parseScopePredicates(where);
+  const plainItems = items.filter((item) => !item.aggregate);
+  // The grain is what the SQL really groups by, not what it selects: a GROUP BY
+  // wider than the plain SELECT items returns more rows than the contract states.
+  const groupText = isSimple ? clause(body, 'GROUP BY', ['HAVING', 'ORDER BY', 'LIMIT']) : undefined;
+  const groupParts = groupText ? splitTopLevel(groupText, ',') : [];
+  const groupIndexes = groupParts.map((part) => {
+    if (/^\d+$/.test(part)) return Number(part) - 1 < items.length && !items[Number(part) - 1]!.aggregate ? plainItems.indexOf(items[Number(part) - 1]!) : -1;
+    const key = norm(part);
+    return plainItems.findIndex((item) => item.expr === key || item.output.toLowerCase() === key || norm(lastSegment(item.expr)) === key);
+  });
+  const groupMatches = groupParts.length === 1 && /^all$/i.test(groupParts[0]!)
+    || (groupIndexes.every((index) => index >= 0) && plainItems.every((_, index) => groupIndexes.includes(index)));
+  const grainUnparsed = groupText && !groupMatches ? [`GROUP BY ${groupText}`] : [];
+  const scopeUnparsed = [...scope.unparsed, ...(having ? [`HAVING ${having}`] : [])];
+  const groupBy = plainItems.map((item) => item.output);
   const outputs = declaredOutputs.length ? declaredOutputs : items.map((item) => item.output);
+  const truncations = plainItems.flatMap((item) => {
+    const match = item.expr.match(/^date_trunc\(\s*'([a-z]+)'\s*,\s*([a-z_][a-z0-9_."`]*)\s*\)$/);
+    return match ? [{ output: item.output, grain: match[1]!, column: lastSegment(match[2]!) }] : [];
+  });
   const relations = [...new Set([...(block.tableDependencies ?? []), ...(block.rawTableRefs ?? [])])];
   return {
     version: 1,
@@ -192,7 +250,11 @@ export function extractBlockContract(block: BlockDeclarationLike): BlockContract
     outputs,
     measures,
     groupBy: groupBy.length ? groupBy : block.dimensions ?? [],
-    staticScope: parsePredicates(where),
+    staticScope: scope.predicates,
+    ...(scopeUnparsed.length ? { scopeUnparsed } : {}),
+    ...(grainUnparsed.length ? { grainUnparsed } : {}),
+    ...(truncations.length ? { truncations } : {}),
+    ...(fromMatch ? { source: fromMatch[1]!.replace(/["`]/g, '') } : {}),
     allowedFilters: block.allowedFilters ?? [],
     parameters: (block.parameters ?? []).map((parameter) => (typeof parameter === 'string' ? parameter : parameter.name)),
     ...(orderBy

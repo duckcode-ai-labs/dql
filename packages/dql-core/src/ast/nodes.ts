@@ -321,6 +321,13 @@ export interface BlockDeclNode extends BaseNode {
   parameterPolicy?: BlockParameterPolicyEntry[];
   /** Maps business/app filters to the physical column/expression this block accepts. */
   filterBindings?: BlockFilterBindingEntry[];
+  /**
+   * Which semantic metric an output column answers, and under which filter.
+   * Ask uses it to serve this block as the certified answer to a question
+   * about that metric when the block's SQL is too complex to compare. The
+   * metric must exist in the semantic layer; `dql compile` checks it.
+   */
+  metricMappings?: BlockMetricMappingEntry[];
   sourceSystems?: string[];
   replacementFor?: string[];
   params?: BlockParamsNode;
@@ -539,6 +546,16 @@ export interface BlockParameterPolicyEntry {
 export interface BlockFilterBindingEntry {
   filter: string;
   binding: string;
+  span: SourceSpan;
+}
+
+export interface BlockMetricMappingEntry {
+  /** The block's output column. */
+  output: string;
+  /** The semantic metric that column answers. */
+  metric: string;
+  /** The rows the metric is read over, as `column = 'value'` predicates joined by AND. */
+  filter?: string;
   span: SourceSpan;
 }
 

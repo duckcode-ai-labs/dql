@@ -1,3 +1,4 @@
+import { parseScopePredicates, type BlockContractMeasure, type BlockContractPredicate } from '../block-contract.js';
 import type { AnalyticalIntentV1 } from '../intent.js';
 import type { VocabularyEntry, VocabularyIndex } from '../vocabulary.js';
 import type { PrepareDeps, PreparedCandidate, PreparedRefusal } from './types.js';
@@ -23,6 +24,8 @@ export interface EntailmentVerdict {
   identityNote?: string;
   /** The output column a time window is applied over, when the block has one. */
   windowColumn?: string;
+  /** Block outputs matched by meaning to the question's own refs, so the rows can be read under the names the question used. */
+  outputRefs?: Array<{ output: string; ref: string }>;
 }
 
 const norm = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, '');
@@ -40,20 +43,23 @@ export function entails(block: VocabularyEntry, intent: AnalyticalIntentV1, voca
   const outputs = new Set(contract.outputs.map(norm));
 
   const namesBlock = intent.measures.every((measure) => measure.ref === block.ref);
+  // Predicates the block's matched measures bring with them: the filter a block
+  // declares for a metric, and the base filter the metric's own definition carries.
+  // The question must ask for them, or the block answers a narrower question.
+  const impliedScope: ImpliedScope[] = [];
+  const outputRefs: Array<{ output: string; ref: string }> = [];
   if (!namesBlock) {
-    // Measures by physical binding: same aggregate over the same source column.
     for (const measure of intent.measures) {
       const entry = vocabulary.get(measure.ref);
-      const physical = entry?.physical;
-      const match = contract.measures.find((candidate) =>
-        physical && candidate.aggregate && physical.aggregate === candidate.aggregate
-        && ((candidate.sourceColumn && physical.column && norm(candidate.sourceColumn) === norm(physical.column))
-          || (candidate.expr && physical.expr && norm(candidate.expr) === norm(physical.expr))));
-      if (!match) missing.push(`${measure.ref} is not one of the block's measures (${contract.measures.map((m) => m.output).join(', ') || 'none'})`);
+      const verdict = matchMeasure(measure.ref, entry, contract);
+      missing.push(...verdict.missing);
+      impliedScope.push(...verdict.impliedScope);
+      if (verdict.output) outputRefs.push({ output: verdict.output, ref: measure.ref });
       if (measure.scope?.length) {
         for (const predicate of measure.scope) {
           const column = leaf(predicate.ref);
-          const covered = contract.staticScope.some((scope) => norm(scope.column) === norm(column) && scopeMatches(scope.op, scope.values, predicate.op, predicate.values));
+          const covered = contract.staticScope.some((scope) => norm(scope.column) === norm(column) && scopeMatches(scope.op, scope.values, predicate.op, predicate.values))
+            || verdict.impliedScope.some((scope) => norm(scope.column) === norm(column) && scopeMatches(scope.op, scope.values, predicate.op, predicate.values));
           if (!covered) missing.push(`the block does not restrict ${column} the way the measure requires`);
         }
       }
@@ -92,8 +98,21 @@ export function entails(block: VocabularyEntry, intent: AnalyticalIntentV1, voca
   for (const group of intent.groupBy) {
     const entry = vocabulary.get(group.ref);
     const column = entry?.physical?.column ?? entry?.name ?? leaf(group.ref);
+    const graining = group.role === 'time' && group.grain;
+    if (graining && !namesBlock) {
+      // A time grain is never assumed: the block must provably truncate that
+      // column to that grain, or its rows are a different grain than the question's.
+      const truncated = truncatedOutput(contract, column, group.grain!);
+      if (truncated) {
+        outputRefs.push({ output: truncated, ref: group.ref });
+        continue;
+      }
+      if (outputs.has(norm(column))) missing.push(`the block groups by ${column}, not by ${group.grain}, which cannot be compared with the question; it would need to select date_trunc('${group.grain}', ${column})`);
+      else missing.push(`grouping by ${column} by ${group.grain} is not an output of the block (${contract.outputs.join(', ')})`);
+      continue;
+    }
     if (!outputs.has(norm(column))) missing.push(`grouping by ${column} is not an output of the block (${contract.outputs.join(', ')})`);
-    if (group.role === 'time' && group.grain) caveats.push(`time grain ${group.grain} is assumed to match the block's own grouping`);
+    if (graining) caveats.push(`time grain ${group.grain} is assumed to match the block's own grouping`);
   }
   for (const ref of intent.display) {
     const entry = vocabulary.get(ref);
@@ -106,13 +125,37 @@ export function entails(block: VocabularyEntry, intent: AnalyticalIntentV1, voca
   // A block the intent names by ref was chosen FOR its declared scope; a block
   // matched through its measures must have that scope asked for explicitly.
   for (const scope of namesBlock ? [] : contract.staticScope) {
-    const asked = intentPredicates.some((predicate) => norm(leaf(predicate.ref)) === norm(scope.column) && scopeMatches(scope.op, scope.values, predicate.op, predicate.values));
-    if (!asked) missing.push(`the block is restricted to ${scope.column} ${scope.op}${scope.values.length ? ` ${scope.values.join('/')}` : ''}, which the question did not ask for`);
+    const asked = intentPredicates.some((predicate) => norm(leaf(predicate.ref)) === norm(scope.column) && scopeMatches(scope.op, scope.values, predicate.op, predicate.values))
+      || impliedScope.some((implied) => norm(implied.column) === norm(scope.column) && scopeMatches(scope.op, scope.values, implied.op, implied.values));
+    if (!asked) missing.push(`the block only counts rows where ${describePredicate(scope)}, which the question did not ask for`);
+  }
+  // Every filter a block's measure declares must be one the question asked for.
+  for (const implied of namesBlock ? [] : impliedScope) {
+    const asked = intentPredicates.some((predicate) => norm(leaf(predicate.ref)) === norm(implied.column) && scopeMatches(implied.op, implied.values, predicate.op, predicate.values))
+      || (!implied.declared && contract.staticScope.some((scope) => norm(scope.column) === norm(implied.column) && scopeMatches(scope.op, scope.values, implied.op, implied.values)));
+    if (!asked) missing.push(`the block's measure is only read where ${describePredicate(implied)}, which the question did not ask for`);
+  }
+  // Rows the block drops by a condition the contract cannot state are never
+  // matched by guess; only a declared metric mapping vouches for them.
+  const vouched = !namesBlock && intent.measures.length > 0 && intent.measures.every((measure) => declaredMeasure(vocabulary.get(measure.ref), contract) !== undefined);
+  if (!namesBlock && contract.scopeUnparsed?.length && !vouched) {
+    missing.push(`the block also filters rows by ${contract.scopeUnparsed.join(' and ')}, which cannot be compared with the question`);
+  }
+  // The block's grain must be the question's grain: a block that groups by a
+  // column the question did not ask for returns more rows than the answer.
+  if (!namesBlock) {
+    if (contract.grainUnparsed?.length) missing.push(`the block groups rows by ${contract.grainUnparsed.join(' and ')}, which is not the grain it selects, so its rows cannot be compared with the question`);
+    const asked = new Set([
+      ...intent.groupBy.map((group) => (group.role === 'time' && group.grain ? truncatedOutput(contract, groupColumn(group.ref, vocabulary), group.grain) : undefined) ?? groupColumn(group.ref, vocabulary)),
+      ...intent.display.map((ref) => groupColumn(ref, vocabulary)),
+    ].map(norm));
+    const extra = (contract.groupBy.length ? contract.groupBy : contract.outputs.filter((output) => !contract.measures.some((m) => norm(m.output) === norm(output)))).filter((column) => !asked.has(norm(column)));
+    if (extra.length) missing.push(`the block breaks the answer down by ${extra.join(', ')}, which the question did not ask for`);
   }
   const accepted = new Set([...contract.allowedFilters, ...contract.parameters, ...contract.staticScope.map((scope) => scope.column), ...(namesBlock ? contract.outputs : [])].map(norm));
   for (const predicate of namesBlock ? intentPredicates : intent.filters) {
     const column = leaf(predicate.ref);
-    const asStatic = contract.staticScope.some((scope) => norm(scope.column) === norm(column) && scopeMatches(scope.op, scope.values, predicate.op, predicate.values));
+    const asStatic = [...contract.staticScope, ...impliedScope].some((scope) => norm(scope.column) === norm(column) && scopeMatches(scope.op, scope.values, predicate.op, predicate.values));
     if (!asStatic && !accepted.has(norm(column))) missing.push(`the block does not accept a filter on ${column}`);
     if (!asStatic && accepted.has(norm(column))) caveats.push(`filter on ${column} needs the block's parameter binding`);
   }
@@ -131,7 +174,96 @@ export function entails(block: VocabularyEntry, intent: AnalyticalIntentV1, voca
     caveats.push(`the block returns at most ${contract.limit} rows`);
   }
   if (!contract.structural) caveats.push('the block SQL could not be read structurally; only its declarations were checked');
-  return { ok: missing.length === 0, missing, caveats, ...(identityNote ? { identityNote } : {}), ...(windowColumn ? { windowColumn } : {}) };
+  return { ok: missing.length === 0, missing, caveats, ...(identityNote ? { identityNote } : {}), ...(windowColumn ? { windowColumn } : {}), ...(outputRefs.length ? { outputRefs } : {}) };
+}
+
+type ImpliedScope = BlockContractPredicate & { declared?: boolean };
+
+const AGGREGATE_WORDS: Record<string, string> = { sum: 'sums', avg: 'averages', count: 'counts every row of', count_distinct: 'counts distinct', min: 'takes the minimum of', max: 'takes the maximum of', median: 'takes the median of' };
+const aggregateWords = (aggregate: string | undefined) => (aggregate ? AGGREGATE_WORDS[aggregate] ?? aggregate : 'computes');
+const OP_WORDS: Record<string, string> = { eq: '=', neq: '<>', gt: '>', gte: '>=', lt: '<', lte: '<=' };
+
+function describePredicate(predicate: BlockContractPredicate): string {
+  if (predicate.op === 'is_true') return `${predicate.column} is true`;
+  if (predicate.op === 'is_false') return `${predicate.column} is false`;
+  if (predicate.op === 'in') return `${predicate.column} is one of ${predicate.values.map((value) => `'${value}'`).join(', ')}`;
+  return `${predicate.column} ${OP_WORDS[predicate.op] ?? predicate.op} '${predicate.values[0] ?? ''}'`;
+}
+
+function groupColumn(ref: string, vocabulary: VocabularyIndex): string {
+  const entry = vocabulary.get(ref);
+  return entry?.physical?.column ?? entry?.name ?? leaf(ref);
+}
+
+/** The block output that is `date_trunc('<grain>', <column>)`, when it has one. */
+function truncatedOutput(contract: NonNullable<VocabularyEntry['contract']>, column: string, grain: string): string | undefined {
+  return contract.truncations?.find((item) => norm(item.column) === norm(column) && item.grain === grain.toLowerCase() && contract.outputs.some((output) => norm(output) === norm(item.output)))?.output;
+}
+
+/** The block measure that declares it answers this metric, when it does. */
+function declaredMeasure(entry: VocabularyEntry | undefined, contract: NonNullable<VocabularyEntry['contract']>): BlockContractMeasure | undefined {
+  if (!entry || (entry.kind !== 'metric' && entry.kind !== 'measure')) return undefined;
+  // A declaration vouches for the metric, not for the grain: with no outputs the
+  // block's rows cannot be compared with the question, so nothing is vouched for.
+  if (contract.outputs.length === 0) return undefined;
+  const wanted = norm(entry.sourceId ?? entry.name);
+  return contract.measures.find((measure) => measure.declaredMetric && norm(measure.declaredMetric.metric) === wanted);
+}
+
+/** Parts of a table name, lower-cased and unquoted, so `claims` and `main."claims"` compare on what they share. */
+function sameRelation(left: string, right: string): boolean {
+  const parts = (value: string) => value.replace(/["`]/g, '').toLowerCase().split('.').filter(Boolean);
+  const a = parts(left);
+  const b = parts(right);
+  if (a.length === 0 || b.length === 0 || a.at(-1) !== b.at(-1)) return false;
+  const shared = Math.min(a.length, b.length);
+  return a.slice(-shared).join('.') === b.slice(-shared).join('.');
+}
+
+interface MetricShape { aggregate?: string; column?: string; relation?: string; scope: BlockContractPredicate[]; readable: boolean }
+
+/** What a metric computes, read from its physical binding: aggregate, column, table and the rows it counts. */
+function metricShape(physical: NonNullable<VocabularyEntry['physical']>): MetricShape {
+  const shape: MetricShape = { scope: [], readable: true, ...(physical.aggregate ? { aggregate: physical.aggregate.toLowerCase() } : {}), relation: physical.relation };
+  let inner = (physical.column ?? physical.expr ?? '').trim();
+  const scoped = inner.match(/^case\s+when\s+(.+?)\s+then\s+(.+?)(?:\s+else\s+0)?\s+end$/is);
+  if (scoped) {
+    const read = parseScopePredicates(scoped[1]!.replace(/["`]/g, ''));
+    shape.scope = read.predicates;
+    if (read.unparsed.length) shape.readable = false;
+    inner = scoped[2]!.trim();
+  }
+  if (/^(?:"[^"]+"|[A-Za-z_]\w*)(?:\.(?:"[^"]+"|[A-Za-z_]\w*))*$/.test(inner)) shape.column = inner.split('.').pop()!.replace(/"/g, '');
+  return shape;
+}
+
+/**
+ * Does the block compute the same thing as the metric? The block's own names
+ * do not matter; its aggregate, column, table and the rows it keeps do. Any
+ * difference, or anything the reader cannot see, is a miss with the reason.
+ */
+function matchMeasure(ref: string, entry: VocabularyEntry | undefined, contract: NonNullable<VocabularyEntry['contract']>): { missing: string[]; impliedScope: ImpliedScope[]; output?: string } {
+  const name = entry?.name ?? leaf(ref);
+  const declared = declaredMeasure(entry, contract);
+  if (declared?.declaredMetric) return { missing: [], impliedScope: declared.declaredMetric.filter.map((predicate) => ({ ...predicate, declared: true })), output: declared.output };
+  const miss = (reason: string) => ({ missing: [reason], impliedScope: [] as ImpliedScope[] });
+  if (contract.outputs.length === 0 && contract.measures.some((measure) => measure.declaredMetric)) return miss('the block declares a metric mapping but no outputs, so the rows it returns cannot be compared with the question; declare its outputs');
+  if (!entry?.physical) return miss(`${name} has no definition over a table that can be compared with the block`);
+  const shape = metricShape(entry.physical);
+  if (!shape.aggregate || !shape.column || !shape.readable) return miss(`${name} is not a plain aggregate over one column (${shape.aggregate ?? 'no aggregate'} of ${entry.physical.expr ?? entry.physical.column ?? 'unknown'}), so it cannot be compared with the block; the block can declare it with metricMappings`);
+  const metricText = `${name} ${aggregateWords(shape.aggregate)} ${shape.column} in ${shape.relation}`;
+  const sameColumn = contract.measures.filter((measure) => measure.sourceColumn && norm(measure.sourceColumn) === norm(shape.column!));
+  const block = sameColumn.find((measure) => measure.aggregate === shape.aggregate);
+  if (!block) {
+    const other = sameColumn[0];
+    const computes = contract.measures.map((measure) => `${measure.output} ${aggregateWords(measure.aggregate)} ${measure.sourceColumn ?? measure.expr ?? 'an expression'}`).join('; ') || 'no measure';
+    return miss(other ? `${metricText}, but the block's ${other.output} ${aggregateWords(other.aggregate)} ${other.sourceColumn}` : `${metricText}; the block computes: ${computes}`);
+  }
+  if (!contract.source) return miss(`the block does not read from one single table, so it cannot be compared with ${name}, which reads ${shape.relation}`);
+  if (!sameRelation(contract.source, shape.relation!)) return miss(`${name} reads ${shape.relation}, the block reads ${contract.source}`);
+  const absent = shape.scope.filter((predicate) => !contract.staticScope.some((scope) => norm(scope.column) === norm(predicate.column) && scopeMatches(scope.op, scope.values, predicate.op, predicate.values)));
+  if (absent.length) return miss(`${name} only counts rows where ${absent.map(describePredicate).join(' and ')}; the block does not keep only those rows`);
+  return { missing: [], impliedScope: shape.scope, output: block.output };
 }
 
 function scopeMatches(op: string, values: string[], intentOp: string, intentValues: Array<string | number | boolean>): boolean {
@@ -219,6 +351,7 @@ export function prepareCertified(intent: AnalyticalIntentV1, vocabulary: Vocabul
         tier: 'certified', trust: 'certified', sql, ...(params.length ? { params } : {}), sourceRef: block.ref,
         // The DQL the answer ran is the certified block itself, as it is saved.
         ...(prepared && 'source' in prepared && prepared.source ? { artifact: { kind: 'certified_block', name: block.name, source: prepared.source, ...(prepared.sourcePath ? { sourcePath: prepared.sourcePath } : {}), persistence: 'saved', trustState: 'certified', compiledSql: sql } } : {}),
+        ...(verdict.outputRefs ? { outputRefs: verdict.outputRefs } : {}),
         proof: [`${block.ref} entails the intent: ${block.contract?.measures.map((m) => m.output).join(', ') || 'declared outputs'}${block.contract?.staticScope.length ? ` with scope ${block.contract.staticScope.map((s) => `${s.column} ${s.op}`).join(', ')}` : ''}${applied.length ? `; ${applied.length} declared filter${applied.length > 1 ? 's' : ''} applied over its output` : ''}`, ...(prepared?.parameters.length ? [`parameters bound: ${prepared.parameters.map((parameter) => `${parameter.name} = ${JSON.stringify(parameter.value)} (${parameter.source})`).join(', ')}`] : []), ...verdict.caveats],
       };
       if (identityOnly) {
