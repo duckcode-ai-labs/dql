@@ -3111,7 +3111,7 @@ function AskRunCard(props: AskRunCardProps) {
           // A governed answer comes from approved semantic definitions, not AI-written SQL.
           : run.trustState === 'governed' || run.trustState === 'grounded'
             ? 'Governed answer'
-            : 'AI-generated answer';
+            : 'Answer';
   // The card supplies its own headline, so the body wants the most SPECIFIC text
   // available: the producer's own message beats the canned per-code headline,
   // which is the same sentence for everything unclassified.
@@ -5650,7 +5650,7 @@ export function trustExplainer(run: AgentRun): string | null {
   // read as Ask AI: a modeling/skill draft is saved to its YAML after review.
   if (run.route === 'modeling_draft') return 'AI-drafted modeling proposal. Review the exact source diff, then save it as a draft — nothing is written or joinable yet.';
   if (run.route === 'skill_draft') return 'AI-drafted Skill proposal. Review it, then save it as a draft — it will not guide any agent until you activate it.';
-  if (run.trustState === 'review_required') return 'AI-generated answer. Save it as a block when you want to keep it.';
+  if (run.trustState === 'review_required') return 'Needs review. Save it as a block when you want to keep it.';
   if (run.trustState === 'blocked') return null;
   return null;
 }
@@ -5669,7 +5669,7 @@ function simpleRunTitle(run: AgentRun): string {
   if (run.route === 'dql_block_draft') return 'Draft block';
   if (isExploratoryDbtRun(run)) return 'Exploratory DBT-grounded answer';
   if (run.route === 'semantic_answer') return 'Semantic answer';
-  if (run.route === 'generated_answer') return 'AI-generated answer';
+  if (run.route === 'generated_answer') return 'Answer';
   return ROUTE_LABEL[run.route];
 }
 
