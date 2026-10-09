@@ -13820,11 +13820,12 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
     const path = url.pathname || '/';
     void (async () => {
 
-    // Exact-origin CORS. Loopback dev origins are accepted; remote serving
-    // requires an explicit allowlist and bearer token.
+    // Exact-origin CORS. An origin on the explicit allowlist is always accepted
+    // (a hosted runtime binds loopback behind its own proxy); loopback dev
+    // origins are accepted only when the server is bound to loopback.
     const requestOrigin = typeof req.headers.origin === 'string' ? req.headers.origin.replace(/\/$/, '') : undefined;
     const loopbackOrigin = requestOrigin ? isLoopbackOrigin(requestOrigin) : false;
-    const originAllowed = !requestOrigin || (loopback ? loopbackOrigin : allowedOrigins.has(requestOrigin));
+    const originAllowed = !requestOrigin || allowedOrigins.has(requestOrigin) || (loopback && loopbackOrigin);
     if (requestOrigin && originAllowed) res.setHeader('Access-Control-Allow-Origin', requestOrigin);
     res.setHeader('Vary', 'Origin');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
