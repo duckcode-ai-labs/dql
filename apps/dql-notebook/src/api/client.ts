@@ -3827,7 +3827,7 @@ export interface AgentMemory {
   enabled: boolean;
 }
 
-const BASE = window.location.origin;
+const BASE = typeof window === 'undefined' ? '' : window.location.origin;
 
 export type LocalOperationStatus = 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled' | 'interrupted';
 
