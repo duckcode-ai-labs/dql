@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Blocks, BookOpen, Boxes, CheckCircle2, Columns3, Download, EyeOff, FileSearch, FolderTree, GitBranch, GraduationCap, Link2, Maximize2, MessageCircle, Network, PanelRightClose, PanelRightOpen, Plus, RefreshCw, RotateCcw, Search, Settings2, ShieldCheck, SlidersHorizontal, Sparkles, XCircle } from 'lucide-react';
 import { DEFAULT_MODEL_AREA_ID } from '@duckcodeailabs/dql-core/modeling-ids';
 import type { DbtNodeAuthoringDetail, DbtSourceAuthoringInput, DbtSourcePatchPreview, ManifestModelArea, ManifestModelEntity, ManifestModelRelationship, ModelingAuthoringChange, ModelingChangePreview } from '@duckcodeailabs/dql-core';
+import { hostReadOnly, readOnlyReason, useHostUi } from '../../host/host-ui';
 import { api, type AgentRunArtifact, type ContextAuthoringProposalV1, type DbtFirstModelingResponse } from '../../api/client';
 import { useNotebook } from '../../store/NotebookStore';
 import type { NotebookFile } from '../../store/types';
@@ -45,7 +46,11 @@ export function DbtFirstModelingPage({ initialSection }: { initialSection?: Doma
   const [data, setData] = useState<DbtFirstModelingResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [unavailable, setUnavailable] = useState<DomainStudioUnavailableState | null>(null);
-  const [domainSettings, setDomainSettings] = useState<DomainSettingsMode | null>(null);
+  const hostUi = useHostUi();
+  // Without dataset.author the person may read the model but not change it: every opener below is a no-op and its button is hidden.
+  const readOnly = hostReadOnly(hostUi, 'domains');
+  const [domainSettings, setDomainSettingsState] = useState<DomainSettingsMode | null>(null);
+  const setDomainSettings = (next: DomainSettingsMode | null) => { if (!readOnly || !next) setDomainSettingsState(next); };
   const [impactOpen, setImpactOpen] = useState(false);
   const initialLocation = useMemo(() => {
     const location = readDomainStudioLocation();
@@ -77,9 +82,11 @@ export function DbtFirstModelingPage({ initialSection }: { initialSection?: Doma
   const [narrowLayout, setNarrowLayout] = useState(() => typeof window !== 'undefined' && window.innerWidth < 980);
   const inspectorToggleRef = useRef<HTMLButtonElement>(null);
   const inspectorRef = useRef<HTMLElement>(null);
-  const [editor, setEditor] = useState<Editor | null>(null);
+  const [editor, setEditorState] = useState<Editor | null>(null);
+  const setEditor = (next: Editor | null) => { if (!readOnly || !next) setEditorState(next); };
   const [pendingRelationshipFrom, setPendingRelationshipFrom] = useState<RelationshipDraft | null>(null);
-  const [startDrawer, setStartDrawer] = useState<'models' | 'yaml' | null>(null);
+  const [startDrawer, setStartDrawerState] = useState<'models' | 'yaml' | null>(null);
+  const setStartDrawer = (next: 'models' | 'yaml' | null) => { if (!readOnly || !next) setStartDrawerState(next); };
   const [proposal, setProposal] = useState<ContextAuthoringProposalV1 | null>(null);
   const [aiDockOpen, setAiDockOpen] = useState(() => readDiagramPreferences().aiDockOpen === true);
   /**
@@ -195,7 +202,8 @@ export function DbtFirstModelingPage({ initialSection }: { initialSection?: Doma
   const [draftingFromWarehouse, setDraftingFromWarehouse] = useState(false);
   // Opt-in: learn joins from recent query history as well (RFC 0007).
   const [draftWithQueryHistory, setDraftWithQueryHistory] = useState(false);
-  const [metricDrawerOpen, setMetricDrawerOpen] = useState(false);
+  const [metricDrawerOpen, setMetricDrawerOpenState] = useState(false);
+  const setMetricDrawerOpen = (open: boolean) => { if (!readOnly || !open) setMetricDrawerOpenState(open); };
   /**
    * RFC 0007: draft domains, models and joins from the warehouse catalog,
    * checked on the warehouse, and open them in the ordinary review drawer.
@@ -383,10 +391,12 @@ export function DbtFirstModelingPage({ initialSection }: { initialSection?: Doma
           options={[{ value: '', label: 'All domains' }, ...packageOptions.map((pkg) => ({ value: pkg.id, label: authoredLabels.get(pkg.id) ?? pkg.label }))]}
           t={t}
         />
-        <IconButton t={t} title="New domain" onClick={() => setDomainSettings({ kind: 'create' })}>
-          <Plus size={14} />
-        </IconButton>
-        {domainRecord ? (
+        {!readOnly && (
+          <IconButton t={t} title="New domain" onClick={() => setDomainSettings({ kind: 'create' })}>
+            <Plus size={14} />
+          </IconButton>
+        )}
+        {!readOnly && domainRecord ? (
           <IconButton t={t} title="Domain settings" onClick={() => setDomainSettings({ kind: 'edit', domain: domainRecord })}>
             <Settings2 size={14} />
           </IconButton>
@@ -400,9 +410,11 @@ export function DbtFirstModelingPage({ initialSection }: { initialSection?: Doma
               options={[{ value: '', label: 'Whole domain' }, ...domainAreas.map((area) => ({ value: area.qualifiedId, label: area.name }))]}
               t={t}
             />
-            <IconButton t={t} title="New subject area" onClick={() => setEditor({ kind: 'area' })}>
-              <Plus size={14} />
-            </IconButton>
+            {!readOnly && (
+              <IconButton t={t} title="New subject area" onClick={() => setEditor({ kind: 'area' })}>
+                <Plus size={14} />
+              </IconButton>
+            )}
           </>
         ) : null}
         <div style={{ display: 'flex', gap: 7, marginLeft: 'auto' }}>
@@ -425,17 +437,18 @@ export function DbtFirstModelingPage({ initialSection }: { initialSection?: Doma
               Use query history
             </label>
           )}
-          {warehouseModeling && (
+          {readOnly && <span style={{ fontSize: 11, color: t.textMuted, alignSelf: 'center' }}>{readOnlyReason(hostUi, 'domains')}</span>}
+          {!readOnly && warehouseModeling && (
             <Button t={t} onClick={() => void draftFromWarehouse()} disabled={draftingFromWarehouse}>
               <Boxes size={14} /> {draftingFromWarehouse ? 'Drafting…' : 'Draft from warehouse'}
             </Button>
           )}
-          {warehouseModeling && (
+          {!readOnly && warehouseModeling && (
             <Button t={t} onClick={() => setMetricDrawerOpen(true)}>
               <Plus size={14} /> New metric
             </Button>
           )}
-          <Button t={t} onClick={() => setStartDrawer('yaml')}><FileSearch size={14} /> Import YAML</Button>
+          {!readOnly && <Button t={t} onClick={() => setStartDrawer('yaml')}><FileSearch size={14} /> Import YAML</Button>}
           <IconButton t={t} title="Recompile" onClick={() => void refresh()}>
             <RefreshCw size={15} />
           </IconButton>
@@ -471,7 +484,7 @@ export function DbtFirstModelingPage({ initialSection }: { initialSection?: Doma
       {notice ? (
         <div role="status" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 14px', borderBottom: `1px solid ${t.headerBorder}`, background: 'var(--accent-dim)', fontSize: 11.5, color: t.textPrimary }}>
           <span style={{ flex: 1 }}>{notice}</span>
-          <Button t={t} onClick={() => { setNotice(null); setStartDrawer('models'); }}>Add models</Button>
+          {!readOnly && <Button t={t} onClick={() => { setNotice(null); setStartDrawer('models'); }}>Add models</Button>}
           <IconButton t={t} title="Dismiss" onClick={() => setNotice(null)}><XCircle size={14} /></IconButton>
         </div>
       ) : null}
@@ -502,12 +515,12 @@ export function DbtFirstModelingPage({ initialSection }: { initialSection?: Doma
                   ...(diagramFullscreen ? { position: 'fixed', inset: 0, zIndex: 90, background: t.appBg } : {}),
                 }}
               >
-                <LayerToolbar modelingView={modelingView} columnMode={columnMode} search={diagramSearch} layoutMode={layoutMode} density={diagramDensity} visibleLimit={visibleLimit} dimUnrelated={dimUnrelated} showEdgeLabels={showEdgeLabels} showLegend={showLegend} fullscreen={diagramFullscreen} aiOpen={aiDockOpen} onBindModel={() => setStartDrawer('models')} onRelationship={() => setEditor({ kind: 'relationship' })} onToggleAi={() => setAiDockOpen((value) => !value)} onModelingView={setModelingView} onColumnMode={setColumnMode} onSearch={setDiagramSearch} searchItems={diagramSearchItems} onPickModel={handlePickModel} onLayoutMode={setLayoutMode} onDensity={setDiagramDensity} onVisibleLimit={setVisibleLimit} onDimUnrelated={setDimUnrelated} onEdgeLabels={setShowEdgeLabels} onLegend={setShowLegend} onFullscreen={() => setDiagramFullscreen((value) => !value)} onExport={() => exportDiagramSvg()} onReset={() => setResetLayoutToken((value) => value + 1)} t={t} />
+                <LayerToolbar readOnly={readOnly} modelingView={modelingView} columnMode={columnMode} search={diagramSearch} layoutMode={layoutMode} density={diagramDensity} visibleLimit={visibleLimit} dimUnrelated={dimUnrelated} showEdgeLabels={showEdgeLabels} showLegend={showLegend} fullscreen={diagramFullscreen} aiOpen={aiDockOpen} onBindModel={() => setStartDrawer('models')} onRelationship={() => setEditor({ kind: 'relationship' })} onToggleAi={() => setAiDockOpen((value) => !value)} onModelingView={setModelingView} onColumnMode={setColumnMode} onSearch={setDiagramSearch} searchItems={diagramSearchItems} onPickModel={handlePickModel} onLayoutMode={setLayoutMode} onDensity={setDiagramDensity} onVisibleLimit={setVisibleLimit} onDimUnrelated={setDimUnrelated} onEdgeLabels={setShowEdgeLabels} onLegend={setShowLegend} onFullscreen={() => setDiagramFullscreen((value) => !value)} onExport={() => exportDiagramSvg()} onReset={() => setResetLayoutToken((value) => value + 1)} t={t} />
                 {selectedArea ? <div style={{ padding: '7px 14px', borderBottom: `1px solid ${t.headerBorder}`, background: 'var(--accent-dim)', color: t.textSecondary, display: 'flex', alignItems: 'center', gap: 8, fontSize: 10.5 }}><Boxes size={13} color={t.accent} /><strong style={{ color: t.textPrimary }}>{selectedArea.name}</strong><span>{selectedArea.description ?? 'Focused business modeling area'}</span><span style={{ marginLeft: 'auto', color: t.textMuted }}>{selectedArea.entityIds.length} model{selectedArea.entityIds.length === 1 ? '' : 's'} · {selectedArea.intentExamples.length} example question{selectedArea.intentExamples.length === 1 ? '' : 's'}</span></div> : null}
                 {showLegend && <DiagramLegend t={t} />}
                 <div style={{ flex: 1, minHeight: 0, display: 'flex' }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  {domainEntities.length === 0 ? <ModelingEmptyWorkspace t={t} connectedModels={Object.keys(data.dbtProvenance.nodes).length} warehouse={warehouseModeling ? { tables: warehouseRelationCount, drafting: draftingFromWarehouse, onDraft: () => void draftFromWarehouse() } : undefined} onDbt={() => setStartDrawer('models')} onYaml={() => setStartDrawer('yaml')} onManual={() => setEditor({ kind: 'entity' })} /> : <DomainModelingCanvas modeling={ghostView.modeling} ghostEntityIds={ghostView.ghostEntityIds} ghostRelationshipIds={ghostView.ghostRelationshipIds} relationByDbtId={relationByDbtId} detailsByDbtId={detailsByDbtId} selectedDomain={selectedDomain} selectedAreaId={selectedAreaId} selectedId={selectedId} viewMode={modelingView} columnMode={columnMode} search={diagramSearch} layoutMode={layoutMode} density={diagramDensity} visibleLimit={visibleLimit} dimUnrelated={dimUnrelated} showEdgeLabels={showEdgeLabels} resetLayoutToken={resetLayoutToken} focusRequest={focusRequest ?? undefined} onVisibleDbtIdsChange={loadVisibleNodeDetails} onSelectEntity={setSelectedId} onSelectRelationship={setSelectedId} onEditRelationship={(recordKey) => { const relationship = data.modeling.relationships[recordKey]; if (relationship) setEditor({ kind: 'relationship', relationship }); }} onDraftRelationship={(draft) => setEditor({ kind: 'relationship', draft })} onAddRelatedModel={(origin) => setEditor({ kind: 'entity', relationshipFrom: origin })} onAddModel={() => setStartDrawer('models')} onCreateDomain={() => setDomainSettings({ kind: 'create' })} onEditEntity={(id) => { const entity = data.modeling.entities[id]; if (entity) setEditor({ kind: 'entity', entity, dbtUniqueId: entity.dbtUniqueId }); }} onOpenAi={(id) => {
+                  {domainEntities.length === 0 ? (readOnly ? <Blank t={t} title="No models on this map yet" detail={readOnlyReason(hostUi, 'domains')} /> : <ModelingEmptyWorkspace t={t} connectedModels={Object.keys(data.dbtProvenance.nodes).length} warehouse={warehouseModeling ? { tables: warehouseRelationCount, drafting: draftingFromWarehouse, onDraft: () => void draftFromWarehouse() } : undefined} onDbt={() => setStartDrawer('models')} onYaml={() => setStartDrawer('yaml')} onManual={() => setEditor({ kind: 'entity' })} />) : <DomainModelingCanvas modeling={ghostView.modeling} ghostEntityIds={ghostView.ghostEntityIds} ghostRelationshipIds={ghostView.ghostRelationshipIds} relationByDbtId={relationByDbtId} detailsByDbtId={detailsByDbtId} selectedDomain={selectedDomain} selectedAreaId={selectedAreaId} selectedId={selectedId} viewMode={modelingView} columnMode={columnMode} search={diagramSearch} layoutMode={layoutMode} density={diagramDensity} visibleLimit={visibleLimit} dimUnrelated={dimUnrelated} showEdgeLabels={showEdgeLabels} resetLayoutToken={resetLayoutToken} focusRequest={focusRequest ?? undefined} onVisibleDbtIdsChange={loadVisibleNodeDetails} onSelectEntity={setSelectedId} onSelectRelationship={setSelectedId} onEditRelationship={(recordKey) => { const relationship = data.modeling.relationships[recordKey]; if (relationship) setEditor({ kind: 'relationship', relationship }); }} onDraftRelationship={(draft) => setEditor({ kind: 'relationship', draft })} onAddRelatedModel={(origin) => setEditor({ kind: 'entity', relationshipFrom: origin })} onAddModel={() => setStartDrawer('models')} onCreateDomain={() => setDomainSettings({ kind: 'create' })} onEditEntity={(id) => { const entity = data.modeling.entities[id]; if (entity) setEditor({ kind: 'entity', entity, dbtUniqueId: entity.dbtUniqueId }); }} onOpenAi={(id) => {
                     setSelectedId(id);
                     openAsk(id);
                   }} theme={t} />}
@@ -582,6 +595,7 @@ export function DbtFirstModelingPage({ initialSection }: { initialSection?: Doma
               detail={nodeDetail}
               relationships={domainRelationships}
               t={t}
+              readOnly={readOnly}
               onEdit={() =>
                 setEditor({
                   kind: 'entity',
@@ -607,6 +621,7 @@ export function DbtFirstModelingPage({ initialSection }: { initialSection?: Doma
               entities={data.modeling.entities}
               relationship={selectedRelationship}
               t={t}
+              readOnly={readOnly}
               onEdit={() =>
                 setEditor({
                   kind: 'relationship',
@@ -1230,7 +1245,7 @@ function DiagramSearch({ search, onSearch, items, onPick, t }: { search: string;
   );
 }
 
-function LayerToolbar({ modelingView, columnMode, search, layoutMode, density, visibleLimit, dimUnrelated, showEdgeLabels, showLegend, fullscreen, aiOpen, onBindModel, onRelationship, onToggleAi, onModelingView, onColumnMode, onSearch, searchItems, onPickModel, onLayoutMode, onDensity, onVisibleLimit, onDimUnrelated, onEdgeLabels, onLegend, onFullscreen, onExport, onReset, t }: { modelingView: ModelingViewMode; columnMode: ColumnDisplayMode; search: string; layoutMode: DiagramLayoutMode; density: DiagramDensity; visibleLimit: number; dimUnrelated: boolean; showEdgeLabels: boolean; showLegend: boolean; fullscreen: boolean; aiOpen: boolean; onBindModel: () => void; onRelationship: () => void; onToggleAi: () => void; onModelingView: (mode: ModelingViewMode) => void; onColumnMode: (mode: ColumnDisplayMode) => void; onSearch: (value: string) => void; searchItems: DiagramSearchItem[]; onPickModel: (recordKey: string) => void; onLayoutMode: (mode: DiagramLayoutMode) => void; onDensity: (density: DiagramDensity) => void; onVisibleLimit: (limit: number) => void; onDimUnrelated: (value: boolean) => void; onEdgeLabels: (value: boolean) => void; onLegend: (value: boolean) => void; onFullscreen: () => void; onExport: () => void; onReset: () => void; t: Theme }) {
+function LayerToolbar({ modelingView, columnMode, search, layoutMode, density, visibleLimit, dimUnrelated, showEdgeLabels, showLegend, fullscreen, aiOpen, readOnly = false, onBindModel, onRelationship, onToggleAi, onModelingView, onColumnMode, onSearch, searchItems, onPickModel, onLayoutMode, onDensity, onVisibleLimit, onDimUnrelated, onEdgeLabels, onLegend, onFullscreen, onExport, onReset, t }: { modelingView: ModelingViewMode; columnMode: ColumnDisplayMode; search: string; layoutMode: DiagramLayoutMode; density: DiagramDensity; visibleLimit: number; dimUnrelated: boolean; showEdgeLabels: boolean; showLegend: boolean; fullscreen: boolean; aiOpen: boolean; readOnly?: boolean; onBindModel: () => void; onRelationship: () => void; onToggleAi: () => void; onModelingView: (mode: ModelingViewMode) => void; onColumnMode: (mode: ColumnDisplayMode) => void; onSearch: (value: string) => void; searchItems: DiagramSearchItem[]; onPickModel: (recordKey: string) => void; onLayoutMode: (mode: DiagramLayoutMode) => void; onDensity: (density: DiagramDensity) => void; onVisibleLimit: (limit: number) => void; onDimUnrelated: (value: boolean) => void; onEdgeLabels: (value: boolean) => void; onLegend: (value: boolean) => void; onFullscreen: () => void; onExport: () => void; onReset: () => void; t: Theme }) {
   return (
     <div
       style={{
@@ -1252,8 +1267,8 @@ function LayerToolbar({ modelingView, columnMode, search, layoutMode, density, v
         <button type="button" onClick={() => onModelingView('data')} style={{ border: 'none', borderRadius: 5, padding: '4px 11px', fontSize: 11.5, fontWeight: 600, cursor: 'pointer', fontFamily: t.font, whiteSpace: 'nowrap', background: modelingView === 'data' ? 'var(--accent-dim)' : 'transparent', color: modelingView === 'data' ? t.accent : t.textMuted }}>Data modeling</button>
       </div>
       <DiagramSearch search={search} onSearch={onSearch} items={searchItems} onPick={onPickModel} t={t} />
-      <button type="button" onClick={onBindModel} style={toolbarAction(t, true)}><Plus size={13} /> Add models</button>
-      <button type="button" onClick={onRelationship} style={toolbarAction(t)}><Link2 size={13} /> Connect</button>
+      {!readOnly && <button type="button" onClick={onBindModel} style={toolbarAction(t, true)}><Plus size={13} /> Add models</button>}
+      {!readOnly && <button type="button" onClick={onRelationship} style={toolbarAction(t)}><Link2 size={13} /> Connect</button>}
       {/* AI is an action on this canvas, not a separate destination. */}
       <button type="button" aria-pressed={aiOpen} onClick={onToggleAi} style={{ ...toolbarAction(t), ...(aiOpen ? { borderColor: t.accent, color: t.accent, background: 'var(--accent-dim)' } : {}) }}><Sparkles size={13} /> Build with AI</button>
       <details style={{ position: 'relative', flexShrink: 0 }}>
@@ -1582,7 +1597,7 @@ function AiCapability({ icon, title, detail, t, action }: { icon: React.ReactNod
 // Prototype entity inspector: kind square + mono name + uppercase kind,
 // description, dbt-binding mono box, columns with PK/FK glyphs, relationship
 // click-through list, and an Edit entity action.
-function EntityInspector({ entity, detail, relationships = [], t, onEdit, onEditDbtSource, onSelectRelationship, onDelete }: { entity: ManifestModelEntity; detail: DbtNodeAuthoringDetail | null; relationships?: ManifestModelRelationship[]; t: Theme; onEdit: () => void; onEditDbtSource: () => void; onSelectRelationship?: (relationship: ManifestModelRelationship) => void; onDelete?: () => void }) {
+function EntityInspector({ entity, detail, relationships = [], t, readOnly = false, onEdit, onEditDbtSource, onSelectRelationship, onDelete }: { entity: ManifestModelEntity; detail: DbtNodeAuthoringDetail | null; relationships?: ManifestModelRelationship[]; t: Theme; readOnly?: boolean; onEdit: () => void; onEditDbtSource: () => void; onSelectRelationship?: (relationship: ManifestModelRelationship) => void; onDelete?: () => void }) {
   const kindColor = entityKindColor(entity.analyticalRole);
   const keys = new Set(entity.keys.length ? entity.keys : (detail?.dqlMeta?.keys ?? []));
   const heading: React.CSSProperties = { fontSize: 10, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', color: t.textMuted, margin: '0 0 5px' };
@@ -1643,9 +1658,9 @@ function EntityInspector({ entity, detail, relationships = [], t, onEdit, onEdit
         <Property label="dbt description" value={detail?.description ?? 'Not declared'} t={t} />
       </details>
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-        <Button primary t={t} onClick={onEdit}>Edit entity</Button>
-        <Button t={t} onClick={onEditDbtSource}>Preview dbt source patch</Button>
-        {onDelete ? <Button t={t} danger onClick={onDelete}>Delete entity</Button> : null}
+        {!readOnly && <Button primary t={t} onClick={onEdit}>Edit entity</Button>}
+        {!readOnly && <Button t={t} onClick={onEditDbtSource}>Preview dbt source patch</Button>}
+        {!readOnly && onDelete ? <Button t={t} danger onClick={onDelete}>Delete entity</Button> : null}
       </div>
     </Inspector>
   );
@@ -1733,7 +1748,7 @@ function SourcePreview({ title, source, t }: { title: string; source: string; t:
   return <section><strong style={{ fontSize: 10 }}>{title}</strong><pre tabIndex={0} style={{ maxHeight: 360, overflow: 'auto', whiteSpace: 'pre-wrap', background: t.appBg, border: `1px solid ${t.headerBorder}`, borderRadius: 6, padding: 10, fontSize: 9.5, color: t.textSecondary }}>{source}</pre></section>;
 }
 
-function RelationshipInspector({ relationship, entities, t, onEdit, onDelete }: { relationship: ManifestModelRelationship; entities: DbtFirstModelingResponse['modeling']['entities']; t: Theme; onEdit: () => void; onDelete?: () => void }) {
+function RelationshipInspector({ relationship, entities, t, readOnly = false, onEdit, onDelete }: { relationship: ManifestModelRelationship; entities: DbtFirstModelingResponse['modeling']['entities']; t: Theme; readOnly?: boolean; onEdit: () => void; onDelete?: () => void }) {
   const status = relationshipStatusView(relationship);
   const nameOf = (ref: string) => entities[ref]?.businessName || entities[ref]?.localId || ref.split('::').pop() || ref;
   const fromName = nameOf(relationship.from);
@@ -1761,8 +1776,8 @@ function RelationshipInspector({ relationship, entities, t, onEdit, onDelete }: 
         <Property label="allowed joins" value={relationship.joinTypes?.join(', ') || 'left'} t={t} />
       </details>
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 12 }}>
-        <Button primary t={t} onClick={onEdit}>Edit relationship</Button>
-        {onDelete ? <Button t={t} danger onClick={onDelete}>Delete relationship</Button> : null}
+        {!readOnly && <Button primary t={t} onClick={onEdit}>Edit relationship</Button>}
+        {!readOnly && onDelete ? <Button t={t} danger onClick={onDelete}>Delete relationship</Button> : null}
       </div>
     </Inspector>
   );

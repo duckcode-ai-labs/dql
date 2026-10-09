@@ -10,6 +10,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { BookOpen, Loader2, Pencil, Plus, Trash2, X } from 'lucide-react';
+import { hostReadOnly, useHostUi } from '../../host/host-ui';
 import { api, type BusinessTerm, type BusinessTermInput, type ContextAuthoringProposalV1, type DbtFirstModelingResponse } from '../../api/client';
 import type { themes } from '../../themes/notebook-theme';
 
@@ -73,6 +74,7 @@ export function TermsAndConceptsPanel({ data, domain, t, onProposal }: {
     [data.modeling.concepts, domain],
   );
   const domainLabel = domain ?? 'all domains';
+  const readOnly = hostReadOnly(useHostUi(), 'domains');
 
   return (
     <div style={{ height: '100%', overflow: 'auto', padding: 20 }}>
@@ -89,17 +91,17 @@ export function TermsAndConceptsPanel({ data, domain, t, onProposal }: {
       <Section
         title={`Terms in ${domainLabel}`}
         count={domainTerms.length}
-        action={<button type="button" onClick={() => setTermForm({})} style={primaryButton(t)}><Plus size={13} /> New term</button>}
+        action={readOnly ? undefined : <button type="button" onClick={() => setTermForm({})} style={primaryButton(t)}><Plus size={13} /> New term</button>}
         t={t}
       >
         {loading ? <Empty text="Loading terms…" t={t} /> : loadError ? <Empty text={loadError} t={t} tone="error" /> : domainTerms.length ? (
-          <div style={grid}>{domainTerms.map((term) => <TermCard key={term.filePath} term={term} t={t} onEdit={() => setTermForm({ term })} />)}</div>
+          <div style={grid}>{domainTerms.map((term) => <TermCard key={term.filePath} term={term} t={t} onEdit={readOnly ? undefined : () => setTermForm({ term })} />)}</div>
         ) : <Empty text={domain ? `No terms in ${domain} yet. Add the words people use when they ask about this domain.` : 'No terms yet.'} t={t} />}
       </Section>
 
       {projectWideTerms.length ? (
         <Section title="Project-wide terms" count={projectWideTerms.length} detail="These have no domain, so they apply to every question." t={t}>
-          <div style={grid}>{projectWideTerms.map((term) => <TermCard key={term.filePath} term={term} t={t} onEdit={() => setTermForm({ term })} />)}</div>
+          <div style={grid}>{projectWideTerms.map((term) => <TermCard key={term.filePath} term={term} t={t} onEdit={readOnly ? undefined : () => setTermForm({ term })} />)}</div>
         </Section>
       ) : null}
 
@@ -107,11 +109,11 @@ export function TermsAndConceptsPanel({ data, domain, t, onProposal }: {
         title={`Concepts in ${domainLabel}`}
         count={concepts.length}
         detail="Changes to a concept open a review before they are saved."
-        action={<button type="button" onClick={() => setConceptForm({})} disabled={!Object.keys(data.modeling.entities).length} title={Object.keys(data.modeling.entities).length ? undefined : 'Add models to the map first'} style={secondaryButton(t)}><Plus size={13} /> New concept</button>}
+        action={readOnly ? undefined : <button type="button" onClick={() => setConceptForm({})} disabled={!Object.keys(data.modeling.entities).length} title={Object.keys(data.modeling.entities).length ? undefined : 'Add models to the map first'} style={secondaryButton(t)}><Plus size={13} /> New concept</button>}
         t={t}
       >
         {concepts.length ? (
-          <div style={grid}>{concepts.map((concept) => <ConceptCard key={concept.qualifiedId} concept={concept} data={data} t={t} onEdit={() => setConceptForm({ concept })} />)}</div>
+          <div style={grid}>{concepts.map((concept) => <ConceptCard key={concept.qualifiedId} concept={concept} data={data} t={t} onEdit={readOnly ? undefined : () => setConceptForm({ concept })} />)}</div>
         ) : <Empty text="No concepts yet. Add one when the same business thing lives in several models." t={t} />}
       </Section>
 
@@ -140,7 +142,7 @@ export function TermsAndConceptsPanel({ data, domain, t, onProposal }: {
   );
 }
 
-function TermCard({ term, t, onEdit }: { term: BusinessTerm; t: Theme; onEdit: () => void }) {
+function TermCard({ term, t, onEdit }: { term: BusinessTerm; t: Theme; onEdit?: () => void }) {
   const gaps = termReadiness(term);
   const kind = TERM_KINDS.find((item) => item.value === (term.termType ?? ''))?.label ?? term.termType;
   return (
@@ -150,7 +152,7 @@ function TermCard({ term, t, onEdit }: { term: BusinessTerm; t: Theme; onEdit: (
         <b style={{ fontSize: 12.5 }}>{term.name}</b>
         {kind ? <Pill t={t}>{kind}</Pill> : null}
         <Pill t={t} tone={term.status === 'certified' ? 'good' : 'muted'}>{term.status ?? 'draft'}</Pill>
-        <button type="button" onClick={onEdit} aria-label={`Edit term ${term.name}`} title="Edit" style={{ ...iconButton(t), marginLeft: 'auto' }}><Pencil size={13} /></button>
+        {onEdit ? <button type="button" onClick={onEdit} aria-label={`Edit term ${term.name}`} title="Edit" style={{ ...iconButton(t), marginLeft: 'auto' }}><Pencil size={13} /></button> : null}
       </div>
       {term.description ? <p style={{ margin: '7px 0 0', color: t.textSecondary, fontSize: 11, lineHeight: 1.5 }}>{term.description}</p> : null}
       {(term.synonyms ?? []).length ? <Line label="Words people use" t={t}>{(term.synonyms ?? []).join(', ')}</Line> : null}
@@ -162,13 +164,13 @@ function TermCard({ term, t, onEdit }: { term: BusinessTerm; t: Theme; onEdit: (
   );
 }
 
-function ConceptCard({ concept, data, t, onEdit }: { concept: ManifestBusinessConcept; data: DbtFirstModelingResponse; t: Theme; onEdit: () => void }) {
+function ConceptCard({ concept, data, t, onEdit }: { concept: ManifestBusinessConcept; data: DbtFirstModelingResponse; t: Theme; onEdit?: () => void }) {
   return (
     <article style={card(t)}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
         <b style={{ fontSize: 12.5 }}>{concept.name}</b>
         <Pill t={t} tone={concept.status === 'certified' ? 'good' : 'muted'}>{concept.status === 'review' ? 'reviewed' : concept.status}</Pill>
-        <button type="button" onClick={onEdit} aria-label={`Edit concept ${concept.name}`} title="Edit" style={{ ...iconButton(t), marginLeft: 'auto' }}><Pencil size={13} /></button>
+        {onEdit ? <button type="button" onClick={onEdit} aria-label={`Edit concept ${concept.name}`} title="Edit" style={{ ...iconButton(t), marginLeft: 'auto' }}><Pencil size={13} /></button> : null}
       </div>
       {concept.description ? <p style={{ margin: '7px 0 0', color: t.textSecondary, fontSize: 11, lineHeight: 1.5 }}>{concept.description}</p> : null}
       <Line label="Stored in" t={t}>

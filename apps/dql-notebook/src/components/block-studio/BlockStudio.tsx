@@ -3,6 +3,7 @@ import { useShallow } from 'zustand/react/shallow';
 import { useQuery } from '@tanstack/react-query';
 import { renderSemanticBlockSource } from '@duckcodeailabs/dql-core/blocks';
 import { AlertTriangle, Blocks, Bot, CheckCircle2, CheckSquare, ChevronLeft, ChevronRight, Code2, Database, FileInput, Loader2, MoreHorizontal, PanelRightOpen, Pencil, Play, Plus, Search, ShieldCheck, Sparkles, Square, Trash2, X, type LucideIcon } from 'lucide-react';
+import { hostReadOnly, readOnlyReason, useHostUi } from '../../host/host-ui';
 import { api, DqlApiError, type BlockCertificationOperationResult } from '../../api/client';
 import { useDispatch, useNotebookStore } from '../../store/NotebookStore';
 import { useOperations } from '../../operations/OperationsProvider';
@@ -130,6 +131,9 @@ const TREE_ROW_HEIGHT = 31;
 const TREE_OVERSCAN = 10;
 
 export function BlockStudio() {
+  const hostUi = useHostUi();
+  const readOnlyBlocks = hostReadOnly(hostUi, 'block_library');
+  const readOnlyBlocksReason = readOnlyBlocks ? readOnlyReason(hostUi, 'block_library') : '';
   const state = useNotebookStore(useShallow((store) => ({
     activeBlockPath: store.activeBlockPath,
     authoredDomains: store.authoredDomains,
@@ -1538,9 +1542,9 @@ export function BlockStudio() {
               handleDraftChange(appendSnippetToDraft(state.blockStudioDraft, text));
             }}
             onSemanticCompose={applySemanticComposition}
-            onNewBlock={beginNewWorkspace}
+            onNewBlock={readOnlyBlocks ? undefined : beginNewWorkspace}
             onOpenBlock={requestOpenBlock}
-            onDeleteBlock={(block) => requestDeleteBlock(block.path, block.name)}
+            onDeleteBlock={readOnlyBlocks ? undefined : (block) => requestDeleteBlock(block.path, block.name)}
             blockLibraryRefreshKey={blockLibraryRefreshKey}
             onCollapse={() => setLeftPaneCollapsed(true)}
             footer={state.semanticLayer.loading
@@ -1621,53 +1625,26 @@ export function BlockStudio() {
           )}
           <div style={{ flex: 1 }} />
           {/* The block overview has its own Run and Delete; the toolbar shows them only while editing. */}
-          {state.activeBlockPath && editorMode !== 'detail' && (
-            <TemplateButton
-              label="Delete"
-              Icon={Trash2}
-              variant="danger"
-              title="Delete this saved block"
-              onClick={() => requestDeleteBlock(state.activeBlockPath!, state.blockStudioMetadata?.name || activeBlockName || state.activeBlockPath!)}
-            />
-          )}
-          <TemplateButton label="New block" Icon={Plus} onClick={beginNewWorkspace} />
-          {hasActiveDraft && (
-            <>
-              {/* A saved block gets one AI action, Modify with AI; Ask AI is for a block not saved yet. */}
-              {!state.activeBlockPath && (
-                <TemplateButton
-                  label="Ask AI"
-                  Icon={Sparkles}
-                  onClick={() => openAskAi({ kind: 'ask' })}
-                />
-              )}
-              {/* Modify the block currently in the editor — the governed cascade in
-                  edit mode (workspaceContext.mode='edit' + blockPath). */}
-              {state.activeBlockPath && (
-                <TemplateButton
-                  label="Modify with AI"
-                  Icon={Sparkles}
-                  onClick={() => openAskAi({ kind: 'edit', initialInput: `Modify this block${activeBlockName ? ` (${activeBlockName})` : ''}: ` })}
-                />
-              )}
-              {editorMode !== 'detail' && <TemplateButton label="Run" Icon={Play} onClick={() => void handleRun()} busy={running} />}
-              <TemplateButton
-                label={saving ? 'Saving' : 'Save draft'}
-                Icon={CheckCircle2}
-                variant="secondary"
-                busy={saving}
-                onClick={() => void handleSave()}
-                title="Save changes as a review-required draft"
-              />
-              <TemplateButton
-                label={state.blockStudioMetadata?.reviewStatus === 'certified' ? 'Re-certify' : 'Certify'}
-                Icon={ShieldCheck}
-                variant="primary"
-                busy={saving || Boolean(certificationOperationId)}
-                onClick={() => void handleCertify()}
-                title="Run validation, query, tests, chart, and lineage gates before certification"
-              />
-            </>
+          <BlockToolbarActions
+            readOnly={readOnlyBlocks}
+            readOnlyReason={readOnlyBlocksReason}
+            hasActiveDraft={hasActiveDraft}
+            activeBlockPath={state.activeBlockPath}
+            detail={editorMode === 'detail'}
+            running={running}
+            saving={saving}
+            certifying={Boolean(certificationOperationId)}
+            certified={state.blockStudioMetadata?.reviewStatus === 'certified'}
+            onDelete={() => requestDeleteBlock(state.activeBlockPath!, state.blockStudioMetadata?.name || activeBlockName || state.activeBlockPath!)}
+            onNew={beginNewWorkspace}
+            onAsk={() => openAskAi({ kind: 'ask' })}
+            onModify={() => openAskAi({ kind: 'edit', initialInput: `Modify this block${activeBlockName ? ` (${activeBlockName})` : ''}: ` })}
+            onRun={() => void handleRun()}
+            onSave={() => void handleSave()}
+            onCertify={() => void handleCertify()}
+          />
+          {readOnlyBlocks && (
+            <span style={{ fontSize: 11, color: t.textMuted, fontFamily: t.font }}>{readOnlyBlocksReason}</span>
           )}
           {saveError && (
             <span style={{ fontSize: 11, color: 'var(--status-error)', fontFamily: t.font, padding: '4px 8px', background: 'var(--status-error-bg)', borderRadius: 6 }}>
@@ -2251,6 +2228,71 @@ function ExplorerTabButton({
       {busy ? <Loader2 size={13} strokeWidth={2} aria-hidden="true" /> : Icon ? <Icon size={13} strokeWidth={2} aria-hidden="true" /> : null}
       {busy ? `${label}...` : label}
     </button>
+  );
+}
+
+/**
+ * The toolbar's action buttons. Under a host without dataset.author the person
+ * may look and run, but not create, delete, save, certify or ask AI to change:
+ * those are left out and the toolbar says why once.
+ */
+export function BlockToolbarActions(props: {
+  readOnly: boolean;
+  readOnlyReason: string;
+  hasActiveDraft: boolean;
+  activeBlockPath: string | null | undefined;
+  detail: boolean;
+  running: boolean;
+  saving: boolean;
+  certifying: boolean;
+  certified: boolean;
+  onDelete: () => void;
+  onNew: () => void;
+  onAsk: () => void;
+  onModify: () => void;
+  onRun: () => void;
+  onSave: () => void;
+  onCertify: () => void;
+}) {
+  const { readOnly, hasActiveDraft, activeBlockPath, detail } = props;
+  return (
+    <>
+      {/* The block overview has its own Run and Delete; the toolbar shows them only while editing. */}
+      {!readOnly && activeBlockPath && !detail && (
+        <TemplateButton label="Delete" Icon={Trash2} variant="danger" title="Delete this saved block" onClick={props.onDelete} />
+      )}
+      {!readOnly && <TemplateButton label="New block" Icon={Plus} onClick={props.onNew} />}
+      {hasActiveDraft && (
+        <>
+          {/* A saved block gets one AI action, Modify with AI; Ask AI is for a block not saved yet. */}
+          {!readOnly && !activeBlockPath && <TemplateButton label="Ask AI" Icon={Sparkles} onClick={props.onAsk} />}
+          {/* Modify the block currently in the editor — the governed cascade in
+              edit mode (workspaceContext.mode='edit' + blockPath). */}
+          {!readOnly && activeBlockPath && <TemplateButton label="Modify with AI" Icon={Sparkles} onClick={props.onModify} />}
+          {!detail && <TemplateButton label="Run" Icon={Play} onClick={props.onRun} busy={props.running} />}
+          {!readOnly && (
+            <>
+              <TemplateButton
+                label={props.saving ? 'Saving' : 'Save draft'}
+                Icon={CheckCircle2}
+                variant="secondary"
+                busy={props.saving}
+                onClick={props.onSave}
+                title="Save changes as a review-required draft"
+              />
+              <TemplateButton
+                label={props.certified ? 'Re-certify' : 'Certify'}
+                Icon={ShieldCheck}
+                variant="primary"
+                busy={props.saving || props.certifying}
+                onClick={props.onCertify}
+                title="Run validation, query, tests, chart, and lineage gates before certification"
+              />
+            </>
+          )}
+        </>
+      )}
+    </>
   );
 }
 

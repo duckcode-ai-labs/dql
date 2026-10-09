@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { api } from '../../api/client';
+import { hostReadOnly, useHostUi } from '../../host/host-ui';
 import { useDispatch, useNotebookStore } from '../../store/NotebookStore';
 import { themes } from '../../themes/notebook-theme';
 import { BuildSidebar } from '../panels/BuildSidebar';
@@ -31,6 +32,7 @@ export function Sidebar({ onOpenFile }: SidebarProps) {
     themeMode: store.themeMode,
   })));
   const dispatch = useDispatch();
+  const hostUi = useHostUi();
   const t = themes[state.themeMode];
   const [collapseHover, setCollapseHover] = useState(false);
   // Match Block Studio's explorer width so all four Build tabs retain their
@@ -147,7 +149,7 @@ export function Sidebar({ onOpenFile }: SidebarProps) {
             onOpenFile={onOpenFile}
             blockDomain={blockDomain}
             onBlockDomainChange={setBlockDomain}
-            onNewBlock={() => dispatch({ type: 'OPEN_NEW_BLOCK_MODAL' })}
+            onNewBlock={hostReadOnly(hostUi, 'block_library') ? undefined : () => dispatch({ type: 'OPEN_NEW_BLOCK_MODAL' })}
             onCollapse={() => dispatch({ type: 'TOGGLE_SIDEBAR' })}
             footer={buildFooter}
             footerStatus={state.semanticLayer.loading ? 'loading' : 'ready'}
