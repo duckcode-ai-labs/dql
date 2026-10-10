@@ -260,7 +260,8 @@ export const NAV_CAPABILITY: Record<string, string[]> = {
   lineage: ['project.read', 'dataset.author'],
   domains: ['project.read', 'dataset.author'],
   ask_observability: ['hint.review'],
-  git: ['git.review'],
+  // Source control shows read-only to anyone who may read; commit and push need git.review.
+  git: ['project.read', 'git.review'],
   settings: ['settings.manage', 'connection.manage'],
 };
 
@@ -270,6 +271,7 @@ export const NAV_WRITE_CAPABILITY: Record<string, string> = {
   block_library: 'dataset.author',
   lineage: 'dataset.author',
   domains: 'dataset.author',
+  git: 'git.review',
 };
 
 export function navItemAllowed(state: HostUiState, key: string): boolean {
@@ -290,6 +292,12 @@ export function readOnlyReason(state: HostUiState, key: string): string {
   return (write && hostRefusal(state, write)?.reason) || 'Read-only: you can look here, but changes are not allowed.';
 }
 
+/** The next step the host offers a person its refusal applies to (for example "Open my draft space"), if it sent one. */
+export function readOnlyNext(state: HostUiState, key: string): { label: string; href: string } | null {
+  const write = NAV_WRITE_CAPABILITY[key];
+  return (write && hostRefusal(state, write)?.next) || null;
+}
+
 /** Which of those screens the main view is showing, if any. */
 export function navKeyForView(mainView: string): string | null {
   switch (mainView) {
@@ -299,6 +307,7 @@ export function navKeyForView(mainView: string): string | null {
     case 'lineage_detail': return 'lineage';
     case 'domains':
     case 'modeling': return 'domains';
+    case 'git': return 'git';
     default: return null;
   }
 }

@@ -528,9 +528,9 @@ export function BlockStudio() {
 
   useEffect(() => {
     if (!state.blockStudioImportOpen) return;
-    setWorkspaceMode('import');
+    if (!readOnlyBlocks) setWorkspaceMode('import');
     dispatch({ type: 'CLOSE_BLOCK_IMPORT' });
-  }, [dispatch, state.blockStudioImportOpen]);
+  }, [dispatch, readOnlyBlocks, state.blockStudioImportOpen]);
 
   useEffect(() => {
     setWorkspaceMode(hasBlockStudioWorkspaceContent(state) ? 'manual' : 'start');
@@ -1727,7 +1727,7 @@ export function BlockStudio() {
               onCreateSql={readOnlyBlocks ? undefined : () => beginManualDraft('custom')}
               onCreateSemantic={readOnlyBlocks ? undefined : () => beginManualDraft('semantic')}
               readOnlyReason={readOnlyBlocksReason}
-              onImport={() => setWorkspaceMode('import')}
+              onImport={readOnlyBlocks ? undefined : () => setWorkspaceMode('import')}
               onBuildDql={() => openAskAi({ kind: 'build', initialInput: 'Draft a reusable DQL block that ' })}
               t={t}
             />
@@ -2521,7 +2521,7 @@ function DeleteBlockDialog({
   );
 }
 
-function BlockStudioStartPage({
+export function BlockStudioStartPage({
   dbtStatus,
   semanticStats,
   semanticObjectCount,
@@ -2549,7 +2549,7 @@ function BlockStudioStartPage({
   onCreateSql?: () => void;
   onCreateSemantic?: () => void;
   readOnlyReason?: string;
-  onImport: () => void;
+  onImport?: () => void;
   onBuildDql: () => void;
   t: Theme;
 }) {
@@ -2602,14 +2602,16 @@ function BlockStudioStartPage({
           onClick={onBuildDql}
           t={t}
         />
-        <PrimaryStartAction
-          title="Import SQL"
-          detail="Paste scripts, upload files, or point at a folder. DQL analyzes candidates without writing block files until you save."
-          label="Start import"
-          Icon={FileInput}
-          onClick={onImport}
-          t={t}
-        />
+        {onImport && (
+          <PrimaryStartAction
+            title="Import SQL"
+            detail="Paste scripts, upload files, or point at a folder. DQL analyzes candidates without writing block files until you save."
+            label="Start import"
+            Icon={FileInput}
+            onClick={onImport}
+            t={t}
+          />
+        )}
         {onCreateSemantic && (
           <PrimaryStartAction
             title="Build manually"

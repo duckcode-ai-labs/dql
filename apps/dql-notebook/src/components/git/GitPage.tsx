@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { useNotebookStore } from '../../store/NotebookStore';
 import { themes, type Theme } from '../../themes/notebook-theme';
+import { hostReadOnly, readOnlyReason, useHostUi } from '../../host/host-ui';
 import { api, type GitGovernedContextGroup } from '../../api/client';
 import { isNoRemoteFailure, remoteUrlInputProblem, REMOTE_URL_EXAMPLES } from './git-connect';
 
@@ -85,6 +86,9 @@ interface ToastMsg { kind: 'ok' | 'err'; text: string }
 
 export function GitPage() {
   const t = themes[useNotebookStore((state) => state.themeMode)];
+  // Under a host, anyone with project.read sees this page; only git.review may change anything.
+  const hostUi = useHostUi();
+  const readOnly = hostReadOnly(hostUi, 'git');
 
   const [status, setStatus] = useState<Status | null>(null);
   const [branchInfo, setBranchInfo] = useState<{ current: string | null; branches: string[] }>({ current: null, branches: [] });
@@ -460,6 +464,14 @@ export function GitPage() {
     return <GitStatusError t={t} message={loadError} onRetry={() => void refreshAll()} />;
   }
 
+  if (status && !status.inRepo && readOnly) {
+    return (
+      <div style={{ height: '100%', display: 'grid', placeItems: 'center', background: t.appBg, color: t.textSecondary, fontSize: 12.5 }}>
+        <span role="status">{readOnlyReason(hostUi, 'git')}</span>
+      </div>
+    );
+  }
+
   if (status && !status.inRepo) {
     return <NotARepo t={t} onInit={() => void onInitRepo()} busy={busy === 'init'} error={initError} />;
   }
@@ -468,6 +480,7 @@ export function GitPage() {
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, background: t.appBg }}>
       <TopBar
         t={t}
+        readOnly={readOnly}
         branchCurrent={branchInfo.current}
         branches={branchInfo.branches}
         ahead={status?.ahead ?? 0}
@@ -490,7 +503,7 @@ export function GitPage() {
         branchMenuRef={branchMenuRef}
       />
 
-      {!remote.url && (
+      {!remote.url && !readOnly && (
         <RemoteSetupBanner
           t={t}
           open={remoteFormOpen}
@@ -508,6 +521,7 @@ export function GitPage() {
       <div style={{ display: 'flex', flex: 1, minHeight: 0, overflow: 'hidden' }}>
         <FileTree
           t={t}
+          readOnly={readOnly}
           stagedFiles={filteredStaged}
           unstagedFiles={filteredUnstaged}
           totalCount={entries.length}
@@ -531,6 +545,7 @@ export function GitPage() {
               <FileDiffHeader
                 t={t}
                 entry={selectedEntry}
+                readOnly={readOnly}
                 onStage={() => onStage(selectedEntry.path)}
                 onUnstage={() => onUnstage(selectedEntry.path)}
                 onDiscard={() => onDiscard(selectedEntry.path)}
@@ -553,7 +568,7 @@ export function GitPage() {
           ) : (
             <DiffEmpty t={t} hasFiles={entries.length > 0} />
           )}
-          {narrowLayout ? (
+          {narrowLayout && !readOnly ? (
             <CommitBar
               t={t}
               commitMsg={commitMsg}
@@ -569,7 +584,7 @@ export function GitPage() {
             />
           ) : null}
         </div>
-        {!narrowLayout ? (
+        {!narrowLayout && !readOnly ? (
           <ShareRail
             t={t}
             branch={branchInfo.current}
@@ -625,6 +640,7 @@ function GitStatusError({ t, message, onRetry }: { t: Theme; message: string; on
 
 interface TopBarProps {
   t: Theme;
+  readOnly: boolean;
   branchCurrent: string | null;
   branches: string[];
   ahead: number;
@@ -685,7 +701,7 @@ function TopBar(p: TopBarProps) {
           {p.branchCurrent ?? 'detached'}
           <ChevronDown size={10} strokeWidth={1.75} style={{ opacity: 0.6 }} />
         </button>
-        {p.branchMenuOpen && (
+        {p.branchMenuOpen && !p.readOnly && (
           <div
             style={{
               position: 'absolute', top: 'calc(100% + 4px)', left: 0,
@@ -788,16 +804,20 @@ function TopBar(p: TopBarProps) {
       </button>
       <style>{`@keyframes dql-spin { to { transform: rotate(360deg); } }`}</style>
 
-      <button onClick={p.onPull} disabled={!!p.busy} style={topBtn(t)} title="Get updates from the shared project">
-        <ArrowDown size={12} strokeWidth={1.75} color={t.warning} />
-        Get updates
-        {p.behind > 0 && <span style={{ fontFamily: t.fontMono, fontSize: 10, color: t.textMuted, marginLeft: 2 }}>{p.behind}</span>}
-      </button>
-      <button onClick={p.onPush} disabled={!!p.busy} style={topBtn(t, true)} title="Send the current branch to the shared project">
-        <ArrowUp size={12} strokeWidth={1.75} />
-        Send branch
-        {p.ahead > 0 && <span style={{ fontFamily: t.fontMono, fontSize: 10, opacity: 0.75, marginLeft: 2 }}>{p.ahead}</span>}
-      </button>
+      {!p.readOnly && (
+        <>
+          <button onClick={p.onPull} disabled={!!p.busy} style={topBtn(t)} title="Get updates from the shared project">
+            <ArrowDown size={12} strokeWidth={1.75} color={t.warning} />
+            Get updates
+            {p.behind > 0 && <span style={{ fontFamily: t.fontMono, fontSize: 10, color: t.textMuted, marginLeft: 2 }}>{p.behind}</span>}
+          </button>
+          <button onClick={p.onPush} disabled={!!p.busy} style={topBtn(t, true)} title="Send the current branch to the shared project">
+            <ArrowUp size={12} strokeWidth={1.75} />
+            Send branch
+            {p.ahead > 0 && <span style={{ fontFamily: t.fontMono, fontSize: 10, opacity: 0.75, marginLeft: 2 }}>{p.ahead}</span>}
+          </button>
+        </>
+      )}
       {p.prUrl && (
         <a
           href={p.prUrl}
@@ -1204,6 +1224,7 @@ function compareArtifactEntries(a: FileEntry, b: FileEntry): number {
 
 interface FileTreeProps {
   t: Theme;
+  readOnly: boolean;
   stagedFiles: FileEntry[];
   unstagedFiles: FileEntry[];
   totalCount: number;
@@ -1247,7 +1268,7 @@ function FileTree(p: FileTreeProps) {
           </span>
           <span style={{ fontSize: 11, color: t.textMuted }}>{p.totalCount} files</span>
           <div style={{ flex: 1 }} />
-          {p.unstagedFiles.length > 0 && (
+          {p.unstagedFiles.length > 0 && !p.readOnly && (
             <button onClick={p.onStageAll} style={miniBtn(t)}>Include all</button>
           )}
         </div>
@@ -1311,7 +1332,7 @@ function FileTree(p: FileTreeProps) {
               active={p.selectedPath === f.path && p.selectedStaged === true}
               onClick={() => p.onSelect(f.path, true)}
               actionLabel="Remove"
-              onAction={() => p.onUnstage(f.path)}
+              onAction={p.readOnly ? undefined : () => p.onUnstage(f.path)}
             />
           ))
         )}
@@ -1331,7 +1352,7 @@ function FileTree(p: FileTreeProps) {
               active={p.selectedPath === f.path && p.selectedStaged === false}
               onClick={() => p.onSelect(f.path, false)}
               actionLabel="Include"
-              onAction={() => p.onStage(f.path)}
+              onAction={p.readOnly ? undefined : () => p.onStage(f.path)}
             />
           ))
         )}
@@ -1382,7 +1403,7 @@ interface FileRowProps {
   active: boolean;
   onClick: () => void;
   actionLabel: string;
-  onAction: () => void;
+  onAction?: () => void;
 }
 
 function FileRow({ t, file, active, onClick, actionLabel, onAction }: FileRowProps) {
@@ -1423,7 +1444,7 @@ function FileRow({ t, file, active, onClick, actionLabel, onAction }: FileRowPro
           <span style={artifactGroupPillStyle(t, group)}>{group.label}</span>
         </div>
       </div>
-      {hover && (
+      {hover && onAction && (
         <button
           onClick={(e) => { e.stopPropagation(); onAction(); }}
           style={{
@@ -1499,6 +1520,7 @@ function StatusBadge({ t, status }: { t: Theme; status: FileEntry['status'] }) {
 interface FileDiffHeaderProps {
   t: Theme;
   entry: FileEntry;
+  readOnly: boolean;
   stagedView: boolean;
   onStage: () => void;
   onUnstage: () => void;
@@ -1507,7 +1529,7 @@ interface FileDiffHeaderProps {
   onDiffView: (view: 'plain' | 'code') => void;
 }
 
-function FileDiffHeader({ t, entry, stagedView, onStage, onUnstage, onDiscard, diffView, onDiffView }: FileDiffHeaderProps) {
+function FileDiffHeader({ t, entry, readOnly, stagedView, onStage, onUnstage, onDiscard, diffView, onDiffView }: FileDiffHeaderProps) {
   return (
     <div
       style={{
@@ -1529,13 +1551,13 @@ function FileDiffHeader({ t, entry, stagedView, onStage, onUnstage, onDiscard, d
         <button type="button" onClick={() => onDiffView('plain')} style={{ border: 'none', borderRadius: 5, padding: '3.5px 10px', fontSize: 11, fontWeight: 600, cursor: 'pointer', fontFamily: t.font, background: diffView === 'plain' ? 'var(--accent-dim)' : 'transparent', color: diffView === 'plain' ? t.accent : t.textMuted }}>What changed</button>
         <button type="button" onClick={() => onDiffView('code')} style={{ border: 'none', borderRadius: 5, padding: '3.5px 10px', fontSize: 11, fontWeight: 600, cursor: 'pointer', fontFamily: t.font, background: diffView === 'code' ? 'var(--accent-dim)' : 'transparent', color: diffView === 'code' ? t.accent : t.textMuted }}>Code view</button>
       </div>
-      {!stagedView && (
+      {!readOnly && !stagedView && (
         <>
           <button onClick={onDiscard} style={miniBtn(t)}>Discard</button>
           <button onClick={onStage} style={miniBtn(t, 'primary')}>Include</button>
         </>
       )}
-      {stagedView && (
+      {!readOnly && stagedView && (
         <button onClick={onUnstage} style={miniBtn(t)}>Remove</button>
       )}
     </div>
