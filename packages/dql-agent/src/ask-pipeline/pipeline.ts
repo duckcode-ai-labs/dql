@@ -9,6 +9,7 @@ import { proveLiterals } from './literal-proof.js';
 import { prepareExploratory } from './prepare/exploratory.js';
 import { keepMembersApart, normalizeEffectiveIntent, resolveIntent, uncoveredQuestionTerms, coverageStates, unmetFacets, type IntentResolution, causalOperatorsIn, predictiveOperatorsIn, readingLane, validateIntentRefs } from './resolve-intent.js';
 import { buildVocabularyIndex, renderCard, type RenderedCards, type VocabularyDomainHeader, type VocabularyEntry, type VocabularyIndex } from './vocabulary.js';
+import { readByOwnWords } from './lexical-reading.js';
 import { mergePhysicalRelationBinding, physicalRelationIdentity, physicalRelationText, samePhysicalRelation } from './physical-binding.js';
 
 /**
@@ -916,7 +917,9 @@ export async function runAskPipeline(input: RunAskPipelineInput): Promise<Pipeli
   // reading over anything else goes to AI-written SQL when it is available.
   const aiSqlAvailable = Boolean(input.prepareDeps.draftSql && (input.explorationOptIn || input.explorationAuto));
   const resolveStarted = now();
-  let resolution: IntentResolution = settled ? settledResolution(settled.intent, input.vocabulary) : await resolveIntent({
+  // A question that is only a governed metric and dimensions, by their own words, is read here: no thread, mode or model phrasing can move its route.
+  const lexicalReading = !settled && !input.selection && !input.memberSelection && !input.conversation?.pendingClarification ? readByOwnWords(input.question, input.vocabulary) : undefined;
+  let resolution: IntentResolution = settled ? settledResolution(settled.intent, input.vocabulary) : lexicalReading ? { status: 'resolved', intent: lexicalReading, attempts: 0, problems: [] } : await resolveIntent({
     question: input.question, vocabulary: input.vocabulary, provider: input.provider, prior: input.prior, priorExecuted: input.priorExecuted, ...(input.hidePriorValues ? { hidePriorValues: true } : {}), priorAnswerSummary: input.priorAnswerSummary, clauseCoverage: input.clauseCoverage, budgetMs: remaining(), ...(input.selection ? { selection: input.selection } : {}),
     guidance: memberGuidance(input), cardBudget: input.cardBudget, providerOptions, now,
     renderedCards, ...(input.conversation ? { conversation: input.conversation } : {}),
@@ -929,6 +932,8 @@ export async function runAskPipeline(input: RunAskPipelineInput): Promise<Pipeli
   if (settled) {
     receipt.reuse = 'interpretation';
     step('read', resolution.status === 'failed' ? 'The settled reading named things that do not exist' : 'Used the settled reading', resolution.status === 'failed' ? 'failed' : 'done', { detail: resolution.status === 'failed' ? resolution.detail : settled.intent.reading });
+  } else if (lexicalReading) {
+    step('read', 'Read the question by the semantic layer\'s own words', 'done', { detail: lexicalReading.reading });
   } else {
     const calls = receipt.dispatches.filter((dispatch) => dispatch.purpose.startsWith('intent:')).length;
     const callsNote = `${calls} AI call${calls === 1 ? '' : 's'}`;
