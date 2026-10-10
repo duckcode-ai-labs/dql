@@ -1076,6 +1076,7 @@ function convertDbtMetric(
     objectKind: 'metric',
     typeParams: dbtMetric.type_params,
     displayFormat: parseSemanticDisplayFormat(dbtMetric.meta ?? (dbtMetric.config as Record<string, unknown> | undefined)?.meta),
+    ...(dbtMetricSynonyms(dbtMetric).length ? { synonyms: dbtMetricSynonyms(dbtMetric) } : {}),
     filter: dbtMetric.filter ?? dbtMetric.filters,
     aggTimeDimension: resolvedMeasure?.measure.agg_time_dimension,
     source: dbtSource('metric', dbtMetric.unique_id ?? dbtMetric.name, dbtMetric.name, dbtMetric as unknown as Record<string, unknown>),
@@ -1231,6 +1232,20 @@ function deriveDbtDomain(model: DbtSemanticModel): string {
     config?.group,
     model.package_name,
   )?.replace(/[^a-z0-9/_-]+/gi, '-').toLowerCase() || 'uncategorized';
+}
+
+/** Other names people use for a metric: `config.meta.synonyms` (or `meta.synonyms`) as a list of words. */
+function dbtMetricSynonyms(metric: DbtMetric): string[] {
+  const meta = asRecord(metric.meta);
+  const configMeta = asRecord(asRecord(metric.config).meta);
+  const out: string[] = [];
+  for (const value of [configMeta.synonyms, meta.synonyms]) {
+    for (const item of Array.isArray(value) ? value : []) {
+      const word = typeof item === 'string' ? item.trim() : '';
+      if (word && !out.some((seen) => seen.toLowerCase() === word.toLowerCase())) out.push(word);
+    }
+  }
+  return out;
 }
 
 function deriveDbtMetricDomain(metric: DbtMetric, modelName?: string): string {

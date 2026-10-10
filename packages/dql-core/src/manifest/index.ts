@@ -77,6 +77,14 @@ export {
   type DbtSourcePatchPreview,
 } from './dbt-first-authoring.js';
 export {
+  previewDbtMetricPatch,
+  applyDbtMetricPatch,
+  DBT_METRIC_AGGREGATIONS,
+  type DbtMetricAggregation,
+  type DbtMetricAuthoringInput,
+  type DbtMetricPatchPreview,
+} from './dbt-metric-authoring.js';
+export {
   planDataLexMigration,
   applyDataLexMigration,
   type DataLexMigrationInput,

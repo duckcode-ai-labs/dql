@@ -740,6 +740,7 @@ export function buildVocabularySource(input: VocabularySourceInput): VocabularyS
         name: metric.name, ...(model ? { model } : {}), label: metric.label, description: `${metric.description ?? ''}${scopeNote}${kindNote}`.trim(),
         ...(aggregate ? { aggregation: aggregate } : {}), ...(metric.metricType ? { type: metric.metricType } : {}), expr: metric.sql, sourceId: metric.name,
         ...(metric.status ? { status: metric.status } : {}), ...(physical ? { physical } : {}),
+        ...(metric.synonyms?.length ? { aliases: metric.synonyms } : {}),
         ...(timeRole ? { aggTimeDimension: timeRole } : {}), ...(displayFormat ? { displayFormat } : {}),
         ...(derived ? { derived } : {}), ...(engineOnly ? { engineOnly } : {}),
       });

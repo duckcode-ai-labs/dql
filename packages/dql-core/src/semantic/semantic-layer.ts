@@ -40,6 +40,8 @@ export interface MetricDefinition {
   aggTimeDimension?: string;
   /** Display contract (currency/percent/decimals) from dbt meta or DQL YAML. */
   displayFormat?: SemanticDisplayFormat;
+  /** Other names for the metric (dbt `config.meta.synonyms`); Ask matches a question's words against them. */
+  synonyms?: string[];
   /**
    * Distinguishes a real dbt metric from a dbt MEASURE that was projected into
    * the metrics map for native composition (see {@link SemanticLayer.addCube}).
