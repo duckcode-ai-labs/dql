@@ -920,7 +920,7 @@ export async function runAskPipeline(input: RunAskPipelineInput): Promise<Pipeli
   // A question that is only a governed metric and dimensions, by their own words, is read here: no mode or model phrasing can move its route.
   // The model keeps any question that reads as an edit of the thread's last analysis (the host passes `prior` only then) and any host guidance.
   const lexicalReading = !settled && !input.prior && !memberGuidance(input) && !input.selection && !input.memberSelection && !input.conversation?.pendingClarification ? readByOwnWords(input.question, input.vocabulary) : undefined;
-  let resolution: IntentResolution = settled ? settledResolution(settled.intent, input.vocabulary) : lexicalReading ? { status: 'resolved', intent: lexicalReading, attempts: 0, problems: [] } : await resolveIntent({
+  let resolution: IntentResolution = settled ? settledResolution(settled.intent, input.vocabulary) : await resolveIntent({
     question: input.question, vocabulary: input.vocabulary, provider: input.provider, prior: input.prior, priorExecuted: input.priorExecuted, ...(input.hidePriorValues ? { hidePriorValues: true } : {}), priorAnswerSummary: input.priorAnswerSummary, clauseCoverage: input.clauseCoverage, budgetMs: remaining(), ...(input.selection ? { selection: input.selection } : {}),
     guidance: memberGuidance(input), cardBudget: input.cardBudget, providerOptions, now,
     renderedCards, ...(input.conversation ? { conversation: input.conversation } : {}),
@@ -929,6 +929,8 @@ export async function runAskPipeline(input: RunAskPipelineInput): Promise<Pipeli
     onDispatch: (event) => { receipt.dispatches.push({ purpose: `intent:${event.purpose}`, ms: event.ms, reply: event.raw.slice(0, 1500), at: Date.now(), attempt: event.attempt, label: event.purpose === 'resolve' ? 'read' : 'correct', ...(event.promptChars !== undefined ? { promptChars: event.promptChars } : {}) }); dispatchStep(event); },
     expand: expandForClauses,
   });
+  // The model was still asked, so its call is on the receipt; the lexical reading decides the route whatever it answered.
+  if (lexicalReading) resolution = { status: 'resolved', intent: lexicalReading, attempts: resolution.attempts, problems: [] };
   mark('resolve', resolveStarted);
   if (settled) {
     receipt.reuse = 'interpretation';

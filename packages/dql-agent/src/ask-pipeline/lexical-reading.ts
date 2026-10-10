@@ -10,7 +10,7 @@ import type { VocabularyEntry, VocabularyIndex } from './vocabulary.js';
  * the same question come back governed one run and AI-written the next. When
  * every content word of the question is a governed metric or dimension, named
  * by label, name or synonym, and each names exactly one entry, the reading is
- * settled here with no model call. Certified-first still holds: the reading
+ * settled here, and it overrides whatever the model answered. Certified-first still holds: the reading
  * goes through the same tiers, and a certified block that entails it wins.
  *
  * Anything else keeps the model-driven path: more than one metric, an approved

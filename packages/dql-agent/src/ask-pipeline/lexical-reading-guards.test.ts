@@ -60,10 +60,10 @@ const ask = (question: string, provider: AgentProvider, extra: Record<string, un
 });
 
 describe('the pipeline asks the model when context applies', () => {
-  it('does not call the model for a lone governed question', async () => {
+  it('answers a lone governed question even when the model returns nothing usable', async () => {
     const provider = counting();
-    await ask('Claims filed by region', provider);
-    expect(provider.calls).toHaveLength(0);
+    const outcome = await ask('Claims filed by region', provider);
+    expect(outcome.kind).toBe('answered');
   });
 
   it('calls the model when the thread has a prior reading', async () => {
