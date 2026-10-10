@@ -25048,6 +25048,10 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
                   ? currentPath
                   : canonicalCertified ? draftBesideCanonical(projectRoot, currentPath!).existingPath : undefined,
                 ...draftSaveOptions,
+                // A copy saved beside a certified block never shares its name.
+                ...(canonicalCertified && !(currentPath && isDraftBlockPath(currentPath))
+                  ? { source: nameDraftEditBesideCertified(draftSource) }
+                  : {}),
                 stableSuffix,
               });
         const canonicalPath = existingCanonicalDraft ? draftPath : canonicalCertified ? currentPath! : undefined;
@@ -26279,6 +26283,9 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
         const savedPath = besideCertified
           ? saveBlockStudioDraftArtifacts(projectRoot, {
               ...saveOptions,
+              // The copy never shares the certified block's name, so nothing that
+              // looks a block up by name can pick it over the certified one.
+              source: nameDraftEditBesideCertified(saveOptions.source),
               currentPath: besideCertified.existingPath,
               stableSuffix: besideCertified.stableSuffix,
             })
@@ -40550,6 +40557,15 @@ export function draftBesideCanonical(projectRoot: string, canonicalPath: string)
   visit(join(projectRoot, 'domains'), 0);
   visit(join(projectRoot, 'blocks'), 0);
   return { stableSuffix, ...(found[0] ? { existingPath: found[0] } : {}) };
+}
+
+export const DRAFT_EDIT_NAME_SUFFIX = ' (draft edit)';
+
+/** Gives the copy saved beside a certified block its own name: `<name> (draft edit)`. */
+export function nameDraftEditBesideCertified(source: string): string {
+  return source.replace(/(\bblock\s+")([^"]*)(")/, (match, open: string, name: string, close: string) => (
+    name.endsWith(DRAFT_EDIT_NAME_SUFFIX) ? match : `${open}${name}${DRAFT_EDIT_NAME_SUFFIX}${close}`
+  ));
 }
 
 export function saveBlockStudioDraftArtifacts(
