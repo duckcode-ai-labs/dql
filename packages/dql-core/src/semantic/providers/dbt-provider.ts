@@ -181,7 +181,7 @@ export class DbtProvider implements SemanticLayerProvider {
     // metrics in the project YAML which it lacks (or which were edited after it was written) are read from the YAML.
     // The manifest does not know about a metric added to the YAML until `dbt parse` runs.
     const overlayFor = (artifactPath: string): YamlOverlay | undefined =>
-      yamlFiles.length > 0 && artifactHasTopLevelMetrics(artifactPath) ? readYamlOverlay(dbtRoot, yamlFiles) : undefined;
+      yamlFiles.length > 0 && artifactHasTopLevelMetrics(artifactPath) ? readYamlOverlay(dbtRoot, yamlFiles, statSync(artifactPath).mtimeMs) : undefined;
 
     let artifactLayer: SemanticLayer | null = null;
     if (existsSync(semanticManifestPath)) {
@@ -390,14 +390,18 @@ const OVERLAY_NAME = /^[a-z][a-z0-9]*(_[a-z0-9]+)*$/;
 const OVERLAY_REFERENCE_KEYS = new Set(['measure', 'measure_name', 'numerator', 'denominator', 'metric', 'metric_name', 'metrics', 'input_measures', 'input_metrics', 'base_metric', 'conversion_metric']);
 
 /** Read `semantic_models` and `metrics` from the project's YAML. A file that cannot be read is skipped, never fatal. */
-function readYamlOverlay(dbtRoot: string, yamlFiles: string[]): YamlOverlay {
+function readYamlOverlay(dbtRoot: string, yamlFiles: string[], manifestMtimeMs: number): YamlOverlay {
   const overlay: YamlOverlay = { models: [], metrics: [] };
   for (const filePath of yamlFiles) {
     try {
-      const doc = yaml.load(readFileSync(filePath, 'utf-8')) as Record<string, unknown> | null;
+      // Only files edited after the manifest are used (see applyYamlOverlay), so older ones are not even read.
+      const mtimeMs = statSync(filePath).mtimeMs;
+      if (mtimeMs <= manifestMtimeMs) continue;
+      const text = readFileSync(filePath, 'utf-8');
+      if (!/^(semantic_models|metrics)\s*:/m.test(text)) continue;
+      const doc = yaml.load(text) as Record<string, unknown> | null;
       if (!doc || typeof doc !== 'object') continue;
       const file = relative(dbtRoot, filePath).replace(/\\/g, '/');
-      const mtimeMs = statSync(filePath).mtimeMs;
       for (const model of Array.isArray(doc.semantic_models) ? doc.semantic_models : []) {
         if (model && typeof model === 'object' && typeof (model as DbtSemanticModel).name === 'string') overlay.models.push({ item: model as DbtSemanticModel, file, mtimeMs });
       }
