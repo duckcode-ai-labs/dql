@@ -22,6 +22,7 @@ export type DqlAction =
   | 'export'
   | 'schedule.manage'
   | 'git.review'
+  | 'request.create'
   | `tool.${string}`;
 
 export interface DqlResource {

@@ -303,6 +303,16 @@ export function navKeyForView(mainView: string): string | null {
   }
 }
 
+/**
+ * Where a person lands at "/" with nothing requested. Under a host, people who may ask land on Ask (Home cards
+ * above it); everyone else stays on Apps, where Home cards show above the list. Without a host: unchanged.
+ * Deep links (an App, a page, /ask, another view) arrive as a different `mainView` or an open App and are left alone.
+ */
+export function hostLandingView(state: HostUiState, here: { pathname: string; mainView: string; activeAppId: string | null }): 'ask' | null {
+  if (!state.host || here.pathname !== '/' || here.mainView !== 'apps' || here.activeAppId) return null;
+  return hostAllows(state, 'ask') ? 'ask' : null;
+}
+
 /** Post an answer action to the host; returns the message to show. */
 export async function runHostAnswerAction(action: HostUi['answerActions'][number], input: { runId: string; question: string; threadId?: string; trustState?: string }): Promise<string> {
   const response = await authorizedFetch(action.url, {

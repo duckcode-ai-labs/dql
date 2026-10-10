@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { ArrowDownRight, ArrowUpRight, LayoutDashboard, Star, Sparkles, Inbox } from 'lucide-react';
 import { fetchHome, fetchHomeCards, type HomeCard, type HomeSummary as HomeSummaryData } from '../../api/home-api';
 import { useDispatch } from '../../store/NotebookStore';
-import { useHostPage } from '../../host/host-ui';
+import { hostAllows, useHostPage, useHostUi, type HostUiState } from '../../host/host-ui';
 
 /**
  * A HOME THAT SUMMARISES (RFC 0010, HH-16), above Ask: the Apps this person
@@ -15,6 +15,7 @@ import { useHostPage } from '../../host/host-ui';
 export function HomeSummary(): JSX.Element | null {
   const dispatch = useDispatch();
   const hostPage = useHostPage();
+  const hostUi = useHostUi();
   const [summary, setSummary] = useState<HomeSummaryData | null>(null);
   const [cards, setCards] = useState<HomeCard[]>([]);
   useEffect(() => {
@@ -26,7 +27,7 @@ export function HomeSummary(): JSX.Element | null {
   return (
     <HomeSummaryView
       summary={summary}
-      cards={cards}
+      cards={homeCardsFor(hostUi, cards)}
       onOpenApp={(appId, pageId) => dispatch({ type: 'OPEN_APP', appId, ...(pageId ? { dashboardId: pageId } : {}) })}
       onOpenLink={(label, href) => {
         hostPage.openPage({ id: `home-${href}`, label, href });
@@ -34,6 +35,11 @@ export function HomeSummary(): JSX.Element | null {
       }}
     />
   );
+}
+
+/** "Open requests" is for people who may make requests; the host's other cards are shown as it sent them. */
+export function homeCardsFor(host: HostUiState, cards: HomeCard[]): HomeCard[] {
+  return cards.filter((hostCard) => hostCard.id !== 'requests' || hostAllows(host, 'request.create'));
 }
 
 const card: React.CSSProperties = {
