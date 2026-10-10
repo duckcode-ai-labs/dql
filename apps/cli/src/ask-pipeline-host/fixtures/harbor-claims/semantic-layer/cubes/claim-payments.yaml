@@ -1,0 +1,39 @@
+name: claim_payments
+label: Claim payments
+description: One row per payment made on a claim.
+domain: claims
+table: claim_payments
+sql: SELECT * FROM claim_payments
+measures:
+  - name: paid_amount
+    label: Amount paid
+    description: Total paid on claims.
+    sql: SUM(amount)
+    type: sum
+    aggregation: sum
+    agg_time_dimension: paid_date
+  - name: paid_claim_count
+    label: Claims paid
+    description: Distinct claims with a payment (a claim with several payments counts once).
+    sql: COUNT(DISTINCT claim_id)
+    type: count_distinct
+    aggregation: count_distinct
+    agg_time_dimension: paid_date
+dimensions:
+  - name: region
+    label: Region
+    description: Harbor Mutual sales region of the policy.
+    sql: region
+    type: string
+  - name: product
+    label: Product
+    description: Auto, Home or Health.
+    sql: product
+    type: string
+time_dimensions:
+  - name: paid_date
+    label: Paid date
+    description: When the payment was made.
+    sql: paid_date
+    granularities: [day, week, month]
+    primary_time: true

@@ -1,0 +1,30 @@
+// dql-format: 1
+
+block "Open claims by region" {
+  domain = "claims"
+  type = "custom"
+  status = "certified"
+  owner = "maria@harbor.example"
+  description = "How many claims are open in each region right now. The claims team's standing definition of open: status is open."
+  tags = ["claims", "open-claims"]
+
+  query = """
+SELECT
+  region,
+  COUNT(DISTINCT claim_id) AS open_claims
+FROM claims
+WHERE status = 'open'
+GROUP BY region
+ORDER BY region
+"""
+
+  visualization {
+    chart = "bar"
+    x = region
+    y = open_claims
+  }
+
+  tests {
+    assert row_count > 0
+  }
+}

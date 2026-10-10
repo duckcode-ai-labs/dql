@@ -640,10 +640,14 @@ export function buildVocabularySource(input: VocabularySourceInput): VocabularyS
       const knownColumns = model ? cubeColumns(model) : new Set<string>();
       const localFilters = filterSpec.unparsed.length === 0 && filters.every((filter) => knownColumns.has(filter.column));
       let physical: { relation: string; expr: string; aggregate: string } | undefined;
-      if (relation && measure && aggregate && AGGREGATES.has(aggregate) && simple && localFilters) {
-        const base = qualifyExpression(measure.expr ?? measure.name, addressed(relation), knownColumns, physicalQuote);
-        const expr = scopedAggregateExpression(base, aggregate, filters.map((filter) => `${qualifyExpression(filter.column, addressed(relation), knownColumns, physicalQuote)} ${filter.condition}`));
-        physical = { relation, expr, aggregate };
+      // A measure may write its whole aggregate ("COUNT(DISTINCT claim_id)") as well as a bare column.
+      // Read the aggregate out of the text, so the binding is "count_distinct of claim_id" and not an
+      // aggregate over an aggregate; a mix of aggregates is left to the semantic engine.
+      const written = relation && measure && aggregate && AGGREGATES.has(aggregate) ? nativeAggregateBinding(measure.expr ?? measure.name, aggregate) : undefined;
+      if (relation && written && simple && localFilters) {
+        const base = qualifyExpression(written.expr, addressed(relation), knownColumns, physicalQuote);
+        const expr = scopedAggregateExpression(base, written.aggregate, filters.map((filter) => `${qualifyExpression(filter.column, addressed(relation), knownColumns, physicalQuote)} ${filter.condition}`));
+        physical = { relation, expr, aggregate: written.aggregate };
       }
       // A derived or ratio metric binds physically ONLY when plain SQL can
       // express it: every input a simple metric with no offset, window,

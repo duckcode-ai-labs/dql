@@ -1,0 +1,8 @@
+// dql-format: 1
+
+domain "Claims" {
+  id = "claims"
+  owner = "maria@harbor.example"
+  description = "Harbor Mutual claims: what was filed, what is open and what was paid. Invented data for the DQL Enterprise demo."
+  reviewCadence = "quarterly"
+}

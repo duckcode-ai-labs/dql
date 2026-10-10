@@ -1,0 +1,49 @@
+name: claims
+label: Claims
+description: One row per claim filed with Harbor Mutual.
+domain: claims
+table: claims
+sql: SELECT * FROM claims
+measures:
+  - name: claim_count
+    label: Claims filed
+    description: Distinct claims filed.
+    sql: COUNT(DISTINCT claim_id)
+    type: count_distinct
+    aggregation: count_distinct
+    agg_time_dimension: reported_date
+  - name: claimed_amount
+    label: Amount claimed
+    description: Total amount claimed.
+    sql: SUM(claimed_amount)
+    type: sum
+    aggregation: sum
+    agg_time_dimension: reported_date
+dimensions:
+  - name: region
+    label: Region
+    description: Harbor Mutual sales region of the policy.
+    sql: region
+    type: string
+  - name: product
+    label: Product
+    description: Auto, Home or Health.
+    sql: product
+    type: string
+  - name: claim_type
+    label: Claim type
+    description: What kind of loss the claim is for.
+    sql: claim_type
+    type: string
+  - name: status
+    label: Status
+    description: open, closed or denied.
+    sql: status
+    type: string
+time_dimensions:
+  - name: reported_date
+    label: Reported date
+    description: When the claim was reported.
+    sql: reported_date
+    granularities: [day, week, month]
+    primary_time: true

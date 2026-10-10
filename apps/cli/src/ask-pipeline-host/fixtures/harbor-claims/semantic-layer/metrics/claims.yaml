@@ -1,0 +1,65 @@
+metrics:
+  - name: claim_count
+    label: Claims filed
+    description: Distinct claims filed with Harbor Mutual.
+    domain: claims
+    status: certified
+    cube: claims
+    table: claims
+    sql: COUNT(DISTINCT claim_id)
+    type: count_distinct
+    aggregation: count_distinct
+    metric_type: simple
+    type_params:
+      measure: claim_count
+    agg_time_dimension: reported_date
+  - name: claimed_amount
+    label: Amount claimed
+    description: Total amount claimed on claims filed.
+    domain: claims
+    status: certified
+    cube: claims
+    table: claims
+    sql: SUM(claimed_amount)
+    type: sum
+    aggregation: sum
+    metric_type: simple
+    type_params:
+      measure: claimed_amount
+    agg_time_dimension: reported_date
+    format:
+      kind: currency
+      currency: USD
+      decimals: 0
+  - name: claims_paid
+    label: Claims paid
+    description: Total amount Harbor Mutual paid on claims.
+    domain: claims
+    status: certified
+    cube: claim_payments
+    table: claim_payments
+    sql: SUM(amount)
+    type: sum
+    aggregation: sum
+    metric_type: simple
+    type_params:
+      measure: paid_amount
+    agg_time_dimension: paid_date
+    format:
+      kind: currency
+      currency: USD
+      decimals: 0
+  - name: paid_claims
+    label: Paid claims
+    description: Distinct claims Harbor Mutual paid; a claim with several payments counts once.
+    domain: claims
+    status: certified
+    cube: claim_payments
+    table: claim_payments
+    sql: COUNT(DISTINCT claim_id)
+    type: count_distinct
+    aggregation: count_distinct
+    metric_type: simple
+    type_params:
+      measure: paid_claim_count
+    agg_time_dimension: paid_date
