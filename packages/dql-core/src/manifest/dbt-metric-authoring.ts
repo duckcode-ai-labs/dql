@@ -37,6 +37,11 @@ export interface DbtMetricAuthoringInput {
     column: string;
     /** Written as `config.meta.domain`, which DQL reads as the metric's domain. */
     domain?: string;
+    /**
+     * Other names people use for the metric. Written as `config.meta.synonyms` in the same patch, which DQL reads
+     * as aliases of the metric, so a question that uses one finds it.
+     */
+    synonyms?: string[];
   };
   dimensions?: Array<{ name: string; column?: string; type?: 'categorical' | 'time'; timeGranularity?: string }>;
 }
@@ -88,6 +93,27 @@ function modelPathsOf(root: string): string[] {
 
 function listOf(document: UnknownRecord, key: string): UnknownRecord[] {
   return Array.isArray(document[key]) ? (document[key] as unknown[]).map(asRecord) : [];
+}
+
+/** Names of the other metrics (in the loaded YAML or the dbt manifest) whose inputs name `name`, a measure or a metric. */
+function metricsReferencing(name: string, files: Loaded[], manifest: UnknownRecord | undefined): string[] {
+  const found = new Set<string>();
+  const mentions = (typeParams: unknown): boolean => {
+    if (typeof typeParams === 'string') return typeParams === name;
+    if (Array.isArray(typeParams)) return typeParams.some(mentions);
+    if (typeParams && typeof typeParams === 'object') return Object.values(typeParams).some(mentions);
+    return false;
+  };
+  for (const file of files) {
+    for (const metric of listOf(file.document, 'metrics')) {
+      if (metric.name !== name && mentions(metric.type_params)) found.add(String(metric.name));
+    }
+  }
+  for (const node of Object.values(asRecord(manifest?.metrics))) {
+    const metric = asRecord(node);
+    if (metric.name !== name && mentions(metric.type_params)) found.add(String(metric.name));
+  }
+  return [...found].sort();
 }
 
 /** Build the YAML patches for adding or editing one MetricFlow simple metric, without writing anything. */
@@ -242,6 +268,16 @@ export function previewDbtMetricPatch(
   const measures = Array.isArray(model.measures) ? [...model.measures as unknown[]].map(asRecord) : [];
   const measureIndex = measures.findIndex((measure) => measure.name === metricName);
   if (input.mode === 'edit' && measureIndex < 0) invalid([`Metric "${metricName}" does not use a measure of the same name on "${semanticModelName}"; edit it in dbt directly.`]);
+  if (input.mode === 'edit') {
+    const current = measures[measureIndex]!;
+    const changesMeaning = String(current.agg ?? '').toLowerCase() !== aggregation || String(current.expr ?? current.name) !== measureColumn;
+    // A measure's aggregation and column define every metric built on it (ratio, derived, cumulative, other simple
+    // metrics), so changing them here would silently change those metrics too.
+    const users = changesMeaning ? metricsReferencing(metricName, all, manifest) : [];
+    if (users.length) {
+      invalid([`The measure "${metricName}" is also used by ${users.map((name) => `"${name}"`).join(', ')}. Changing its aggregation or column would change ${users.length === 1 ? 'that metric' : 'those metrics'} too, so DQL will not do it. Add a new metric with its own measure instead, or edit the dependants in dbt first.`]);
+    }
+  }
   const measure: UnknownRecord = {
     ...(measureIndex >= 0 ? measures[measureIndex] : {}),
     name: metricName,
@@ -273,6 +309,13 @@ export function previewDbtMetricPatch(
   const metricIndex = metrics.findIndex((metric) => metric.name === metricName);
   const existingMetric = metricIndex >= 0 ? metrics[metricIndex] : {};
   const domain = metricInput.domain?.trim();
+  const synonyms: string[] = [];
+  for (const raw of metricInput.synonyms ?? []) {
+    const word = String(raw).trim();
+    if (word && !synonyms.some((seen) => seen.toLowerCase() === word.toLowerCase())) synonyms.push(word);
+  }
+  const existingMeta = asRecord(asRecord(existingMetric.config).meta);
+  const meta: UnknownRecord = { ...existingMeta, ...(domain ? { domain } : {}), ...(synonyms.length ? { synonyms } : {}) };
   const nextMetric: UnknownRecord = {
     ...existingMetric,
     name: metricName,
@@ -280,7 +323,7 @@ export function previewDbtMetricPatch(
     ...(metricInput.description?.trim() ? { description: metricInput.description.trim() } : {}),
     type: 'simple',
     type_params: { ...asRecord(existingMetric.type_params), measure: metricName },
-    ...(domain ? { config: { ...asRecord(existingMetric.config), meta: { ...asRecord(asRecord(existingMetric.config).meta), domain } } } : {}),
+    ...(Object.keys(meta).length ? { config: { ...asRecord(existingMetric.config), meta } } : {}),
   };
   if (metricIndex >= 0) metrics[metricIndex] = nextMetric; else metrics.push(nextMetric);
   metricDocument.metrics = metrics;

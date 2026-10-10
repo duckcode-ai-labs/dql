@@ -15174,6 +15174,18 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
       const requestId = apiRequestId('modeling-dbt-metric-apply');
       const snapshot = projectSnapshot();
       try {
+        // The route family is checked as dataset.author. This route also writes git-tracked dbt YAML into the
+        // checkout, which is a change to the project: a host that follows main (Production) refuses project.write
+        // and so refuses this, while a draft space allows both.
+        const principal = hostHooks ? currentPrincipal() : undefined;
+        if (hostHooks && principal) {
+          const decision = await authorizeHostRequest(hostHooks, principal, { action: 'project.write', resource: { type: 'project' } });
+          if (!decision.allow) {
+            res.writeHead(403, { 'Content-Type': 'application/json; charset=utf-8' });
+            res.end(serializeJSON(apiErrorEnvelope({ requestId, snapshotId: snapshot.snapshotId, code: 'HOST_REFUSED', message: decision.reason ?? 'This workspace follows main, so dbt YAML cannot be written here. Open a draft space and add the metric there.', nextActions: ['Open a draft space and add the metric there.'] })));
+            return;
+          }
+        }
         const body = await readJSON(req) as { change?: DbtMetricAuthoringInput; fingerprint?: string; expectedFingerprint?: string; expectedSnapshotId?: string };
         if (!body.change) throw Object.assign(new Error('A dbt metric change is required.'), { code: 'INVALID_REQUEST' });
         if (!body.expectedSnapshotId || body.expectedSnapshotId !== snapshot.snapshotId) {

@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Blocks, BookOpen, Boxes, CheckCircle2, Columns3, Download, EyeOff, FileSearch, FolderTree, GitBranch, GraduationCap, Link2, Maximize2, MessageCircle, Network, PanelRightClose, PanelRightOpen, Plus, RefreshCw, RotateCcw, Search, Settings2, ShieldCheck, SlidersHorizontal, Sparkles, XCircle } from 'lucide-react';
 import { DEFAULT_MODEL_AREA_ID } from '@duckcodeailabs/dql-core/modeling-ids';
 import type { DbtMetricAuthoringInput, DbtMetricPatchPreview, DbtNodeAuthoringDetail, DbtSourceAuthoringInput, DbtSourcePatchPreview, ManifestModelArea, ManifestModelEntity, ManifestModelRelationship, ModelingAuthoringChange, ModelingChangePreview } from '@duckcodeailabs/dql-core';
-import { hostReadOnly, readOnlyReason, useHostUi } from '../../host/host-ui';
+import { hostAllows, hostReadOnly, readOnlyReason, useHostUi, type HostUiState } from '../../host/host-ui';
 import { api, type AgentRunArtifact, type ContextAuthoringProposalV1, type DbtFirstModelingResponse } from '../../api/client';
 import { useNotebook } from '../../store/NotebookStore';
 import type { NotebookFile } from '../../store/types';
@@ -450,7 +450,7 @@ export function DbtFirstModelingPage({ initialSection }: { initialSection?: Doma
               <Plus size={14} /> New metric
             </Button>
           )}
-          {!readOnly && !warehouseModeling && (
+          {!warehouseModeling && canAddDbtMetric(hostUi) && (
             <Button t={t} onClick={() => setDbtMetricOpen(true)}>
               <Plus size={14} /> Add metric
             </Button>
@@ -2431,13 +2431,13 @@ function NewMetricDrawer({ data, domain, t, onClose, onSaved }: { data: DbtFirst
 }
 
 /**
- * dbt-first: a metric belongs to dbt/MetricFlow, so this writes the metric, its measure and any dimensions
- * into the dbt project's YAML through the same preview → apply flow as "Preview dbt source patch".
- * Synonyms are business words, not dbt: they are saved as a Business Term that names the metric.
+ * dbt-first: a metric belongs to dbt/MetricFlow, so this writes the metric, its measure, any dimensions and its
+ * synonyms (`config.meta.synonyms`) into the dbt project's YAML in one patch, through the same preview → apply
+ * flow as "Preview dbt source patch". Nothing else is saved, so the preview shows everything that will change.
  */
 /**
- * The business term that carries a new metric's synonyms. The server refuses a link to a metric Ask cannot find yet,
- * so until dbt has parsed the metric the term is saved unlinked and the user links it afterwards.
+ * No longer used by the drawer: synonyms now go into the dbt YAML patch. Kept only because
+ * add-dbt-metric-synonyms.test.tsx still imports it; delete both together.
  */
 export function dbtMetricSynonymTerm({ label, metricName, synonyms, domain, linked }: { label: string; metricName: string; synonyms: string[]; domain: string | null; linked: boolean }) {
   return {
@@ -2447,6 +2447,14 @@ export function dbtMetricSynonymTerm({ label, metricName, synonyms, domain, link
     ...(linked ? { metricRefs: [metricName] } : {}),
     ...(domain ? { domain } : {}),
   };
+}
+
+/**
+ * "Add metric" writes git-tracked dbt YAML, so it needs project.write as well as the authoring the page already
+ * needs (dataset.author). Production follows main and refuses project.write: read-only there, editable in a draft space.
+ */
+export function canAddDbtMetric(hostUi: HostUiState): boolean {
+  return !hostReadOnly(hostUi, 'domains') && hostAllows(hostUi, 'project.write');
 }
 
 export function AddDbtMetricDrawer({ data, domain, snapshotId, t, onClose, onApplied }: { data: DbtFirstModelingResponse; domain: string | null; snapshotId: string; t: Theme; onClose: () => void; onApplied: (message: string) => Promise<void> }) {
@@ -2488,7 +2496,7 @@ export function AddDbtMetricDrawer({ data, domain, snapshotId, t, onClose, onApp
     modelUniqueId: nodeId,
     ...(entity.trim() && entityColumn.trim() ? { primaryEntity: { name: slug(entity), column: entityColumn.trim() } } : {}),
     ...(timeColumn.trim() ? { timeDimension: { name: slug(timeColumn), column: timeColumn.trim() } } : {}),
-    metric: { name: metricName, label: label.trim() || titleCase(metricName), description: description.trim(), aggregation, column, ...(domain ? { domain } : {}) },
+    metric: { name: metricName, label: label.trim() || titleCase(metricName), description: description.trim(), aggregation, column, ...(domain ? { domain } : {}), ...(csvList(synonyms).length ? { synonyms: csvList(synonyms) } : {}) },
     dimensions: csvList(dimensions).map((item) => ({ name: slug(item), column: item, type: 'categorical' as const })),
   });
   const ready = Boolean(nodeId && metricName && column);
@@ -2501,16 +2509,8 @@ export function AddDbtMetricDrawer({ data, domain, snapshotId, t, onClose, onApp
   const applyPatch = () => run(async () => {
     if (!preview) return;
     const result = await api.applyDbtMetricPatch(change(), preview.fingerprint, preview.snapshotId);
-    const words = csvList(synonyms);
     let message = `Metric ${metricName} written to ${result.applied.patches.filter((patch) => patch.changed).map((patch) => patch.path).join(', ')}.`;
     if (!result.manifestRefresh.refreshed) message += ` ${result.manifestRefresh.reason ?? ''}`;
-    if (words.length) {
-      const linked = result.manifestRefresh.refreshed;
-      await api.createTerm(dbtMetricSynonymTerm({ label, metricName, synonyms: words, domain, linked }));
-      message += linked
-        ? ' Synonyms saved as a business term.'
-        : ` Synonyms saved as a business term, not yet linked to the metric: after dbt parse, open the term in the Glossary and add ${metricName} under its metrics.`;
-    }
     await onApplied(message);
   });
   return (
@@ -2527,7 +2527,7 @@ export function AddDbtMetricDrawer({ data, domain, snapshotId, t, onClose, onApp
           <Field label="Label"><Input value={label} onChange={setLabel} t={t} placeholder="Average claimed amount" /></Field>
           <Field label="What it measures"><Input value={description} onChange={setDescription} t={t} placeholder="Mean amount claimed per claim." /></Field>
           <Field label="Dimensions to add (columns, comma separated)"><Input value={dimensions} onChange={setDimensions} t={t} placeholder="product, region" /></Field>
-          <Field label="Also known as (synonyms, comma separated)"><Input value={synonyms} onChange={setSynonyms} t={t} placeholder="avg claim, mean claim size" /></Field>
+          <Field label="Also known as (synonyms, comma separated; saved in the dbt YAML)"><Input value={synonyms} onChange={setSynonyms} t={t} placeholder="avg claim, mean claim size" /></Field>
           <details>
             <summary style={{ cursor: 'pointer', fontSize: 11, color: t.textMuted }}>This dbt model has no semantic model yet</summary>
             <div style={{ display: 'grid', gap: 10, marginTop: 8 }}>
