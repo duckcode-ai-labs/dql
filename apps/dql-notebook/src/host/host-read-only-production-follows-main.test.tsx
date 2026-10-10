@@ -16,11 +16,13 @@ const strip = (state: HostUiState, view: string) =>
 
 // Each screen, the action that edits it, and a main view that shows it.
 const SCREENS = [
-  { key: 'git', action: 'git.review', view: 'git' },
-  { key: 'ask_observability', action: 'hint.review', view: 'ask_observability' },
+  // git: shown read-only to anyone refused with a draft-space link. Ask observability: only to people who hold
+  // hint.review by role (stewards, admins), whom the host marks readOnly; a creator's draft-space link is not enough.
+  { key: 'git', action: 'git.review', view: 'git', readOnly: {} },
+  { key: 'ask_observability', action: 'hint.review', view: 'ask_observability', readOnly: { readOnly: true } },
 ];
 
-describe.each(SCREENS)('$key when Production follows main', ({ key, action, view }) => {
+describe.each(SCREENS)('$key when Production follows main', ({ key, action, view, readOnly }) => {
   it('is hidden from a viewer or explorer: refused with no next step, or no refusal at all', () => {
     const viewer = hosted({ 'project.read': true });
     expect(navItemAllowed(viewer, key)).toBe(false);
@@ -29,7 +31,7 @@ describe.each(SCREENS)('$key when Production follows main', ({ key, action, view
   });
 
   it('shows read-only with the draft-space link when refused with a next step', () => {
-    const creator = hosted({ 'project.read': true }, { [action]: { reason: REASON, next: DRAFT } });
+    const creator = hosted({ 'project.read': true }, { [action]: { reason: REASON, next: DRAFT, ...readOnly } });
     expect(navItemAllowed(creator, key)).toBe(true);
     expect(hostReadOnly(creator, key)).toBe(true);
     const html = strip(creator, view);
@@ -48,6 +50,13 @@ describe.each(SCREENS)('$key when Production follows main', ({ key, action, view
   it('is unchanged without a host', () => {
     expect(navItemAllowed(NO_HOST, key)).toBe(true);
     expect(hostReadOnly(NO_HOST, key)).toBe(false);
+  });
+});
+
+describe('Ask observability for a creator', () => {
+  it('stays hidden when the refusal carries only a draft-space link', () => {
+    const creator = hosted({ 'project.read': true }, { 'hint.review': { reason: REASON, next: DRAFT } });
+    expect(navItemAllowed(creator, 'ask_observability')).toBe(false);
   });
 });
 
