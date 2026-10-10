@@ -63,8 +63,9 @@ const REQUIRED_TEST_FILES = [
 // 180 with the Bedrock Converse provider (+1 file, +29 tests);
 // 181 with certified-block matching by meaning (+1 file, +14 tests).
 // 182 with the block grain read from GROUP BY (+1 file, +4 tests);
-// 183 with the time grain a block proves by date_trunc (+1 file, +5 tests).
-const EXPECTED_TEST_FILES = 183;
+// 183 with the time grain a block proves by date_trunc (+1 file, +5 tests);
+// 184 with the refusal sentence of a certified block not used (+1 file, +8 tests).
+const EXPECTED_TEST_FILES = 184;
 // Keep the aggregate receipt exact. The Ask pipeline suites (intent contract,
 // vocabulary, governed defaults and host proofs, prepare tiers), the engine,
 // observability, retrieval, semantic-proof, research-ledger, conversation and
@@ -87,8 +88,9 @@ const EXPECTED_TEST_FILES = 183;
 // 2363 (179 files) with a follow-up's earlier values named by position outside the privacy boundary
 // (prior-values.test.ts, +3 tests);
 // 2393 (180 files) with the Bedrock Converse provider (bedrock-converse.test.ts, +30 tests).
-// 2416 (183 files) with the time-grain proof (certified-time-grain.test.ts, +5 tests).
-const EXPECTED_TESTS = 2416;
+// 2416 (183 files) with the time-grain proof (certified-time-grain.test.ts, +5 tests);
+// 2424 (184 files) with the refusal sentence (certified-refusal-sentence.test.ts, +8 tests).
+const EXPECTED_TESTS = 2424;
 // The heavy lane's share of EXPECTED_TESTS (catalog.test.ts 72 + project-state.test.ts 4), pinned so
 // a lane run on its own (CI runs the two lanes as separate steps) is audited as exactly as both together.
 // The ordinary lane's share is the difference: 2316.
