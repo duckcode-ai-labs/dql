@@ -25054,7 +25054,12 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
                   : {}),
                 stableSuffix,
               });
-        const canonicalPath = existingCanonicalDraft ? draftPath : canonicalCertified ? currentPath! : undefined;
+        // Certifying the copy saved beside a certified block replaces that
+        // certified file; it never publishes a second block.
+        const certifiedBesideDraft = currentPath && isDraftBlockPath(currentPath)
+          ? canonicalForDraftBeside(projectRoot, currentPath)
+          : undefined;
+        const canonicalPath = existingCanonicalDraft ? draftPath : canonicalCertified ? currentPath! : certifiedBesideDraft;
         const operation = operationCoordinator.create({
           type: 'block_certification',
           scope: `block:${draftPath}`,
@@ -25104,12 +25109,13 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
           }
 
           report({ phase: 'publishing', progress: 82, message: 'Publishing the certified block.' });
-          const certifiedSource = setBlockStudioStatusInSource(draftSource, 'certified');
+          const publishedDraftSource = certifiedBesideDraft ? stripDraftEditName(draftSource) : draftSource;
+          const certifiedSource = setBlockStudioStatusInSource(publishedDraftSource, 'certified');
           const certifiedMetadata = parseBlockSourceMetadata(certifiedSource);
           const savedPath = saveBlockStudioArtifacts(projectRoot, {
             currentPath: canonicalPath ?? draftPath,
             source: certifiedSource,
-            name: certifiedMetadata.name || name,
+            name: certifiedMetadata.name || (certifiedBesideDraft ? stripDraftEditSuffix(name) : name),
             domain: certifiedMetadata.domain,
             description: certifiedMetadata.description,
             owner: certifiedMetadata.owner,
@@ -40566,6 +40572,46 @@ export function nameDraftEditBesideCertified(source: string): string {
   return source.replace(/(\bblock\s+")([^"]*)(")/, (match, open: string, name: string, close: string) => (
     name.endsWith(DRAFT_EDIT_NAME_SUFFIX) ? match : `${open}${name}${DRAFT_EDIT_NAME_SUFFIX}${close}`
   ));
+}
+
+function stripDraftEditSuffix(name: string): string {
+  return name.endsWith(DRAFT_EDIT_NAME_SUFFIX) ? name.slice(0, -DRAFT_EDIT_NAME_SUFFIX.length) : name;
+}
+
+/** The reverse of {@link nameDraftEditBesideCertified}: the name the certified block keeps. */
+export function stripDraftEditName(source: string): string {
+  return source.replace(/(\bblock\s+")([^"]*)(")/, (_match, open: string, name: string, close: string) => (
+    `${open}${stripDraftEditSuffix(name)}${close}`
+  ));
+}
+
+/**
+ * The certified file a draft was saved beside: the reverse of
+ * {@link draftBesideCanonical}. Undefined when the draft is not such a copy or
+ * the certified file is gone.
+ */
+export function canonicalForDraftBeside(projectRoot: string, draftPath: string): string | undefined {
+  const suffix = /-([0-9a-f]{16})\.dql$/.exec(draftPath)?.[1];
+  if (!suffix) return undefined;
+  let found: string | undefined;
+  const visit = (dir: string, depth: number) => {
+    if (found || depth > 6 || !existsSync(dir)) return;
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const child = join(dir, entry.name);
+      if (entry.isDirectory()) {
+        visit(child, depth + 1);
+        continue;
+      }
+      if (!entry.name.endsWith('.dql')) continue;
+      const relativePath = relative(projectRoot, child).replaceAll('\\', '/');
+      if (isDraftBlockPath(relativePath)) continue;
+      if (createHash('sha256').update(relativePath).digest('hex').slice(0, 16) !== suffix) continue;
+      if (/^\s*status\s*=\s*"certified"/m.test(readFileSync(child, 'utf-8'))) found = relativePath;
+    }
+  };
+  visit(join(projectRoot, 'domains'), 0);
+  visit(join(projectRoot, 'blocks'), 0);
+  return found;
 }
 
 export function saveBlockStudioDraftArtifacts(
