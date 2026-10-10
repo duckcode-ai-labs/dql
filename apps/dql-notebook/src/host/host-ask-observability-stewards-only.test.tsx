@@ -8,22 +8,17 @@ function hosted(capabilities: Record<string, boolean>, refusals?: HostUi['refusa
   return { host: true, person: { id: 'u1', name: 'Cleo', kind: 'person' }, capabilities, links: [], answerActions: [], ...(refusals ? { refusals } : {}) };
 }
 
-// Source control opens read-only for anyone sent to a draft space (`next`); Ask observability is for stewards and
-// admins, whom the host marks `readOnly` (every creator gets a `next` link too).
-describe('Ask observability is for stewards and admins', () => {
-  it('stays hidden from a creator whose refusal carries a next link, in Production and in a draft space', () => {
-    const production = hosted({ 'project.read': true }, { 'hint.review': { reason: REASON, next: DRAFT } });
-    expect(navItemAllowed(production, 'ask_observability')).toBe(false);
-    const draftSpace = hosted({ 'project.read': true }, { 'hint.review': { reason: 'Only a steward may review.' } });
-    expect(navItemAllowed(draftSpace, 'ask_observability')).toBe(false);
+// Who sees Ask observability is the host's call: it sends a refusal (with or without a next link) only to the people
+// it wants to see the screen read-only. A refusal that carries the `readOnly` mark (a steward whom Production refuses
+// the write) is shown the same way as one with a next link.
+describe('Ask observability in the sidebar', () => {
+  it('is hidden when the host sends no refusal, or a refusal with no next link and no readOnly mark', () => {
+    expect(navItemAllowed(hosted({ 'project.read': true }), 'ask_observability')).toBe(false);
+    expect(navItemAllowed(hosted({ 'project.read': true }, { 'hint.review': { reason: 'Only a steward may review.' } }), 'ask_observability')).toBe(false);
   });
 
-  it('shows for a steward: read-only where Production refuses the write, editable where it is allowed', () => {
+  it('shows for a steward whom Production refuses the write, and where the write is allowed', () => {
     expect(navItemAllowed(hosted({ 'project.read': true }, { 'hint.review': { reason: REASON, next: DRAFT, readOnly: true } }), 'ask_observability')).toBe(true);
     expect(navItemAllowed(hosted({ 'project.read': true, 'hint.review': true }), 'ask_observability')).toBe(true);
-  });
-
-  it('keeps Source control for a creator with a next link', () => {
-    expect(navItemAllowed(hosted({ 'project.read': true }, { 'git.review': { reason: REASON, next: DRAFT } }), 'git')).toBe(true);
   });
 });
