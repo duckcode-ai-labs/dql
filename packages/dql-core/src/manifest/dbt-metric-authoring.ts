@@ -315,7 +315,8 @@ export function previewDbtMetricPatch(
     if (word && !synonyms.some((seen) => seen.toLowerCase() === word.toLowerCase())) synonyms.push(word);
   }
   const existingMeta = asRecord(asRecord(existingMetric.config).meta);
-  const meta: UnknownRecord = { ...existingMeta, ...(domain ? { domain } : {}), ...(synonyms.length ? { synonyms } : {}) };
+  // dql.authored marks a metric written here: DQL reads it from the YAML until dbt parses it into the manifest.
+  const meta: UnknownRecord = { ...existingMeta, ...(domain ? { domain } : {}), ...(synonyms.length ? { synonyms } : {}), dql: { ...asRecord(existingMeta.dql), authored: true } };
   const nextMetric: UnknownRecord = {
     ...existingMetric,
     name: metricName,

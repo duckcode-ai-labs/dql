@@ -394,10 +394,11 @@ function readYamlOverlay(dbtRoot: string, yamlFiles: string[], manifestMtimeMs: 
   const overlay: YamlOverlay = { models: [], metrics: [] };
   for (const filePath of yamlFiles) {
     try {
-      // Only files edited after the manifest are used (see applyYamlOverlay), so older ones are not even read.
+      // Files edited after the manifest are read. Older ones only when they hold a metric DQL's Add metric wrote
+      // (meta.dql.authored): a git checkout writes models/ before target/manifest.json, so file times cannot tell.
       const mtimeMs = statSync(filePath).mtimeMs;
-      if (mtimeMs <= manifestMtimeMs) continue;
       const text = readFileSync(filePath, 'utf-8');
+      if (mtimeMs <= manifestMtimeMs && !/\bauthored\s*:\s*true\b/.test(text)) continue;
       if (!/^(semantic_models|metrics)\s*:/m.test(text)) continue;
       const doc = yaml.load(text) as Record<string, unknown> | null;
       if (!doc || typeof doc !== 'object') continue;
@@ -427,6 +428,12 @@ function referencedNames(value: unknown, output: Set<string>, underReferenceKey 
   }
 }
 
+/** A metric DQL's Add metric wrote (`config.meta.dql.authored: true`), unless dbt disables it. */
+function dqlAuthored(item: DbtMetric): boolean {
+  const config = (item as { config?: { enabled?: unknown; meta?: { dql?: { authored?: unknown } } } }).config;
+  return config?.enabled !== false && config?.meta?.dql?.authored === true;
+}
+
 /**
  * Add the YAML's semantic models and metrics to those read from the manifest, in place. The manifest stays the base:
  * a YAML entry is used only when the manifest lacks it, or when its file changed after the manifest was written.
@@ -441,8 +448,25 @@ function applyYamlOverlay(
 ): void {
   // A file older than the manifest was already seen by dbt: what the manifest lacks from it was left out on purpose
   // (disabled, another package), so only files edited after the manifest was written are read.
+  // Measures that metrics written by Add metric need, for files older than the manifest (see readYamlOverlay).
+  const authoredMeasures = new Set<string>();
+  for (const { item } of overlay.metrics) {
+    if (!dqlAuthored(item) || metrics.some((metric) => metric.name === item.name)) continue;
+    const measure = firstSemanticRefName(item.type_params?.measure, item.type_params?.measure_name);
+    if (measure) authoredMeasures.add(measure);
+  }
   for (const { item, mtimeMs } of overlay.models) {
-    if (mtimeMs <= manifestMtimeMs) continue;
+    if (mtimeMs <= manifestMtimeMs) {
+      // An older file: only the measures an authored metric needs, added to the manifest's model when it lacks them.
+      const index = models.findIndex((model) => model.name === item.name);
+      const needed = (item.measures ?? []).filter((measure) => authoredMeasures.has(measure.name));
+      if (needed.length === 0) continue;
+      if (index < 0) { models.push(item); continue; }
+      const have = models[index]!.measures ?? [];
+      const extra = needed.filter((measure) => !have.some((existing) => existing.name === measure.name));
+      if (extra.length > 0) models[index] = { ...models[index]!, measures: [...have, ...extra] };
+      continue;
+    }
     const index = models.findIndex((model) => model.name === item.name);
     if (index < 0) models.push(item);
     else models[index] = { ...item, ...(models[index]!.columnDescriptions ? { columnDescriptions: models[index]!.columnDescriptions } : {}) };
@@ -450,8 +474,9 @@ function applyYamlOverlay(
   const measures = new Set(models.flatMap((model) => (model.measures ?? []).map((measure) => measure.name)));
   const metricNames = new Set(metrics.map((metric) => metric.name));
   for (const { item, file, mtimeMs } of overlay.metrics) {
-    if (mtimeMs <= manifestMtimeMs) continue;
     const index = metrics.findIndex((metric) => metric.name === item.name);
+    // An older file is read only for a metric Add metric wrote that dbt has not parsed yet.
+    if (mtimeMs <= manifestMtimeMs && !(dqlAuthored(item) && index < 0)) continue;
     const problems: string[] = [];
     if (!OVERLAY_NAME.test(item.name)) problems.push('the name must be lowercase letters, digits and single underscores');
     const type = String(item.type ?? 'simple').toLowerCase();
