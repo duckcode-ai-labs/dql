@@ -2436,20 +2436,6 @@ function NewMetricDrawer({ data, domain, t, onClose, onSaved }: { data: DbtFirst
  * flow as "Preview dbt source patch". Nothing else is saved, so the preview shows everything that will change.
  */
 /**
- * No longer used by the drawer: synonyms now go into the dbt YAML patch. Kept only because
- * add-dbt-metric-synonyms.test.tsx still imports it; delete both together.
- */
-export function dbtMetricSynonymTerm({ label, metricName, synonyms, domain, linked }: { label: string; metricName: string; synonyms: string[]; domain: string | null; linked: boolean }) {
-  return {
-    name: label.trim() || titleCase(metricName),
-    termType: 'metric' as const,
-    synonyms,
-    ...(linked ? { metricRefs: [metricName] } : {}),
-    ...(domain ? { domain } : {}),
-  };
-}
-
-/**
  * "Add metric" writes git-tracked dbt YAML, so it needs project.write as well as the authoring the page already
  * needs (dataset.author). Production follows main and refuses project.write: read-only there, editable in a draft space.
  */
