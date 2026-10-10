@@ -72,6 +72,7 @@ import {
   type RuntimeSchemaTable,
   priorWithoutValues,
   sqlStringValues,
+  standsAloneAsNewQuestion,
 } from '@duckcodeailabs/dql-agent';
 import { buildProjectVocabulary, buildVocabularySource, embeddedManifestRelations, normalizeRelationName, type VocabularySourceInput } from './vocabulary-source.js';
 import { businessIdentifierLine, businessIdentifiers, modelingEntityTexts, certifiedJoinViolations, classifySqlJoins, ledgerJoins, markerTableLine, markerTables, modeledJoinPaths, modelingRelationshipEdges, sameRelation, sharedParentShortcuts, type LedgerJoin } from './join-relationships.js';
@@ -1787,7 +1788,7 @@ export function createAskPipelineHost(deps: AskPipelineHostDeps): AskPipelineHos
     // validation, execution evidence and receipt) reads the same bindings.
     let requestVocabulary = vocabulary;
     const currentVocabulary = () => requestVocabulary;
-    const priorTurn = request.threadId ? await deps.priorIntent(request) : undefined;
+    const priorTurn = request.threadId && readsAsEditOfPriorTurn(request) ? await deps.priorIntent(request) : undefined;
     // The thread's compacted memory, read once for this run (a host store answers with a Promise).
     const threadMemory = await deps.conversation?.(request);
     // RFC 0010 HH-5: an earlier answer's text and the thread's memory carry its figures. They reach this model only
@@ -2885,6 +2886,23 @@ interface MissingRelationEvidence {
   expiresAt: number;
   /** Original warehouse spelling for an actionable, non-quoted diagnostic. */
   relation: string;
+}
+
+/**
+ * Is this turn read as an edit of the thread's last analysis? The browser always
+ * sends a thread, the API usually does not, so an earlier turn used to decide
+ * whether a complete question was read on its own or as an edit of the last
+ * answer (and an edit of an AI-drafted answer stays AI-drafted). A question
+ * that stands on its own, or that the thread itself calls a new topic, is read
+ * alone; an explicit selection or clarification reply always keeps its thread.
+ * The thread's memory still reaches the SQL drafter either way.
+ */
+export function readsAsEditOfPriorTurn(request: Pick<AgentRunRequest, 'question' | 'conversationContext' | 'selectedEvidenceId' | 'selectedResultBinding' | 'clarificationSourceQuestion'>): boolean {
+  if (request.selectedEvidenceId || request.selectedResultBinding || request.clarificationSourceQuestion) return true;
+  const envelope = request.conversationContext?.conversationEnvelope as { topicRelation?: unknown; pendingClarification?: unknown } | undefined;
+  if (envelope?.pendingClarification) return true;
+  if (envelope?.topicRelation === 'shift') return false;
+  return !standsAloneAsNewQuestion(request.question);
 }
 
 const MISSING_RELATION_TTL_MS = 60_000;

@@ -1044,6 +1044,7 @@ export {
   isLikelyClarificationReply,
   recallRelevantTurns,
   renderConversationEnvelopeForPrompt,
+  standsAloneAsNewQuestion,
 } from "./conversation/snapshot.js";
 export type {
   ConversationEnvelopeV1,
