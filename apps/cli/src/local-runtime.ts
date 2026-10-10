@@ -15471,7 +15471,7 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
       // RFC 0010: with a host, a trace is listed only to the person whose run it is (runs are owner-scoped), and the
       // page cursor names only a trace that person may see: pages are read until one holds enough of theirs.
       // A person who reviews answers for the workspace (a steward) lists everyone's: the list shows each question
-      // and why it was answered or refused, which is what they review. Opening a trace stays the asker's own.
+      // and why it was answered or refused, which is what they review. A reviewer opens any of them; exporting one stays the asker's own.
       const reviewsAll = await hostedMayReviewAllRuns();
       const scoped = currentRecordOwner() !== undefined && !reviewsAll;
       const runsForList = reviewsAll ? storedAgentRuns : agentRunStore;
@@ -15514,7 +15514,8 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
       }
       const runId = decodeURIComponent(path.slice('/api/ask-traces/by-run/'.length));
       // Someone else's run's trace is "not found", as the run is.
-      const trace = currentRecordOwner() !== undefined && !(await agentRunStore.get(runId)) ? null : askTraceStore.getByRun(runId);
+      const traceRuns = (await hostedMayReviewAllRuns()) ? storedAgentRuns : agentRunStore;
+      const trace = currentRecordOwner() !== undefined && !(await traceRuns.get(runId)) ? null : askTraceStore.getByRun(runId);
       if (!trace) {
         res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(serializeJSON({ code: 'TRACE_NOT_FOUND', error: 'No local trace was found for this Ask run.' }));
@@ -15525,7 +15526,7 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
         res.end(serializeJSON({ code: 'TRACE_DETAIL_EXPIRED', error: 'Detailed trace evidence has expired; the run summary remains available.', envelope: trace.envelope }));
         return;
       }
-      const run = await agentRunStore.get(runId);
+      const run = await traceRuns.get(runId);
       const projectedTrace = {
         ...trace,
         envelope: projectAuthoritativeV8TraceEnvelope(trace.envelope, run),
@@ -15608,7 +15609,8 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
       }
       const traceId = path.split('/').at(-1) ?? '';
       const stored = askTraceStore.get(traceId);
-      const trace = stored && currentRecordOwner() !== undefined && !(await agentRunStore.get(stored.envelope.runId)) ? null : stored;
+      const traceRuns = (await hostedMayReviewAllRuns()) ? storedAgentRuns : agentRunStore;
+      const trace = stored && currentRecordOwner() !== undefined && !(await traceRuns.get(stored.envelope.runId)) ? null : stored;
       if (!trace) {
         res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(serializeJSON({ code: 'TRACE_NOT_FOUND', error: 'No local trace was found.' }));
@@ -15619,7 +15621,7 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
         res.end(serializeJSON({ code: 'TRACE_DETAIL_EXPIRED', error: 'Detailed trace evidence has expired; the run summary remains available.', envelope: trace.envelope }));
         return;
       }
-      const run = await agentRunStore.get(trace.envelope.runId);
+      const run = await traceRuns.get(trace.envelope.runId);
       const projectedTrace = {
         ...trace,
         envelope: projectAuthoritativeV8TraceEnvelope(trace.envelope, run),
