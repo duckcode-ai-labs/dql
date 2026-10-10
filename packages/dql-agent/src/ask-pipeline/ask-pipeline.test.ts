@@ -2931,7 +2931,9 @@ describe('two governed sources: certified blocks and authored semantics; everyth
       },
       executeDeps: { run: async () => ({ columns: ['region', 'revenue'], rows: [{ region: 'east', revenue: 3 }], rowCount: 1, executionTimeMs: 1 }) },
     });
-    expect(dispatches).toBe(1);
+    // "revenue by region" names a metric and a dimension outright, so it is read without the model (lexical reading);
+    // the point is unchanged: no repair re-ask, one AI SQL draft.
+    expect(dispatches).toBe(0);
     expect(drafts).toBe(1);
     expect(outcome.kind).toBe('answered');
     if (outcome.kind === 'answered') expect(outcome.candidate.trust).toBe('review_required');
