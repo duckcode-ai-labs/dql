@@ -27,6 +27,14 @@ export interface PreparationCache {
   set(key: string, candidate: PreparedCandidate): void;
 }
 
+/**
+ * What the run that first prepared a candidate tried before it settled on it
+ * (which tiers, and why the ones it passed over said no). A reused preparation
+ * replays this, so a later run's trace still shows that the certified tier was
+ * tried and why a block was not used, instead of showing no tier at all.
+ */
+const preparedWith = new WeakMap<PreparedCandidate, { tiers: PipelineReceipt['tiers']; refusals: PreparedRefusal[] }>();
+
 export interface RunAskPipelineInput {
   question: string;
   vocabulary: VocabularyIndex;
@@ -1249,6 +1257,12 @@ export async function runAskPipeline(input: RunAskPipelineInput): Promise<Pipeli
     if (cached) {
       candidate = cached;
       receipt.reuse = 'preparation';
+      const earlier = preparedWith.get(cached);
+      if (earlier) {
+        receipt.refusals.push(...earlier.refusals);
+        receipt.tiers.push(...earlier.tiers);
+        tierSteps(earlier.tiers, undefined, 'when first prepared');
+      }
       step('tier', `${TIER_NAMES[cached.tier] ?? cached.tier}: reused an earlier validated preparation`, 'done');
       receipt.candidates.push({ tier: cached.tier, trust: cached.trust, proof: [...cached.proof, 'reused a previously validated preparation'], sqlFingerprint: fingerprintSql(cached.sql), ...(cached.engine ? { engine: cached.engine } : {}) });
       mark('prepare', prepareStarted);
@@ -1521,7 +1535,11 @@ export async function runAskPipeline(input: RunAskPipelineInput): Promise<Pipeli
     return { kind: 'failed', stage: 'execute', message: executed.message, text: composeFailedText('execute', executed.message, executed.warehouse), receipt, intent };
   }
   const cacheKey = `${input.cacheScope ?? ''}|${intentExecutionFingerprint(intent)}`;
-  input.preparationCache?.set(cacheKey, candidate);
+  if (input.preparationCache) {
+    // A candidate reused from an earlier run keeps what that run recorded; its replay is already in this receipt.
+    if (!preparedWith.has(candidate)) preparedWith.set(candidate, { tiers: [...receipt.tiers], refusals: [...receipt.refusals] });
+    input.preparationCache.set(cacheKey, candidate);
+  }
   receipt.executed = { tier: candidate.tier, sqlFingerprint: fingerprintSql(candidate.sql), rowCount: executed.result.rowCount, ms: Math.round(executed.result.executionTimeMs), proofs: executed.proofs };
   timings.total = Math.round(now() - started);
   // A certified block matched by meaning names its columns its own way; the
