@@ -42,10 +42,13 @@ export function entails(block: VocabularyEntry, intent: AnalyticalIntentV1, voca
   if (intent.population === 'all') return { ok: false, missing: ['a block returns the rows it matched; it cannot include every member of the entity'], caveats };
   const outputs = new Set(contract.outputs.map(norm));
   // A filter names a field of the project's vocabulary; a block's scope names a
-  // physical column. They are the same filter when the field IS that column.
+  // physical column. They are the same filter when the field IS that column of
+  // the block's own table; a same-named column of another table is not.
   const columnsOf = (ref: string) => {
     const entry = vocabulary.get(ref);
-    return [leaf(ref), entry?.physical?.column, entry?.name].filter((name): name is string => Boolean(name)).map(norm);
+    const relation = entry?.physical?.relation;
+    const sameTable = !relation || (contract.source !== undefined && sameRelation(contract.source, relation));
+    return [leaf(ref), ...(sameTable ? [entry?.physical?.column, entry?.name] : [])].filter((name): name is string => Boolean(name)).map(norm);
   };
   const filtersColumn = (predicate: { ref: string }, column: string) => columnsOf(predicate.ref).includes(norm(column));
 

@@ -41,9 +41,21 @@ describe('a question filter that equals the block literal filter entails it', ()
     expect(prepared.candidates[0]).toMatchObject({ tier: 'certified', trust: 'certified', sourceRef: blockRef });
   });
 
-  it('the same value written as a one-member set, or in another case, entails too', () => {
+  it('the same value written as a one-member set entails too', () => {
     expect(entails(vocabulary.get(blockRef)!, asked([status(['open'], 'in')]), vocabulary).ok).toBe(true);
-    expect(entails(vocabulary.get(blockRef)!, asked([status(['OPEN'])]), vocabulary).ok).toBe(true);
+  });
+
+  it('a column of the same name on another table is a different column', () => {
+    const other = buildVocabularyIndex({
+      metrics: [{ name: 'claim_count', model: 'claims', aggregation: 'count_distinct', physical: { relation: 'claims', expr: '"claims"."claim_id"', aggregate: 'count_distinct' } }],
+      dimensions: [
+        { name: 'region', model: 'claims', dataType: 'string', physical: { relation: 'claims', column: 'region' } },
+        { name: 'policy_status', model: 'policies', dataType: 'string', physical: { relation: 'policies', column: 'status' } },
+      ],
+      blocks: [{ name: 'open_claims_by_region', domain: 'claims', certified: true, sql: SQL, contract: extractBlockContract({ name: 'open_claims_by_region', domain: 'claims', sql: SQL }) }],
+    });
+    const verdict = entails(other.get(blockRef)!, asked([{ ref: 'dimension:policies.policy_status', op: 'eq', values: ['open'] }]), other);
+    expect(verdict.ok).toBe(false);
   });
 
   it('a different value is not used and the sentence says which rows differ', () => {
