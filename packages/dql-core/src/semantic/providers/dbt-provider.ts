@@ -5,7 +5,7 @@
  */
 
 import { readFileSync, readdirSync, existsSync, statSync } from 'node:fs';
-import { dirname, extname, join, resolve } from 'node:path';
+import { dirname, extname, join, relative, resolve } from 'node:path';
 import * as yaml from 'js-yaml';
 import {
   SemanticLayer,
@@ -171,15 +171,27 @@ export class DbtProvider implements SemanticLayerProvider {
     // MetricFlow/dbt Semantic Layer compatibility artifact and includes saved
     // queries plus resolved semantic metadata. Fall back to manifest.json and
     // then source YAML for projects that have not parsed semantic artifacts yet.
+    const modelPaths = config.modelPaths?.length
+      ? config.modelPaths
+      : dbtProjectSettings.modelPaths;
+    const yamlFiles = Array.from(new Set(
+      modelPaths.flatMap((modelPath) => collectYamlFiles(resolve(dbtRoot, modelPath))),
+    ));
+    // When an artifact already holds metrics it is the base and is returned as is, except that semantic models and
+    // metrics in the project YAML which it lacks (or which were edited after it was written) are read from the YAML.
+    // The manifest does not know about a metric added to the YAML until `dbt parse` runs.
+    const overlayFor = (artifactPath: string): YamlOverlay | undefined =>
+      yamlFiles.length > 0 && artifactHasTopLevelMetrics(artifactPath) ? readYamlOverlay(dbtRoot, yamlFiles) : undefined;
+
     let artifactLayer: SemanticLayer | null = null;
     if (existsSync(semanticManifestPath)) {
-      artifactLayer = loadFromManifestJson(semanticManifestPath, 'semantic_manifest');
+      artifactLayer = loadFromManifestJson(semanticManifestPath, 'semantic_manifest', overlayFor(semanticManifestPath));
       if (artifactLayer && artifactHasTopLevelMetrics(semanticManifestPath)) return artifactLayer;
     }
 
     let manifestInventory: SemanticLayer | null = null;
     if (existsSync(manifestPath)) {
-      const layer = loadFromManifestJson(manifestPath, 'manifest');
+      const layer = loadFromManifestJson(manifestPath, 'manifest', overlayFor(manifestPath));
       if (layer && artifactHasTopLevelMetrics(manifestPath)) return layer;
       artifactLayer ??= layer;
       manifestInventory = loadDbtModelInventoryFromManifestPath(manifestPath);
@@ -189,12 +201,6 @@ export class DbtProvider implements SemanticLayerProvider {
     // MetricFlow nodes are absent. Keep that inventory, but still scan the
     // configured model paths so semantic YAML is not hidden by an early return.
     const layer = artifactLayer ?? manifestInventory ?? new SemanticLayer();
-    const modelPaths = config.modelPaths?.length
-      ? config.modelPaths
-      : dbtProjectSettings.modelPaths;
-    const yamlFiles = Array.from(new Set(
-      modelPaths.flatMap((modelPath) => collectYamlFiles(resolve(dbtRoot, modelPath))),
-    ));
     if (yamlFiles.length === 0) return layer;
 
     // First pass: collect all semantic models so we can resolve measure references
@@ -283,7 +289,7 @@ export class DbtProvider implements SemanticLayerProvider {
  * Returns `null` if the manifest is unreadable or contains no semantic nodes,
  * signalling the caller to fall back to the YAML walker.
  */
-function loadFromManifestJson(manifestPath: string, artifactKind: 'manifest' | 'semantic_manifest'): SemanticLayer | null {
+function loadFromManifestJson(manifestPath: string, artifactKind: 'manifest' | 'semantic_manifest', overlay?: YamlOverlay): SemanticLayer | null {
   let manifest: Record<string, unknown>;
   try {
     manifest = JSON.parse(readFileSync(manifestPath, 'utf-8')) as Record<string, unknown>;
@@ -345,6 +351,7 @@ function loadFromManifestJson(manifestPath: string, artifactKind: 'manifest' | '
   }
 
   const layer = new SemanticLayer();
+  if (overlay) applyYamlOverlay(layer, overlay, models, dbtMetrics, statSync(manifestPath).mtimeMs);
 
   // Build measure lookup first (identical logic to the YAML path).
   const measureLookup: DbtMeasureLookup = new Map();
@@ -371,6 +378,97 @@ function loadFromManifestJson(manifestPath: string, artifactKind: 'manifest' | '
   }
 
   return layer;
+}
+
+/** Semantic models and metrics found in the dbt project's YAML, with the file each came from. */
+interface YamlOverlay {
+  models: Array<{ item: DbtSemanticModel; file: string; mtimeMs: number }>;
+  metrics: Array<{ item: DbtMetric; file: string; mtimeMs: number }>;
+}
+
+const OVERLAY_NAME = /^[a-z][a-z0-9]*(_[a-z0-9]+)*$/;
+const OVERLAY_REFERENCE_KEYS = new Set(['measure', 'measure_name', 'numerator', 'denominator', 'metric', 'metric_name', 'metrics', 'input_measures', 'input_metrics', 'base_metric', 'conversion_metric']);
+
+/** Read `semantic_models` and `metrics` from the project's YAML. A file that cannot be read is skipped, never fatal. */
+function readYamlOverlay(dbtRoot: string, yamlFiles: string[]): YamlOverlay {
+  const overlay: YamlOverlay = { models: [], metrics: [] };
+  for (const filePath of yamlFiles) {
+    try {
+      const doc = yaml.load(readFileSync(filePath, 'utf-8')) as Record<string, unknown> | null;
+      if (!doc || typeof doc !== 'object') continue;
+      const file = relative(dbtRoot, filePath).replace(/\\/g, '/');
+      const mtimeMs = statSync(filePath).mtimeMs;
+      for (const model of Array.isArray(doc.semantic_models) ? doc.semantic_models : []) {
+        if (model && typeof model === 'object' && typeof (model as DbtSemanticModel).name === 'string') overlay.models.push({ item: model as DbtSemanticModel, file, mtimeMs });
+      }
+      for (const metric of Array.isArray(doc.metrics) ? doc.metrics : []) {
+        if (metric && typeof metric === 'object' && typeof (metric as DbtMetric).name === 'string') overlay.metrics.push({ item: metric as DbtMetric, file, mtimeMs });
+      }
+    } catch {
+      // A malformed YAML file does not stop the manifest from loading.
+    }
+  }
+  return overlay;
+}
+
+function referencedNames(value: unknown, output: Set<string>, underReferenceKey = false): void {
+  if (typeof value === 'string') {
+    if (underReferenceKey && value.trim()) output.add(value.trim());
+    return;
+  }
+  if (Array.isArray(value)) { for (const item of value) referencedNames(item, output, underReferenceKey); return; }
+  if (!value || typeof value !== 'object') return;
+  for (const [key, nested] of Object.entries(value as Record<string, unknown>)) {
+    referencedNames(nested, output, OVERLAY_REFERENCE_KEYS.has(key) || (underReferenceKey && key === 'name'));
+  }
+}
+
+/**
+ * Add the YAML's semantic models and metrics to those read from the manifest, in place. The manifest stays the base:
+ * a YAML entry is used only when the manifest lacks it, or when its file changed after the manifest was written.
+ * A YAML metric that does not resolve is left out and named in the layer's diagnostics.
+ */
+function applyYamlOverlay(
+  layer: SemanticLayer,
+  overlay: YamlOverlay,
+  models: DbtSemanticModel[],
+  metrics: DbtMetric[],
+  manifestMtimeMs: number,
+): void {
+  // A file older than the manifest was already seen by dbt: what the manifest lacks from it was left out on purpose
+  // (disabled, another package), so only files edited after the manifest was written are read.
+  for (const { item, mtimeMs } of overlay.models) {
+    if (mtimeMs <= manifestMtimeMs) continue;
+    const index = models.findIndex((model) => model.name === item.name);
+    if (index < 0) models.push(item);
+    else models[index] = { ...item, ...(models[index]!.columnDescriptions ? { columnDescriptions: models[index]!.columnDescriptions } : {}) };
+  }
+  const measures = new Set(models.flatMap((model) => (model.measures ?? []).map((measure) => measure.name)));
+  const metricNames = new Set(metrics.map((metric) => metric.name));
+  for (const { item, file, mtimeMs } of overlay.metrics) {
+    if (mtimeMs <= manifestMtimeMs) continue;
+    const index = metrics.findIndex((metric) => metric.name === item.name);
+    const problems: string[] = [];
+    if (!OVERLAY_NAME.test(item.name)) problems.push('the name must be lowercase letters, digits and single underscores');
+    const type = String(item.type ?? 'simple').toLowerCase();
+    const refs = new Set<string>();
+    referencedNames(item.type_params, refs);
+    if (refs.size === 0) problems.push('it names no measure or metric');
+    for (const ref of refs) if (!measures.has(ref) && !metricNames.has(ref)) problems.push(`"${ref}" is not a measure or metric in the manifest or the YAML`);
+    if (type === 'simple') {
+      const measureName = firstSemanticRefName(item.type_params?.measure, item.type_params?.measure_name);
+      const agg = models.flatMap((model) => model.measures ?? []).find((measure) => measure.name === measureName)?.agg;
+      if (agg && !AGG_TYPE_MAP[agg]) problems.push(`aggregation "${agg}" is not one DQL compiles (${Object.keys(AGG_TYPE_MAP).join(', ')})`);
+    }
+    if (problems.length > 0) {
+      layer.addDiagnostic(`Metric "${item.name}" in ${file} was not read from YAML: ${problems.join('; ')}.`);
+      continue;
+    }
+    const entry: DbtMetric = { ...item, type: item.type ?? 'simple' };
+    if (index >= 0) metrics[index] = entry; else metrics.push(entry);
+    metricNames.add(item.name);
+    layer.addDiagnostic(`Metric "${item.name}" was read from YAML (${file}); run dbt parse to confirm.`);
+  }
 }
 
 /** Shape of a `semantic_models.*` entry in dbt's manifest.json. */

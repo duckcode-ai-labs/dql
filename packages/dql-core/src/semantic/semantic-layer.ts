@@ -606,6 +606,17 @@ export class SemanticLayer {
   // cube-name → list of joins for that cube (adjacency list)
   private joinGraph: Map<string, JoinDefinition[]> = new Map();
 
+  /** Notes from loading, e.g. metrics read from dbt YAML instead of the manifest. Not errors. */
+  private diagnostics: string[] = [];
+
+  addDiagnostic(message: string): void {
+    this.diagnostics.push(message);
+  }
+
+  getDiagnostics(): string[] {
+    return [...this.diagnostics];
+  }
+
   constructor(config?: SemanticLayerConfig) {
     if (config) {
       for (const m of config.metrics) this.addMetric(m);
