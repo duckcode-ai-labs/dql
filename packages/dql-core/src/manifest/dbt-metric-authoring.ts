@@ -101,7 +101,7 @@ export function previewDbtMetricPatch(
   const warnings: string[] = [];
   const metricInput = input.metric ?? ({} as DbtMetricAuthoringInput['metric']);
   const metricName = String(metricInput.name ?? '').trim();
-  const semanticModelName = String(input.semanticModel ?? '').trim();
+  let semanticModelName = String(input.semanticModel ?? '').trim();
   if (input.mode !== 'add' && input.mode !== 'edit') issues.push('mode must be "add" or "edit".');
   if (!NAME.test(metricName)) issues.push(`Metric name "${metricName}" must be lowercase letters, digits and single underscores, starting with a letter (for example average_claimed_amount).`);
   if (!NAME.test(semanticModelName)) issues.push(`Semantic model name "${semanticModelName}" must be lowercase letters, digits and single underscores.`);
@@ -132,7 +132,24 @@ export function previewDbtMetricPatch(
   const manifestMetricNames = Object.values(asRecord(manifest?.metrics)).map((node) => stringValue(asRecord(node).name));
   const metricOwner = all.find((file) => listOf(file.document, 'metrics').some((metric) => metric.name === metricName));
   const measureOwner = all.find((file) => listOf(file.document, 'semantic_models').some((model) => listOf(model, 'measures').some((measure) => measure.name === metricName)));
-  const semanticOwner = all.find((file) => listOf(file.document, 'semantic_models').some((model) => model.name === semanticModelName));
+  let semanticOwner = all.find((file) => listOf(file.document, 'semantic_models').some((model) => model.name === semanticModelName));
+  if (!semanticOwner && input.modelUniqueId && manifest) {
+    // The semantic model may be named differently from its dbt model. A second one on the same dbt model would split
+    // its measures, so the existing one is used.
+    const pickedNode = asRecord(asRecord(manifest.nodes)[input.modelUniqueId]);
+    const pickedName = pickedNode.resource_type === 'model' ? stringValue(pickedNode.name) : undefined;
+    if (pickedName) {
+      for (const file of all) {
+        const found = listOf(file.document, 'semantic_models').find((candidate) => /ref\(\s*['"]([^'"]+)['"]/.exec(String(candidate.model ?? ''))?.[1] === pickedName);
+        if (found) {
+          semanticOwner = file;
+          semanticModelName = String(found.name);
+          warnings.push(`dbt model "${pickedName}" already has the semantic model "${semanticModelName}" (${file.path}); the metric was added there instead of creating a second one.`);
+          break;
+        }
+      }
+    }
+  }
 
   if (input.mode === 'add') {
     if (metricOwner || manifestMetricNames.includes(metricName)) issues.push(`A metric named "${metricName}" already exists${metricOwner ? ` in ${metricOwner.path}` : ' in the dbt manifest'}. Pick another name, or edit that metric.`);

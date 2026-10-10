@@ -2435,6 +2435,20 @@ function NewMetricDrawer({ data, domain, t, onClose, onSaved }: { data: DbtFirst
  * into the dbt project's YAML through the same preview → apply flow as "Preview dbt source patch".
  * Synonyms are business words, not dbt: they are saved as a Business Term that names the metric.
  */
+/**
+ * The business term that carries a new metric's synonyms. The server refuses a link to a metric Ask cannot find yet,
+ * so until dbt has parsed the metric the term is saved unlinked and the user links it afterwards.
+ */
+export function dbtMetricSynonymTerm({ label, metricName, synonyms, domain, linked }: { label: string; metricName: string; synonyms: string[]; domain: string | null; linked: boolean }) {
+  return {
+    name: label.trim() || titleCase(metricName),
+    termType: 'metric' as const,
+    synonyms,
+    ...(linked ? { metricRefs: [metricName] } : {}),
+    ...(domain ? { domain } : {}),
+  };
+}
+
 export function AddDbtMetricDrawer({ data, domain, snapshotId, t, onClose, onApplied }: { data: DbtFirstModelingResponse; domain: string | null; snapshotId: string; t: Theme; onClose: () => void; onApplied: (message: string) => Promise<void> }) {
   const models = useMemo(() => Object.values(data.dbtProvenance.nodes)
     .filter((node) => node.resourceType === 'model')
@@ -2490,11 +2504,13 @@ export function AddDbtMetricDrawer({ data, domain, snapshotId, t, onClose, onApp
     const words = csvList(synonyms);
     let message = `Metric ${metricName} written to ${result.applied.patches.filter((patch) => patch.changed).map((patch) => patch.path).join(', ')}.`;
     if (!result.manifestRefresh.refreshed) message += ` ${result.manifestRefresh.reason ?? ''}`;
-    else if (words.length) {
-      await api.createTerm({ name: label.trim() || titleCase(metricName), termType: 'metric', synonyms: words, metricRefs: [metricName], ...(domain ? { domain } : {}) });
-      message += ` Synonyms saved as a business term.`;
+    if (words.length) {
+      const linked = result.manifestRefresh.refreshed;
+      await api.createTerm(dbtMetricSynonymTerm({ label, metricName, synonyms: words, domain, linked }));
+      message += linked
+        ? ' Synonyms saved as a business term.'
+        : ` Synonyms saved as a business term, not yet linked to the metric: after dbt parse, open the term in the Glossary and add ${metricName} under its metrics.`;
     }
-    if (!result.manifestRefresh.refreshed && words.length) message += ' Add the synonyms after dbt has parsed the metric.';
     await onApplied(message);
   });
   return (
