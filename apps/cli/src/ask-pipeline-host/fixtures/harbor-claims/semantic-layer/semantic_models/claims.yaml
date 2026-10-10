@@ -1,0 +1,9 @@
+name: claims
+label: Claims semantic model
+description: Claims and the payments made on them.
+domain: claims
+table: claims
+entities: [claim]
+measures: [claim_count, claimed_amount]
+dimensions: [region, product, claim_type, status]
+time_dimensions: [reported_date]

@@ -1,0 +1,8 @@
+name: claim
+label: Claim
+description: One claim filed on a policy.
+domain: claims
+cube: claims
+table: claims
+type: primary
+expr: claim_id

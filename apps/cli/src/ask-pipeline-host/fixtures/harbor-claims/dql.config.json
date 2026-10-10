@@ -1,0 +1,24 @@
+{
+  "project": "harbor-claims",
+  "manifestVersion": 3,
+  "modeling": {
+    "mode": "dbt-first"
+  },
+  "apps": {
+    "datasets": true
+  },
+  "connections": {
+    "default": {
+      "driver": "duckdb",
+      "filepath": "harbor.duckdb"
+    }
+  },
+  "semanticLayer": {
+    "provider": "dql",
+    "path": "semantic-layer"
+  },
+  "dbt": {
+    "projectDir": ".",
+    "manifestPath": "target/manifest.json"
+  }
+}
