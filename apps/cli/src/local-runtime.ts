@@ -1597,6 +1597,29 @@ function askTraceScenarioLabel(run: Pick<AgentRun, 'requestedMode' | 'route'>): 
 }
 
 /**
+ * One plain sentence on why this run was answered, held or refused, for the trace list. It reads only the run's
+ * stop reason and its gap message (a sentence about what was missing), never the answer, SQL or any value.
+ */
+export function askTraceReason(run: Pick<AgentRun, 'stopReason' | 'status' | 'artifacts' | 'evaluations'>): string {
+  const gap = traceAnswerProjection(run)?.gap as { message?: unknown } | undefined;
+  const gapMessage = typeof gap?.message === 'string' ? gap.message.trim().slice(0, 300) : '';
+  const byStop: Record<AgentRun['stopReason'], string> = {
+    certified_answer_found: 'Answered from a certified block.',
+    governed_semantic_answer: 'Answered from the governed semantic layer.',
+    governed_compound_answer: 'Answered from the governed semantic layer.',
+    generated_review_required: 'Answered with SQL that needs review before it is trusted.',
+    conversational_reply: 'A conversational reply; no data was read.',
+    artifact_created: 'Built the requested artifact.',
+    needs_clarification: 'Asked the person to clarify before answering.',
+    human_review_required: 'Held for a person to review.',
+    cancelled: 'Cancelled before an answer.',
+    blocked: 'Refused: no governed answer was available.',
+  };
+  if (gapMessage && (run.stopReason === 'blocked' || run.stopReason === 'needs_clarification')) return gapMessage;
+  return byStop[run.stopReason] ?? 'No reason was recorded.';
+}
+
+/**
  * The SQLite trace envelope is intentionally small and may have been written
  * before the V2 terminal receipt was attached to the AgentRun. Project only
  * receipt-owned scalar facts at this API boundary so a completed V2 run does
@@ -5655,6 +5678,20 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
     const principal = currentPrincipal();
     if (!principal || !hostHooks) return false;
     return (await authorizeHostRequest(hostHooks, principal, { action, resource: { type: 'project' } })).allow;
+  };
+  /**
+   * With a host, whether this person reviews answers for the workspace (`hint.review`, the steward's action), and so
+   * reads every person's Ask traces. A host with no `authorize` rule never grants it: people keep to their own.
+   * When Production follows main the host refuses `hint.review` (a write) for everyone. It marks the refusal
+   * `readOnly` for the people who hold the action by role, and only those read everyone's traces. A `next` link
+   * says nothing about the role (every person who may draft gets one), so it never grants this.
+   */
+  const hostedMayReviewAllRuns = async (): Promise<boolean> => {
+    if (!hostedRequest()) return false;
+    const principal = currentPrincipal();
+    if (!principal || !hostHooks?.authorize) return false;
+    const decision = await authorizeHostRequest(hostHooks, principal, { action: 'hint.review', resource: { type: 'project' } });
+    return decision.allow || decision.readOnly === true;
   };
   /**
    * RFC 0010: agent memory with a host. A person's own notes (scope `user`) are keyed by who they are and shown to
@@ -15437,7 +15474,11 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
       };
       // RFC 0010: with a host, a trace is listed only to the person whose run it is (runs are owner-scoped), and the
       // page cursor names only a trace that person may see: pages are read until one holds enough of theirs.
-      const scoped = currentRecordOwner() !== undefined;
+      // A person who reviews answers for the workspace (a steward) lists everyone's: the list shows each question
+      // and why it was answered or refused, which is what they review. A reviewer opens any of them; exporting one stays the asker's own.
+      const reviewsAll = await hostedMayReviewAllRuns();
+      const scoped = currentRecordOwner() !== undefined && !reviewsAll;
+      const runsForList = reviewsAll ? storedAgentRuns : agentRunStore;
       let page = askTraceStore.list(traceListInput);
       const visibleRaw: typeof page.traces = [];
       for (let reads = 0; ; reads += 1) {
@@ -15452,13 +15493,14 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
         page = { ...page, traces: pageTraces, ...(more && lastVisible ? { nextCursor: Buffer.from(`${lastVisible.startedAt}\u0000${lastVisible.traceId}`, 'utf8').toString('base64url') } : { nextCursor: undefined }) };
       }
       const listed = await Promise.all(page.traces.map(async (trace) => {
-        const run = await agentRunStore.get(trace.runId);
+        const run = await runsForList.get(trace.runId);
         if (!run) return scoped ? null : trace;
         const questionPreview = askTraceQuestionPreview(run.question);
         return {
           ...projectAuthoritativeV8TraceEnvelope(trace, run),
           ...(questionPreview ? { questionPreview } : {}),
           scenarioLabel: askTraceScenarioLabel(run),
+          reason: askTraceReason(run),
           ...(run.askAgentRuntimeMode ? { runtimeMode: run.askAgentRuntimeMode } : {}),
         };
       }));
@@ -15476,7 +15518,8 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
       }
       const runId = decodeURIComponent(path.slice('/api/ask-traces/by-run/'.length));
       // Someone else's run's trace is "not found", as the run is.
-      const trace = currentRecordOwner() !== undefined && !(await agentRunStore.get(runId)) ? null : askTraceStore.getByRun(runId);
+      const traceRuns = (await hostedMayReviewAllRuns()) ? storedAgentRuns : agentRunStore;
+      const trace = currentRecordOwner() !== undefined && !(await traceRuns.get(runId)) ? null : askTraceStore.getByRun(runId);
       if (!trace) {
         res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(serializeJSON({ code: 'TRACE_NOT_FOUND', error: 'No local trace was found for this Ask run.' }));
@@ -15487,7 +15530,7 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
         res.end(serializeJSON({ code: 'TRACE_DETAIL_EXPIRED', error: 'Detailed trace evidence has expired; the run summary remains available.', envelope: trace.envelope }));
         return;
       }
-      const run = await agentRunStore.get(runId);
+      const run = await traceRuns.get(runId);
       const projectedTrace = {
         ...trace,
         envelope: projectAuthoritativeV8TraceEnvelope(trace.envelope, run),
@@ -15570,7 +15613,8 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
       }
       const traceId = path.split('/').at(-1) ?? '';
       const stored = askTraceStore.get(traceId);
-      const trace = stored && currentRecordOwner() !== undefined && !(await agentRunStore.get(stored.envelope.runId)) ? null : stored;
+      const traceRuns = (await hostedMayReviewAllRuns()) ? storedAgentRuns : agentRunStore;
+      const trace = stored && currentRecordOwner() !== undefined && !(await traceRuns.get(stored.envelope.runId)) ? null : stored;
       if (!trace) {
         res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(serializeJSON({ code: 'TRACE_NOT_FOUND', error: 'No local trace was found.' }));
@@ -15581,7 +15625,7 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
         res.end(serializeJSON({ code: 'TRACE_DETAIL_EXPIRED', error: 'Detailed trace evidence has expired; the run summary remains available.', envelope: trace.envelope }));
         return;
       }
-      const run = await agentRunStore.get(trace.envelope.runId);
+      const run = await traceRuns.get(trace.envelope.runId);
       const projectedTrace = {
         ...trace,
         envelope: projectAuthoritativeV8TraceEnvelope(trace.envelope, run),
@@ -17216,7 +17260,7 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
         const actions: DqlAction[] = ['project.read', 'project.write', 'dataset.author', 'dataset.certify', 'hint.review', 'app.author', 'app.publish', 'ask', 'research', 'query.run', 'export', 'schedule.manage', 'git.review', 'connection.manage', 'settings.manage', 'request.create'];
         const capabilities: Record<string, boolean> = {};
         // For an action the person may not take: the host's reason and where to go (HH-12), so a screen can say so up front.
-        const refusals: Record<string, { reason?: string; next?: { label: string; href: string } }> = {};
+        const refusals: Record<string, { reason?: string; next?: { label: string; href: string }; readOnly?: boolean }> = {};
         const decisions = new Map<DqlAction, Awaited<ReturnType<typeof authorizeHostRequest>>>();
         for (const action of actions) decisions.set(action, await authorizeHostRequest(hostHooks!, principal, { action, resource: { type: 'project' } }));
         // Exporting a statement also runs it (the SQL export route asks both): the map says so from the same two decisions.
@@ -17225,7 +17269,7 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
         for (const action of actions) {
           const decision = decisions.get(action)!;
           capabilities[action] = decision.allow;
-          if (!decision.allow && (decision.reason || decision.next)) refusals[action] = { ...(decision.reason ? { reason: decision.reason.slice(0, 280) } : {}), ...(decision.next ? { next: decision.next } : {}) };
+          if (!decision.allow && (decision.reason || decision.next || decision.readOnly)) refusals[action] = { ...(decision.reason ? { reason: decision.reason.slice(0, 280) } : {}), ...(decision.next ? { next: decision.next } : {}), ...(decision.readOnly ? { readOnly: true } : {}) };
         }
         let answered: unknown = {};
         try {
@@ -23010,7 +23054,7 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
       }
       if (hostedRequest() && !hostedProjectFile(projectRoot, filePath, { privateDrafts: privateDraftsAllowed() })) {
         res.writeHead(403, { 'Content-Type': 'application/json; charset=utf-8' });
-        res.end(serializeJSON({ error: HOSTED_FILE_REFUSED, code: 'PERMISSION_DENIED' }));
+        res.end(serializeJSON({ error: hostedFileRefusal(filePath), code: 'PERMISSION_DENIED' }));
         return;
       }
       const absPath = safeJoin(projectRoot, filePath);
@@ -23227,7 +23271,7 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
         const absPath = hostedRequest() ? hostedProjectFile(projectRoot, filePath, { privateDrafts: privateDraftsAllowed() }) : safeJoin(projectRoot, filePath);
         if (!absPath) {
           res.writeHead(403, { 'Content-Type': 'application/json; charset=utf-8' });
-          res.end(serializeJSON({ error: hostedRequest() ? HOSTED_FILE_REFUSED : 'Invalid path' }));
+          res.end(serializeJSON({ error: hostedRequest() ? hostedFileRefusal(filePath) : 'Invalid path' }));
           return;
         }
         await mkdirAsync(dirname(absPath), { recursive: true });
@@ -24875,7 +24919,7 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
           }
         }
 
-        const draftSource = markBlockStudioSourceReusable(setBlockStudioStatusInSource(source, 'draft'));
+        const draftSource = ensureBlockStudioPattern(markBlockStudioSourceReusable(setBlockStudioStatusInSource(source, 'draft')));
         const parsed = parseBlockSourceMetadata(draftSource);
         const name = typeof suppliedMetadata.name === 'string' && suppliedMetadata.name.trim()
           ? suppliedMetadata.name.trim()
@@ -24894,7 +24938,7 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
         const canonicalOnDisk = canonicalAbsolute && existsSync(canonicalAbsolute) ? readFileSync(canonicalAbsolute, 'utf-8') : undefined;
         const canonicalCertified = canonicalOnDisk !== undefined && /^\s*status\s*=\s*"certified"/m.test(canonicalOnDisk);
         const unchangedCertified = canonicalCertified
-          && markBlockStudioSourceReusable(setBlockStudioStatusInSource(canonicalOnDisk!, 'draft')).trim() === draftSource.trim();
+          && ensureBlockStudioPattern(markBlockStudioSourceReusable(setBlockStudioStatusInSource(canonicalOnDisk!, 'draft'))).trim() === draftSource.trim();
         const existingCanonicalDraft = existingCanonical && !canonicalCertified;
         const stableSuffix = createHash('sha256')
           .update(currentPath ?? `${name}:${draftSource}`)
@@ -26074,7 +26118,7 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
       try {
         const body = await readJSON(req);
         const source = typeof body.source === 'string'
-          ? markBlockStudioSourceReusable(body.source)
+          ? ensureBlockStudioPattern(markBlockStudioSourceReusable(body.source))
           : '';
         const metadata = body.metadata && typeof body.metadata === 'object'
           ? body.metadata as {
@@ -26127,8 +26171,8 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
         const canonicalOnDisk = canonicalAbsolute && existsSync(canonicalAbsolute) ? readFileSync(canonicalAbsolute, 'utf-8') : undefined;
         const canonicalCertified = canonicalOnDisk !== undefined && certifiedStatus.test(canonicalOnDisk);
         const sameAsCertified = canonicalCertified
-          && markBlockStudioSourceReusable(setBlockStudioStatusInSource(canonicalOnDisk!, 'draft')).trim()
-            === markBlockStudioSourceReusable(setBlockStudioStatusInSource(source, 'draft')).trim();
+          && ensureBlockStudioPattern(markBlockStudioSourceReusable(setBlockStudioStatusInSource(canonicalOnDisk!, 'draft'))).trim()
+            === ensureBlockStudioPattern(markBlockStudioSourceReusable(setBlockStudioStatusInSource(source, 'draft'))).trim();
         const keepCertified = sameAsCertified && certifiedStatus.test(source);
         const sourceToWrite = certifiedStatus.test(source) && !keepCertified
           ? markBlockStudioSourceReusable(setBlockStudioStatusInSource(source, 'draft'))
@@ -37647,6 +37691,13 @@ const HOSTED_FILE_EXTENSIONS = new Set(['.dqlnb', '.dql', '.dqld', '.md', '.sql'
 const HOSTED_DENIED_FOLDERS = new Set(['node_modules', 'target', 'data', 'dist', 'logs', 'seeds']);
 const HOSTED_DENIED_NAMES = new Set(['dql.config.json', 'profiles.yml', 'profiles.yaml', 'package.json', 'package-lock.json']);
 export const HOSTED_FILE_REFUSED = 'This file is not one DQL opens here: only notebooks, blocks, Apps, domains, the semantic layer and docs. Open it from the Files list.';
+export const HOSTED_SETTINGS_FILE_REFUSED = "This file holds the workspace's connections and settings. They belong to Production and are changed there, not from a draft space. Ask an admin to change them in Production.";
+
+/** The sentence a refused hosted file request gets: why, when the file is the project's connection or dbt profile settings. */
+export function hostedFileRefusal(requested: string): string {
+  const name = requested.split(/[\\/]/).filter(Boolean).at(-1)?.toLowerCase() ?? '';
+  return name === 'dql.config.json' || name === 'profiles.yml' || name === 'profiles.yaml' ? HOSTED_SETTINGS_FILE_REFUSED : HOSTED_FILE_REFUSED;
+}
 
 function hostedFileRuleBroken(relativePath: string, privateDrafts: boolean): boolean {
   const segments = relativePath.split('/').filter(Boolean);
@@ -40944,6 +40995,19 @@ export function markBlockStudioSourceReusable(source: string): string {
     return source.replace(/\btags\s*=\s*\[[\s\S]*?\]/i, `tags = [${rendered}]`);
   }
   return source.replace(/(\bblock\s+"[^"]+"\s*\{)/i, `$1\n  tags = [${rendered}]`);
+}
+
+/**
+ * A block made in Block Studio declares a reusable pattern. The editor offers "custom" first, so a block saved without
+ * choosing one is a custom block: write that down instead of leaving the field empty (a workspace that certifies
+ * with enterprise rules refuses a block that declares none). A pattern the author chose is never changed.
+ */
+export function ensureBlockStudioPattern(source: string): string {
+  if (parseBlockSourceMetadata(source).pattern?.trim()) return source;
+  if (/^[ \t]*pattern[ \t]*=[ \t]*"[ \t]*"[ \t]*$/m.test(source)) {
+    return source.replace(/^([ \t]*)pattern[ \t]*=[ \t]*"[ \t]*"[ \t]*$/m, '$1pattern = "custom"');
+  }
+  return source.replace(/(\bblock\s+"[^"]+"\s*\{)/i, '$1\n  pattern = "custom"');
 }
 
 function compareBlockStudioValues(actual: unknown, operator: string, expected: unknown): boolean {

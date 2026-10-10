@@ -1770,6 +1770,8 @@ export interface AskTraceListEntryV1 extends AskTraceEnvelopeV1 {
   /** Joined at API read time from the local run store; never persisted in the trace store. */
   questionPreview?: string;
   scenarioLabel?: string;
+  /** One plain sentence on why the run was answered, held or refused; joined with the question preview. */
+  reason?: string;
   runtimeMode?: 'authoritative_v2' | 'pipeline_v3';
 }
 

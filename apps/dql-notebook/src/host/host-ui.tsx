@@ -19,7 +19,7 @@ export interface HostUi {
   /** A strip above every screen, e.g. "Draft space — changes go to review, not Production". */
   banner?: HostBanner;
   /** For an action the person may not take: the host's reason and where to go (HH-12), e.g. Request access. */
-  refusals?: Record<string, { reason?: string; next?: { label: string; href: string } }>;
+  refusals?: Record<string, { reason?: string; next?: { label: string; href: string }; readOnly?: boolean }>;
   /** `reader`: the person reads and asks here but does not build; screens leave out the notebook's local words. */
   audience?: 'reader';
   /** What an App link says when this project has no such App, and where to go. */
@@ -241,7 +241,7 @@ export function hostAllows(state: HostUiState, action: string): boolean {
 }
 
 /** Why the host refuses this action and where the person can go, when it said (HH-12); null when it is allowed. */
-export function hostRefusal(state: HostUiState, action: string): { reason?: string; next?: { label: string; href: string } } | null {
+export function hostRefusal(state: HostUiState, action: string): { reason?: string; next?: { label: string; href: string }; readOnly?: boolean } | null {
   if (!state.host || state.capabilities[action] === true) return null;
   return state.refusals?.[action] ?? {};
 }

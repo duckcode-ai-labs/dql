@@ -25,3 +25,13 @@ export function withoutAskLocationHref(href: string): string {
   url.searchParams.delete(ASK_THREAD_PARAM);
   return `${url.pathname}${url.search}${url.hash}`;
 }
+
+/**
+ * `/ask/traces` and `/ask/traces/<run>` belong to the Ask observability pages. Once another page is
+ * open they become `/`, so the address bar names the page the person is on.
+ */
+export function withoutAskTraceLocationHref(href: string): string {
+  const url = new URL(href);
+  if (url.pathname === '/ask/traces' || url.pathname.startsWith('/ask/traces/')) url.pathname = '/';
+  return `${url.pathname}${url.search}${url.hash}`;
+}

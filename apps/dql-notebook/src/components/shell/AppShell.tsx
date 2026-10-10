@@ -5,7 +5,7 @@ import { useShallow } from 'zustand/react/shallow';
 import { CommandPalette } from '../palette/CommandPalette';
 import { InspectorPanel } from './InspectorPanel';
 import { askTraceRouteFromPathname, useDispatch, useNotebookStore } from '../../store/NotebookStore';
-import { withoutAskLocationHref } from '../home/ask-location';
+import { withoutAskLocationHref, withoutAskTraceLocationHref } from '../home/ask-location';
 import { themes } from '../../themes/notebook-theme';
 import { ActivityBar } from './ActivityBar';
 import { Sidebar } from './Sidebar';
@@ -139,7 +139,7 @@ export function AppShell() {
     // The Ask thread lives in the URL only while Ask is open; leaving Ask
     // must not leave a reload pointing back at it.
     const next = state.mainView !== 'ask' && state.mainView !== 'ask_trace' && state.mainView !== 'ask_observability'
-      ? withoutAskLocationHref(`${window.location.origin}${stripped}`)
+      ? withoutAskTraceLocationHref(`${window.location.origin}${withoutAskLocationHref(`${window.location.origin}${stripped}`)}`)
       : stripped;
     const current = `${window.location.pathname}${window.location.search}${window.location.hash}`;
     if (next !== current) window.history.replaceState(window.history.state, '', next);
