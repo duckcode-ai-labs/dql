@@ -259,11 +259,15 @@ export const NAV_CAPABILITY: Record<string, string[]> = {
   block_library: ['project.read', 'dataset.author'],
   lineage: ['project.read', 'dataset.author'],
   domains: ['project.read', 'dataset.author'],
+  // Source control and Ask observability need their write action. When Production follows main the host
+  // refuses it for everyone; a refusal carrying a `next` link (people who may draft) shows them read-only.
   ask_observability: ['hint.review'],
-  // Source control shows read-only to anyone who may read; commit and push need git.review.
-  git: ['project.read', 'git.review'],
+  git: ['git.review'],
   settings: ['settings.manage', 'connection.manage'],
 };
+
+/** Screens shown read-only to a person whose write action is refused with a next step. */
+const NAV_SHOWN_WITH_NEXT = new Set(['git', 'ask_observability']);
 
 /** The action that lets a person edit on each of those screens. */
 export const NAV_WRITE_CAPABILITY: Record<string, string> = {
@@ -272,12 +276,14 @@ export const NAV_WRITE_CAPABILITY: Record<string, string> = {
   lineage: 'dataset.author',
   domains: 'dataset.author',
   git: 'git.review',
+  ask_observability: 'hint.review',
 };
 
 export function navItemAllowed(state: HostUiState, key: string): boolean {
   const needs = NAV_CAPABILITY[key];
   if (!state.host || !needs) return true;
-  return needs.some((action) => hostAllows(state, action));
+  if (needs.some((action) => hostAllows(state, action))) return true;
+  return NAV_SHOWN_WITH_NEXT.has(key) && readOnlyNext(state, key) !== null;
 }
 
 /** A screen the person may open but not edit: under a host, without that screen's write action. Never without a host. */
@@ -308,6 +314,8 @@ export function navKeyForView(mainView: string): string | null {
     case 'domains':
     case 'modeling': return 'domains';
     case 'git': return 'git';
+    case 'ask_observability':
+    case 'ask_trace': return 'ask_observability';
     default: return null;
   }
 }
