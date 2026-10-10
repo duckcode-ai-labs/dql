@@ -19,7 +19,7 @@ export interface HostUi {
   /** A strip above every screen, e.g. "Draft space — changes go to review, not Production". */
   banner?: HostBanner;
   /** For an action the person may not take: the host's reason and where to go (HH-12), e.g. Request access. */
-  refusals?: Record<string, { reason?: string; next?: { label: string; href: string } }>;
+  refusals?: Record<string, { reason?: string; next?: { label: string; href: string }; readOnly?: boolean }>;
   /** `reader`: the person reads and asks here but does not build; screens leave out the notebook's local words. */
   audience?: 'reader';
   /** What an App link says when this project has no such App, and where to go. */
@@ -241,7 +241,7 @@ export function hostAllows(state: HostUiState, action: string): boolean {
 }
 
 /** Why the host refuses this action and where the person can go, when it said (HH-12); null when it is allowed. */
-export function hostRefusal(state: HostUiState, action: string): { reason?: string; next?: { label: string; href: string } } | null {
+export function hostRefusal(state: HostUiState, action: string): { reason?: string; next?: { label: string; href: string }; readOnly?: boolean } | null {
   if (!state.host || state.capabilities[action] === true) return null;
   return state.refusals?.[action] ?? {};
 }
@@ -259,15 +259,21 @@ export const NAV_CAPABILITY: Record<string, string[]> = {
   block_library: ['project.read', 'dataset.author'],
   lineage: ['project.read', 'dataset.author'],
   domains: ['project.read', 'dataset.author'],
-  // Source control and Ask observability need their write action. When Production follows main the host
-  // refuses it for everyone; a refusal carrying a `next` link (people who may draft) shows them read-only.
+  // Source control needs its write action. When Production follows main the host refuses it for everyone;
+  // a refusal carrying a `next` link (people who may draft) shows it read-only.
+  // Ask observability is for stewards and admins (who hold `hint.review`): Production refuses that action for
+  // everyone too, and the host marks the refusal `readOnly` for the people who hold it. A `next` link is not
+  // that signal: every creator gets one.
   ask_observability: ['hint.review'],
   git: ['git.review'],
   settings: ['settings.manage', 'connection.manage'],
 };
 
 /** Screens shown read-only to a person whose write action is refused with a next step. */
-const NAV_SHOWN_WITH_NEXT = new Set(['git', 'ask_observability']);
+const NAV_SHOWN_WITH_NEXT = new Set(['git']);
+
+/** Screens shown read-only to a person who holds the write action but whom the place refuses it. */
+const NAV_SHOWN_READ_ONLY = new Set(['ask_observability']);
 
 /** The action that lets a person edit on each of those screens. */
 export const NAV_WRITE_CAPABILITY: Record<string, string> = {
@@ -283,6 +289,10 @@ export function navItemAllowed(state: HostUiState, key: string): boolean {
   const needs = NAV_CAPABILITY[key];
   if (!state.host || !needs) return true;
   if (needs.some((action) => hostAllows(state, action))) return true;
+  if (NAV_SHOWN_READ_ONLY.has(key)) {
+    const write = NAV_WRITE_CAPABILITY[key];
+    return !!write && hostRefusal(state, write)?.readOnly === true;
+  }
   return NAV_SHOWN_WITH_NEXT.has(key) && readOnlyNext(state, key) !== null;
 }
 

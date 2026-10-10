@@ -59,9 +59,11 @@ beforeAll(async () => {
       resolvePrincipal: (req) => people[String(req.headers['x-test-person'] ?? '')] ?? null,
       authorize: (principal, action) => {
         if (action !== 'hint.review') return { allow: true };
-        return principal.id === sam.id
-          ? { allow: false, reason: 'Production follows main.', next: { label: 'Open my draft space', href: '/e/draft' } }
-          : { allow: false, reason: 'Production follows main.' };
+        // As dql-enterprise answers in Production: everyone who may draft (creators and stewards) gets the next
+        // link; only the steward, who holds the action by role, is marked read-only.
+        const refusal = { allow: false, reason: 'Production follows main.', next: { label: 'Open my draft space', href: '/e/draft' } };
+        if (principal.id === wes.id) return { allow: false, reason: 'Production follows main.' };
+        return principal.id === sam.id ? { ...refusal, readOnly: true } : refusal;
       },
     },
     captureServer: (created) => { servers.push(created); },
@@ -90,10 +92,20 @@ describe('Ask observability in Production (hint.review refused for everyone)', (
     for (const trace of (listed.body as Listed).traces) expect(trace.reason).toBeTruthy();
   });
 
-  it('keeps a creator whose refusal has no next link to their own questions', async () => {
+  it('keeps a creator, whose refusal also carries the next link, to their own questions', async () => {
     const listed = await call('cole', 'GET', '/api/ask-traces?limit=100');
     expect(listed.status).toBe(200);
     expect(ids(listed.body as Listed)).not.toContain(wesRunId);
     expect((listed.body as Listed).traces.length).toBeGreaterThan(0);
+  });
+
+  it('does not open Wes\'s trace for the creator, by run or by id, and does for the steward', async () => {
+    expect((await call('cole', 'GET', `/api/ask-traces/by-run/${encodeURIComponent(wesRunId)}`)).status).toBe(404);
+    const stewardList = (await call('sam', 'GET', '/api/ask-traces?limit=100')).body as Listed;
+    const wesTrace = stewardList.traces.find((trace) => trace.runId === wesRunId) as { traceId?: string; id?: string } | undefined;
+    const traceId = wesTrace?.traceId ?? wesTrace?.id ?? '';
+    expect(traceId).not.toBe('');
+    expect((await call('cole', 'GET', `/api/ask-traces/${encodeURIComponent(traceId)}`)).status).toBe(404);
+    expect((await call('sam', 'GET', `/api/ask-traces/by-run/${encodeURIComponent(wesRunId)}`)).status).toBe(200);
   });
 });

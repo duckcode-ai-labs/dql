@@ -5682,16 +5682,16 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
   /**
    * With a host, whether this person reviews answers for the workspace (`hint.review`, the steward's action), and so
    * reads every person's Ask traces. A host with no `authorize` rule never grants it: people keep to their own.
-   * When Production follows main the host refuses `hint.review` (a write) for everyone; it still lets the people
-   * who review answers open the screen read-only by sending a `next` link with that refusal (the same signal the
-   * navigation uses), so a refusal with `next` also reads everyone's traces. A plain refusal does not.
+   * When Production follows main the host refuses `hint.review` (a write) for everyone. It marks the refusal
+   * `readOnly` for the people who hold the action by role, and only those read everyone's traces. A `next` link
+   * says nothing about the role (every person who may draft gets one), so it never grants this.
    */
   const hostedMayReviewAllRuns = async (): Promise<boolean> => {
     if (!hostedRequest()) return false;
     const principal = currentPrincipal();
     if (!principal || !hostHooks?.authorize) return false;
     const decision = await authorizeHostRequest(hostHooks, principal, { action: 'hint.review', resource: { type: 'project' } });
-    return decision.allow || !!decision.next;
+    return decision.allow || decision.readOnly === true;
   };
   /**
    * RFC 0010: agent memory with a host. A person's own notes (scope `user`) are keyed by who they are and shown to
@@ -17260,7 +17260,7 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
         const actions: DqlAction[] = ['project.read', 'project.write', 'dataset.author', 'dataset.certify', 'hint.review', 'app.author', 'app.publish', 'ask', 'research', 'query.run', 'export', 'schedule.manage', 'git.review', 'connection.manage', 'settings.manage', 'request.create'];
         const capabilities: Record<string, boolean> = {};
         // For an action the person may not take: the host's reason and where to go (HH-12), so a screen can say so up front.
-        const refusals: Record<string, { reason?: string; next?: { label: string; href: string } }> = {};
+        const refusals: Record<string, { reason?: string; next?: { label: string; href: string }; readOnly?: boolean }> = {};
         const decisions = new Map<DqlAction, Awaited<ReturnType<typeof authorizeHostRequest>>>();
         for (const action of actions) decisions.set(action, await authorizeHostRequest(hostHooks!, principal, { action, resource: { type: 'project' } }));
         // Exporting a statement also runs it (the SQL export route asks both): the map says so from the same two decisions.
@@ -17269,7 +17269,7 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
         for (const action of actions) {
           const decision = decisions.get(action)!;
           capabilities[action] = decision.allow;
-          if (!decision.allow && (decision.reason || decision.next)) refusals[action] = { ...(decision.reason ? { reason: decision.reason.slice(0, 280) } : {}), ...(decision.next ? { next: decision.next } : {}) };
+          if (!decision.allow && (decision.reason || decision.next || decision.readOnly)) refusals[action] = { ...(decision.reason ? { reason: decision.reason.slice(0, 280) } : {}), ...(decision.next ? { next: decision.next } : {}), ...(decision.readOnly ? { readOnly: true } : {}) };
         }
         let answered: unknown = {};
         try {

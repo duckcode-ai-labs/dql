@@ -154,6 +154,12 @@ export interface DqlDecision {
    * same-origin path (`/…`) is passed on; DQL opens it as a host page.
    */
   next?: { label: string; href: string };
+  /**
+   * On a refusal: this person holds the action by role, but the place refuses it for everyone (for example
+   * Production, which follows main, refuses every change). DQL then lets them read what the action reviews,
+   * read-only. A refusal for a person who does not hold the action never sets it; `next` is not a substitute.
+   */
+  readOnly?: boolean;
 }
 
 /** A refusal's `next` link as DQL passes it on: a same-origin path only. */
@@ -868,7 +874,7 @@ export async function authorizeHostRequest(hooks: DqlHostHooks, principal: DqlPr
     if (answer.allow === true) return { allow: true };
     const reason = typeof answer.reason === 'string' && answer.reason.trim() ? answer.reason.trim() : undefined;
     const next = safeNextLink(answer.next);
-    return { allow: false, ...(reason ? { reason } : {}), ...(next ? { next } : {}) };
+    return { allow: false, ...(reason ? { reason } : {}), ...(next ? { next } : {}), ...(answer.readOnly === true ? { readOnly: true } : {}) };
   } catch (error) {
     return error instanceof HostHookTimeoutError ? { allow: false, reason: HOST_DECISION_UNAVAILABLE } : { allow: false };
   }
