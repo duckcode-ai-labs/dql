@@ -366,7 +366,7 @@ export function prepareCertified(intent: AnalyticalIntentV1, vocabulary: Vocabul
       }
       const sql = applied.length ? `SELECT * FROM (\n${source.trim().replace(/;\s*$/, '')}\n) AS block\nWHERE ${applied.join(' AND ')}` : source;
       const candidate: PreparedCandidate = {
-        tier: 'certified', trust: 'certified', sql, ...(params.length ? { params } : {}), sourceRef: block.ref,
+        tier: 'certified', trust: 'certified', sql, ...(params.length ? { params } : {}), sourceRef: block.ref, ...(block.owner ? { sourceOwner: block.owner } : {}),
         // The DQL the answer ran is the certified block itself, as it is saved.
         ...(prepared && 'source' in prepared && prepared.source ? { artifact: { kind: 'certified_block', name: block.name, source: prepared.source, ...(prepared.sourcePath ? { sourcePath: prepared.sourcePath } : {}), persistence: 'saved', trustState: 'certified', compiledSql: sql } } : {}),
         ...(verdict.outputRefs ? { outputRefs: verdict.outputRefs } : {}),

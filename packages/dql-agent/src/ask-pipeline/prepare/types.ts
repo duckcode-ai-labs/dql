@@ -30,6 +30,8 @@ export interface PreparedCandidate {
   proof: string[];
   /** The block ref for a certified candidate; the engine for a semantic one. */
   sourceRef?: string;
+  /** The certified block's recorded `owner`; absent when the block names none. */
+  sourceOwner?: string;
   engine?: string;
   /** Certified block outputs matched by meaning to the question's refs: the rows are described under those refs, not the block's own column names. */
   outputRefs?: Array<{ output: string; ref: string }>;

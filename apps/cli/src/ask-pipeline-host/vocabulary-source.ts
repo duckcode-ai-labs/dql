@@ -838,6 +838,7 @@ export function buildVocabularySource(input: VocabularySourceInput): VocabularyS
     source.blocks!.push({
       name: block.name, ...(block.domain ? { domain: block.domain } : {}), ...(block.description ? { description: block.description } : {}), certified, status: block.status,
       ...(block.filePath ? { sourcePath: block.filePath } : {}),
+      ...(block.owner?.trim() ? { owner: block.owner.trim() } : {}),
       contract: extractBlockContract({
         name: block.name, domain: block.domain, sql: block.sql, declaredOutputs: block.declaredOutputs, dimensions: block.dimensions, allowedFilters: block.allowedFilters,
         parameters: block.parameters?.map((parameter) => parameter.name), grain: block.grain, entities: block.entities, tableDependencies: block.tableDependencies, rawTableRefs: block.rawTableRefs,

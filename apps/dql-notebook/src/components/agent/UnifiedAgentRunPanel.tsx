@@ -3118,6 +3118,7 @@ function AskRunCard(props: AskRunCardProps) {
   const failureMessage = cancelled ? (run.summary || 'Stopped by user.') : blocked ? askFailureDetail(run) : undefined;
   const captureWarning = askRunCaptureWarning(run);
   const evidence = evidenceFromRun(run);
+  const certifiedSource = certified ? certifiedBlockSourceFromRun(run) : undefined;
   // A host kept this answer's figures from this person until someone checks it (RFC 0010 HH-14).
   const figuresWithheld = (run as { figuresWithheld?: boolean }).figuresWithheld === true;
   const displayArtifacts = cancelled || figuresWithheld ? [] : run.artifacts;
@@ -3166,7 +3167,9 @@ function AskRunCard(props: AskRunCardProps) {
             ? <ShieldCheck size={14} color={t.success} />
             : <Sparkles size={14} color={t.accent} />}
         <span style={{ fontSize: 12, fontWeight: 650, color: cancelled ? t.textMuted : blocked ? t.error : t.textSecondary }}>{outcomeLabel}</span>
-        {certified && evidence[0] ? (
+        {certified && certifiedSource ? (
+          <CertifiedBlockSource source={certifiedSource} t={t} />
+        ) : certified && evidence[0] ? (
           <span style={{ fontSize: 11, color: t.textMuted }}>from <span style={{ color: t.accent, fontWeight: 600 }}>{evidence[0].label}</span></span>
         ) : !blocked && !cancelled && researchVerdicts && researchArtifact ? (
           <button
@@ -6979,6 +6982,33 @@ function certifiedBlockNameFromRun(run: AgentRun): string | undefined {
     if (typeof name === 'string' && name.trim()) return name.trim();
   }
   return undefined;
+}
+
+/**
+ * The certified block a Certified answer ran and the owner the block records
+ * (its `owner` declaration, the accountable person; not who certified it).
+ * `owner` is null when none is recorded, so the answer can say so.
+ */
+export function certifiedBlockSourceFromRun(run: AgentRun): { name: string; owner: string | null } | undefined {
+  if (run.trustState !== 'certified') return undefined;
+  for (const artifact of run.artifacts) {
+    const payload = payloadOf(artifact);
+    const ref = typeof payload.certifiedBlockRef === 'string' ? payload.certifiedBlockRef : undefined;
+    const name = certifiedBlockNameFromRun({ ...run, artifacts: [artifact] }) ?? ref?.replace(/^block:/, '').replace(/^[^.]+\./, '');
+    if (!name) continue;
+    const owner = typeof payload.certifiedBlockOwner === 'string' && payload.certifiedBlockOwner.trim() ? payload.certifiedBlockOwner.trim() : null;
+    return { name, owner };
+  }
+  return undefined;
+}
+
+/** "from <block> · Owner: <name>", with "not set" rather than a blank. */
+export function CertifiedBlockSource({ source, t }: { source: { name: string; owner: string | null }; t: Theme }) {
+  return (
+    <span style={{ fontSize: 11, color: t.textMuted }}>
+      from <span style={{ color: t.accent, fontWeight: 600 }}>{source.name}</span> · Owner: <span style={{ color: source.owner ? t.textSecondary : t.warning, fontWeight: 600 }}>{source.owner ?? 'not set'}</span>
+    </span>
+  );
 }
 
 /** The chart configuration the run produced, so a pinned tile is not forced to `table`. */

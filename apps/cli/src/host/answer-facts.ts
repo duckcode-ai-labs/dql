@@ -18,7 +18,8 @@ export interface DqlAnswerFacts {
   sqlFingerprint?: string;
   tables: string[];
   traceId?: string;
-  source?: { kind: string; name: string };
+  /** `owner` is the certified block's recorded owner; absent when the block names none. */
+  source?: { kind: string; name: string; owner?: string };
   /** The same identifiers the answer's audit event carries, so a host can find others who got this answer. */
   sqlSha256: string[];
   sources: string[];
@@ -86,6 +87,11 @@ export function certifiedBlockIds(payload: AnyRecord): { ids: string[]; name?: s
   return { ids, name };
 }
 
+/** The owner the certified block records for itself, when the answer ran one. */
+export function certifiedBlockOwner(payload: AnyRecord): string | undefined {
+  return certifiedBlockIds(payload).ids.length ? text(payload.certifiedBlockOwner)?.trim() : undefined;
+}
+
 /** SQL hashes and source ids of a run, computed exactly as its audit event does (observability.ts). */
 export function answerIdentities(run: { artifacts?: unknown[] }): { sqlSha256: string[]; sources: string[] } {
   const sql = new Set<string>();
@@ -113,6 +119,9 @@ export function answerFactsFromRun(run: AnyRecord): DqlAnswerFacts {
   const certified = (Array.isArray(run.artifacts) ? run.artifacts : [])
     .map((artifact) => certifiedBlockIds(record(record(artifact)?.payload) ?? {}).name)
     .find((name): name is string => !!name);
+  const blockOwner = (Array.isArray(run.artifacts) ? run.artifacts : [])
+    .map((artifact) => certifiedBlockOwner(record(record(artifact)?.payload) ?? {}))
+    .find((owner): owner is string => !!owner);
   const selectedName = text(selected?.title) ?? text(selected?.id) ?? text(selected?.path);
   const sourceName = selectedName ?? certified;
   return {
@@ -128,7 +137,7 @@ export function answerFactsFromRun(run: AnyRecord): DqlAnswerFacts {
       : sql ? { sqlFingerprint: `sha256:${createHash('sha256').update(sql.sql).digest('hex')}` } : {}),
     tables: sql ? tablesRead(sql.sql) : [],
     ...(text(trace?.traceId) ? { traceId: text(trace?.traceId)! } : {}),
-    ...(sourceName ? { source: { kind: selectedName ? String(selected?.kind ?? 'object') : 'block', name: sourceName } } : {}),
+    ...(sourceName ? { source: { kind: selectedName ? String(selected?.kind ?? 'object') : 'block', name: sourceName, ...(!selectedName && blockOwner ? { owner: blockOwner } : {}) } } : {}),
     ...answerIdentities(run as { artifacts?: unknown[] }),
   };
 }

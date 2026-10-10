@@ -24,6 +24,8 @@ export type VocabularyRole = 'measure' | 'key' | 'label' | 'categorical' | 'time
 export interface VocabularyEntry {
   /** Project-relative path of a block's DQL source, for hosts that compile and bind it. */
   sourcePath?: string;
+  /** A block's `owner`, as its declaration records it. Absent when none is set. */
+  owner?: string;
   ref: string;
   kind: VocabularyKind;
   name: string;
@@ -525,7 +527,7 @@ export interface VocabularySource {
   dimensions?: Array<{ name: string; model: string; label?: string; description?: string; dataType?: string; isTime?: boolean; timeGrains?: string[]; sourceId?: string; aliases?: string[]; reachableFrom?: string[]; physical?: VocabularyEntry['physical']; inventory?: boolean }>;
   entities?: Array<{ name: string; model: string; type: string; label?: string; description?: string; sourceId?: string; reachableFrom?: string[]; physical?: VocabularyEntry['physical']; inventory?: boolean }>;
   models?: Array<{ name: string; label?: string; description?: string; relation?: string }>;
-  blocks?: Array<{ name: string; domain?: string; description?: string; certified: boolean; status?: string; contract: BlockContractV1; examples?: string[]; tags?: string[]; sourceId?: string; sql?: string; sourcePath?: string; supersedes?: Array<{ name: string; deprecatedOn?: string }> }>;
+  blocks?: Array<{ name: string; domain?: string; description?: string; certified: boolean; status?: string; contract: BlockContractV1; examples?: string[]; tags?: string[]; sourceId?: string; sql?: string; sourcePath?: string; owner?: string; supersedes?: Array<{ name: string; deprecatedOn?: string }> }>;
   relations?: Array<{ database?: string; schema?: string; name: string; description?: string; columns: Array<{ name: string; dataType?: string; description?: string }>; /** Bounded dbt-manifest metadata used to choose a relation before its physical columns are hydrated. It never becomes individual vocabulary entries on its own. */ embeddedColumns?: Array<{ name: string; dataType?: string; description?: string }>; sourceId?: string; /** The domain whose entity binds this relation, when one does (physical ownership). */ domain?: string; /** Every domain with an entity bound to this relation — ownership is a set, never the first entity seen. */ domains?: string[]; /** What each column is computed from, by column name (lowercased), from the model's SQL. */ columnLineage?: Record<string, string[]>; /** Exact runtime/dbt identity shared by discovery, drafting, validation and execution. */ binding?: PhysicalRelationBindingV1; /** Manifest descriptions are partial unless a catalog/runtime observation proves otherwise. */ columnCompleteness?: PhysicalColumnCompleteness; observedAt?: string; truncated?: boolean }>;
   terms?: Array<{ name: string; synonyms?: string[]; description?: string; metricRefs?: string[]; rules?: string[]; domain?: string }>;
   /** Declared relationships between modeled things, with their authority to join. */
@@ -735,6 +737,7 @@ export function buildVocabularyIndex(source: VocabularySource): VocabularyIndex 
       ...(block.sourceId ? { sourceId: block.sourceId } : {}),
       ...(block.sql ? { sql: block.sql } : {}),
       ...(block.sourcePath ? { sourcePath: block.sourcePath } : {}),
+      ...(block.owner ? { owner: block.owner } : {}),
       ...(block.supersedes?.length ? { supersedes: block.supersedes } : {}),
     });
   }
