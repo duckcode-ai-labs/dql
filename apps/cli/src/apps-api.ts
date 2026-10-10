@@ -5961,11 +5961,15 @@ function appPublicationReadiness(
         governedTiles += 1;
         const blockRef = item.block;
         const boundRevision = item.sourceRevision ?? item.review?.sourceFingerprint;
-        const block = blocks.find((candidate) => (
-          'blockId' in blockRef
-            ? candidate.id === blockRef.blockId || candidate.name === blockRef.blockId
-            : candidate.path === blockRef.ref
-        ));
+        // A name can be declared by more than one file (a draft saved beside a
+        // certified block, or an older copy that kept the same name). A name
+        // resolves to the certified declaration first; a path names exactly one file.
+        const block = 'blockId' in blockRef
+          ? (() => {
+              const named = blocks.filter((candidate) => candidate.id === blockRef.blockId || candidate.name === blockRef.blockId);
+              return named.find((candidate) => candidate.status === 'certified') ?? named[0];
+            })()
+          : blocks.find((candidate) => candidate.path === blockRef.ref);
         if (block?.status === 'deprecated') {
           // A retired block is never certified for a new publish; name what replaces it.
           const replacement = resolveBlockReplacement(blocks.map((candidate) => ({ ...candidate, filePath: candidate.path })), { ...block, filePath: block.path })?.replacement;
