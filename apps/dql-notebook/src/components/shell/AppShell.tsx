@@ -11,6 +11,7 @@ import { ActivityBar } from './ActivityBar';
 import { Sidebar } from './Sidebar';
 import { Header } from './Header';
 import { HostBanner } from './HostBanner';
+import { hostLandingView, useHostUi } from '../../host/host-ui';
 import { HostRefusalNotice, ReadOnlyStrip } from './HostReadOnly';
 import { DevPanel } from './DevPanel';
 import { api, type SetupLaunchResponse } from '../../api/client';
@@ -40,6 +41,7 @@ const AgentLogPage = lazy(() => import('../agent/AgentLogPage').then((module) =>
 const AskTracePage = lazy(() => import('../agent/AskTracePage').then((module) => ({ default: module.AskTracePage })));
 const AskObservabilityPage = lazy(() => import('../agent/AskObservabilityPage').then((module) => ({ default: module.AskObservabilityPage })));
 const DbtFirstModelingPage = lazy(() => import('../modeling/DbtFirstModelingPage').then((module) => ({ default: module.DbtFirstModelingPage })));
+const HomeSummary = lazy(() => import('../home/HomeSummary').then((module) => ({ default: module.HomeSummary })));
 const AppsView = lazy(() => import('../apps/AppsView').then((module) => ({ default: module.AppsView })));
 const LineageDrawer = lazy(() => import('../lineage/LineageDrawer').then((module) => ({ default: module.LineageDrawer })));
 const AiBuildDialog = lazy(() => import('../agent/AiBuildDialog').then((module) => ({ default: module.AiBuildDialog })));
@@ -157,6 +159,15 @@ export function AppShell() {
     const current = `${window.location.pathname}${window.location.search}${window.location.hash}`;
     if (next !== current) window.history.replaceState(window.history.state, '', next);
   }, [state.activeAppDraftId, state.activeAppExperience, state.activeAppId, state.activeDashboardId, state.mainView]);
+
+  // Under a host, everyone lands on Home: Ask (with the Home cards) for people
+  // who may ask, Apps with the Home cards above the list for the rest. Once, on load.
+  const hostUi = useHostUi();
+  useEffect(() => {
+    const view = hostLandingView(hostUi, { pathname: window.location.pathname, mainView: state.mainView, activeAppId: state.activeAppId });
+    if (view) dispatch({ type: 'SET_MAIN_VIEW', view });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the landing is decided once, from the first state
+  }, []);
 
   // Global keyboard shortcuts
   useKeyboardShortcuts();
@@ -347,7 +358,15 @@ export function AppShell() {
             ) : state.mainView === 'domains' || state.mainView === 'modeling' ? (
               <DbtFirstModelingPage key="modeling" />
             ) : state.mainView === 'apps' ? (
-              <AppsView />
+              <>
+                {/* Under a host the Apps list is Home for people without Ask: the summary sits above it. */}
+                {hostUi.host && !state.activeAppId && !state.activeAppDraftId ? (
+                  <div style={{ flexShrink: 0, maxHeight: '40vh', overflowY: 'auto' }}>
+                    <HomeSummary />
+                  </div>
+                ) : null}
+                <AppsView />
+              </>
             ) : state.mainView === 'agent_log' ? (
               <FullPageSection
                 title="Agent steps"
