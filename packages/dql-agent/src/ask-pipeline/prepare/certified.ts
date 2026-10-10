@@ -41,6 +41,13 @@ export function entails(block: VocabularyEntry, intent: AnalyticalIntentV1, voca
   if (intent.measures.some((measure) => measure.derived)) return { ok: false, missing: ['a derived ratio measure is composed by the governed tiers, never served from a block'], caveats };
   if (intent.population === 'all') return { ok: false, missing: ['a block returns the rows it matched; it cannot include every member of the entity'], caveats };
   const outputs = new Set(contract.outputs.map(norm));
+  // A filter names a field of the project's vocabulary; a block's scope names a
+  // physical column. They are the same filter when the field IS that column.
+  const columnsOf = (ref: string) => {
+    const entry = vocabulary.get(ref);
+    return [leaf(ref), entry?.physical?.column, entry?.name].filter((name): name is string => Boolean(name)).map(norm);
+  };
+  const filtersColumn = (predicate: { ref: string }, column: string) => columnsOf(predicate.ref).includes(norm(column));
 
   const namesBlock = intent.measures.every((measure) => measure.ref === block.ref);
   // Predicates the block's matched measures bring with them: the filter a block
@@ -58,8 +65,8 @@ export function entails(block: VocabularyEntry, intent: AnalyticalIntentV1, voca
       if (measure.scope?.length) {
         for (const predicate of measure.scope) {
           const column = leaf(predicate.ref);
-          const covered = contract.staticScope.some((scope) => norm(scope.column) === norm(column) && scopeMatches(scope.op, scope.values, predicate.op, predicate.values))
-            || verdict.impliedScope.some((scope) => norm(scope.column) === norm(column) && scopeMatches(scope.op, scope.values, predicate.op, predicate.values));
+          const covered = contract.staticScope.some((scope) => filtersColumn(predicate, scope.column) && scopeMatches(scope.op, scope.values, predicate.op, predicate.values))
+            || verdict.impliedScope.some((scope) => filtersColumn(predicate, scope.column) && scopeMatches(scope.op, scope.values, predicate.op, predicate.values));
           if (!covered) missing.push(`the block does not restrict ${column} the way the measure requires`);
         }
       }
@@ -125,13 +132,13 @@ export function entails(block: VocabularyEntry, intent: AnalyticalIntentV1, voca
   // A block the intent names by ref was chosen FOR its declared scope; a block
   // matched through its measures must have that scope asked for explicitly.
   for (const scope of namesBlock ? [] : contract.staticScope) {
-    const asked = intentPredicates.some((predicate) => norm(leaf(predicate.ref)) === norm(scope.column) && scopeMatches(scope.op, scope.values, predicate.op, predicate.values))
+    const asked = intentPredicates.some((predicate) => filtersColumn(predicate, scope.column) && scopeMatches(scope.op, scope.values, predicate.op, predicate.values))
       || impliedScope.some((implied) => norm(implied.column) === norm(scope.column) && scopeMatches(scope.op, scope.values, implied.op, implied.values));
     if (!asked) missing.push(`the block only counts rows where ${describePredicate(scope)}, which the question did not ask for`);
   }
   // Every filter a block's measure declares must be one the question asked for.
   for (const implied of namesBlock ? [] : impliedScope) {
-    const asked = intentPredicates.some((predicate) => norm(leaf(predicate.ref)) === norm(implied.column) && scopeMatches(implied.op, implied.values, predicate.op, predicate.values))
+    const asked = intentPredicates.some((predicate) => filtersColumn(predicate, implied.column) && scopeMatches(implied.op, implied.values, predicate.op, predicate.values))
       || (!implied.declared && contract.staticScope.some((scope) => norm(scope.column) === norm(implied.column) && scopeMatches(scope.op, scope.values, implied.op, implied.values)));
     if (!asked) missing.push(`the block's measure is only read where ${describePredicate(implied)}, which the question did not ask for`);
   }
@@ -155,9 +162,10 @@ export function entails(block: VocabularyEntry, intent: AnalyticalIntentV1, voca
   const accepted = new Set([...contract.allowedFilters, ...contract.parameters, ...contract.staticScope.map((scope) => scope.column), ...(namesBlock ? contract.outputs : [])].map(norm));
   for (const predicate of namesBlock ? intentPredicates : intent.filters) {
     const column = leaf(predicate.ref);
-    const asStatic = [...contract.staticScope, ...impliedScope].some((scope) => norm(scope.column) === norm(column) && scopeMatches(scope.op, scope.values, predicate.op, predicate.values));
-    if (!asStatic && !accepted.has(norm(column))) missing.push(`the block does not accept a filter on ${column}`);
-    if (!asStatic && accepted.has(norm(column))) caveats.push(`filter on ${column} needs the block's parameter binding`);
+    const asStatic = [...contract.staticScope, ...impliedScope].some((scope) => filtersColumn(predicate, scope.column) && scopeMatches(scope.op, scope.values, predicate.op, predicate.values));
+    const acceptsColumn = columnsOf(predicate.ref).some((name) => accepted.has(name));
+    if (!asStatic && !acceptsColumn) missing.push(`the block does not accept a filter on ${column}`);
+    if (!asStatic && acceptsColumn) caveats.push(`filter on ${column} needs the block's parameter binding`);
   }
 
   // Ordering and limit must be provable.
@@ -300,6 +308,8 @@ export function prepareCertified(intent: AnalyticalIntentV1, vocabulary: Vocabul
   const fallbacks: PreparedCandidate[] = [];
   const named = intent.measures.map((measure) => measure.ref).filter((ref) => ref.startsWith('block:'));
   const considered = named.length ? blocks.filter((block) => named.includes(block.ref)) : blocks;
+  // Why each block was not used, in words: block and field names only, never result values.
+  const notUsed: string[] = [];
   for (const block of considered) {
     const verdict = entails(block, intent, vocabulary);
     // The block is compiled and bound like every other surface runs it. The
@@ -307,11 +317,13 @@ export function prepareCertified(intent: AnalyticalIntentV1, vocabulary: Vocabul
     const prepared = deps.prepareBlock?.(block.ref, { question: intent.reading });
     if (prepared && 'error' in prepared) {
       refusals.push({ tier: 'certified', code: 'block_not_applicable', message: `${block.ref}: its parameters could not be bound: ${prepared.error}`, repairable: false, detail: { unresolved: prepared.unresolved ?? [] } });
+      notUsed.push(`${block.ref}: its parameters could not be bound: ${prepared.error}`);
       continue;
     }
     const rawSource = prepared ? undefined : (deps.blockSql?.(block.ref) ?? block.sql);
     if (rawSource && /\$\{\s*[A-Za-z_][A-Za-z0-9_]*\s*\}/.test(rawSource)) {
       refusals.push({ tier: 'certified', code: 'block_not_applicable', message: `${block.ref}: declares template parameters that this host does not bind`, repairable: false });
+      notUsed.push(`${block.ref}: declares template parameters that this host does not bind`);
       continue;
     }
     const source = prepared?.sql ?? rawSource;
@@ -361,15 +373,19 @@ export function prepareCertified(intent: AnalyticalIntentV1, vocabulary: Vocabul
       } else {
         candidates.push(candidate);
       }
-    } else if (named.includes(block.ref) || verdict.missing.length <= 2) {
-      // A block the model named but which does not entail the intent is a
-      // repairable refusal: the resolver can re-express the analysis with the
-      // metric and dimension refs the block was standing in for.
-      refusals.push({ tier: 'certified', code: 'block_not_applicable', message: `${block.ref}: ${verdict.missing.join('; ') || 'no SQL source'}`, repairable: named.includes(block.ref), detail: verdict });
+    } else {
+      const why = `${block.ref}: ${verdict.missing.join('; ') || 'no SQL source'}`;
+      notUsed.push(why);
+      if (named.includes(block.ref) || verdict.missing.length <= 2) {
+        // A block the model named but which does not entail the intent is a
+        // repairable refusal: the resolver can re-express the analysis with the
+        // metric and dimension refs the block was standing in for.
+        refusals.push({ tier: 'certified', code: 'block_not_applicable', message: why, repairable: named.includes(block.ref), detail: verdict });
+      }
     }
   }
   if (candidates.length === 0 && refusals.length === 0) {
-    refusals.push({ tier: 'certified', code: 'block_not_applicable', message: `no certified block entails the intent (${blocks.map((block) => block.ref).join(', ')})`, repairable: false });
+    refusals.push({ tier: 'certified', code: 'block_not_applicable', message: notUsed.length ? `no certified block entails the intent. ${notUsed.join(' | ')}` : `no certified block entails the intent (${blocks.map((block) => block.ref).join(', ')})`, repairable: false });
   }
   return { candidates, refusals, fallbacks };
 }
