@@ -587,7 +587,7 @@ function normalizeConversationValue(value: string): string {
  * point back at the previous turn. "How many warehouse shipments were delayed?"
  * qualifies; "what about 2023", "show monthly" and "by month" do not.
  */
-export function standsAloneAsNewQuestion(question: string): boolean {
+function standsAloneAsNewQuestion(question: string): boolean {
   const normalized = question.replace(/\s+/g, ' ').trim();
   const words = normalized.split(' ').filter(Boolean);
   if (words.length < 5) return false;
