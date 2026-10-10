@@ -242,6 +242,7 @@ function TraceCatalogCard({ trace, t, onOpen }: { trace: AskTraceListEntryV1; t:
             <span style={{ color: t.textMuted, fontWeight: 500 }}>· {trace.mode === 'research' ? 'Research' : 'Ask'} · {trace.surface}</span>
           </div>
           <h2 style={{ margin: '5px 0 0', color: t.textPrimary, fontSize: 14, lineHeight: 1.4, fontWeight: 700 }}>{traceCatalogTitle(trace)}</h2>
+          {trace.reason ? <p style={{ margin: '4px 0 0', color: t.textSecondary, fontSize: 12, lineHeight: 1.45 }}>{trace.reason}</p> : null}
         </div>
         <button type="button" onClick={onOpen} style={primaryButtonStyle(t)}>
           Open trace <ArrowRight size={13} />

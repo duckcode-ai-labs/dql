@@ -4959,7 +4959,7 @@ function ImportCandidateDetail({
   const [description, setDescription] = useState(candidate.description);
   const [tags, setTags] = useState(candidate.tags.join(', '));
   const [terms, setTerms] = useState((candidate.terms ?? []).join(', '));
-  const [pattern, setPattern] = useState(candidate.pattern ?? '');
+  const [pattern, setPattern] = useState(candidate.pattern || 'custom');
   const [grain, setGrain] = useState(candidate.grain ?? '');
   const [entities, setEntities] = useState((candidate.entities ?? []).join(', '));
   const [outputs, setOutputs] = useState((candidate.outputs ?? []).join(', '));
@@ -4980,7 +4980,7 @@ function ImportCandidateDetail({
     setDescription(candidate.description);
     setTags(candidate.tags.join(', '));
     setTerms((candidate.terms ?? []).join(', '));
-    setPattern(candidate.pattern ?? '');
+    setPattern(candidate.pattern || 'custom');
     setGrain(candidate.grain ?? '');
     setEntities((candidate.entities ?? []).join(', '));
     setOutputs((candidate.outputs ?? []).join(', '));
