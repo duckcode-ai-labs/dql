@@ -114,7 +114,7 @@ async function askAverageByProduct(root: string) {
 }
 
 describe('B4: a metric added from Modeling in a dbt-first workspace makes Ask answer Governed', () => {
-  it('stays invisible until dbt parses again, then answers Governed', async () => {
+  it('is read from the YAML before dbt parses again, answers Governed, and dbt parse changes nothing', async () => {
     const { root, manifestPath } = dbtHarbor();
     const before = await askAverageByProduct(root);
     expect(before.semanticLayer.getMetric('claimed_amount')).toBeDefined();
@@ -125,10 +125,10 @@ describe('B4: a metric added from Modeling in a dbt-first workspace makes Ask an
     expect(preview.patches.map((patch) => patch.path)).toEqual(['models/claims/claims_semantic.yml']);
     applyDbtMetricPatch(root, manifestPath, addAverage, preview.fingerprint);
 
-    // The YAML is written, but the manifest dbt last parsed already holds metrics, so DQL still reads that.
+    // The YAML is written and the manifest is stale: DQL overlays the YAML metric, so Ask already answers Governed.
     const stale = await askAverageByProduct(root);
-    expect(stale.semanticLayer.getMetric('average_claimed_amount')).toBeUndefined();
-    expect(stale.trust).not.toBe('governed');
+    expect(stale.semanticLayer.getMetric('average_claimed_amount')).toBeDefined();
+    expect(stale.trust).toBe('governed');
 
     dbtParse(root);
     const after = await askAverageByProduct(root);

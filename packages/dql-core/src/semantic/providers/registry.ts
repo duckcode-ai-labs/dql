@@ -16,6 +16,8 @@ import { resolveRepoSource } from './repo-resolver.js';
 export interface SemanticLayerResult {
   layer: SemanticLayer | undefined;
   errors: string[];
+  /** Load notes that are not failures, e.g. dbt metrics read from YAML because the manifest lacks them. */
+  diagnostics?: string[];
   detectedProvider?: string;
 }
 
@@ -191,7 +193,8 @@ function loadFromConfig(
       }
       case 'dbt': {
         const provider = new DbtProvider();
-        return { layer: provider.load(config, effectiveRoot), errors };
+        const layer = provider.load(config, effectiveRoot);
+        return { layer, errors, diagnostics: layer.getDiagnostics() };
       }
       case 'cubejs': {
         const provider = new CubejsProvider();

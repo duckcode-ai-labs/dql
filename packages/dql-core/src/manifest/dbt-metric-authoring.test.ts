@@ -85,6 +85,8 @@ describe('previewDbtMetricPatch', () => {
     expect(model.measures[0]).toEqual({ name: 'claimed_amount', agg: 'sum' });
     expect(after.metrics.find((metric) => metric.name === 'average_claimed_amount')).toEqual({
       name: 'average_claimed_amount', label: 'Average claimed amount', type: 'simple', type_params: { measure: 'average_claimed_amount' },
+      // Marks a metric Add metric wrote, so DQL reads it from the YAML until dbt parses it.
+      config: { meta: { dql: { authored: true } } },
     });
     expect(preview.fingerprint).toMatch(/^[a-f0-9]{64}$/);
   });
@@ -102,7 +104,7 @@ describe('previewDbtMetricPatch', () => {
     const preview = previewDbtMetricPatch(root, manifestPath, { ...average, metric: { ...average.metric, aggregation: 'AVG', domain: 'claims' } });
     const after = yaml.load(preview.patches[0]!.after) as { semantic_models: Array<Record<string, any>>; metrics: Array<Record<string, any>> };
     expect(after.semantic_models[0]!.measures.at(-1).agg).toBe('average');
-    expect(after.metrics.at(-1)!.config).toEqual({ meta: { domain: 'claims' } });
+    expect(after.metrics.at(-1)!.config).toEqual({ meta: { domain: 'claims', dql: { authored: true } } });
   });
 
   it('creates a semantic model in a new file beside the dbt model when none exists', () => {
