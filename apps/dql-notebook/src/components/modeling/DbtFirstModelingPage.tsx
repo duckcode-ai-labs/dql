@@ -1,8 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Blocks, BookOpen, Boxes, CheckCircle2, Columns3, Download, EyeOff, FileSearch, FolderTree, GitBranch, GraduationCap, Link2, Maximize2, MessageCircle, Network, PanelRightClose, PanelRightOpen, Plus, RefreshCw, RotateCcw, Search, Settings2, ShieldCheck, SlidersHorizontal, Sparkles, XCircle } from 'lucide-react';
 import { DEFAULT_MODEL_AREA_ID } from '@duckcodeailabs/dql-core/modeling-ids';
-import type { DbtNodeAuthoringDetail, DbtSourceAuthoringInput, DbtSourcePatchPreview, ManifestModelArea, ManifestModelEntity, ManifestModelRelationship, ModelingAuthoringChange, ModelingChangePreview } from '@duckcodeailabs/dql-core';
-import { hostReadOnly, readOnlyReason, useHostUi } from '../../host/host-ui';
+import type { DbtMetricAuthoringInput, DbtMetricPatchPreview, DbtNodeAuthoringDetail, DbtSourceAuthoringInput, DbtSourcePatchPreview, ManifestModelArea, ManifestModelEntity, ManifestModelRelationship, ModelingAuthoringChange, ModelingChangePreview } from '@duckcodeailabs/dql-core';
+import { hostAllows, hostReadOnly, readOnlyReason, useHostUi, type HostUiState } from '../../host/host-ui';
 import { api, type AgentRunArtifact, type ContextAuthoringProposalV1, type DbtFirstModelingResponse } from '../../api/client';
 import { useNotebook } from '../../store/NotebookStore';
 import type { NotebookFile } from '../../store/types';
@@ -204,6 +204,8 @@ export function DbtFirstModelingPage({ initialSection }: { initialSection?: Doma
   const [draftWithQueryHistory, setDraftWithQueryHistory] = useState(false);
   const [metricDrawerOpen, setMetricDrawerOpenState] = useState(false);
   const setMetricDrawerOpen = (open: boolean) => { if (!readOnly || !open) setMetricDrawerOpenState(open); };
+  const [dbtMetricOpen, setDbtMetricOpenState] = useState(false);
+  const setDbtMetricOpen = (open: boolean) => { if (!readOnly || !open) setDbtMetricOpenState(open); };
   /**
    * RFC 0007: draft domains, models and joins from the warehouse catalog,
    * checked on the warehouse, and open them in the ordinary review drawer.
@@ -448,6 +450,11 @@ export function DbtFirstModelingPage({ initialSection }: { initialSection?: Doma
               <Plus size={14} /> New metric
             </Button>
           )}
+          {!warehouseModeling && canAddDbtMetric(hostUi) && (
+            <Button t={t} onClick={() => setDbtMetricOpen(true)}>
+              <Plus size={14} /> Add metric
+            </Button>
+          )}
           {!readOnly && <Button t={t} onClick={() => setStartDrawer('yaml')}><FileSearch size={14} /> Import YAML</Button>}
           <IconButton t={t} title="Recompile" onClick={() => void refresh()}>
             <RefreshCw size={15} />
@@ -674,6 +681,16 @@ export function DbtFirstModelingPage({ initialSection }: { initialSection?: Doma
           t={t}
           onClose={() => setMetricDrawerOpen(false)}
           onSaved={(path) => { setMetricDrawerOpen(false); setNotice(`Metric saved to ${path}. Ask and Blocks can use it now.`); }}
+        />
+      ) : null}
+      {dbtMetricOpen ? (
+        <AddDbtMetricDrawer
+          data={data}
+          domain={selectedDomain}
+          snapshotId={data.snapshotId}
+          t={t}
+          onClose={() => setDbtMetricOpen(false)}
+          onApplied={async (message) => { setDbtMetricOpen(false); setNotice(message); await refresh(); }}
         />
       ) : null}
       {startDrawer === 'models' ? <AddModelsDrawer data={data} domain={selectedDomain} areaId={selectedAreaId} theme={t} onClose={() => setStartDrawer(null)} onProposal={(next) => { setStartDrawer(null); setProposal(next); }} /> : null}
@@ -2410,6 +2427,122 @@ function NewMetricDrawer({ data, domain, t, onClose, onSaved }: { data: DbtFirst
         </div>
       </div>
     </div>
+  );
+}
+
+/**
+ * dbt-first: a metric belongs to dbt/MetricFlow, so this writes the metric, its measure, any dimensions and its
+ * synonyms (`config.meta.synonyms`) into the dbt project's YAML in one patch, through the same preview → apply
+ * flow as "Preview dbt source patch". Nothing else is saved, so the preview shows everything that will change.
+ */
+/**
+ * "Add metric" writes git-tracked dbt YAML, so it needs project.write as well as the authoring the page already
+ * needs (dataset.author). Production follows main and refuses project.write: read-only there, editable in a draft space.
+ */
+export function canAddDbtMetric(hostUi: HostUiState): boolean {
+  return !hostReadOnly(hostUi, 'domains') && hostAllows(hostUi, 'project.write');
+}
+
+export function AddDbtMetricDrawer({ data, domain, snapshotId, t, onClose, onApplied }: { data: DbtFirstModelingResponse; domain: string | null; snapshotId: string; t: Theme; onClose: () => void; onApplied: (message: string) => Promise<void> }) {
+  const models = useMemo(() => Object.values(data.dbtProvenance.nodes)
+    .filter((node) => node.resourceType === 'model')
+    .sort((a, b) => a.name.localeCompare(b.name)), [data.dbtProvenance.nodes]);
+  const [nodeId, setNodeId] = useState('');
+  const [columns, setColumns] = useState<string[]>([]);
+  const [semanticModel, setSemanticModel] = useState('');
+  const [aggregation, setAggregation] = useState('average');
+  const [column, setColumn] = useState('');
+  const [name, setName] = useState('');
+  const [label, setLabel] = useState('');
+  const [description, setDescription] = useState('');
+  const [dimensions, setDimensions] = useState('');
+  const [synonyms, setSynonyms] = useState('');
+  const [entity, setEntity] = useState('');
+  const [entityColumn, setEntityColumn] = useState('');
+  const [timeColumn, setTimeColumn] = useState('');
+  const [preview, setPreview] = useState<(DbtMetricPatchPreview & { snapshotId: string }) | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    setColumns([]);
+    setColumn('');
+    if (!nodeId) return;
+    let active = true;
+    void api.getDbtModelingNode(nodeId)
+      .then((detail) => { if (active) setColumns(detail.columns.map((item) => item.name)); })
+      .catch((cause) => { if (active) setError(cause instanceof Error ? cause.message : String(cause)); });
+    return () => { active = false; };
+  }, [nodeId]);
+  const slug = (value: string) => value.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+  const metricName = slug(name);
+  const csvList = (value: string) => value.split(',').map((item) => item.trim()).filter(Boolean);
+  const change = (): DbtMetricAuthoringInput => ({
+    mode: 'add',
+    semanticModel: slug(semanticModel) || slug(models.find((node) => node.uniqueId === nodeId)?.name ?? ''),
+    modelUniqueId: nodeId,
+    ...(entity.trim() && entityColumn.trim() ? { primaryEntity: { name: slug(entity), column: entityColumn.trim() } } : {}),
+    ...(timeColumn.trim() ? { timeDimension: { name: slug(timeColumn), column: timeColumn.trim() } } : {}),
+    metric: { name: metricName, label: label.trim() || titleCase(metricName), description: description.trim(), aggregation, column, ...(domain ? { domain } : {}), ...(csvList(synonyms).length ? { synonyms: csvList(synonyms) } : {}) },
+    dimensions: csvList(dimensions).map((item) => ({ name: slug(item), column: item, type: 'categorical' as const })),
+  });
+  const ready = Boolean(nodeId && metricName && column);
+  const run = async (action: () => Promise<void>) => {
+    setBusy(true);
+    setError(null);
+    try { await action(); } catch (cause) { setError(cause instanceof Error ? cause.message : String(cause)); } finally { setBusy(false); }
+  };
+  const previewPatch = () => run(async () => setPreview(await api.previewDbtMetricPatch(change(), snapshotId)));
+  const applyPatch = () => run(async () => {
+    if (!preview) return;
+    const result = await api.applyDbtMetricPatch(change(), preview.fingerprint, preview.snapshotId);
+    let message = `Metric ${metricName} written to ${result.applied.patches.filter((patch) => patch.changed).map((patch) => patch.path).join(', ')}.`;
+    if (!result.manifestRefresh.refreshed) message += ` ${result.manifestRefresh.reason ?? ''}`;
+    await onApplied(message);
+  });
+  return (
+    <Modal title="Add metric" t={t} onClose={onClose}>
+      <Message text="The metric lives in your dbt project's YAML, where dbt/MetricFlow owns it. DQL previews the exact change first; nothing is written until you apply." t={t} />
+      {!preview ? (
+        <div style={{ display: 'grid', gap: 12 }}>
+          <Field label="dbt model"><Select value={nodeId} onChange={(value) => { setNodeId(value); setSemanticModel(''); }} values={models.map((node) => node.uniqueId)} labels={Object.fromEntries(models.map((node) => [node.uniqueId, node.name]))} t={t} /></Field>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.4fr', gap: 10 }}>
+            <Field label="Aggregation"><Select value={aggregation} onChange={(value) => setAggregation(value || 'average')} values={['sum', 'count', 'count_distinct', 'average', 'min', 'max']} labels={{ sum: 'Sum', count: 'Count', count_distinct: 'Count distinct', average: 'Average', min: 'Minimum', max: 'Maximum' }} t={t} /></Field>
+            <Field label="Column"><Select value={column} onChange={setColumn} values={columns} t={t} /></Field>
+          </div>
+          <Field label="Metric name"><Input value={name} onChange={setName} t={t} placeholder="average_claimed_amount" /></Field>
+          <Field label="Label"><Input value={label} onChange={setLabel} t={t} placeholder="Average claimed amount" /></Field>
+          <Field label="What it measures"><Input value={description} onChange={setDescription} t={t} placeholder="Mean amount claimed per claim." /></Field>
+          <Field label="Dimensions to add (columns, comma separated)"><Input value={dimensions} onChange={setDimensions} t={t} placeholder="product, region" /></Field>
+          <Field label="Also known as (synonyms, comma separated; saved in the dbt YAML)"><Input value={synonyms} onChange={setSynonyms} t={t} placeholder="avg claim, mean claim size" /></Field>
+          <details>
+            <summary style={{ cursor: 'pointer', fontSize: 11, color: t.textMuted }}>This dbt model has no semantic model yet</summary>
+            <div style={{ display: 'grid', gap: 10, marginTop: 8 }}>
+              <Field label="Semantic model name"><Input value={semanticModel} onChange={setSemanticModel} t={t} placeholder="claims" /></Field>
+              <Field label="Primary entity name"><Input value={entity} onChange={setEntity} t={t} placeholder="claim" /></Field>
+              <Field label="Primary entity column"><Select value={entityColumn} onChange={setEntityColumn} values={columns} t={t} /></Field>
+              <Field label="Time column"><Select value={timeColumn} onChange={setTimeColumn} values={columns} t={t} /></Field>
+            </div>
+          </details>
+          {error ? <p role="alert" style={{ margin: 0, color: 'var(--status-error)', fontSize: 11.5 }}>{error}</p> : null}
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 7 }}><Button t={t} onClick={onClose}>Cancel</Button><Button primary t={t} disabled={!ready || busy} onClick={() => void previewPatch()}>Preview dbt YAML</Button></div>
+        </div>
+      ) : (
+        <div style={{ display: 'grid', gap: 10 }}>
+          {preview.patches.map((patch) => (
+            <div key={patch.path} style={{ display: 'grid', gap: 6 }}>
+              <div style={{ color: t.textSecondary, fontSize: 11 }}>Source: <code>{patch.path}</code></div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                <SourcePreview title="Current dbt YAML" source={patch.before || '# New dbt YAML file'} t={t} />
+                <SourcePreview title="Proposed dbt YAML" source={patch.after} t={t} />
+              </div>
+            </div>
+          ))}
+          {preview.warnings.map((warning) => <Message key={warning} text={warning} t={t} />)}
+          {error ? <p role="alert" style={{ margin: 0, color: 'var(--status-error)', fontSize: 11.5 }}>{error}</p> : null}
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 7 }}><Button t={t} onClick={() => setPreview(null)}>Back</Button><Button primary t={t} disabled={busy || !preview.patches.some((patch) => patch.changed)} onClick={() => void applyPatch()}>{busy ? 'Applying…' : 'Apply to dbt'}</Button></div>
+        </div>
+      )}
+    </Modal>
   );
 }
 

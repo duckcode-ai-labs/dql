@@ -929,7 +929,7 @@ function dbtPatchRelativePath(raw: UnknownRecord, name: string): string {
 
 /** Resolve lexical and real paths so existing symlink ancestors cannot escape
  * the intended project root. Missing leaf segments are allowed for previews. */
-function assertContainedPath(projectRoot: string, inputPath: string, label: string): string {
+export function assertContainedPath(projectRoot: string, inputPath: string, label: string): string {
   const root = resolve(projectRoot);
   const canonicalRoot = existsSync(root) ? realpathSync(root) : root;
   const absolute = resolve(root, inputPath);
@@ -954,7 +954,7 @@ function assertContainedPath(projectRoot: string, inputPath: string, label: stri
  * `yaml` package's Document API), which is a new runtime dependency for this
  * published package and is deliberately left as a separate decision.
  */
-function dumpYaml(value: unknown): string {
+export function dumpYaml(value: unknown): string {
   return yaml.dump(value, { noRefs: true, lineWidth: -1, sortKeys: false, noCompatMode: true }).trimEnd() + '\n';
 }
 
@@ -967,7 +967,7 @@ function canonicalFanout(value: ManifestFanoutPolicy): Exclude<ManifestFanoutPol
   return value === 'unsafe' ? 'forbidden' : value;
 }
 
-function readJson(path: string): UnknownRecord {
+export function readJson(path: string): UnknownRecord {
   const stat = statSync(path);
   const version = `${stat.size}:${stat.mtimeMs}`;
   const cached = dbtJsonArtifactCache.get(path);
@@ -1000,14 +1000,14 @@ function stringArray(value: unknown): string[] {
   return Array.isArray(value) ? value.map(String).filter(Boolean) : [];
 }
 
-function stringValue(value: unknown): string | undefined {
+export function stringValue(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim() ? value.trim() : undefined;
 }
 
-function asRecord(value: unknown): UnknownRecord {
+export function asRecord(value: unknown): UnknownRecord {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as UnknownRecord : {};
 }
 
-function hash(value: unknown): string {
+export function hash(value: unknown): string {
   return createHash('sha256').update(JSON.stringify(value)).digest('hex');
 }

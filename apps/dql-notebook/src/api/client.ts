@@ -26,6 +26,8 @@ import type {
   DbtNodeAuthoringDetail,
   DbtSourceAuthoringInput,
   DbtSourcePatchPreview,
+  DbtMetricAuthoringInput,
+  DbtMetricPatchPreview,
   RelationshipAuthoringInput,
   ManifestRelationshipValidationEvidence,
   ManifestDomainCapsule,
@@ -4983,6 +4985,18 @@ export const api = {
 
   async applyDbtSourcePatch(change: DbtSourceAuthoringInput, expectedFingerprint: string, expectedSnapshotId: string): Promise<{ requestId?: string; snapshotId: string; applied: DbtSourcePatchPreview }> {
     return request('/api/modeling/dbt-first/dbt-source/apply', {
+      method: 'POST', body: JSON.stringify({ change, expectedFingerprint, expectedSnapshotId }),
+    });
+  },
+
+  async previewDbtMetricPatch(change: DbtMetricAuthoringInput, expectedSnapshotId: string): Promise<DbtMetricPatchPreview & { requestId?: string; snapshotId: string }> {
+    return request('/api/modeling/dbt-first/dbt-metric/preview', {
+      method: 'POST', body: JSON.stringify({ change, expectedSnapshotId }),
+    });
+  },
+
+  async applyDbtMetricPatch(change: DbtMetricAuthoringInput, expectedFingerprint: string, expectedSnapshotId: string): Promise<{ requestId?: string; snapshotId: string; applied: DbtMetricPatchPreview; manifestRefresh: { refreshed: boolean; reason?: string } }> {
+    return request('/api/modeling/dbt-first/dbt-metric/apply', {
       method: 'POST', body: JSON.stringify({ change, expectedFingerprint, expectedSnapshotId }),
     });
   },
