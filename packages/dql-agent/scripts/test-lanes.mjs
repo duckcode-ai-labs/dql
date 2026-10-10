@@ -91,7 +91,8 @@ const EXPECTED_TEST_FILES = 184;
 // 2416 (183 files) with the time-grain proof (certified-time-grain.test.ts, +5 tests);
 // 2424 (184 files) with the refusal sentence (certified-refusal-sentence.test.ts, +8 tests).
 // 2425 with the own-table filter column check (65797183, +1 test).
-const EXPECTED_TESTS = 2425;
+// 2426 with the renamed-dimension filter apply check (+1 test).
+const EXPECTED_TESTS = 2426;
 // The heavy lane's share of EXPECTED_TESTS (catalog.test.ts 72 + project-state.test.ts 4), pinned so
 // a lane run on its own (CI runs the two lanes as separate steps) is audited as exactly as both together.
 // The ordinary lane's share is the difference: 2316.

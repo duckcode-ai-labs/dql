@@ -31,6 +31,14 @@ export interface EntailmentVerdict {
 const norm = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, '');
 const leaf = (ref: string) => (ref.split('.').pop() ?? ref).toLowerCase();
 
+/** The normalized column names a filter's ref can stand for on the block's own table. */
+function filterColumns(contract: NonNullable<VocabularyEntry['contract']>, vocabulary: VocabularyIndex, ref: string): string[] {
+  const entry = vocabulary.get(ref);
+  const relation = entry?.physical?.relation;
+  const sameTable = !relation || (contract.source !== undefined && sameRelation(contract.source, relation));
+  return [leaf(ref), ...(sameTable ? [entry?.physical?.column, entry?.name] : [])].filter((name): name is string => Boolean(name)).map(norm);
+}
+
 export function entails(block: VocabularyEntry, intent: AnalyticalIntentV1, vocabulary: VocabularyIndex): EntailmentVerdict {
   const contract = block.contract;
   const missing: string[] = [];
@@ -44,12 +52,7 @@ export function entails(block: VocabularyEntry, intent: AnalyticalIntentV1, voca
   // A filter names a field of the project's vocabulary; a block's scope names a
   // physical column. They are the same filter when the field IS that column of
   // the block's own table; a same-named column of another table is not.
-  const columnsOf = (ref: string) => {
-    const entry = vocabulary.get(ref);
-    const relation = entry?.physical?.relation;
-    const sameTable = !relation || (contract.source !== undefined && sameRelation(contract.source, relation));
-    return [leaf(ref), ...(sameTable ? [entry?.physical?.column, entry?.name] : [])].filter((name): name is string => Boolean(name)).map(norm);
-  };
+  const columnsOf = (ref: string) => filterColumns(contract, vocabulary, ref);
   const filtersColumn = (predicate: { ref: string }, column: string) => columnsOf(predicate.ref).includes(norm(column));
 
   const namesBlock = intent.measures.every((measure) => measure.ref === block.ref);
@@ -343,11 +346,11 @@ export function prepareCertified(intent: AnalyticalIntentV1, vocabulary: Vocabul
       const applied: string[] = [];
       const blockPredicates = [...intent.filters, ...intent.measures.filter((measure) => measure.ref === block.ref).flatMap((measure) => measure.scope ?? [])];
       for (const predicate of blockPredicates) {
-        const column = leaf(predicate.ref);
-        const staticMatch = block.contract?.staticScope.some((scope) => norm(scope.column) === norm(column));
+        const columns = block.contract ? filterColumns(block.contract, vocabulary, predicate.ref) : [norm(leaf(predicate.ref))];
+        const staticMatch = block.contract?.staticScope.some((scope) => columns.includes(norm(scope.column)) && scopeMatches(scope.op, scope.values, predicate.op, predicate.values));
         if (staticMatch) continue;
-        const output = (block.contract?.outputs ?? []).find((name) => norm(name) === norm(column));
-        if (!output || !outputs.has(norm(column))) continue;
+        const output = (block.contract?.outputs ?? []).find((name) => columns.includes(norm(name)));
+        if (!output || !outputs.has(norm(output))) continue;
         const quoted = `"${output.replace(/"/g, '""')}"`;
         const value = predicate.values[0];
         if (predicate.op === 'eq' && typeof value === 'string') applied.push(`LOWER(CAST(block.${quoted} AS TEXT)) = ${bind(value.toLowerCase())}`);
