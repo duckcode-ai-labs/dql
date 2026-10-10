@@ -246,7 +246,7 @@ program imports a supported API rather than a file path.
 `project.read`, `project.write`, `connection.manage`, `settings.manage`,
 `dataset.author`, `dataset.certify`, `hint.review`, `app.view`,
 `app.author`, `app.publish`, `ask`, `research`, `query.run` (SQL the
-person writes), `export`, `schedule.manage`, `git.review`, `tool.<name>`.
+person writes), `export`, `schedule.manage`, `git.review`, `request.create` (asked only by `GET /api/host/ui`, so Home can show "Open requests"), `tool.<name>`.
 
 Each request maps to one action and one resource (`project`, `app`,
 `app-build`, `hint`, `connection`, each with an id where the path names
