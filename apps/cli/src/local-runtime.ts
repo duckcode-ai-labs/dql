@@ -186,11 +186,14 @@ import {
   applyModelingChange,
   previewDbtSourcePatch,
   applyDbtSourcePatch,
+  previewDbtMetricPatch,
+  applyDbtMetricPatch,
   loadDomainPackageRegistry,
   loadDbtNodeAuthoringDetail,
   type ModelingAuthoringChange,
   type DbtNodeAuthoringDetail,
   type DbtSourceAuthoringInput,
+  type DbtMetricAuthoringInput,
   type RelationshipAuthoringInput,
   type ManifestRelationshipValidationEvidence,
   normalizeAnalyticalFailureV1,
@@ -15137,6 +15140,76 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
         res.end(serializeJSON({ requestId, snapshotId: nextSnapshot.snapshotId, applied }));
       } catch (error) {
         const inferred = /changed after the preview/i.test(apiErrorMessage(error)) ? 'SOURCE_CHANGED' : 'DBT_SOURCE_PATCH_INVALID';
+        const code = apiErrorCode(error, inferred);
+        res.writeHead(code === 'SOURCE_CHANGED' ? 409 : 400, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(serializeJSON(apiErrorEnvelope({ requestId, snapshotId: snapshot.snapshotId, code, message: apiErrorMessage(error), nextActions: ['Refresh the source patch preview before applying.'] })));
+      }
+      return;
+    }
+
+    // Add or edit a MetricFlow metric (and the measure/dimensions it needs) in the dbt project's own YAML.
+    // Same contract as dbt-source above; the metric stays owned by dbt, DQL only writes the reviewed patch.
+    if (req.method === 'POST' && path === '/api/modeling/dbt-first/dbt-metric/preview') {
+      const requestId = apiRequestId('modeling-dbt-metric-preview');
+      const snapshot = projectSnapshot();
+      try {
+        const body = await readJSON(req) as { change?: DbtMetricAuthoringInput; expectedSnapshotId?: string };
+        if (!body.change) throw Object.assign(new Error('A dbt metric change is required.'), { code: 'INVALID_REQUEST' });
+        if (body.expectedSnapshotId && body.expectedSnapshotId !== snapshot.snapshotId) {
+          throw Object.assign(new Error('Project sources changed after the model was loaded.'), { code: 'SOURCE_CHANGED' });
+        }
+        const { dbtProjectDir, manifestPath } = onboardingDbtPaths({});
+        const preview = previewDbtMetricPatch(dbtProjectDir, manifestPath, body.change);
+        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(serializeJSON({ requestId, snapshotId: snapshot.snapshotId, ...preview }));
+      } catch (error) {
+        const code = apiErrorCode(error, 'DBT_METRIC_INVALID');
+        res.writeHead(code === 'SOURCE_CHANGED' ? 409 : 400, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(serializeJSON(apiErrorEnvelope({ requestId, snapshotId: snapshot.snapshotId, code, message: apiErrorMessage(error), nextActions: ['Fix the metric definition and preview the dbt YAML patch again.'] })));
+      }
+      return;
+    }
+
+    if (req.method === 'POST' && path === '/api/modeling/dbt-first/dbt-metric/apply') {
+      const requestId = apiRequestId('modeling-dbt-metric-apply');
+      const snapshot = projectSnapshot();
+      try {
+        const body = await readJSON(req) as { change?: DbtMetricAuthoringInput; fingerprint?: string; expectedFingerprint?: string; expectedSnapshotId?: string };
+        if (!body.change) throw Object.assign(new Error('A dbt metric change is required.'), { code: 'INVALID_REQUEST' });
+        if (!body.expectedSnapshotId || body.expectedSnapshotId !== snapshot.snapshotId) {
+          throw Object.assign(new Error('Project sources changed after the source patch preview.'), { code: 'SOURCE_CHANGED' });
+        }
+        const expectedFingerprint = body.expectedFingerprint ?? body.fingerprint;
+        if (!expectedFingerprint) throw Object.assign(new Error('The reviewed source patch fingerprint is required.'), { code: 'SOURCE_CHANGED' });
+        const { dbtProjectDir, manifestPath, profilesDir } = onboardingDbtPaths({});
+        const applied = applyDbtMetricPatch(dbtProjectDir, manifestPath, body.change, expectedFingerprint);
+        // DQL reads dbt's compiled manifest first, so the new metric is only visible once dbt has parsed the YAML.
+        // When dbt is not available here the YAML is still written; say so rather than claim the metric is live.
+        let manifestRefresh: { refreshed: boolean; reason?: string } = { refreshed: false, reason: 'No YAML changed.' };
+        if (applied.patches.some((patch) => patch.changed)) {
+          try {
+            execFileSync('dbt', buildDbtParseArgs(dbtProjectDir, profilesDir), {
+              cwd: dbtProjectDir,
+              timeout: 120_000,
+              maxBuffer: 1024 * 1024,
+              encoding: 'utf8',
+              stdio: ['ignore', 'pipe', 'pipe'],
+              env: hostedRequest() ? { ...minimalChildEnv(), ...dbtEnvironment(), DBT_LOG_FORMAT: 'text' } : { ...process.env, DBT_LOG_FORMAT: 'text' },
+            });
+            manifestRefresh = { refreshed: true };
+          } catch (parseError) {
+            const missing = (parseError as NodeJS.ErrnoException)?.code === 'ENOENT';
+            manifestRefresh = { refreshed: false, reason: missing ? 'dbt is not installed where DQL runs. Run `dbt parse` in the dbt project to make the metric visible to Ask.' : 'dbt parse failed. Run `dbt parse` in the dbt project to see the error.' };
+          }
+        }
+        projectSnapshots.invalidate();
+        invalidateAgentProjectState(projectRoot);
+        await reloadSemanticLayer();
+        const nextSnapshot = projectSnapshot();
+        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(serializeJSON({ requestId, snapshotId: nextSnapshot.snapshotId, applied, manifestRefresh }));
+      } catch (error) {
+        const inferred = /changed after the preview/i.test(apiErrorMessage(error)) ? 'SOURCE_CHANGED' : 'DBT_METRIC_INVALID';
         const code = apiErrorCode(error, inferred);
         res.writeHead(code === 'SOURCE_CHANGED' ? 409 : 400, { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(serializeJSON(apiErrorEnvelope({ requestId, snapshotId: snapshot.snapshotId, code, message: apiErrorMessage(error), nextActions: ['Refresh the source patch preview before applying.'] })));
