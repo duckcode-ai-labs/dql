@@ -3091,6 +3091,7 @@ export function toExecutorResult(runId: string, outcome: PipelineOutcome, starte
       ...(result.columnsMeta?.length ? { columnsMeta: result.columnsMeta } : {}),
     },
     ...(candidate.sourceRef ? { certifiedBlockRef: candidate.sourceRef } : {}),
+    ...(candidate.sourceRef && candidate.sourceOwner ? { certifiedBlockOwner: candidate.sourceOwner } : {}),
     ...(candidate.artifact !== undefined ? { dqlArtifact: candidate.artifact } : {}),
     proof: [...candidate.proof, ...(receipt.executed?.proofs ?? [])],
     ...common,
@@ -3120,6 +3121,9 @@ export function toExecutorResult(runId: string, outcome: PipelineOutcome, starte
       // A certified block served as published with a label-only grouping
       // says so: the answer cannot keep two same-named entities apart.
       ...(candidate.tier === 'certified' ? candidate.proof.filter((line) => /no identity key/.test(line)).map((line, index) => ({ id: `pipeline-certified-caveat-${index + 1}`, label: 'Certified block identity', passed: false, severity: 'warning' as const, message: `${line.replace(/^the block/, 'The block')}. Recertify it with the entity key to keep same-named members apart.` })) : []),
+      // A certified answer always names who owns its block; a block with no
+      // recorded owner is listed here and the answer says "Owner: not set".
+      ...(certified && candidate.sourceRef && !candidate.sourceOwner ? [{ id: 'pipeline-certified-owner', label: 'Certified block owner', passed: false, severity: 'warning' as const, message: `${candidate.sourceRef} has no owner recorded. Set owner in the block declaration.` }] : []),
       // An answer that could not carry a requested output says so, and the
       // check does not pass: a ranking whose only identity is a numeric key
       // has not answered "which teams".
