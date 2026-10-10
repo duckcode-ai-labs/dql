@@ -13,7 +13,8 @@ import type { VocabularyEntry, VocabularyIndex } from './vocabulary.js';
  * settled here with no model call. Certified-first still holds: the reading
  * goes through the same tiers, and a certified block that entails it wins.
  *
- * Anything else keeps the model-driven path: a word nothing here accounts for
+ * Anything else keeps the model-driven path: more than one metric, an approved
+ * correction, skill or host guidance that applies to a name, a word nothing here accounts for
  * (a period, a filter, "top", "compare"), a name two entries share, a name a
  * certified block or term also claims, a time dimension, or a dimension the
  * metric cannot reach.
@@ -21,8 +22,8 @@ import type { VocabularyEntry, VocabularyIndex } from './vocabulary.js';
 
 // Words that ask for a grouped table without changing what is measured.
 const CONNECTIVES = new Set([
-  'a', 'an', 'the', 'by', 'per', 'for', 'each', 'every', 'of', 'and', 'with', 'across', 'our', 'my', 'please',
-  'show', 'me', 'us', 'give', 'list', 'display', 'get', 'tell', 'what', 'whats', 'is', 'are', 'can', 'you', 'i', 'want', 'to', 'see',
+  'a', 'an', 'the', 'by', 'for', 'each', 'every', 'of', 'and', 'across', 'our', 'my', 'please',
+  'show', 'me', 'us', 'give', 'display', 'get', 'tell', 'what', 'whats', 'is', 'are', 'can', 'you', 'i', 'want', 'to', 'see',
   'broken', 'down', 'split', 'grouped', 'group', 'breakdown', 'it', 's',
 ]);
 const MAX_PHRASE_WORDS = 6;
@@ -42,6 +43,23 @@ function namedBy(phrase: string, vocabulary: VocabularyIndex): VocabularyEntry |
   if (semantic.length === 0) return undefined;
   if (semantic.length > 1 || !isGovernedEntry(semantic[0]!)) return 'ambiguous';
   return semantic[0];
+}
+
+/** Does an approved correction or a selected skill speak about this entry? The model sees those cards; this path does not, so it yields. */
+function guidedBy(entry: VocabularyEntry, vocabulary: VocabularyIndex): boolean {
+  if (entry.preferredBy?.length) return true;
+  const names = [entry.label, entry.name, ...entry.aliases].filter((value): value is string => Boolean(value)).map((value) => wordsOf(value).join(' ')).filter(Boolean);
+  return vocabulary.entries.some((other) => {
+    if (other.kind === 'skill') {
+      const skill = other.skill;
+      if (!skill) return false;
+      const refs = [...skill.preferredRefs, ...Object.values(skill.vocabulary)].map((ref) => ref.toLowerCase());
+      return refs.includes(entry.ref.toLowerCase());
+    }
+    if (other.kind !== 'hint') return false;
+    const text = ` ${wordsOf([other.name, ...other.aliases, other.description ?? ''].join(' ')).join(' ')} `;
+    return names.some((name) => text.includes(` ${name} `));
+  });
 }
 
 export function readByOwnWords(question: string, vocabulary: VocabularyIndex): AnalyticalIntentV1 | undefined {
@@ -66,17 +84,19 @@ export function readByOwnWords(question: string, vocabulary: VocabularyIndex): A
   named.sort((a, b) => a.start - b.start);
   const metrics = named.filter((item) => item.entry.kind === 'metric');
   const dimensions = named.filter((item) => item.entry.kind === 'dimension');
-  if (metrics.length === 0 || dimensions.length === 0 || metrics.length + dimensions.length !== named.length) return undefined;
+  // One metric: a second one is a comparison or a join the model reads.
+  if (metrics.length !== 1 || dimensions.length === 0 || metrics.length + dimensions.length !== named.length) return undefined;
   // A time dimension needs a grain, and a dimension the metric cannot reach needs a join path: both are the model's to read.
   const reachable = (dimension: VocabularyEntry) => metrics.every(({ entry }) => !entry.model || dimension.model === entry.model || (dimension.joinReach ?? []).includes(entry.model));
   if (dimensions.some(({ entry }) => entry.roles.includes('time') || !reachable(entry))) return undefined;
+  if (named.some(({ entry }) => guidedBy(entry, vocabulary))) return undefined;
   const unique = <T>(values: T[]) => [...new Set(values)];
   const metricRefs = unique(metrics.map(({ entry }) => entry.ref));
   const dimensionRefs = unique(dimensions.map(({ entry }) => entry.ref));
   const label = (ref: string) => vocabulary.get(ref)?.label ?? vocabulary.get(ref)?.name ?? ref;
   const parsed = parseIntent({
     version: 1, kind: 'analytics',
-    reading: `${metricRefs.map(label).join(' and ')} by ${dimensionRefs.map(label).join(' and ')}`,
+    reading: `${label(metricRefs[0]!)} by ${dimensionRefs.map(label).join(' and ')}`,
     measures: metricRefs.map((ref) => ({ ref })),
     groupBy: dimensionRefs.map((ref) => ({ ref, role: 'categorical' })),
     display: [], filters: [], unresolved: [], provenance: {}, expectedShape: 'grouped',

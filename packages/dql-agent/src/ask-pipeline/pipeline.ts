@@ -917,8 +917,9 @@ export async function runAskPipeline(input: RunAskPipelineInput): Promise<Pipeli
   // reading over anything else goes to AI-written SQL when it is available.
   const aiSqlAvailable = Boolean(input.prepareDeps.draftSql && (input.explorationOptIn || input.explorationAuto));
   const resolveStarted = now();
-  // A question that is only a governed metric and dimensions, by their own words, is read here: no thread, mode or model phrasing can move its route.
-  const lexicalReading = !settled && !input.selection && !input.memberSelection && !input.conversation?.pendingClarification ? readByOwnWords(input.question, input.vocabulary) : undefined;
+  // A question that is only a governed metric and dimensions, by their own words, is read here: no mode or model phrasing can move its route.
+  // The model keeps any question that reads as an edit of the thread's last analysis (the host passes `prior` only then) and any host guidance.
+  const lexicalReading = !settled && !input.prior && !memberGuidance(input) && !input.selection && !input.memberSelection && !input.conversation?.pendingClarification ? readByOwnWords(input.question, input.vocabulary) : undefined;
   let resolution: IntentResolution = settled ? settledResolution(settled.intent, input.vocabulary) : lexicalReading ? { status: 'resolved', intent: lexicalReading, attempts: 0, problems: [] } : await resolveIntent({
     question: input.question, vocabulary: input.vocabulary, provider: input.provider, prior: input.prior, priorExecuted: input.priorExecuted, ...(input.hidePriorValues ? { hidePriorValues: true } : {}), priorAnswerSummary: input.priorAnswerSummary, clauseCoverage: input.clauseCoverage, budgetMs: remaining(), ...(input.selection ? { selection: input.selection } : {}),
     guidance: memberGuidance(input), cardBudget: input.cardBudget, providerOptions, now,

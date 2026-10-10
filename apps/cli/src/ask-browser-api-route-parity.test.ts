@@ -21,6 +21,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const QUESTIONS = [
   { label: 'a certified block', question: 'Who are the top customers by lifetime spend?' },
   { label: 'a certified comparison', question: 'compare food and drink revenue' },
+  { label: 'a question made only of a governed metric and a dimension', question: 'product revenue by product name' },
   { label: 'a question no certified block or metric answers', question: 'what is the order count for each customer?' },
 ];
 
