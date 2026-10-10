@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react';
 import { HOST_REFUSAL_EVENT, type HostRefusalDetail } from '../../api/server-auth';
-import { hostReadOnly, navKeyForView, readOnlyReason, useHostUi } from '../../host/host-ui';
+import { hostReadOnly, navKeyForView, readOnlyNext, readOnlyReason, useHostUi } from '../../host/host-ui';
 
 /** One line above a screen the person may open but not edit (host with project.read and no write action). */
 export function ReadOnlyStrip({ mainView }: { mainView: string }) {
   const hostUi = useHostUi();
   const key = navKeyForView(mainView);
   if (!key || !hostReadOnly(hostUi, key)) return null;
+  const next = readOnlyNext(hostUi, key);
   return (
     <div
       role="status"
@@ -14,6 +15,14 @@ export function ReadOnlyStrip({ mainView }: { mainView: string }) {
       style={{ padding: '6px 16px', fontSize: 12.5, lineHeight: 1.4, background: 'var(--bg-2)', color: 'var(--text-secondary)', borderBottom: '1px solid var(--border-subtle)' }}
     >
       <strong style={{ color: 'var(--text-primary)' }}>Read-only.</strong> {readOnlyReason(hostUi, key)}
+      {next && (
+        <>
+          {' '}
+          <a href={next.href} target="_top" style={{ color: 'var(--accent)', fontWeight: 600, textDecoration: 'underline' }}>
+            {next.label}
+          </a>
+        </>
+      )}
     </div>
   );
 }
