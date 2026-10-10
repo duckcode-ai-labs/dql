@@ -9,6 +9,7 @@ import { proveLiterals } from './literal-proof.js';
 import { prepareExploratory } from './prepare/exploratory.js';
 import { keepMembersApart, normalizeEffectiveIntent, resolveIntent, uncoveredQuestionTerms, coverageStates, unmetFacets, type IntentResolution, causalOperatorsIn, predictiveOperatorsIn, readingLane, validateIntentRefs } from './resolve-intent.js';
 import { buildVocabularyIndex, renderCard, type RenderedCards, type VocabularyDomainHeader, type VocabularyEntry, type VocabularyIndex } from './vocabulary.js';
+import { readByOwnWords } from './lexical-reading.js';
 import { mergePhysicalRelationBinding, physicalRelationIdentity, physicalRelationText, samePhysicalRelation } from './physical-binding.js';
 
 /**
@@ -916,6 +917,9 @@ export async function runAskPipeline(input: RunAskPipelineInput): Promise<Pipeli
   // reading over anything else goes to AI-written SQL when it is available.
   const aiSqlAvailable = Boolean(input.prepareDeps.draftSql && (input.explorationOptIn || input.explorationAuto));
   const resolveStarted = now();
+  // A question that is only a governed metric and dimensions, by their own words, is read here: no mode or model phrasing can move its route.
+  // The model keeps any question that reads as an edit of the thread's last analysis (the host passes `prior` only then) and any host guidance.
+  const lexicalReading = !settled && !input.prior && !memberGuidance(input) && !input.selection && !input.memberSelection && !input.conversation?.pendingClarification ? readByOwnWords(input.question, input.vocabulary) : undefined;
   let resolution: IntentResolution = settled ? settledResolution(settled.intent, input.vocabulary) : await resolveIntent({
     question: input.question, vocabulary: input.vocabulary, provider: input.provider, prior: input.prior, priorExecuted: input.priorExecuted, ...(input.hidePriorValues ? { hidePriorValues: true } : {}), priorAnswerSummary: input.priorAnswerSummary, clauseCoverage: input.clauseCoverage, budgetMs: remaining(), ...(input.selection ? { selection: input.selection } : {}),
     guidance: memberGuidance(input), cardBudget: input.cardBudget, providerOptions, now,
@@ -925,10 +929,14 @@ export async function runAskPipeline(input: RunAskPipelineInput): Promise<Pipeli
     onDispatch: (event) => { receipt.dispatches.push({ purpose: `intent:${event.purpose}`, ms: event.ms, reply: event.raw.slice(0, 1500), at: Date.now(), attempt: event.attempt, label: event.purpose === 'resolve' ? 'read' : 'correct', ...(event.promptChars !== undefined ? { promptChars: event.promptChars } : {}) }); dispatchStep(event); },
     expand: expandForClauses,
   });
+  // The model was still asked, so its call is on the receipt; the lexical reading decides the route whatever it answered.
+  if (lexicalReading) resolution = { status: 'resolved', intent: lexicalReading, attempts: resolution.attempts, problems: [] };
   mark('resolve', resolveStarted);
   if (settled) {
     receipt.reuse = 'interpretation';
     step('read', resolution.status === 'failed' ? 'The settled reading named things that do not exist' : 'Used the settled reading', resolution.status === 'failed' ? 'failed' : 'done', { detail: resolution.status === 'failed' ? resolution.detail : settled.intent.reading });
+  } else if (lexicalReading) {
+    step('read', 'Read the question by the semantic layer\'s own words', 'done', { detail: lexicalReading.reading });
   } else {
     const calls = receipt.dispatches.filter((dispatch) => dispatch.purpose.startsWith('intent:')).length;
     const callsNote = `${calls} AI call${calls === 1 ? '' : 's'}`;

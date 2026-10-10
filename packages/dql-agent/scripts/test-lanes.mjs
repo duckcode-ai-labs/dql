@@ -65,8 +65,9 @@ const REQUIRED_TEST_FILES = [
 // 182 with the block grain read from GROUP BY (+1 file, +4 tests);
 // 183 with the time grain a block proves by date_trunc (+1 file, +5 tests);
 // 184 with the refusal sentence of a certified block not used (+1 file, +8 tests);
-// 185 with the renamed-dimension filter apply check (+1 file, +1 test).
-const EXPECTED_TEST_FILES = 185;
+// 185 with the renamed-dimension filter apply check (+1 file, +1 test);
+// 187 with the lexical reading of a governed metric and its dimensions (+2 files, +19 tests).
+const EXPECTED_TEST_FILES = 187;
 // Keep the aggregate receipt exact. The Ask pipeline suites (intent contract,
 // vocabulary, governed defaults and host proofs, prepare tiers), the engine,
 // observability, retrieval, semantic-proof, research-ledger, conversation and
@@ -93,7 +94,8 @@ const EXPECTED_TEST_FILES = 185;
 // 2424 (184 files) with the refusal sentence (certified-refusal-sentence.test.ts, +8 tests).
 // 2425 with the own-table filter column check (65797183, +1 test).
 // 2426 (185 files) with the renamed-dimension filter apply check (certified-renamed-filter.test.ts, +1 test).
-const EXPECTED_TESTS = 2426;
+// 2445 (187 files) with the lexical reading (lexical-reading.test.ts, lexical-reading-guards.test.ts, +19 tests).
+const EXPECTED_TESTS = 2445;
 // The heavy lane's share of EXPECTED_TESTS (catalog.test.ts 72 + project-state.test.ts 4), pinned so
 // a lane run on its own (CI runs the two lanes as separate steps) is audited as exactly as both together.
 // The ordinary lane's share is the difference: 2316.
