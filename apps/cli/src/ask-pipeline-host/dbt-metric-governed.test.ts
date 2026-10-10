@@ -1,7 +1,8 @@
-import { cpSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import * as yaml from 'js-yaml';
 import { afterAll, describe, expect, it, vi } from 'vitest';
 import type { ConnectionConfig, QueryExecutor } from '@duckcodeailabs/dql-connectors';
 import type { AgentProvider, AgentRunRequest } from '@duckcodeailabs/dql-agent';
@@ -18,6 +19,22 @@ afterAll(() => { for (const root of roots) rmSync(root, { recursive: true, force
 
 const connection = { driver: 'duckdb', path: ':memory:' } as ConnectionConfig;
 const COLUMNS = ['claim_id', 'region', 'product', 'claim_type', 'status', 'claimed_amount', 'reported_date'];
+
+// Stand-in for `dbt parse`: it writes the model nodes and every semantic model and metric in the YAML into
+// target/manifest.json. DQL reads that manifest first and only falls back to YAML when it holds no metrics,
+// so a metric added to the YAML is invisible to Ask until dbt has parsed again.
+function dbtParse(root: string) {
+  const document = yaml.load(readFileSync(join(root, 'models', 'claims', 'claims_semantic.yml'), 'utf8')) as {
+    semantic_models: Array<{ name: string }>; metrics: Array<{ name: string }>;
+  };
+  const keyed = (kind: string, items: Array<{ name: string }>) => Object.fromEntries(items.map((item) => [`${kind}.harbor.${item.name}`, item]));
+  writeFileSync(join(root, 'target', 'manifest.json'), JSON.stringify({
+    nodes: { 'model.harbor.claims': { unique_id: 'model.harbor.claims', resource_type: 'model', name: 'claims', original_file_path: 'models/claims/claims.sql', columns: Object.fromEntries(COLUMNS.map((name) => [name, { name }])) } },
+    sources: {}, child_map: {},
+    semantic_models: keyed('semantic_model', document.semantic_models),
+    metrics: keyed('metric', document.metrics),
+  }));
+}
 
 function dbtHarbor() {
   const root = mkdtempSync(join(tmpdir(), 'dql-dbt-metric-governed-'));
@@ -53,11 +70,7 @@ function dbtHarbor() {
     '  - { name: claimed_amount, type: simple, type_params: { measure: claimed_amount } }',
     '',
   ].join('\n'));
-  // What `dbt parse` writes for this project: the model and its columns, and the metrics dbt had before this change.
-  writeFileSync(join(root, 'target', 'manifest.json'), JSON.stringify({
-    nodes: { 'model.harbor.claims': { unique_id: 'model.harbor.claims', resource_type: 'model', name: 'claims', original_file_path: 'models/claims/claims.sql', columns: Object.fromEntries(COLUMNS.map((name) => [name, { name }])) } },
-    sources: {}, metrics: {}, semantic_models: {}, child_map: {},
-  }));
+  dbtParse(root);
   return { root, manifestPath: join(root, 'target', 'manifest.json') };
 }
 
@@ -101,9 +114,10 @@ async function askAverageByProduct(root: string) {
 }
 
 describe('B4: a metric added from Modeling in a dbt-first workspace makes Ask answer Governed', () => {
-  it('is not answerable before the metric exists, and answers Governed after the dbt YAML patch is applied', async () => {
+  it('stays invisible until dbt parses again, then answers Governed', async () => {
     const { root, manifestPath } = dbtHarbor();
     const before = await askAverageByProduct(root);
+    expect(before.semanticLayer.getMetric('claimed_amount')).toBeDefined();
     expect(before.semanticLayer.getMetric('average_claimed_amount')).toBeUndefined();
     expect(before.trust).not.toBe('governed');
 
@@ -111,6 +125,12 @@ describe('B4: a metric added from Modeling in a dbt-first workspace makes Ask an
     expect(preview.patches.map((patch) => patch.path)).toEqual(['models/claims/claims_semantic.yml']);
     applyDbtMetricPatch(root, manifestPath, addAverage, preview.fingerprint);
 
+    // The YAML is written, but the manifest dbt last parsed already holds metrics, so DQL still reads that.
+    const stale = await askAverageByProduct(root);
+    expect(stale.semanticLayer.getMetric('average_claimed_amount')).toBeUndefined();
+    expect(stale.trust).not.toBe('governed');
+
+    dbtParse(root);
     const after = await askAverageByProduct(root);
     const metric = after.semanticLayer.getMetric('average_claimed_amount');
     expect(metric).toMatchObject({ sql: 'AVG(claimed_amount)', cube: 'claims', domain: 'claims', label: 'Average claimed amount' });

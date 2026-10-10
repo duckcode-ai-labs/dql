@@ -15181,27 +15181,18 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
         }
         const expectedFingerprint = body.expectedFingerprint ?? body.fingerprint;
         if (!expectedFingerprint) throw Object.assign(new Error('The reviewed source patch fingerprint is required.'), { code: 'SOURCE_CHANGED' });
-        const { dbtProjectDir, manifestPath, profilesDir } = onboardingDbtPaths({});
+        const { dbtProjectDir, manifestPath } = onboardingDbtPaths({});
         const applied = applyDbtMetricPatch(dbtProjectDir, manifestPath, body.change, expectedFingerprint);
         // DQL reads dbt's compiled manifest first, so the new metric is only visible once dbt has parsed the YAML.
-        // When dbt is not available here the YAML is still written; say so rather than claim the metric is live.
-        let manifestRefresh: { refreshed: boolean; reason?: string } = { refreshed: false, reason: 'No YAML changed.' };
-        if (applied.patches.some((patch) => patch.changed)) {
-          try {
-            execFileSync('dbt', buildDbtParseArgs(dbtProjectDir, profilesDir), {
-              cwd: dbtProjectDir,
-              timeout: 120_000,
-              maxBuffer: 1024 * 1024,
-              encoding: 'utf8',
-              stdio: ['ignore', 'pipe', 'pipe'],
-              env: hostedRequest() ? { ...minimalChildEnv(), ...dbtEnvironment(), DBT_LOG_FORMAT: 'text' } : { ...process.env, DBT_LOG_FORMAT: 'text' },
-            });
-            manifestRefresh = { refreshed: true };
-          } catch (parseError) {
-            const missing = (parseError as NodeJS.ErrnoException)?.code === 'ENOENT';
-            manifestRefresh = { refreshed: false, reason: missing ? 'dbt is not installed where DQL runs. Run `dbt parse` in the dbt project to make the metric visible to Ask.' : 'dbt parse failed. Run `dbt parse` in the dbt project to see the error.' };
-          }
-        }
+        // This route writes the reviewed YAML and nothing else: running dbt on the server is a settings.manage
+        // action (route-actions.ts) and would block the server while it runs. The next step is named instead.
+        const changed = applied.patches.some((patch) => patch.changed);
+        const manifestRefresh: { refreshed: boolean; reason: string } = {
+          refreshed: false,
+          reason: changed
+            ? 'The YAML is written. Run `dbt parse` in the dbt project (or merge and let your dbt job run) to make the metric visible to Ask.'
+            : 'No YAML changed.',
+        };
         projectSnapshots.invalidate();
         invalidateAgentProjectState(projectRoot);
         await reloadSemanticLayer();

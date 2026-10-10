@@ -162,6 +162,11 @@ export function previewDbtMetricPatch(
       const original = stringValue(node.original_file_path) ?? `models/${modelNode}.sql`;
       const dir = dirname(original).replace(/\\/g, '/');
       created = { modelName: modelNode ?? semanticModelName, dir, path: `${dir === '.' ? '' : `${dir}/`}${semanticModelName}_semantic.yml` };
+      // A file at that path that the scan did not load (unparsable, over 2 MB, or outside model-paths) may hold
+      // the semantic model or other content. Writing a new file over it would destroy it, so refuse.
+      if (!loaded.has(created.path) && existsSync(resolve(root, created.path))) {
+        issues.push(`${created.path} already exists but could not be read as dbt YAML (see warnings), so DQL will not overwrite it. Fix or move that file, or add the semantic model there by hand.`);
+      }
     }
     if (!input.primaryEntity?.name || !input.primaryEntity.column) issues.push('A new semantic model needs a primary entity (name and key column).');
     if (!input.timeDimension?.name || !input.timeDimension.column) issues.push('A new semantic model needs a time column for MetricFlow to aggregate over time.');
