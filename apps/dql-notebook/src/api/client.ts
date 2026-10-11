@@ -5855,8 +5855,8 @@ export const api = {
     /** The answer's SQL and result column names (never rows), so the server can pre-fill certification metadata. */
     sql?: string;
     columns?: string[];
-  }): Promise<BlockStudioOpenPayload> {
-    return request<BlockStudioOpenPayload>('/api/block-studio/agent-drafts', {
+  }): Promise<BlockStudioOpenPayload & { prefill?: { suggested: unknown[]; unknown: string[]; identityGap?: { labels: string[]; key?: string; message: string } } }> {
+    return request('/api/block-studio/agent-drafts', {
       method: 'POST',
       body: JSON.stringify(payload),
     });

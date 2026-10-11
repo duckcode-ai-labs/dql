@@ -199,6 +199,7 @@ export function BlockStudio() {
   // read-only detail overview when the user just created the block from an answer.
   const openIntentRef = useRef<'builder' | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [identityGapNotice, setIdentityGapNotice] = useState<string | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [pendingDeleteBlock, setPendingDeleteBlock] = useState<{ path: string; name: string } | null>(null);
   const [deletingBlock, setDeletingBlock] = useState(false);
@@ -1357,6 +1358,8 @@ export function BlockStudio() {
         columns: payload.result?.columns,
       });
       openIntentRef.current = 'builder';
+      // The SQL is left as the creator wrote it; the suggestion to add the key is for them to review.
+      setIdentityGapNotice(saved.prefill?.identityGap?.message ?? null);
       dispatch({
         type: 'OPEN_BLOCK_STUDIO',
         file: {
@@ -1690,6 +1693,11 @@ export function BlockStudio() {
         {repairWarning && (
           <div role="status" style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 8, padding: '8px 14px', borderBottom: '1px solid var(--status-warning-border)', background: 'var(--status-warning-bg)', color: t.textSecondary, fontSize: 11.5, fontFamily: t.font }}>
             <AlertTriangle size={14} color="var(--status-warning)" /> {repairWarning}
+          </div>
+        )}
+        {identityGapNotice && (
+          <div role="status" style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 8, padding: '8px 14px', borderBottom: '1px solid var(--status-warning-border)', background: 'var(--status-warning-bg)', color: t.textSecondary, fontSize: 11.5, fontFamily: t.font }}>
+            <AlertTriangle size={14} color="var(--status-warning)" /> {identityGapNotice}
           </div>
         )}
         {hasActiveDraft && contextInspectorOpen && (

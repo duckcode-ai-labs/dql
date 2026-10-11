@@ -97,7 +97,8 @@ const EXPECTED_TEST_FILES = 188;
 // 2426 (185 files) with the renamed-dimension filter apply check (certified-renamed-filter.test.ts, +1 test).
 // 2445 (187 files) with the lexical reading (lexical-reading.test.ts, lexical-reading-guards.test.ts, +19 tests).
 // 2451 (188 files) with the identity-key warning (certified-identity-warning.test.ts, +6 tests).
-const EXPECTED_TESTS = 2451;
+// 2454 (188 files) with GROUP BY ALL, by-position and aliased-label cases in that file (+3 tests).
+const EXPECTED_TESTS = 2454;
 // The heavy lane's share of EXPECTED_TESTS (catalog.test.ts 72 + project-state.test.ts 4), pinned so
 // a lane run on its own (CI runs the two lanes as separate steps) is audited as exactly as both together.
 // The ordinary lane's share is the difference: 2316.

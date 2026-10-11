@@ -1,4 +1,5 @@
 import { extractTablesFromSql } from '../lineage/index.js';
+import { contractGroupingColumns } from './select-items.js';
 import { groupingIdentityGap, type GroupingIdentityGap, type RelationKeyKnowledge } from './grouping-identity.js';
 
 /**
@@ -66,7 +67,7 @@ export function prefillCertificationMetadata(source: string, hints: Certificatio
 
   const suggested: CertificationSuggestion[] = [];
   const unknown: string[] = [];
-  const identityGap = sql ? groupingIdentityGapOfSql(sql, hints.knownRelations) : undefined;
+  const identityGap = sql ? groupingIdentityGapOfSql(sql, hints.knownRelations, dimensions) : undefined;
   const withGap = (prefill: CertificationPrefill): CertificationPrefill => (identityGap ? { ...prefill, identityGap } : prefill);
   const propose = (field: string, value: string | string[] | undefined) => {
     if (value === undefined || (Array.isArray(value) && value.length === 0) || value === '') {
@@ -246,9 +247,13 @@ export function groupingColumnsOfSql(sql: string): string[] {
   return groupByFields(sql);
 }
 
-/** Whether a block's SQL groups by labels only, read the way Ask's certified matcher reads it. */
-export function groupingIdentityGapOfSql(sql: string, known: readonly RelationKeyKnowledge[] = []): GroupingIdentityGap | undefined {
-  return groupingIdentityGap(groupByFields(sql), usedTables(sql), known);
+/**
+ * Whether a block's SQL groups by labels only. The grouping columns are the ones
+ * Ask's certified matcher reads (plain SELECT outputs, `GROUP BY ALL` included,
+ * declared dimensions as the fallback), so the warning and the matcher agree.
+ */
+export function groupingIdentityGapOfSql(sql: string, known: readonly RelationKeyKnowledge[] = [], declaredDimensions: readonly string[] = []): GroupingIdentityGap | undefined {
+  return groupingIdentityGap(contractGroupingColumns(sql, declaredDimensions), usedTables(sql), known);
 }
 
 /** The tables a block's SQL reads. */

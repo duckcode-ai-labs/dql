@@ -32,6 +32,9 @@ const matcherRefusesForIdentity = (sql: string): boolean => {
 const CASES: Array<{ label: string; sql: string; gap: boolean }> = [
   { label: 'a name only', sql: 'SELECT adjuster_name, COUNT(DISTINCT claim_id) AS claim_count FROM claims GROUP BY adjuster_name', gap: true },
   { label: 'a name and its key', sql: 'SELECT adjuster_id, adjuster_name, COUNT(DISTINCT claim_id) AS claim_count FROM claims GROUP BY adjuster_id, adjuster_name', gap: false },
+  { label: 'a name with GROUP BY ALL', sql: 'SELECT adjuster_name, COUNT(DISTINCT claim_id) AS claim_count FROM claims GROUP BY ALL', gap: true },
+  { label: 'a name by position', sql: 'SELECT adjuster_name, COUNT(DISTINCT claim_id) AS claim_count FROM claims GROUP BY 1', gap: true },
+  { label: 'a name aliased to a non-label output', sql: 'SELECT adjuster_name AS adjuster, COUNT(DISTINCT claim_id) AS claim_count FROM claims GROUP BY adjuster_name', gap: false },
   { label: 'a plain dimension', sql: 'SELECT region, COUNT(DISTINCT claim_id) AS claim_count FROM claims GROUP BY region', gap: false },
 ];
 
