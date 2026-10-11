@@ -29947,6 +29947,13 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
     // WAL handle after the Notebook process has stopped).
     void Promise.resolve(conversationStoreInstance?.close?.()).catch(() => undefined);
     conversationStoreInstance = undefined;
+    // The run store is DQL's own SQLite (WAL) handle unless a host supplied
+    // the store; a host owns the lifecycle of its own. Left open, the file
+    // blocks removing the project tree on some filesystems (EBUSY on EFS).
+    // better-sqlite3 treats a second close() as a no-op.
+    if (storedAgentRuns instanceof SqliteAgentRunStore) {
+      try { storedAgentRuns.close(); } catch { /* already closed */ }
+    }
     for (const client of operationSseClients.keys()) {
       try { client.end(); } catch { /* connection already closed */ }
     }
