@@ -3,7 +3,7 @@
 > **Source of truth:** the installed CLI. Run `dql --help` (or the project-local
 > equivalent below) for the exact command list shipped by your version. This
 > page is maintained against
-> [`apps/cli/src/index.ts`](https://github.com/duckcode-ai/dql/blob/main/apps/cli/src/index.ts),
+> [`apps/cli/src/index.ts`](https://github.com/duckcode-ai-labs/dql/blob/main/apps/cli/src/index.ts),
 > and CI checks that every dispatched top-level command appears here.
 
 ```bash

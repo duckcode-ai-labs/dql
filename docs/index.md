@@ -105,4 +105,4 @@ flowchart LR
 | [`@duckcodeailabs/dql-lsp`](https://www.npmjs.com/package/@duckcodeailabs/dql-lsp) | LSP for `.dql` files |
 | [`@duckcodeailabs/dql-openlineage`](https://www.npmjs.com/package/@duckcodeailabs/dql-openlineage) | OpenLineage project snapshot events |
 
-[GitHub](https://github.com/duckcode-ai/dql) · [Roadmap](https://github.com/duckcode-ai/dql/blob/main/ROADMAP.md) · [Support](https://github.com/duckcode-ai/dql/blob/main/SUPPORT.md)
+[GitHub](https://github.com/duckcode-ai-labs/dql) · [Roadmap](https://github.com/duckcode-ai-labs/dql/blob/main/ROADMAP.md) · [Support](https://github.com/duckcode-ai-labs/dql/blob/main/SUPPORT.md)

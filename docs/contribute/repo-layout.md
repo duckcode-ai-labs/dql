@@ -5,7 +5,7 @@
 ## Clone & install
 
 ```bash
-git clone https://github.com/duckcode-ai/dql.git
+git clone https://github.com/duckcode-ai-labs/dql.git
 cd dql
 pnpm install
 ```

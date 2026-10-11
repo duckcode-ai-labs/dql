@@ -1,6 +1,6 @@
 # DQL
 
-[![CI](https://github.com/duckcode-ai/dql/actions/workflows/ci.yml/badge.svg)](https://github.com/duckcode-ai/dql/actions/workflows/ci.yml)
+[![CI](https://github.com/duckcode-ai-labs/dql/actions/workflows/ci.yml/badge.svg)](https://github.com/duckcode-ai-labs/dql/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/npm/v/@duckcodeailabs/dql-cli?label=dql-cli)](https://www.npmjs.com/package/@duckcodeailabs/dql-cli)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](./LICENSE)
 [![Node](https://img.shields.io/badge/node-20%20%7C%2022%20%7C%2024%20LTS-green)](https://nodejs.org)
@@ -368,7 +368,7 @@ The full event schema is documented in
 
 See [CONTRIBUTING.md](./CONTRIBUTING.md) and
 [docs/contribute/repo-layout.md](./docs/contribute/repo-layout.md). Bugs and
-feature requests: [open an issue](https://github.com/duckcode-ai/dql/issues).
+feature requests: [open an issue](https://github.com/duckcode-ai-labs/dql/issues).
 
 ## License
 
