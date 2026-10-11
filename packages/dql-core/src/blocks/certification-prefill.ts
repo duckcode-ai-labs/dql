@@ -174,8 +174,44 @@ function splitTopLevel(value: string): string[] {
   return parts.map((part) => part.trim()).filter(Boolean);
 }
 
+/**
+ * Blank everything inside parentheses so CTE bodies, subqueries and function
+ * arguments cannot be mistaken for the outermost query. Quoted text is kept.
+ */
+function outermostQuery(sql: string): string {
+  let out = '';
+  let depth = 0;
+  let quote = '';
+  for (const char of stripSql(sql)) {
+    if (quote) {
+      if (char === quote) quote = '';
+      out += depth > 0 ? ' ' : char;
+    } else if (char === "'" || char === '"') {
+      quote = char;
+      out += depth > 0 ? ' ' : char;
+    } else if (char === '(') {
+      out += depth === 0 ? char : ' ';
+      depth += 1;
+    } else if (char === ')') {
+      depth = Math.max(0, depth - 1);
+      out += depth === 0 ? char : ' ';
+    } else {
+      out += depth > 0 ? ' ' : char;
+    }
+  }
+  return out;
+}
+
+/** The outermost SELECT's text, or undefined when a set operation makes its shape ambiguous. */
+function outerSelect(sql: string): string | undefined {
+  const outer = outermostQuery(sql);
+  if (/\b(?:union|intersect|except)\b/i.test(outer)) return undefined;
+  const start = outer.search(/\bselect\b/i);
+  return start < 0 ? undefined : outer.slice(start);
+}
+
 function selectOutputs(sql: string): string[] {
-  const match = stripSql(sql).match(/\bselect\b([\s\S]+?)\bfrom\b/i);
+  const match = outerSelect(sql)?.match(/\bselect\b([\s\S]+?)\bfrom\b/i);
   if (!match) return [];
   return splitTopLevel(match[1]).map((expression) =>
     (expression.match(/\bas\s+["`]?([A-Za-z_][A-Za-z0-9_$]*)["`]?\s*$/i)?.[1]
@@ -195,7 +231,7 @@ function grainFor(sql: string, dimensions: string[]): string | undefined {
 }
 
 function groupByFields(sql: string): string[] {
-  const match = stripSql(sql).match(/\bgroup\s+by\b([\s\S]+?)(?:\border\s+by\b|\blimit\b|\bqualify\b|\bhaving\b|\bwindow\b|$)/i);
+  const match = outerSelect(sql)?.match(/\bgroup\s+by\b([\s\S]+?)(?:\border\s+by\b|\blimit\b|\bqualify\b|\bhaving\b|\bwindow\b|$)/i);
   if (!match) return [];
   const outputs = selectOutputs(sql);
   const fields = splitTopLevel(match[1]).map((item) => {
