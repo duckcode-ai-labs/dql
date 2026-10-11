@@ -1,64 +1,48 @@
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import { generateKeyPairSync } from 'node:crypto';
 import { Readable } from 'node:stream';
 import { ConnectorQueryError } from '../result-types.js';
 import { SnowflakeConnector, normalizeSnowflakePrivateKeyForAuth } from './snowflake.js';
 
 describe('normalizeSnowflakePrivateKeyForAuth', () => {
-  it('normalizes RSA private keys to PKCS8 PEM', () => {
-    const { privateKey } = generateKeyPairSync('rsa', {
-      modulusLength: 2048,
-      privateKeyEncoding: { type: 'pkcs1', format: 'pem' },
-      publicKeyEncoding: { type: 'spki', format: 'pem' },
-    });
+  // RSA key generation is the slow step (it timed out on the Node 20 CI runner),
+  // so generate one key per file and export it in each format the tests need.
+  let pkcs1Key: string;
+  let pkcs8Key: string;
+  let encryptedKey: string;
 
-    const normalized = normalizeSnowflakePrivateKeyForAuth(privateKey);
+  beforeAll(() => {
+    const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
+    pkcs1Key = privateKey.export({ type: 'pkcs1', format: 'pem' }) as string;
+    pkcs8Key = privateKey.export({ type: 'pkcs8', format: 'pem' }) as string;
+    encryptedKey = privateKey.export({
+      type: 'pkcs8',
+      format: 'pem',
+      cipher: 'aes-256-cbc',
+      passphrase: 'correct-passphrase',
+    }) as string;
+  }, 30_000);
+
+  it('normalizes RSA private keys to PKCS8 PEM', () => {
+    const normalized = normalizeSnowflakePrivateKeyForAuth(pkcs1Key);
 
     expect(normalized).toContain('-----BEGIN PRIVATE KEY-----');
   });
 
   it('accepts pasted keys with escaped newlines', () => {
-    const { privateKey } = generateKeyPairSync('rsa', {
-      modulusLength: 2048,
-      privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
-      publicKeyEncoding: { type: 'spki', format: 'pem' },
-    });
-
-    const normalized = normalizeSnowflakePrivateKeyForAuth(privateKey.replace(/\n/g, '\\n'));
+    const normalized = normalizeSnowflakePrivateKeyForAuth(pkcs8Key.replace(/\n/g, '\\n'));
 
     expect(normalized).toContain('-----BEGIN PRIVATE KEY-----');
   });
 
   it('decrypts encrypted private keys with the matching passphrase', () => {
-    const { privateKey } = generateKeyPairSync('rsa', {
-      modulusLength: 2048,
-      privateKeyEncoding: {
-        type: 'pkcs8',
-        format: 'pem',
-        cipher: 'aes-256-cbc',
-        passphrase: 'correct-passphrase',
-      },
-      publicKeyEncoding: { type: 'spki', format: 'pem' },
-    });
-
-    const normalized = normalizeSnowflakePrivateKeyForAuth(privateKey, 'correct-passphrase');
+    const normalized = normalizeSnowflakePrivateKeyForAuth(encryptedKey, 'correct-passphrase');
 
     expect(normalized).toContain('-----BEGIN PRIVATE KEY-----');
   });
 
   it('returns an actionable error when an encrypted key has the wrong passphrase', () => {
-    const { privateKey } = generateKeyPairSync('rsa', {
-      modulusLength: 2048,
-      privateKeyEncoding: {
-        type: 'pkcs8',
-        format: 'pem',
-        cipher: 'aes-256-cbc',
-        passphrase: 'correct-passphrase',
-      },
-      publicKeyEncoding: { type: 'spki', format: 'pem' },
-    });
-
-    expect(() => normalizeSnowflakePrivateKeyForAuth(privateKey, 'wrong-passphrase'))
+    expect(() => normalizeSnowflakePrivateKeyForAuth(encryptedKey, 'wrong-passphrase'))
       .toThrow(/Snowflake private key could not be parsed or decrypted/);
   });
 });
