@@ -13989,7 +13989,10 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
       // HH-2: and only for what the host lets this person do.
       const route = routeAction(req.method, path);
       const decision = await authorizeHostRequest(hostHooks!, requestPrincipal, route);
-      if (!decision.allow) {
+      // Reading Ask observability is the steward's: when Production follows main the host refuses `hint.review` (a
+      // write) for everyone, and marks the refusal `readOnly` for people who hold it by role. They still read.
+      const readsAsReviewer = decision.readOnly === true && route.action === 'hint.review' && (req.method === 'GET' || req.method === 'HEAD');
+      if (!decision.allow && !readsAsReviewer) {
         res.writeHead(403, { 'Content-Type': 'application/json; charset=utf-8' });
         const next = safeNextLink(decision.next);
         res.end(serializeJSON({

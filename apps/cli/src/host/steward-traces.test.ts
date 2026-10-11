@@ -80,12 +80,12 @@ describe('Ask observability for a steward', () => {
     for (const trace of traces) expect(trace.reason, JSON.stringify(trace).slice(0, 200)).toBeTruthy();
   });
 
-  it('lists only their own to anyone who does not review answers', async () => {
-    const steward = (await call('sam', 'GET', '/api/ask-traces?limit=100')).body as Listed;
+  it('refuses the list, with the host\'s reason, to anyone who does not review answers', async () => {
     const listed = await call('dan', 'GET', '/api/ask-traces?limit=100');
-    expect(listed.status).toBe(200);
-    const own = (listed.body as Listed).traces;    expect(own.length).toBeGreaterThan(0);
-    expect(own.length).toBeLessThan(steward.traces.length);
+    expect(listed.status).toBe(403);
+    expect(listed.body?.code).toBe('PERMISSION_DENIED');
+    expect(listed.body?.action).toBe('hint.review');
+    expect(listed.body?.error).toBe('Only a steward may review.');
   });
 });
 
