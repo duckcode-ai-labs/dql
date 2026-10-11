@@ -167,12 +167,10 @@ async function main() {
   const pm = detectPackageManager();
   const installCmd = pm === 'npm' ? 'npm install' : `${pm} install`;
   const runCmd = pm === 'npm' ? 'npm run notebook' : `${pm} notebook`;
-  // Drivers install into .dql/connectors with the same package manager the
-  // user ran (pnpm and yarn have no `--prefix`).
-  const connectorInstall = (pkg) =>
-    pm === 'pnpm' ? `pnpm add --dir .dql/connectors ${pkg}`
-      : pm === 'yarn' ? `yarn --cwd .dql/connectors add ${pkg}`
-        : `npm install --prefix .dql/connectors ${pkg}`;
+  // Drivers always install with npm (it ships with Node): pnpm 10 skips
+  // duckdb's native build script and Yarn Berry has no --prefix equivalent,
+  // so neither yields a driver the runtime can load from .dql/connectors.
+  const connectorInstall = (pkg) => `npm install --prefix .dql/connectors ${pkg}`;
   const connectorTip = [
     c.dim('# Optional database driver install before running queries:'),
     c.dim(`#   DuckDB/local files: ${connectorInstall('duckdb')}`),
