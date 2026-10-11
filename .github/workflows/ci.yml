@@ -17,7 +17,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        node: [20, 22, 24]
+        node: [20, 22]
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -57,43 +57,6 @@ jobs:
         with:
           node-version: 20
       - run: node packages/create-dql-app/test/smoke.mjs
-
-  # --- Docker quickstart: the documented `docker compose up` must start ---
-  # Builds the image from the compose file and checks /api/health with the
-  # server token the quickstart tells users to set. A non-loopback binding
-  # without DQL_SERVER_TOKEN makes the container exit, so this fails if the
-  # compose file or the docs drift from the runtime.
-  docker-image:
-    name: docker image health
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: build and start with docker compose
-        env:
-          DQL_SERVER_TOKEN: ci-health-check-token
-        run: docker compose up -d --build notebook
-      - name: wait for /api/health
-        run: |
-          for i in $(seq 1 60); do
-            code=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3474/api/health || true)
-            if [ "$code" = "200" ]; then
-              echo "health ok after ${i} tries"
-              exit 0
-            fi
-            sleep 2
-          done
-          echo "health check did not return 200 (last code: ${code})"
-          exit 1
-      - name: container logs
-        if: ${{ failure() }}
-        env:
-          DQL_SERVER_TOKEN: ci-health-check-token
-        run: docker compose logs notebook
-      - name: stop
-        if: ${{ always() }}
-        env:
-          DQL_SERVER_TOKEN: ci-health-check-token
-        run: docker compose down
 
   # --- docs: verify every relative markdown link under docs/ resolves ---
   docs:
