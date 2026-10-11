@@ -144,7 +144,7 @@ export function exactPackageSpec(packageName, version) {
   return `${packageName}@${version}`;
 }
 
-export function publishCommandArgs({ tag, otp }) {
+export function publishCommandArgs({ tag, otp, provenance = false }) {
   return [
     'publish',
     '--access',
@@ -152,8 +152,35 @@ export function publishCommandArgs({ tag, otp }) {
     '--no-git-checks',
     '--tag',
     tag,
+    ...(provenance ? ['--provenance'] : []),
     ...(otp ? ['--otp', otp] : []),
   ];
+}
+
+/**
+ * npm only signs provenance from a CI provider that issues an OIDC identity.
+ * The release workflow grants `id-token: write`, so GitHub Actions publishes
+ * with provenance; the local same-SHA fallback cannot and publishes without.
+ */
+export function wantsProvenance(env = process.env) {
+  return env.GITHUB_ACTIONS === 'true';
+}
+
+/**
+ * On GitHub Actions a missing token fails halfway through the package list
+ * with an opaque registry 404 (v1.14.3-rc.1 died on PUT dql-telemetry that
+ * way). Check before building anything. Only there: setup-node's registry-url
+ * .npmrc reads NODE_AUTH_TOKEN. A local fallback uses the maintainer's own
+ * `npm login`, so the variable means nothing there and is not checked.
+ */
+export function assertPublishCredentials(env = process.env) {
+  if (env.GITHUB_ACTIONS === 'true' && !env.NODE_AUTH_TOKEN) {
+    throw new Error(
+      'NODE_AUTH_TOKEN is not set. Set the NPM_TOKEN repository secret; ' +
+        'the release workflow maps it to NODE_AUTH_TOKEN. ' +
+        'Use --dry-run to check everything except the publish.',
+    );
+  }
 }
 
 export function assertSynchronizedReleaseVersions(packageManifests) {
@@ -326,6 +353,8 @@ export async function main({ argv = process.argv.slice(2), cwd = process.cwd(), 
   const packageManifests = readReleasePackageManifests(cwd);
   const version = assertSynchronizedReleaseVersions(packageManifests);
   assertExpectedReleaseVersion(version, release.expectedVersion);
+  if (release.publish) assertPublishCredentials(env);
+  const provenance = wantsProvenance(env);
   const artifactsDir = path.join(cwd, '.release-artifacts');
 
   console.log(`\nRelease ${release.dryRun ? 'dry run' : 'publish'}: ${version} -> npm dist-tag ${release.tag}`);
@@ -362,11 +391,17 @@ export async function main({ argv = process.argv.slice(2), cwd = process.cwd(), 
       if (release.dryRun) {
         console.log(`\n==> Packing ${relPath} for npm dist-tag ${release.tag}`);
         await run('pnpm', ['pack', '--pack-destination', artifactsDir], packageDir);
+        const exists = await packageVersionExists(cwd, manifest.name, manifest.version);
+        console.log(
+          exists
+            ? `    publish would skip: ${exactPackageSpec(manifest.name, manifest.version)} already exists`
+            : `    publish would run: pnpm ${publishCommandArgs({ ...release, otp: undefined, provenance }).join(' ')}`,
+        );
       } else if (await packageVersionExists(cwd, manifest.name, manifest.version)) {
         console.log(`\n==> Skipping ${relPath} (${exactPackageSpec(manifest.name, manifest.version)} already exists)`);
       } else {
         console.log(`\n==> Publishing ${relPath} to npm dist-tag ${release.tag}`);
-        await run('pnpm', publishCommandArgs(release), packageDir);
+        await run('pnpm', publishCommandArgs({ ...release, provenance }), packageDir);
       }
     }
     if (release.publish) {

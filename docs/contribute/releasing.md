@@ -18,17 +18,9 @@ restores the repo manifests afterward. The workflow runs only for the
 GitHub repository, so keep every manifest pointing at
 `https://github.com/duckcode-ai-labs/dql`.
 
-> The workflow and script changes described above (owner gate, `id-token:
-> write`, `--provenance`, the early token check) are delivered as owner-applied
-> diffs in `.agent-diffs/o2-*.diff` because those files are locked for agents.
-> Until the owner applies them, `release.yml` still gates on the old repository
-> name and the script does not pass `--provenance`.
->
-> One `duckcode-ai/dql` string is kept on purpose: the OpenLineage producer URI
-> in `packages/dql-openlineage/src`. It appears in emitted lineage events, so
-> changing it is visible to consumers, and the existing test asserts it. The
-> change is ready as `.agent-diffs/o2-openlineage-producer.diff` for the owner to
-> decide.
+The OpenLineage producer URI emitted in lineage events
+(`packages/dql-openlineage/src`) also points at
+`https://github.com/duckcode-ai-labs/dql`.
 
 The 19 release packages include the VS Code extension's language support
 package, which is published to npm as `dql-language-support` with the rest.
