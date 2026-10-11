@@ -20,6 +20,7 @@ const people: Record<string, DqlPrincipal> = { wes, dan, sam };
 const servers: Server[] = [];
 let projectRoot = '';
 let base = '';
+let wesRunId = '';
 
 const call = async (person: string, method: string, path: string, body?: unknown) => {
   const response = await fetch(`${base}${path}`, {
@@ -60,7 +61,10 @@ beforeAll(async () => {
     captureServer: (created) => { servers.push(created); },
   });
   base = `http://127.0.0.1:${port}`;
-  expect((await call('wes', 'POST', '/api/agent-runs', { question: 'How many claims did Wes ask about?' })).status).toBeLessThan(300);
+  const asked = await call('wes', 'POST', '/api/agent-runs', { question: 'How many claims did Wes ask about?' });
+  expect(asked.status).toBeLessThan(300);
+  wesRunId = String(asked.body?.run?.id ?? asked.body?.id ?? '');
+  expect(wesRunId).not.toBe('');
   expect((await call('dan', 'POST', '/api/agent-runs', { question: 'How many claims did Dan ask about?' })).status).toBeLessThan(300);
 }, 120_000);
 
@@ -71,21 +75,30 @@ afterAll(async () => {
 
 type Listed = { traces: Array<{ traceId: string; runId: string }> };
 
+/** Wes's trace, found the way a steward finds it: in the steward's own list of everyone's questions. */
+const wesTraceFromStewardList = async () => {
+  const stewardList = (await call('sam', 'GET', '/api/ask-traces?limit=100')).body as Listed;
+  const wesTrace = stewardList.traces.find((trace) => trace.runId === wesRunId);
+  expect(wesTrace).toBeTruthy();
+  return wesTrace!;
+};
+
 describe('opening a trace', () => {
   it('lets a steward open another person\'s trace, by id and by run', async () => {
-    const wesList = (await call('wes', 'GET', '/api/ask-traces?limit=100')).body as Listed;
-    expect(wesList.traces.length).toBeGreaterThan(0);
-    const wesTrace = wesList.traces[0]!;
+    const wesTrace = await wesTraceFromStewardList();
     const byId = await call('sam', 'GET', `/api/ask-traces/${wesTrace.traceId}`);
     expect(byId.status).toBe(200);
     const byRun = await call('sam', 'GET', `/api/ask-traces/by-run/${encodeURIComponent(wesTrace.runId)}`);
     expect(byRun.status).toBe(200);
   });
 
-  it('keeps another person\'s trace not found for someone who does not review answers', async () => {
-    const wesTrace = ((await call('wes', 'GET', '/api/ask-traces?limit=100')).body as Listed).traces[0]!;
-    expect((await call('dan', 'GET', `/api/ask-traces/${wesTrace.traceId}`)).status).toBe(404);
-    expect((await call('dan', 'GET', `/api/ask-traces/by-run/${encodeURIComponent(wesTrace.runId)}`)).status).toBe(404);
-    expect((await call('wes', 'GET', `/api/ask-traces/${wesTrace.traceId}`)).status).toBe(200);
+  it('refuses a trace, by id and by run, to someone who does not review answers, even their own', async () => {
+    const wesTrace = await wesTraceFromStewardList();
+    for (const person of ['dan', 'wes']) {
+      const byId = await call(person, 'GET', `/api/ask-traces/${wesTrace.traceId}`);
+      expect(byId.status).toBe(403);
+      expect(byId.body?.error).toBe('Only a steward may review.');
+      expect((await call(person, 'GET', `/api/ask-traces/by-run/${encodeURIComponent(wesTrace.runId)}`)).status).toBe(403);
+    }
   });
 });

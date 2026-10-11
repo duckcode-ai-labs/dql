@@ -92,20 +92,21 @@ describe('Ask observability in Production (hint.review refused for everyone)', (
     for (const trace of (listed.body as Listed).traces) expect(trace.reason).toBeTruthy();
   });
 
-  it('keeps a creator, whose refusal also carries the next link, to their own questions', async () => {
+  it('refuses the list to a creator, whose refusal carries a next link but is not read-only; their own chats stay in Ask history', async () => {
     const listed = await call('cole', 'GET', '/api/ask-traces?limit=100');
-    expect(listed.status).toBe(200);
-    expect(ids(listed.body as Listed)).not.toContain(wesRunId);
-    expect((listed.body as Listed).traces.length).toBeGreaterThan(0);
+    expect(listed.status).toBe(403);
+    expect(listed.body?.code).toBe('PERMISSION_DENIED');
+    expect(listed.body?.action).toBe('hint.review');
+    expect(listed.body?.error).toBe('Production follows main.');
   });
 
-  it('does not open Wes\'s trace for the creator, by run or by id, and does for the steward', async () => {
-    expect((await call('cole', 'GET', `/api/ask-traces/by-run/${encodeURIComponent(wesRunId)}`)).status).toBe(404);
+  it('does not open a trace for the creator, by run or by id, and does for the steward', async () => {
+    expect((await call('cole', 'GET', `/api/ask-traces/by-run/${encodeURIComponent(wesRunId)}`)).status).toBe(403);
     const stewardList = (await call('sam', 'GET', '/api/ask-traces?limit=100')).body as Listed;
     const wesTrace = stewardList.traces.find((trace) => trace.runId === wesRunId) as { traceId?: string; id?: string } | undefined;
     const traceId = wesTrace?.traceId ?? wesTrace?.id ?? '';
     expect(traceId).not.toBe('');
-    expect((await call('cole', 'GET', `/api/ask-traces/${encodeURIComponent(traceId)}`)).status).toBe(404);
+    expect((await call('cole', 'GET', `/api/ask-traces/${encodeURIComponent(traceId)}`)).status).toBe(403);
     expect((await call('sam', 'GET', `/api/ask-traces/by-run/${encodeURIComponent(wesRunId)}`)).status).toBe(200);
   });
 });

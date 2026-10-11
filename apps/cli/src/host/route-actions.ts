@@ -123,6 +123,10 @@ function actionFor(method: string, path: string): DqlAction {
     || /^\/api\/apps\/[^/]+\/dashboards\/[^/]+\/approve-semantic$/.test(path)
   )) return 'dataset.certify';
   if (!read && /^\/api\/agent\/hints\/[^/]+(\/(review|lifecycle))?$/.test(path)) return 'hint.review';
+  // Ask observability (the list of recent questions and a trace's detail) is the steward's screen: people who
+  // review answers open it. Everyone else's own chats stay in Ask's own history. Status, the CLI capability probe and
+  // the export (an `export`) are not part of it.
+  if (read && (path === '/api/ask-traces' || /^\/api\/ask-traces\/(by-run\/[^/]+|[0-9a-f]{32})$/.test(path))) return 'hint.review';
 
   // Taking data out.
   if (/\/export$/.test(path) || /^\/api\/apps\/[^/]+\/dashboards\/[^/]+\/snapshot$/.test(path)) return 'export';

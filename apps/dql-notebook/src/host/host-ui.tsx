@@ -269,6 +269,12 @@ export const NAV_CAPABILITY: Record<string, string[]> = {
 /** Screens shown read-only to a person whose write action is refused with a next step. */
 const NAV_SHOWN_WITH_NEXT = new Set(['git', 'ask_observability']);
 
+/**
+ * Screens shown read-only only to a person the host marks `readOnly` on one of the screen's actions: it holds the
+ * action by role but the space refuses it (Production follows main). A `next` link alone never shows them.
+ */
+const NAV_SHOWN_READ_ONLY = new Set(['settings']);
+
 /** The action that lets a person edit on each of those screens. */
 export const NAV_WRITE_CAPABILITY: Record<string, string> = {
   files: 'project.write',
@@ -283,19 +289,25 @@ export function navItemAllowed(state: HostUiState, key: string): boolean {
   const needs = NAV_CAPABILITY[key];
   if (!state.host || !needs) return true;
   if (needs.some((action) => hostAllows(state, action))) return true;
+  if (NAV_SHOWN_READ_ONLY.has(key) && needs.some((action) => hostRefusal(state, action)?.readOnly === true)) return true;
   return NAV_SHOWN_WITH_NEXT.has(key) && readOnlyNext(state, key) !== null;
 }
 
 /** A screen the person may open but not edit: under a host, without that screen's write action. Never without a host. */
 export function hostReadOnly(state: HostUiState, key: string): boolean {
+  if (NAV_SHOWN_READ_ONLY.has(key)) return state.host && !(NAV_CAPABILITY[key] ?? []).some((action) => hostAllows(state, action));
   const write = NAV_WRITE_CAPABILITY[key];
   return !!write && state.host && !hostAllows(state, write);
 }
 
 /** The one-line reason a read-only screen gives: the host's own sentence when it sent one. */
 export function readOnlyReason(state: HostUiState, key: string): string {
-  const write = NAV_WRITE_CAPABILITY[key];
-  return (write && hostRefusal(state, write)?.reason) || 'Read-only: you can look here, but changes are not allowed.';
+  const actions = NAV_SHOWN_READ_ONLY.has(key) ? (NAV_CAPABILITY[key] ?? []) : [NAV_WRITE_CAPABILITY[key]];
+  for (const action of actions) {
+    const reason = action ? hostRefusal(state, action)?.reason : undefined;
+    if (reason) return reason;
+  }
+  return 'Read-only: you can look here, but changes are not allowed.';
 }
 
 /** The next step the host offers a person its refusal applies to (for example "Open my draft space"), if it sent one. */
@@ -314,6 +326,8 @@ export function navKeyForView(mainView: string): string | null {
     case 'domains':
     case 'modeling': return 'domains';
     case 'git': return 'git';
+    case 'settings':
+    case 'connection': return 'settings';
     case 'ask_observability':
     case 'ask_trace': return 'ask_observability';
     default: return null;
