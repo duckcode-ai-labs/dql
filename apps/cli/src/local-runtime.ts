@@ -12487,8 +12487,9 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
     // Run tests against the SAME SQL the preview runs: for a semantic block with a
     // pre-compiled query, that's the query (not a recompiled metric), so the test's
     // output columns match the block's declared outputs.
-    const semanticCompose = semanticLayer
-      ? await timer.time('compose_sql', () => composeSemanticBlockSqlForRuntime(source, semanticLayer, {
+    const composeLayer = semanticLayer;
+    const semanticCompose = composeLayer
+      ? await timer.time('compose_sql', () => composeSemanticBlockSqlForRuntime(source, composeLayer, {
           driver: activeConnection.driver,
           tableMapping,
           projectRoot,
