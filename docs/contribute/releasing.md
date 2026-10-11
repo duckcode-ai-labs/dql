@@ -13,8 +13,8 @@ The authoritative npm publication path is the `vX.Y.Z` or
 restores the repo manifests afterward. The workflow runs only for the
 `duckcode-ai-labs` owner, needs the `NPM_TOKEN` repository secret (mapped to
 `NODE_AUTH_TOKEN`), and publishes with `--provenance` (it has
-`id-token: write`). The script stops before building if `NODE_AUTH_TOKEN` is
-missing. Provenance only works when the package's `repository.url` matches the
+`id-token: write`). On GitHub Actions the script stops before building if
+`NODE_AUTH_TOKEN` is missing. Provenance only works when the package's `repository.url` matches the
 GitHub repository, so keep every manifest pointing at
 `https://github.com/duckcode-ai-labs/dql`.
 
@@ -23,6 +23,12 @@ GitHub repository, so keep every manifest pointing at
 > diffs in `.agent-diffs/o2-*.diff` because those files are locked for agents.
 > Until the owner applies them, `release.yml` still gates on the old repository
 > name and the script does not pass `--provenance`.
+>
+> One `duckcode-ai/dql` string is kept on purpose: the OpenLineage producer URI
+> in `packages/dql-openlineage/src`. It appears in emitted lineage events, so
+> changing it is visible to consumers, and the existing test asserts it. The
+> change is ready as `.agent-diffs/o2-openlineage-producer.diff` for the owner to
+> decide.
 
 The 19 release packages include the VS Code extension's language support
 package, which is published to npm as `dql-language-support` with the rest.
@@ -128,6 +134,11 @@ git rev-parse HEAD
 git rev-parse v1.7.0^{}
 pnpm release:publish -- --tag latest --expected-version 1.7.0
 ```
+
+The fallback publishes with your own npm login: run `npm login` first (an
+account with publish rights on the `@duckcodeailabs` scope) and approve the
+OTP or web prompt when `pnpm publish` asks. It does not need `NODE_AUTH_TOKEN`;
+that variable is only read on GitHub Actions. Check with `npm whoami`.
 
 Use `--tag next --expected-version 1.7.0-rc.1` for an authorized prerelease
 fallback. The script will reject a stable version with `next`, a prerelease

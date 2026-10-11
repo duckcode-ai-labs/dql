@@ -4,7 +4,7 @@ diff --git a/scripts/release-publish-guards.test.mjs b/scripts/release-publish-g
 new file mode 100644
 --- /dev/null
 +++ b/scripts/release-publish-guards.test.mjs
-@@ -0,0 +1,28 @@
+@@ -0,0 +1,32 @@
 +import assert from 'node:assert/strict';
 +import test from 'node:test';
 +
@@ -14,10 +14,14 @@ new file mode 100644
 +  wantsProvenance,
 +} from './release-packages.mjs';
 +
-+test('publish refuses early, and says why, when NODE_AUTH_TOKEN is missing', () => {
-+  assert.throws(() => assertPublishCredentials({}), /NODE_AUTH_TOKEN is not set/);
-+  assert.throws(() => assertPublishCredentials({ NODE_AUTH_TOKEN: '' }), /NPM_TOKEN/);
-+  assert.doesNotThrow(() => assertPublishCredentials({ NODE_AUTH_TOKEN: 'npm_x' }));
++test('on GitHub Actions publish refuses early, and says why, when NODE_AUTH_TOKEN is missing', () => {
++  assert.throws(() => assertPublishCredentials({ GITHUB_ACTIONS: 'true' }), /NODE_AUTH_TOKEN is not set/);
++  assert.throws(() => assertPublishCredentials({ GITHUB_ACTIONS: 'true', NODE_AUTH_TOKEN: '' }), /NPM_TOKEN/);
++  assert.doesNotThrow(() => assertPublishCredentials({ GITHUB_ACTIONS: 'true', NODE_AUTH_TOKEN: 'npm_x' }));
++});
++
++test('a local fallback is not required to set NODE_AUTH_TOKEN (it uses npm login)', () => {
++  assert.doesNotThrow(() => assertPublishCredentials({}));
 +});
 +
 +test('provenance is requested only from GitHub Actions', () => {

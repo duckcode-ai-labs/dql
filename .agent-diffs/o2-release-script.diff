@@ -12,7 +12,7 @@ diff --git a/scripts/release-packages.mjs b/scripts/release-packages.mjs
    return [
      'publish',
      '--access',
-@@ -152,10 +152,36 @@ export function publishCommandArgs({ tag, otp }) {
+@@ -152,10 +152,37 @@ export function publishCommandArgs({ tag, otp }) {
      '--no-git-checks',
      '--tag',
      tag,
@@ -31,16 +31,17 @@ diff --git a/scripts/release-packages.mjs b/scripts/release-packages.mjs
 +}
 +
 +/**
-+ * A publish with no npm credential fails halfway through the package list
++ * On GitHub Actions a missing token fails halfway through the package list
 + * with an opaque registry 404 (v1.14.3-rc.1 died on PUT dql-telemetry that
-+ * way). Check before building anything.
++ * way). Check before building anything. Only there: setup-node's registry-url
++ * .npmrc reads NODE_AUTH_TOKEN. A local fallback uses the maintainer's own
++ * `npm login`, so the variable means nothing there and is not checked.
 + */
 +export function assertPublishCredentials(env = process.env) {
-+  if (!env.NODE_AUTH_TOKEN) {
++  if (env.GITHUB_ACTIONS === 'true' && !env.NODE_AUTH_TOKEN) {
 +    throw new Error(
-+      'NODE_AUTH_TOKEN is not set. Publishing needs an npm automation token: ' +
-+        'set the NPM_TOKEN repository secret (the release workflow maps it to NODE_AUTH_TOKEN) ' +
-+        'or export NODE_AUTH_TOKEN before running a local fallback. ' +
++      'NODE_AUTH_TOKEN is not set. Set the NPM_TOKEN repository secret; ' +
++        'the release workflow maps it to NODE_AUTH_TOKEN. ' +
 +        'Use --dry-run to check everything except the publish.',
 +    );
 +  }
@@ -49,7 +50,7 @@ diff --git a/scripts/release-packages.mjs b/scripts/release-packages.mjs
  export function assertSynchronizedReleaseVersions(packageManifests) {
    const versions = new Set(packageManifests.map(({ manifest }) => manifest.version));
    if (versions.size !== 1) {
-@@ -326,6 +352,8 @@ export async function main({ argv = process.argv.slice(2), cwd = process.cwd(),
+@@ -326,6 +353,8 @@ export async function main({ argv = process.argv.slice(2), cwd = process.cwd(),
    const packageManifests = readReleasePackageManifests(cwd);
    const version = assertSynchronizedReleaseVersions(packageManifests);
    assertExpectedReleaseVersion(version, release.expectedVersion);
@@ -58,7 +59,7 @@ diff --git a/scripts/release-packages.mjs b/scripts/release-packages.mjs
    const artifactsDir = path.join(cwd, '.release-artifacts');
 
    console.log(`\nRelease ${release.dryRun ? 'dry run' : 'publish'}: ${version} -> npm dist-tag ${release.tag}`);
-@@ -362,11 +390,17 @@ export async function main({ argv = process.argv.slice(2), cwd = process.cwd(),
+@@ -362,11 +391,17 @@ export async function main({ argv = process.argv.slice(2), cwd = process.cwd(),
        if (release.dryRun) {
          console.log(`\n==> Packing ${relPath} for npm dist-tag ${release.tag}`);
          await run('pnpm', ['pack', '--pack-destination', artifactsDir], packageDir);

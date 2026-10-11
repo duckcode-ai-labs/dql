@@ -1,0 +1,46 @@
+Reason: the OpenLineage producer URI is emitted in lineage events (a consumer-visible change) and the existing index.test.ts asserts the old URI, which is a protected path; owner decides whether to apply.
+
+diff --git a/packages/dql-openlineage/src/index.ts b/packages/dql-openlineage/src/index.ts
+--- a/packages/dql-openlineage/src/index.ts
++++ b/packages/dql-openlineage/src/index.ts
+@@ -52,3 +52,3 @@
+
+-const PRODUCER = 'https://github.com/duckcode-ai/dql';
++const PRODUCER = 'https://github.com/duckcode-ai-labs/dql';
+ const SCHEMA_URL =
+diff --git a/packages/dql-openlineage/src/index.test.ts b/packages/dql-openlineage/src/index.test.ts
+--- a/packages/dql-openlineage/src/index.test.ts
++++ b/packages/dql-openlineage/src/index.test.ts
+@@ -35,3 +35,3 @@
+     const body = JSON.parse(opts.body);
+-    expect(body.producer).toContain('duckcode-ai/dql');
++    expect(body.producer).toContain('duckcode-ai-labs/dql');
+     expect(body.job.name).toBe('block.x');
+diff --git a/packages/dql-openlineage/src/manifest-events.ts b/packages/dql-openlineage/src/manifest-events.ts
+--- a/packages/dql-openlineage/src/manifest-events.ts
++++ b/packages/dql-openlineage/src/manifest-events.ts
+@@ -159,3 +159,3 @@
+     facets.documentation = {
+-      _producer: 'https://github.com/duckcode-ai/dql',
++      _producer: 'https://github.com/duckcode-ai-labs/dql',
+       _schemaURL:
+@@ -167,3 +167,3 @@
+     facets.ownership = {
+-      _producer: 'https://github.com/duckcode-ai/dql',
++      _producer: 'https://github.com/duckcode-ai-labs/dql',
+       _schemaURL:
+@@ -216,3 +216,3 @@
+     facets.schema = {
+-      _producer: 'https://github.com/duckcode-ai/dql',
++      _producer: 'https://github.com/duckcode-ai-labs/dql',
+       _schemaURL:
+@@ -234,3 +234,3 @@
+       facets.columnLineage = {
+-        _producer: 'https://github.com/duckcode-ai/dql',
++        _producer: 'https://github.com/duckcode-ai-labs/dql',
+         _schemaURL:
+@@ -267,3 +267,3 @@
+     eventTime,
+-    producer: 'https://github.com/duckcode-ai/dql',
++    producer: 'https://github.com/duckcode-ai-labs/dql',
+     schemaURL:
