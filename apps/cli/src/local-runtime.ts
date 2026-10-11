@@ -25164,17 +25164,21 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
               : [];
             if (certifiedMetadata.name) {
               const memory = openMemoryStore();
-              await memory.upsert({
-                id: `mem_certify_${certifiedMetadata.name}`,
-                scope: 'project',
-                title: `Certified block: ${certifiedMetadata.name}`,
-                content: `Prefer the certified block "${certifiedMetadata.name}" for ${certifiedMetadata.description?.trim() || `questions in the ${certifiedMetadata.domain ?? 'analytics'} domain`}.${certifiedMetadata.grain ? ` Grain: ${certifiedMetadata.grain}.` : ''}${learnedOutputs.length ? ` Outputs: ${learnedOutputs.slice(0, 8).join(', ')}.` : ''} It is the trusted source — reuse it instead of generating new SQL.`,
-                tags: [certifiedMetadata.domain, certifiedMetadata.name, ...learnedOutputs.slice(0, 4)].filter((value): value is string => Boolean(value)),
-                source: 'certify',
-                confidence: 0.95,
-                importance: 0.85,
-                enabled: true,
-              });
+              try {
+                await memory.upsert({
+                  id: `mem_certify_${certifiedMetadata.name}`,
+                  scope: 'project',
+                  title: `Certified block: ${certifiedMetadata.name}`,
+                  content: `Prefer the certified block "${certifiedMetadata.name}" for ${certifiedMetadata.description?.trim() || `questions in the ${certifiedMetadata.domain ?? 'analytics'} domain`}.${certifiedMetadata.grain ? ` Grain: ${certifiedMetadata.grain}.` : ''}${learnedOutputs.length ? ` Outputs: ${learnedOutputs.slice(0, 8).join(', ')}.` : ''} It is the trusted source — reuse it instead of generating new SQL.`,
+                  tags: [certifiedMetadata.domain, certifiedMetadata.name, ...learnedOutputs.slice(0, 4)].filter((value): value is string => Boolean(value)),
+                  source: 'certify',
+                  confidence: 0.95,
+                  importance: 0.85,
+                  enabled: true,
+                });
+              } finally {
+                await memory.close?.();
+              }
             }
           } catch {
             /* best-effort: learning capture must never block certification */
@@ -25336,17 +25340,21 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
               ? learned.outputs.filter((o): o is string => typeof o === 'string')
               : [];
             const memory = openMemoryStore();
-            await memory.upsert({
-              id: `mem_certify_${learned.name}`,
-              scope: 'project',
-              title: `Certified block: ${learned.name}`,
-              content: `Prefer the certified block "${learned.name}" for ${learned.description?.trim() || `questions in the ${learned.domain ?? 'analytics'} domain`}.${learned.grain ? ` Grain: ${learned.grain}.` : ''}${learnedOutputs.length ? ` Outputs: ${learnedOutputs.slice(0, 8).join(', ')}.` : ''} It is the trusted source — reuse it instead of generating new SQL.`,
-              tags: [learned.domain, learned.name, ...learnedOutputs.slice(0, 4)].filter((x): x is string => Boolean(x)),
-              source: 'certify',
-              confidence: 0.95,
-              importance: 0.85,
-              enabled: true,
-            });
+            try {
+              await memory.upsert({
+                id: `mem_certify_${learned.name}`,
+                scope: 'project',
+                title: `Certified block: ${learned.name}`,
+                content: `Prefer the certified block "${learned.name}" for ${learned.description?.trim() || `questions in the ${learned.domain ?? 'analytics'} domain`}.${learned.grain ? ` Grain: ${learned.grain}.` : ''}${learnedOutputs.length ? ` Outputs: ${learnedOutputs.slice(0, 8).join(', ')}.` : ''} It is the trusted source — reuse it instead of generating new SQL.`,
+                tags: [learned.domain, learned.name, ...learnedOutputs.slice(0, 4)].filter((x): x is string => Boolean(x)),
+                source: 'certify',
+                confidence: 0.95,
+                importance: 0.85,
+                enabled: true,
+              });
+            } finally {
+              await memory.close?.();
+            }
           }
         } catch {
           /* best-effort: learning capture must never block certification */
