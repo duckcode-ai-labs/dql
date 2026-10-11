@@ -1,4 +1,5 @@
 import type { BlockRecord, TestResultSummary } from '@duckcodeailabs/dql-project';
+import type { GroupingIdentityGap } from '@duckcodeailabs/dql-core';
 import { hasInvariantViolation, type InvariantResult } from './invariant-evaluator.js';
 
 /**
@@ -12,6 +13,11 @@ export interface CertificationContext {
    * array means the block declares no invariants.
    */
   invariantResults?: InvariantResult[];
+  /**
+   * Set when the block's SQL groups by labels only (see `groupingIdentityGapOfSql`
+   * in dql-core). Undefined when it was not checked or the grouping is keyed.
+   */
+  groupingIdentityGap?: GroupingIdentityGap;
 }
 
 /**
@@ -169,6 +175,18 @@ export const BUILTIN_RULES: CertificationRule[] = [
         };
       }
       return { passed: true };
+    },
+  },
+  {
+    id: 'groups-by-identity-key',
+    name: 'Block groups by an identity key',
+    description:
+      "Ask serves a block as a certified answer only when its grouping carries an identity key, because two entities can share a label. " +
+      'A labels-only block can still be certified and used in Apps, so this is a warning, not a blocker.',
+    severity: 'warning',
+    check: (_block, _testResults, context) => {
+      const gap = context?.groupingIdentityGap;
+      return { passed: !gap, message: gap?.message };
     },
   },
   {

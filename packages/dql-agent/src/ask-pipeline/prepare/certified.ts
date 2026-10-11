@@ -1,3 +1,4 @@
+import { groupsByLabelsOnly } from '@duckcodeailabs/dql-core';
 import { parseScopePredicates, type BlockContractMeasure, type BlockContractPredicate } from '../block-contract.js';
 import type { AnalyticalIntentV1 } from '../intent.js';
 import type { VocabularyEntry, VocabularyIndex } from '../vocabulary.js';
@@ -85,10 +86,8 @@ export function entails(block: VocabularyEntry, intent: AnalyticalIntentV1, voca
   // grouping columns are all labels cannot prove which customer is which, so it
   // is evidence, not a certified answer, until it is recertified with the key.
   const grouping = contract.groupBy.length ? contract.groupBy : contract.outputs.filter((output) => !contract.measures.some((m) => norm(m.output) === norm(output)));
-  const keyLike = (column: string) => /(^|_)(id|key|uuid|code|number)$/i.test(column);
-  const labelLike = (column: string) => /(^|_)(name|label|title)(_|$)/i.test(column);
   let identityNote: string | undefined;
-  if (grouping.length > 0 && grouping.every(labelLike) && !grouping.some(keyLike)) {
+  if (groupsByLabelsOnly(grouping)) {
     const note = `the block groups by ${grouping.join(', ')} (a label) with no identity key, so two entities sharing a name would merge`;
     // Identity is never certified away: even a block the intent names is
     // evidence, not the answer, until it is recertified with the key. The

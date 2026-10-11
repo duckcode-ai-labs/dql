@@ -1,3 +1,11 @@
+import {
+  lastSqlSegment as lastSegment,
+  normalizeSqlText as norm,
+  readSelectList,
+  splitSqlTopLevel as splitTopLevel,
+  sqlClause as clause,
+} from '@duckcodeailabs/dql-core';
+
 /**
  * What a certified block PROMISES, read from its declaration and its SQL.
  *
@@ -72,26 +80,6 @@ export interface BlockDeclarationLike {
   metricMappings?: Array<{ output: string; metric: string; filter?: string }>;
 }
 
-const norm = (value: string) => value.toLowerCase().replace(/\s+/g, ' ').trim();
-const lastSegment = (value: string) => value.replace(/["`]/g, '').split('.').pop() ?? value;
-
-function splitTopLevel(text: string, separator: string): string[] {
-  const parts: string[] = [];
-  let depth = 0;
-  let current = '';
-  let quote: string | undefined;
-  for (const char of text) {
-    if (quote) { current += char; if (char === quote) quote = undefined; continue; }
-    if (char === "'" || char === '"') { quote = char; current += char; continue; }
-    if (char === '(') depth += 1;
-    if (char === ')') depth -= 1;
-    if (char === separator && depth === 0) { parts.push(current); current = ''; continue; }
-    current += char;
-  }
-  parts.push(current);
-  return parts.map((part) => part.trim()).filter(Boolean);
-}
-
 /** Split a WHERE clause on top-level AND. */
 function splitAnd(text: string): string[] {
   const parts: string[] = [];
@@ -110,52 +98,6 @@ function splitAnd(text: string): string[] {
   }
   parts.push(current);
   return parts.map((part) => part.trim()).filter(Boolean);
-}
-
-function clause(sql: string, keyword: string, stops: string[]): string | undefined {
-  const upper = sql.toUpperCase();
-  let depth = 0;
-  let start = -1;
-  const boundary = (at: number) => at <= 0 || /[\s)]/.test(upper[at - 1] ?? ' ');
-  for (let index = 0; index < upper.length; index += 1) {
-    const char = upper[index];
-    if (char === '(') depth += 1;
-    else if (char === ')') depth -= 1;
-    if (depth !== 0) continue;
-    if (start < 0) {
-      if (upper.startsWith(keyword, index) && boundary(index) && /[\s(]/.test(upper[index + keyword.length] ?? ' ')) {
-        start = index + keyword.length;
-        index = start - 1;
-      }
-      continue;
-    }
-    for (const stop of stops) {
-      if (upper.startsWith(stop, index) && boundary(index) && /[\s(]|$/.test(upper[index + stop.length] ?? ' ')) {
-        return sql.slice(start, index).trim();
-      }
-    }
-  }
-  return start >= 0 ? sql.slice(start).trim().replace(/;\s*$/, '') : undefined;
-}
-
-const AGGREGATES: Array<[RegExp, BlockContractMeasure['aggregate']]> = [
-  [/^count\s*\(\s*distinct\b/i, 'count_distinct'],
-  [/^count\s*\(/i, 'count'],
-  [/^sum\s*\(/i, 'sum'],
-  [/^avg\s*\(/i, 'avg'],
-  [/^min\s*\(/i, 'min'],
-  [/^max\s*\(/i, 'max'],
-  [/^median\s*\(/i, 'median'],
-];
-
-function parseSelectItem(item: string): { output: string; expr: string; aggregate?: BlockContractMeasure['aggregate']; sourceColumn?: string } {
-  const aliasMatch = item.match(/^(.*?)\s+as\s+"?([A-Za-z_][A-Za-z0-9_]*)"?\s*$/i);
-  const expr = norm(aliasMatch ? aliasMatch[1]! : item);
-  const output = aliasMatch ? aliasMatch[2]! : lastSegment(item.trim());
-  const aggregate = AGGREGATES.find(([pattern]) => pattern.test(expr))?.[1];
-  const inner = aggregate ? expr.replace(/^[a-z_]+\s*\(\s*(distinct\s+)?/i, '').replace(/\)\s*$/, '') : undefined;
-  const sourceColumn = inner && /^[a-z_][a-z0-9_.]*$/i.test(inner) ? lastSegment(inner) : undefined;
-  return { output, expr, ...(aggregate ? { aggregate } : {}), ...(sourceColumn ? { sourceColumn } : {}) };
 }
 
 const COMPARATORS: Record<string, BlockContractPredicate['op']> = { '=': 'eq', '<>': 'neq', '!=': 'neq', '>': 'gt', '>=': 'gte', '<': 'lt', '<=': 'lte' };
@@ -195,10 +137,8 @@ function parsePredicates(where: string | undefined): BlockContractPredicate[] {
 export function extractBlockContract(block: BlockDeclarationLike): BlockContractV1 {
   const declaredOutputs = block.declaredOutputs ?? block.outputs?.map((output) => (typeof output === 'string' ? output : output.name)) ?? [];
   const sql = (block.sql ?? '').trim();
-  const body = sql.replace(/--[^\n]*/g, ' ').replace(/\s+/g, ' ').trim();
-  const isSimple = /^\s*select\b/i.test(body) && !/\bunion\b/i.test(body);
-  const selectList = isSimple ? clause(body, 'SELECT', ['FROM']) : undefined;
-  const items = selectList ? splitTopLevel(selectList, ',').map(parseSelectItem) : [];
+  // The SELECT list is read in dql-core, shared with the certify-time identity warning.
+  const { body, isSimple, items } = readSelectList(sql);
   const where = isSimple ? clause(body, 'WHERE', ['GROUP BY', 'ORDER BY', 'LIMIT', 'HAVING']) : undefined;
   const orderBy = isSimple ? clause(body, 'ORDER BY', ['LIMIT']) : undefined;
   const limitText = isSimple ? clause(body, 'LIMIT', []) : undefined;

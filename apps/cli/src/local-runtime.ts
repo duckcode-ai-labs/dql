@@ -224,6 +224,8 @@ import {
   checkTileCalculations,
   renderTableDatasetBlock,
   resolveBlockReplacement,
+  groupingIdentityGapOfSql,
+  type RelationKeyKnowledge,
 } from '@duckcodeailabs/dql-core';
 import {
   prepareDatasetDeclarationPatch,
@@ -5023,6 +5025,15 @@ export async function startLocalServer(opts: LocalServerOptions): Promise<number
   // own, so a host that runs several servers in one process never has one server's hooks used for another's.
   const scope: DqlServerScope = { id: randomUUID() };
   return withServerScope(scope, () => startLocalServerInScope(opts, scope));
+}
+
+/** Columns and primary keys the warehouse catalog knows, used to name the identity key a block should group by. */
+function knownRelationKeys(projectRoot: string): RelationKeyKnowledge[] {
+  return (readWarehouseCatalog(projectRoot).snapshot?.relations ?? []).map((relation) => ({
+    relation: relation.relation,
+    columns: relation.columns.map((column) => column.name),
+    primaryKey: relation.primaryKey,
+  }));
 }
 
 async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServerScope): Promise<number> {
@@ -12692,10 +12703,15 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
         })
       : null;
     record.invariants = extractBlockInvariants(source);
+    // Ask serves a labels-only block as Needs review, not Certified; tell the creator now.
+    const groupingIdentityGap = groupingIdentityGapOfSql(extractBlockStudioSql(source) ?? '', knownRelationKeys(projectRoot), parsed.dimensions);
     const certification = await timer.time('certifier_rules', () => new Certifier(options.enterprise ? ENTERPRISE_RULES : undefined).evaluate(
       record,
       testResults ?? undefined,
-      invariantEval ? { invariantResults: invariantEval.invariantResults } : undefined,
+      {
+        ...(invariantEval ? { invariantResults: invariantEval.invariantResults } : {}),
+        ...(groupingIdentityGap ? { groupingIdentityGap } : {}),
+      },
     ));
     const checklist = buildBlockStudioCertificationChecklist({
       source,
@@ -26210,6 +26226,7 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
         const prefill = prefillCertificationMetadata(cleanedSource, {
           sql: typeof body.sql === 'string' ? body.sql : undefined,
           columns: Array.isArray(body.columns) ? (body.columns as unknown[]).filter((column): column is string => typeof column === 'string') : undefined,
+          knownRelations: knownRelationKeys(projectRoot),
           owner: hostActor() ?? (hostHooks ? undefined : resolveLocalOwner(projectRoot)),
           entities: semanticEntitiesForSource(cleanedSource, semanticLayer),
           sourceSystemFor: (table) => {
@@ -26234,7 +26251,7 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
         });
         const payload = openBlockStudioDocument(projectRoot, savedPath, semanticLayer);
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-        res.end(serializeJSON({ ...payload, prefill: { suggested: prefill.suggested, unknown: prefill.unknown } }));
+        res.end(serializeJSON({ ...payload, prefill: { suggested: prefill.suggested, unknown: prefill.unknown, ...(prefill.identityGap ? { identityGap: prefill.identityGap } : {}) } }));
       } catch (error) {
         res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(serializeJSON({ error: error instanceof Error ? error.message : String(error) }));
