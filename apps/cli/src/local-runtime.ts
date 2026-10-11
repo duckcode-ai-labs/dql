@@ -12605,7 +12605,7 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
       progress: 10,
       message: 'Validating the saved DQL source.',
     });
-    let validation = await timer.time('validate_source', () => validateBlockStudioSource(source, semanticLayer));
+    let validation = timer.timeSync('validate_source', () => validateBlockStudioSource(source, semanticLayer));
     let preview: Awaited<ReturnType<typeof runBlockStudioPreviewSource>> | null = null;
     let testResults: TestResultSummary | null = null;
     const blockers: string[] = [];

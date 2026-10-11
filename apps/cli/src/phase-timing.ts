@@ -6,6 +6,8 @@
 export interface PhaseTimer {
   /** Time one phase. The duration is kept even when the phase throws. */
   time<T>(name: string, work: () => Promise<T> | T): Promise<T>;
+  /** Time one synchronous phase without yielding to the event loop. */
+  timeSync<T>(name: string, work: () => T): T;
   /** Phases in the order they finished, durations in whole milliseconds. */
   phases(): Array<{ name: string; ms: number }>;
   /** Milliseconds since the timer was created. */
@@ -34,6 +36,14 @@ export function createPhaseTimer(now: () => number = Date.now): PhaseTimer {
       const phaseStart = now();
       try {
         return await work();
+      } finally {
+        recorded.push({ name: name.replace(PHASE_NAME, '_'), ms: Math.max(0, now() - phaseStart) });
+      }
+    },
+    timeSync(name, work) {
+      const phaseStart = now();
+      try {
+        return work();
       } finally {
         recorded.push({ name: name.replace(PHASE_NAME, '_'), ms: Math.max(0, now() - phaseStart) });
       }
