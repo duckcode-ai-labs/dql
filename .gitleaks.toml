@@ -1,9 +1,22 @@
 title = "DQL gitleaks config"
 
 # Needs gitleaks >= 8.25 (the [[allowlists]] array form and `condition`).
+# CI pins the version in .github/workflows/secret-scan.yml.
 
 [extend]
 useDefault = true
+
+# Untracked build and install output (compiled test files, dependencies).
+# Only matters for a local `gitleaks dir .` after a build; CI scans before
+# installing, and `gitleaks git` only sees tracked files.
+[[allowlists]]
+description = "Local build and dependency output"
+paths = [
+  '''(^|/)node_modules/''',
+  '''(^|/)dist/''',
+  '''(^|/)\.turbo/''',
+  '''(^|/)\.release-artifacts/''',
+]
 
 # Synthetic canaries used by tests. This applies to every file, so a real
 # key in any test file still fails the scan.
@@ -27,3 +40,43 @@ paths = [
 regexes = [
   '''-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----''',
 ]
+
+# Replay-cassette cache keys: a 32-hex digest of the request, not a credential.
+# Allowed only as the "key" field of a cassette file or the cassette test.
+[[allowlists]]
+description = "Cassette request-hash keys"
+condition = "AND"
+regexTarget = "match"
+paths = [
+  '''(^|/)test-cassettes/.+\.json$''',
+  '''apps/cli/src/commands/agent-eval-cassette\.test\.ts''',
+]
+regexes = [
+  '''key['"]?\s*(:|===)\s*['"][0-9a-f]{32}['"]''',
+]
+
+# Synthetic values in specific tests and source files (each pinned to its file).
+[[allowlists]]
+description = "Synthetic token in notebook URL tests"
+condition = "AND"
+paths = ['''apps/cli/src/commands/notebook\.test\.ts''']
+regexes = ['''^abc123def456$''']
+
+[[allowlists]]
+description = "Legacy block key names in provider tests"
+condition = "AND"
+paths = ['''apps/cli/src/llm/providers/(provider-runner|dql-agent-provider)\.test\.ts''']
+regexes = ['''^legacy-order-count-v1$''']
+
+[[allowlists]]
+description = "Redaction canary in the ask-observability test"
+condition = "AND"
+paths = ['''packages/dql-agent/src/ask-observability/ask-observability\.test\.ts''']
+regexes = ['''^sk_v8_secret_abcdefghijklmnop$''']
+
+[[allowlists]]
+description = "Anthropic beta header names"
+condition = "AND"
+regexTarget = "match"
+paths = ['''apps/cli/src/providers/oauth/claude-oauth\.ts''']
+regexes = ['''interleaved-thinking-\d{4}-\d{2}-\d{2}''']

@@ -1,10 +1,8 @@
 {
   "build": {
     "commit": "f964bb5caade101f8a139e18c09f161af6dfe6fa",
-    "dirty": "true",
-    "contentFingerprint": "29324da3201964c8",
     "mode": "default",
-    "provider": "live:/Users/Kranthi_1/jaffle-shop-duckdb",
+    "provider": "live",
     "fixture": "jaffle-golden"
   },
   "passed": 17,

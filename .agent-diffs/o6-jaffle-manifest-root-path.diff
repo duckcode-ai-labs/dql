@@ -1,8 +1,0 @@
-Reason: protected fixture; the manifest is one 2 MB line, so this is a replacement rule, not a hunk. Apply by hand.
-File: apps/cli/test/fixtures/jaffle-golden/target/manifest.json
-Replace every (5 occurrences, the seed nodes' root_path):
-  "root_path": "/Users/Kranthi_1/jaffle-shop-duckdb"
-with:
-  "root_path": "/workspace/jaffle-shop-duckdb"
-Command: sed -i '' 's#/Users/Kranthi_1/jaffle-shop-duckdb#/workspace/jaffle-shop-duckdb#g' apps/cli/test/fixtures/jaffle-golden/target/manifest.json
-Check afterwards: run the jaffle-golden tests, since the manifest is a fixture.

@@ -442,7 +442,7 @@ describe('local Ask trace API errors (OBS-009)', () => {
       'Show customer "Brittany Barrera" revenue',
       'SELECT * FROM orders WHERE customer_email = "person@example.com"',
       'Show results from https://example.test/secret',
-      'Read /Users/kranthi/.dql/settings.json',
+      'Read /Users/someone/.dql/settings.json',
       'Show customer ssn 123-45-6789',
       'Show results for jane.doe@example.com',
       'Call +1 (512) 555-0199',

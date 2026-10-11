@@ -79,7 +79,9 @@ const REPEAT = Math.max(1, Number(process.env.DQL_ASK_GOLDEN_REPEAT ?? '1') || 1
 /** `DQL_ASK_GOLDEN_KEEP=1` leaves the temporary project (and its run/trace stores) on disk for inspection. */
 const KEEP = process.env.DQL_ASK_GOLDEN_KEEP === '1';
 const MODE = process.env.DQL_ASK_GOLDEN_MODE as AskAgentRuntimeMode | undefined;
-const PROVIDER_PROJECT = process.env.DQL_ASK_GOLDEN_PROVIDER_PROJECT ?? '/Users/Kranthi_1/jaffle-shop-duckdb';
+// The live lane reads provider settings from a project you name; there is no default path.
+const PROVIDER_PROJECT = process.env.DQL_ASK_GOLDEN_PROVIDER_PROJECT ?? '';
+if (LIVE && !PROVIDER_PROJECT) throw new Error('DQL_ASK_GOLDEN_LIVE=1 requires DQL_ASK_GOLDEN_PROVIDER_PROJECT (a project with .dql/provider-settings.json).');
 /** Comma-separated question ids to run alone (debugging a failure); empty runs everything. */
 const ONLY = new Set((process.env.DQL_ASK_GOLDEN_ONLY ?? '').split(',').map((id) => id.trim()).filter(Boolean));
 const selected = <T extends { id: string }>(items: T[]): T[] => (ONLY.size ? items.filter((item) => ONLY.has(item.id)) : items);
@@ -94,7 +96,7 @@ function buildIdentity(): Record<string, string> {
   const dirty = git('git status --porcelain -- apps/cli/src packages/dql-agent/src packages/dql-core/src');
   const diff = git('git diff -- apps/cli/src packages/dql-agent/src packages/dql-core/src');
   const content = createHash('sha256').update(sha).update(dirty).update(diff).digest('hex').slice(0, 16);
-  return { commit: sha, dirty: dirty ? 'true' : 'false', contentFingerprint: content, mode: MODE ?? 'default', provider: LIVE ? `live:${PROVIDER_PROJECT}` : 'cassette-replay', fixture: FIXTURE };
+  return { commit: sha, dirty: dirty ? 'true' : 'false', contentFingerprint: content, mode: MODE ?? 'default', provider: LIVE ? 'live' : 'cassette-replay', fixture: FIXTURE };
 }
 
 // ── row comparison ──────────────────────────────────────────────────────────
