@@ -18,6 +18,12 @@ missing. Provenance only works when the package's `repository.url` matches the
 GitHub repository, so keep every manifest pointing at
 `https://github.com/duckcode-ai-labs/dql`.
 
+> The workflow and script changes described above (owner gate, `id-token:
+> write`, `--provenance`, the early token check) are delivered as owner-applied
+> diffs in `.agent-diffs/o2-*.diff` because those files are locked for agents.
+> Until the owner applies them, `release.yml` still gates on the old repository
+> name and the script does not pass `--provenance`.
+
 The 19 release packages include the VS Code extension's language support
 package, which is published to npm as `dql-language-support` with the rest.
 The Visual Studio Marketplace listing is separate: it is published only from a

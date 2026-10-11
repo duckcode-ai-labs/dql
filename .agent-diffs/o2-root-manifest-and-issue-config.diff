@@ -1,0 +1,28 @@
+Reason: root package.json and .github/ISSUE_TEMPLATE/config.yml are locked for agents; owner applies (O2 step 5: duckcode-ai/dql -> duckcode-ai-labs/dql).
+
+diff --git a/.github/ISSUE_TEMPLATE/config.yml b/.github/ISSUE_TEMPLATE/config.yml
+--- a/.github/ISSUE_TEMPLATE/config.yml
++++ b/.github/ISSUE_TEMPLATE/config.yml
+@@ -1,8 +1,8 @@
+ blank_issues_enabled: false
+ contact_links:
+   - name: Security policy
+-    url: https://github.com/duckcode-ai/dql/blob/main/SECURITY.md
++    url: https://github.com/duckcode-ai-labs/dql/blob/main/SECURITY.md
+     about: Report vulnerabilities through the documented security process.
+   - name: Discussions
+-    url: https://github.com/duckcode-ai/dql/discussions
++    url: https://github.com/duckcode-ai-labs/dql/discussions
+     about: Use Discussions for design questions and broader language proposals.
+diff --git a/package.json b/package.json
+--- a/package.json
++++ b/package.json
+@@ -4,7 +4,7 @@
+   "packageManager": "pnpm@9.15.0",
+   "repository": {
+     "type": "git",
+-    "url": "https://github.com/duckcode-ai/dql.git"
++    "url": "https://github.com/duckcode-ai-labs/dql.git"
+   },
+   "scripts": {
+     "build": "turbo run build",
