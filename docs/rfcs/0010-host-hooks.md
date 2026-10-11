@@ -323,7 +323,7 @@ identical.
 
 ## Progress
 
-All slices below are on `claude/oss-security-fixes`, implemented 2026-09-25 and awaiting independent verification. Items marked **needs a live check** were built from the vendors' public documentation and tested on recorded replies, not against the live service.
+All slices below have landed on `main`, implemented 2026-09-25 and awaiting independent verification. Items marked **needs a live check** were built from the vendors' public documentation and tested on recorded replies, not against the live service.
 
 ### HH-1 — who is asking
 `apps/cli/src/host/`. With `resolvePrincipal`, every API request except health runs as the person the host names. Unplaced requests get 401. Reviews, correction authors and the default owner of new content come from the person, never the request body. The certification rule set comes from the host. `@duckcodeailabs/dql-cli/host` exports the supported API. Tests: `host-hooks.test.ts`.
@@ -576,7 +576,7 @@ Nothing changes for projects or for `dql notebook` with no hooks.
 
 ## Alternatives considered
 
-- **Fork DQL for commercial hosting.** Every OSS release would become merge work. The existing governed-analytics-cloud embed drifted three months behind for this reason.
+- **Fork DQL for commercial hosting.** Every OSS release would become merge work. An earlier host embed drifted three months behind for this reason.
 - **Put a proxy in front of the server.** It can check who is asking, but it can't narrow AI-written SQL, stamp certification actors or key caches by access. Those decisions live inside the engine.
 - **Pass the principal as a parameter through every call.** That touches hundreds of call sites. `AsyncLocalStorage` is already used for the same purpose in this file.
 - **Build sign-in and roles into OSS.** Out of scope by the OSS boundary (AGENTS.md, `delivery-orchestration.md`).

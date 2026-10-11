@@ -1,20 +1,29 @@
 title = "DQL gitleaks config"
 
+# Needs gitleaks >= 8.25 (the [[allowlists]] array form and `condition`).
+
 [extend]
 useDefault = true
 
-# Known synthetic canaries and dummy keys used by tests. Nothing else is allowed.
+# Synthetic canaries used by tests. This applies to every file, so a real
+# key in any test file still fails the scan.
 [[allowlists]]
-description = "Synthetic test secrets"
-paths = [
-  '''packages/dql-connectors/src/connection-pool\.test\.ts''',
-  '''packages/dql-connectors/src/drivers/snowflake\.test\.ts''',
-  '''apps/cli/src/settings/provider-settings\.test\.ts''',
-  '''apps/cli/src/local-runtime\.git\.test\.ts''',
-  '''apps/cli/src/host/config-reads\.test\.ts''',
-]
+description = "Synthetic test canaries"
 regexes = [
   '''sk-CANARY[A-Za-z0-9_-]*''',
   '''sk-ant-test[A-Za-z0-9_-]*''',
   '''ghp_secret[A-Za-z0-9_-]*''',
+]
+
+# Dummy PEM blocks, allowed only in the two connector tests that need them.
+# condition = "AND": a finding is skipped only if the path AND the regex match.
+[[allowlists]]
+description = "Dummy PEM blocks in connector tests"
+condition = "AND"
+paths = [
+  '''packages/dql-connectors/src/connection-pool\.test\.ts''',
+  '''packages/dql-connectors/src/drivers/snowflake\.test\.ts''',
+]
+regexes = [
+  '''-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----''',
 ]
