@@ -3,6 +3,7 @@ import test from 'node:test';
 
 import {
   assertPublishCredentials,
+  parseReleaseArguments,
   publishCommandArgs,
   wantsProvenance,
 } from './release-packages.mjs';
@@ -29,4 +30,11 @@ test('--provenance is added only when asked for, before the otp', () => {
     ['publish', '--access', 'public', '--no-git-checks', '--tag', 'latest', '--provenance', '--otp', '123456'],
   );
   assert.ok(!publishCommandArgs({ tag: 'next' }).includes('--provenance'));
+});
+
+test('a forwarded `--` separator (pnpm release:dry-run -- ...) is ignored', () => {
+  const release = parseReleaseArguments(['--dry-run', '--', '--tag', 'latest', '--expected-version', '1.17.3'], {});
+  assert.equal(release.dryRun, true);
+  assert.equal(release.tag, 'latest');
+  assert.equal(release.expectedVersion, '1.17.3');
 });

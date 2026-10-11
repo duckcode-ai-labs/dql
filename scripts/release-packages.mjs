@@ -43,6 +43,9 @@ export function parseReleaseArguments(argv, env = process.env) {
 
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
+    // pnpm 9 forwards the `--` in `pnpm release:dry-run -- --tag ...` to the
+    // script (npm strips it); it only separates arguments, so skip it.
+    if (arg === '--') continue;
     if (arg === '--dry-run') {
       dryRun = true;
       continue;
