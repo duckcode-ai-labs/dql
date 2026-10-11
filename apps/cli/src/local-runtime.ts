@@ -51,6 +51,7 @@ import {
   type LocalOperationProgress,
 } from './local-operation-coordinator.js';
 import { ProjectRefreshCoordinator } from './project-refresh-coordinator.js';
+import { createPhaseTimer, logSlowRequest, type PhaseTimer } from './phase-timing.js';
 import {
   buildMixedSourceWarehouseFallbackSql,
   findMentionedNotebookDataset,
@@ -12390,6 +12391,7 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
     source: string,
     targetConnection?: ConnectionConfig | null,
     parameters: Record<string, unknown> = {},
+    timer: PhaseTimer = createPhaseTimer(),
   ): Promise<{
     sql: string;
     result: ReturnType<typeof normalizeQueryResult>;
@@ -12403,12 +12405,12 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
     const activeConnection = requireActiveConnection(targetConnection);
     let tableMapping: Record<string, string> | undefined;
     if (semanticLayer) {
-      tableMapping = await resolveSemanticTableMapping(
+      tableMapping = await timer.time('preview_table_mapping', () => resolveSemanticTableMapping(
         executor,
         activeConnection,
         semanticLayer,
         projectRoot,
-      );
+      ));
     }
     const invocation = prepareBlockInvocation({ source, parameters, surface: 'block_studio' });
     if (invocation.errors.length > 0) throw new Error(invocation.errors.join(' '));
@@ -12445,13 +12447,13 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
         semanticSql: semanticCompose?.sql ?? undefined,
       },
     );
-    const execution = await analyticalExecutionService.execute({
+    const execution = await timer.time('preview_query', () => analyticalExecutionService.execute({
       sql: semanticCompose?.sql ?? plan?.sql ?? executableSql,
       subject: 'Block Studio preview query',
       connection: activeConnection,
       sqlParams: plan?.sqlParams,
       variables: { ...(plan?.variables ?? {}), ...invocation.values },
-    });
+    }));
     return {
       sql: execution.preparation.executedSql,
       result: execution.result,
@@ -12468,31 +12470,34 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
     source: string,
     targetConnection?: ConnectionConfig | null,
     executedPreview?: Awaited<ReturnType<typeof runBlockStudioPreviewSource>>,
+    timer: PhaseTimer = createPhaseTimer(),
   ): Promise<TestResultSummary> => {
     const start = Date.now();
     if (executedPreview) {
-      return evaluateBlockStudioTests(
+      return timer.time('evaluate_assertions', () => evaluateBlockStudioTests(
         executedPreview.tests,
         executedPreview.result.rows,
         executedPreview.result.columns,
         start,
-      );
+      ));
     }
     const activeConnection = requireActiveConnection(targetConnection);
-    const tableMapping = await resolveSemanticTableMapping(executor, activeConnection, semanticLayer, projectRoot);
+    const tableMapping = await timer.time('table_mapping', () =>
+      resolveSemanticTableMapping(executor, activeConnection, semanticLayer, projectRoot));
     // Run tests against the SAME SQL the preview runs: for a semantic block with a
     // pre-compiled query, that's the query (not a recompiled metric), so the test's
     // output columns match the block's declared outputs.
-    const semanticCompose = semanticLayer
-      ? await composeSemanticBlockSqlForRuntime(source, semanticLayer, {
+    const composeLayer = semanticLayer;
+    const semanticCompose = composeLayer
+      ? await timer.time('compose_sql', () => composeSemanticBlockSqlForRuntime(source, composeLayer, {
           driver: activeConnection.driver,
           tableMapping,
           projectRoot,
           projectConfig,
           detectedProvider: semanticDetectedProvider,
-        })
+        }))
       : null;
-    const plan = buildExecutionPlan(
+    const plan = await timer.time('execution_plan', () => buildExecutionPlan(
       { id: 'block-studio-tests', type: 'dql', source, title: 'Block Studio' },
       {
         semanticLayer,
@@ -12500,7 +12505,7 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
         tableMapping,
         semanticSql: semanticCompose?.sql ?? undefined,
       },
-    );
+    ));
     const tests = plan?.tests ?? [];
     if (!plan || !plan.sql) {
       return {
@@ -12520,15 +12525,15 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
     if (tests.length === 0) {
       return { passed: 0, failed: 0, skipped: 0, duration: Date.now() - start, assertions: [], runAt: new Date() };
     }
-    const execution = await analyticalExecutionService.execute({
+    const execution = await timer.time('run_query', () => analyticalExecutionService.execute({
       sql: semanticCompose?.sql ?? plan.sql,
       subject: 'Block Studio certification test query',
       connection: activeConnection,
       sqlParams: plan.sqlParams,
       variables: plan.variables,
-    });
+    }));
     const { rows, columns } = execution.result;
-    return evaluateBlockStudioTests(tests, rows, columns, start);
+    return timer.time('evaluate_assertions', () => evaluateBlockStudioTests(tests, rows, columns, start));
   };
 
   const saveDqlGenerationDraft = (
@@ -12591,14 +12596,16 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
     options: {
       enterprise?: boolean;
       reportProgress?: (progress: { phase: string; progress: number; message: string }) => void;
+      timer?: PhaseTimer;
     } = {},
   ) => {
+    const timer = options.timer ?? createPhaseTimer();
     options.reportProgress?.({
       phase: 'validating',
       progress: 10,
       message: 'Validating the saved DQL source.',
     });
-    let validation = validateBlockStudioSource(source, semanticLayer);
+    let validation = timer.timeSync('validate_source', () => validateBlockStudioSource(source, semanticLayer));
     let preview: Awaited<ReturnType<typeof runBlockStudioPreviewSource>> | null = null;
     let testResults: TestResultSummary | null = null;
     const blockers: string[] = [];
@@ -12609,7 +12616,7 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
       message: 'Compiling and previewing the saved block.',
     });
     try {
-      preview = await runBlockStudioPreviewSource(source);
+      preview = await runBlockStudioPreviewSource(source, undefined, {}, timer);
       validation = preview.validation;
     } catch (error) {
       blockers.push(error instanceof Error ? error.message : String(error));
@@ -12622,8 +12629,8 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
     });
     try {
       testResults = preview
-        ? await runBlockStudioTestSummary(source, undefined, preview)
-        : await runBlockStudioTestSummary(source);
+        ? await runBlockStudioTestSummary(source, undefined, preview, timer)
+        : await runBlockStudioTestSummary(source, undefined, undefined, timer);
     } catch (error) {
       testResults = {
         passed: 0,
@@ -12684,11 +12691,11 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
         })
       : null;
     record.invariants = extractBlockInvariants(source);
-    const certification = new Certifier(options.enterprise ? ENTERPRISE_RULES : undefined).evaluate(
+    const certification = await timer.time('certifier_rules', () => new Certifier(options.enterprise ? ENTERPRISE_RULES : undefined).evaluate(
       record,
       testResults ?? undefined,
       invariantEval ? { invariantResults: invariantEval.invariantResults } : undefined,
-    );
+    ));
     const checklist = buildBlockStudioCertificationChecklist({
       source,
       validation,
@@ -24917,6 +24924,7 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
 
     // ── Run block tests ────────────────────────────────────────────────
     if (req.method === 'POST' && path === '/api/blocks/run-tests') {
+      const timer = createPhaseTimer();
       try {
         const body = await readJSON(req);
         const source = body.source as string;
@@ -24925,7 +24933,9 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
           res.end(serializeJSON({ error: 'source is required' }));
           return;
         }
-        const summary = await runBlockStudioTestSummary(source);
+        const summary = await runBlockStudioTestSummary(source, undefined, undefined, timer);
+        logSlowRequest(timer, 'POST /api/blocks/run-tests');
+        if (timer.header()) res.setHeader('Server-Timing', timer.header());
         const results = summary.assertions.map((assertion) => ({
           name: assertion.name,
           field: assertion.name.match(/^assert\s+(\S+)/)?.[1] ?? assertion.name,
@@ -24937,6 +24947,7 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(serializeJSON({ assertions: results, passed: summary.passed, failed: summary.failed, duration: summary.duration }));
       } catch (error) {
+        logSlowRequest(timer, 'POST /api/blocks/run-tests');
         res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(serializeJSON({ error: error instanceof Error ? error.message : String(error) }));
       }
@@ -25247,6 +25258,12 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
     }
 
     if (req.method === 'POST' && path === '/api/block-studio/certify') {
+      const timer = createPhaseTimer();
+      // The timing header and slow-request line go out on every exit, success or refusal.
+      const stampTiming = () => {
+        logSlowRequest(timer, 'POST /api/block-studio/certify');
+        if (timer.header() && !res.headersSent) res.setHeader('Server-Timing', timer.header());
+      };
       try {
         const body = await readJSON(req);
         const source = typeof body.source === 'string' ? body.source : '';
@@ -25260,17 +25277,18 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
         // a successful run are the gate; grain/outputs/pattern/lineage/cadence are
         // AI-filled advisory warnings, not hard blockers. Enterprise-grade certification
         // (all of those required) is an opt-in for the cloud tier — request it explicitly.
-        const result = await certifyBlockStudioSource(source, blockPath, { enterprise: hostIdentity ? hostHooks?.enterpriseCertification === true : body.enterprise === true });
+        const result = await certifyBlockStudioSource(source, blockPath, { enterprise: hostIdentity ? hostHooks?.enterpriseCertification === true : body.enterprise === true, timer });
         const blockers = Array.from(new Set(result.checklist.blockers));
         if (!result.certification.certified || blockers.length > 0) {
           if (blockPath && result.preview) writeBlockStudioRunSummary(projectRoot, blockPath, source, result.preview.result);
+          stampTiming();
           res.writeHead(422, { 'Content-Type': 'application/json; charset=utf-8' });
           res.end(serializeJSON({ ok: false, ...result, blockers }));
           return;
         }
-        let certifiedPayload: ReturnType<typeof openBlockStudioDocument> | null = null;
         const certifiedSource = setBlockStudioStatusInSource(source, 'certified');
-        if (blockPath) {
+        const certifiedPayload: ReturnType<typeof openBlockStudioDocument> | null = blockPath
+          ? await timer.time('write_certified_block', async () => {
           const normalizedBlockPath = normalize(blockPath).replace(/^\/+/, '');
           const parsed = parseBlockSourceMetadata(certifiedSource);
           if (isDraftBlockPath(normalizedBlockPath)) {
@@ -25284,17 +25302,17 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
               tags: parsed.tags,
             });
             if (result.preview) writeBlockStudioRunSummary(projectRoot, savedPath, certifiedSource, result.preview.result);
-            certifiedPayload = openBlockStudioDocument(projectRoot, savedPath, semanticLayer);
-          } else {
-            setBlockStudioStatus(projectRoot, normalizedBlockPath, 'certified');
-            if (result.preview) writeBlockStudioRunSummary(projectRoot, normalizedBlockPath, certifiedSource, result.preview.result);
-            certifiedPayload = openBlockStudioDocument(projectRoot, normalizedBlockPath, semanticLayer);
+            return openBlockStudioDocument(projectRoot, savedPath, semanticLayer);
           }
-        }
+          setBlockStudioStatus(projectRoot, normalizedBlockPath, 'certified');
+          if (result.preview) writeBlockStudioRunSummary(projectRoot, normalizedBlockPath, certifiedSource, result.preview.result);
+          return openBlockStudioDocument(projectRoot, normalizedBlockPath, semanticLayer);
+        })
+          : null;
         // Auto-capture (OSS local learning loop): certifying a block teaches the
         // agent to prefer it. Write a scoped, advisory project memory — deterministic,
         // best-effort, and it never blocks certification.
-        try {
+        await timer.time('memory_capture', async () => { try {
           const learned = parseBlockSourceMetadata(certifiedSource);
           if (learned.name) {
             const learnedOutputs = Array.isArray(learned.outputs)
@@ -25315,8 +25333,9 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
           }
         } catch {
           /* best-effort: learning capture must never block certification */
-        }
+        } });
         const refreshOperation = scheduleProjectRefresh('block-studio-certify');
+        stampTiming();
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(serializeJSON({
           ok: true,
@@ -25330,6 +25349,7 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
           lineageRefresh: { status: 'queued', operationId: refreshOperation.id },
         }));
       } catch (error) {
+        stampTiming();
         res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(serializeJSON({ error: error instanceof Error ? error.message : String(error) }));
       }
@@ -39209,16 +39229,59 @@ export async function resolveSemanticTableMapping(
     }
   }
   try {
-    const tablesResult = await executor.executeQuery(
-      `SELECT table_schema, table_name
+    const rows = await cachedCatalogTableRows(executor, connection);
+    return buildSemanticTableMapping(semanticLayer, rows);
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * How long one catalog listing may answer repeated mapping requests. Every
+ * Block Studio run, test and certify asks for the same list; scanning
+ * information_schema each time cost seconds on a large or remote catalog.
+ */
+export const CATALOG_TABLE_ROWS_TTL_MS = 30_000;
+
+const catalogTableRowCache = new WeakMap<
+  QueryExecutor,
+  Map<string, { at: number; rows: Array<Record<string, unknown>> | Promise<Array<Record<string, unknown>>> }>
+>();
+
+/** Drop the cached catalog listing, e.g. after the app itself creates or drops a table. */
+export function clearCatalogTableRowCache(executor: QueryExecutor): void {
+  catalogTableRowCache.delete(executor);
+}
+
+async function cachedCatalogTableRows(
+  executor: QueryExecutor,
+  connection: ConnectionConfig,
+  now: () => number = Date.now,
+): Promise<Array<Record<string, unknown>>> {
+  let perExecutor = catalogTableRowCache.get(executor);
+  if (!perExecutor) {
+    perExecutor = new Map();
+    catalogTableRowCache.set(executor, perExecutor);
+  }
+  const key = JSON.stringify(connection);
+  const hit = perExecutor.get(key);
+  if (hit && now() - hit.at < CATALOG_TABLE_ROWS_TTL_MS) return hit.rows;
+  const pending = executor.executeQuery(
+    `SELECT table_schema, table_name
        FROM information_schema.tables
        WHERE UPPER(table_schema) NOT IN ('INFORMATION_SCHEMA', 'PG_CATALOG')
        ORDER BY table_schema, table_name`,
-      [], {}, connection, { purpose: 'metadata' },
-    );
-    return buildSemanticTableMapping(semanticLayer, tablesResult.rows);
-  } catch {
-    return undefined;
+    [], {}, connection, { purpose: 'metadata' },
+  ).then((result) => result.rows as Array<Record<string, unknown>>);
+  // Concurrent callers share one scan; a failed scan is never remembered.
+  perExecutor.set(key, { at: now(), rows: pending });
+  try {
+    const rows = await pending;
+    perExecutor.set(key, { at: now(), rows });
+    return rows;
+  } catch (error) {
+    if (perExecutor.get(key)?.rows === pending) perExecutor.delete(key);
+    throw error;
   }
 }
 
