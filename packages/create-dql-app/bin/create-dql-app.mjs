@@ -167,10 +167,16 @@ async function main() {
   const pm = detectPackageManager();
   const installCmd = pm === 'npm' ? 'npm install' : `${pm} install`;
   const runCmd = pm === 'npm' ? 'npm run notebook' : `${pm} notebook`;
+  // Drivers install into .dql/connectors with the same package manager the
+  // user ran (pnpm and yarn have no `--prefix`).
+  const connectorInstall = (pkg) =>
+    pm === 'pnpm' ? `pnpm add --dir .dql/connectors ${pkg}`
+      : pm === 'yarn' ? `yarn --cwd .dql/connectors add ${pkg}`
+        : `npm install --prefix .dql/connectors ${pkg}`;
   const connectorTip = [
     c.dim('# Optional database driver install before running queries:'),
-    c.dim('#   DuckDB/local files: npm install --prefix .dql/connectors duckdb'),
-    c.dim('#   Snowflake:       npm install --prefix .dql/connectors snowflake-sdk'),
+    c.dim(`#   DuckDB/local files: ${connectorInstall('duckdb')}`),
+    c.dim(`#   Snowflake:       ${connectorInstall('snowflake-sdk')}`),
     c.dim('#   Databricks:      no extra package'),
   ].join('\n  ');
   const dbtTip = dbtSibling

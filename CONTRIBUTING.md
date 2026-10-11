@@ -30,7 +30,7 @@ Before a non-trivial change, read the
 
 ## Development Setup
 
-Requires Node.js 18, 20, or 22 and pnpm 9.
+Requires Node.js 20 or newer (CI tests 20, 22, and 24) and pnpm 9.
 
 ```bash
 git clone https://github.com/duckcode-ai/dql.git
@@ -85,9 +85,13 @@ pnpm --filter @duckcodeailabs/dql-core test
 ### Running the notebook dev server
 
 ```bash
-pnpm --filter dql-notebook dev      # Vite dev server on port 5173
-pnpm --filter @duckcodeailabs/dql-cli start  # CLI server on port 3000
+pnpm --filter @duckcodeailabs/dql-notebook-app dev   # Vite dev server for the UI
+pnpm --filter @duckcodeailabs/dql-cli build
+node apps/cli/dist/index.js notebook                  # built CLI server, default port 3474
 ```
+
+Vite alone does not count as UI verification: check UI changes against the
+built `dql notebook` CLI (see [AGENTS.md](./AGENTS.md)).
 
 ---
 
@@ -95,8 +99,10 @@ pnpm --filter @duckcodeailabs/dql-cli start  # CLI server on port 3000
 
 ```
 apps/
-  cli/                   dql CLI entry point
+  cli/                   dql CLI entry point and local notebook server
   dql-notebook/          React notebook UI (Vite)
+  notebook-browser/      Browser notebook build
+  desktop/               Tauri desktop shell
   vscode-extension/      VS Code extension package
 packages/
   dql-core/              Lexer, parser, AST, semantic layer, formatter
@@ -105,9 +111,18 @@ packages/
   dql-connectors/        Database driver layer
   dql-governance/        Certification and cost rules
   dql-lsp/               Language server
+  datalex-lsp/           DataLex language server
   dql-project/           Git-backed registry
   dql-notebook/          Notebook document model and execution helpers
   dql-charts/            React SVG chart components
+  dql-ui/                Shared UI components and theme tokens
+  dql-agent/             Ask and agent runtime
+  dql-mcp/               MCP server
+  dql-slack/             Slack bot
+  dql-openlineage/       OpenLineage emitter
+  dql-plugin-api/        Plugin API types
+  dql-telemetry/         Deprecated, unused
+  create-dql-app/        `npx create-dql-app` scaffolder
 docs/                    All documentation
 ```
 
@@ -150,11 +165,12 @@ Common contribution areas:
 
 DQL follows [Semantic Versioning](https://semver.org/):
 
-- **Patch** (`0.x.Y`): bug fixes, documentation, internal improvements
-- **Minor** (`0.X.0`): new features, new commands, new language constructs (backwards-compatible)
+- **Patch** (`1.x.Y`): bug fixes, documentation, internal improvements
+- **Minor** (`1.X.0`): new features, new commands, new language constructs (backwards-compatible)
 - **Major** (`X.0.0`): breaking changes to the language syntax, CLI flags, or public package APIs
 
-All packages in this monorepo are released together on the same version cadence.
+The `1.x` packages are released together on the same version. `datalex-lsp`
+versions on its own (currently `0.2.0`).
 
 ---
 
