@@ -6,8 +6,7 @@
 | **Status**         | Accepted; building step by step                                              |
 | **Created**        | 2026-09-23                                                                   |
 | **Builds on**      | RFC 0007 (Datasets and tile queries)                                         |
-| **Implementation** | branch `claude/app-builder-commercial` (RFC 0007 series rebased onto `main`) |
-| **Design**         | canvas https://claude.ai/artifact/X6Xp9ZbbF3Rfq6VWxgscz8                     |
+| **Implementation** | landed on `main` (RFC 0007 series rebased onto `main`)                       |
 
 ## Summary
 

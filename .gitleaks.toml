@@ -1,0 +1,20 @@
+title = "DQL gitleaks config"
+
+[extend]
+useDefault = true
+
+# Known synthetic canaries and dummy keys used by tests. Nothing else is allowed.
+[[allowlists]]
+description = "Synthetic test secrets"
+paths = [
+  '''packages/dql-connectors/src/connection-pool\.test\.ts''',
+  '''packages/dql-connectors/src/drivers/snowflake\.test\.ts''',
+  '''apps/cli/src/settings/provider-settings\.test\.ts''',
+  '''apps/cli/src/local-runtime\.git\.test\.ts''',
+  '''apps/cli/src/host/config-reads\.test\.ts''',
+]
+regexes = [
+  '''sk-CANARY[A-Za-z0-9_-]*''',
+  '''sk-ant-test[A-Za-z0-9_-]*''',
+  '''ghp_secret[A-Za-z0-9_-]*''',
+]
