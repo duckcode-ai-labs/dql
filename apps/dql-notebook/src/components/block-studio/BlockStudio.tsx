@@ -1353,6 +1353,8 @@ export function BlockStudio() {
         description: parsed?.description || `AI-generated draft for ${payload.title ?? name}`,
         tags: parsed?.tags?.length ? parsed.tags : ['ai-generated', 'review-required'],
         runId: payload.sourceRunId,
+        sql: sql || undefined,
+        columns: payload.result?.columns,
       });
       openIntentRef.current = 'builder';
       dispatch({

@@ -724,6 +724,7 @@ import {
 import { observeWarehouseTargetIdentity } from './semantic-execution/connection-identity.js';
 import { configuredWarehouseTargetIdentity, describeWarehouseTargetIdentityMismatch } from './semantic-execution/connection-identity.js';
 import { probeAskTierReadinessV1 } from './ask-runtime/readiness.js';
+import { prefillCertificationMetadata } from './block-studio-prefill.js';
 import {
   executeTargetBoundSemanticQuery,
   semanticExecutionFailureCode,
@@ -26193,15 +26194,33 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
     if (req.method === 'POST' && path === '/api/block-studio/agent-drafts') {
       try {
         const body = await readJSON(req);
-        const source = typeof body.source === 'string'
+        const cleanedSource = typeof body.source === 'string'
           ? markBlockStudioSourceReusable(sanitizeAgentBlockDraftSource(body.source))
           : '';
         const name = typeof body.name === 'string' ? body.name.trim() : '';
-        if (!source.trim() || !name) {
+        if (!cleanedSource.trim() || !name) {
           res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
           res.end(serializeJSON({ error: 'DQL source and block name are required.' }));
           return;
         }
+        // The creator opening the draft is the human the AI draft is assigned to.
+        // Pre-fill what the answer already knows so certification is not a seven-field form;
+        // each value is written into the source as a visible suggestion to review.
+        const manifestSources = projectSnapshot().manifest?.sources ?? {};
+        const prefill = prefillCertificationMetadata(cleanedSource, {
+          sql: typeof body.sql === 'string' ? body.sql : undefined,
+          columns: Array.isArray(body.columns) ? (body.columns as unknown[]).filter((column): column is string => typeof column === 'string') : undefined,
+          owner: hostActor() ?? (hostHooks ? undefined : resolveLocalOwner(projectRoot)),
+          entities: semanticEntitiesForSource(cleanedSource, semanticLayer),
+          sourceSystemFor: (table) => {
+            const wanted = table.toLowerCase();
+            const found = Object.values(manifestSources).find((entry) =>
+              entry.origin === 'dbt' && entry.dbtModel
+              && (entry.name.toLowerCase() === wanted || entry.name.toLowerCase() === wanted.split('.').pop()));
+            return found?.dbtModel?.uniqueId;
+          },
+        });
+        const source = prefill.source;
         const savedPath = saveBlockStudioDraftArtifacts(projectRoot, {
           source,
           name,
@@ -26215,7 +26234,7 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
         });
         const payload = openBlockStudioDocument(projectRoot, savedPath, semanticLayer);
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-        res.end(serializeJSON(payload));
+        res.end(serializeJSON({ ...payload, prefill: { suggested: prefill.suggested, unknown: prefill.unknown } }));
       } catch (error) {
         res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(serializeJSON({ error: error instanceof Error ? error.message : String(error) }));
@@ -40392,6 +40411,17 @@ function saveDqlGenerationDraftForProject(
       evidence: candidate.evidence ?? [],
     };
   }
+}
+
+/** Tables of the metrics and dimensions a semantic draft names: the business entities the semantic layer knows it reads. */
+function semanticEntitiesForSource(source: string, layer: SemanticLayer | undefined): string[] {
+  if (!layer) return [];
+  const parsed = parseBlockSourceMetadata(source);
+  const tables = [
+    ...[...parsed.metricsRef, parsed.metricRef].filter(Boolean).map((metric) => layer.getMetric(metric)?.table),
+    ...parsed.dimensions.map((dimension) => layer.getDimension(dimension)?.table),
+  ];
+  return Array.from(new Set(tables.filter((table): table is string => typeof table === 'string' && table.trim().length > 0)));
 }
 
 /** AI may propose block logic, but ownership is assigned by a human at promotion. */

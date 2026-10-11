@@ -5852,6 +5852,9 @@ export const api = {
     description?: string;
     tags?: string[];
     runId?: string;
+    /** The answer's SQL and result column names (never rows), so the server can pre-fill certification metadata. */
+    sql?: string;
+    columns?: string[];
   }): Promise<BlockStudioOpenPayload> {
     return request<BlockStudioOpenPayload>('/api/block-studio/agent-drafts', {
       method: 'POST',
