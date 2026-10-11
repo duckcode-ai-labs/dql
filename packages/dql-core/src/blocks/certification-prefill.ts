@@ -1,4 +1,5 @@
 import { extractTablesFromSql } from '../lineage/index.js';
+import { groupingIdentityGap, type GroupingIdentityGap, type RelationKeyKnowledge } from './grouping-identity.js';
 
 /**
  * Certification metadata a creator would otherwise type by hand when an answer
@@ -22,6 +23,8 @@ export interface CertificationPrefillHints {
   entities?: string[];
   /** Maps a table the SQL reads to its dbt model/source id, when lineage knows it. */
   sourceSystemFor?: (table: string) => string | undefined;
+  /** Keys and columns known for the tables the SQL reads (from the warehouse catalog or dbt), used to name the key to add. */
+  knownRelations?: RelationKeyKnowledge[];
 }
 
 export interface CertificationSuggestion {
@@ -35,6 +38,12 @@ export interface CertificationPrefill {
   suggested: CertificationSuggestion[];
   /** Fields the answer did not tell us enough to suggest. */
   unknown: string[];
+  /**
+   * Set when the SQL groups by labels only, so Ask could not serve the block as
+   * a certified answer. A suggestion for the creator to review: the SQL is
+   * never rewritten.
+   */
+  identityGap?: GroupingIdentityGap;
 }
 
 const DEFAULT_PATTERN = 'custom';
@@ -57,6 +66,8 @@ export function prefillCertificationMetadata(source: string, hints: Certificatio
 
   const suggested: CertificationSuggestion[] = [];
   const unknown: string[] = [];
+  const identityGap = sql ? groupingIdentityGapOfSql(sql, hints.knownRelations) : undefined;
+  const withGap = (prefill: CertificationPrefill): CertificationPrefill => (identityGap ? { ...prefill, identityGap } : prefill);
   const propose = (field: string, value: string | string[] | undefined) => {
     if (value === undefined || (Array.isArray(value) && value.length === 0) || value === '') {
       unknown.push(field);
@@ -78,7 +89,7 @@ export function prefillCertificationMetadata(source: string, hints: Certificatio
   if (!/\btests\s*\{/i.test(source)) propose('tests', DEFAULT_TEST);
   if (hints.owner?.trim() && !hasValue(source, 'owner')) propose('owner', hints.owner.trim());
 
-  if (suggested.length === 0) return { source, suggested, unknown };
+  if (suggested.length === 0) return withGap({ source, suggested, unknown });
 
   const fieldLines = suggested
     .filter((entry) => entry.field !== 'tests')
@@ -104,7 +115,7 @@ export function prefillCertificationMetadata(source: string, hints: Certificatio
     const close = next.lastIndexOf('}');
     if (close > 0) next = `${next.slice(0, close).trimEnd()}\n\n  tests {\n    ${DEFAULT_TEST}\n  }\n}${next.slice(close + 1)}`;
   }
-  return { source: next, suggested, unknown };
+  return withGap({ source: next, suggested, unknown });
 }
 
 function render(value: string | string[]): string {
@@ -228,6 +239,21 @@ function grainFor(sql: string, dimensions: string[]): string | undefined {
   const fields = sql ? groupByFields(sql) : dimensions;
   const clean = unique(fields);
   return clean.length > 0 ? `one row per ${clean.join(', ')}` : undefined;
+}
+
+/** The columns the outermost query groups by, or [] when they cannot all be named. */
+export function groupingColumnsOfSql(sql: string): string[] {
+  return groupByFields(sql);
+}
+
+/** Whether a block's SQL groups by labels only, read the way Ask's certified matcher reads it. */
+export function groupingIdentityGapOfSql(sql: string, known: readonly RelationKeyKnowledge[] = []): GroupingIdentityGap | undefined {
+  return groupingIdentityGap(groupByFields(sql), usedTables(sql), known);
+}
+
+/** The tables a block's SQL reads. */
+export function tablesOfSql(sql: string): string[] {
+  return usedTables(sql);
 }
 
 function groupByFields(sql: string): string[] {

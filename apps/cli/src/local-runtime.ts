@@ -224,6 +224,7 @@ import {
   checkTileCalculations,
   renderTableDatasetBlock,
   resolveBlockReplacement,
+  groupingIdentityGapOfSql,
 } from '@duckcodeailabs/dql-core';
 import {
   prepareDatasetDeclarationPatch,
@@ -12692,10 +12693,20 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
         })
       : null;
     record.invariants = extractBlockInvariants(source);
+    // Ask serves a labels-only block as Needs review, not Certified; tell the creator now.
+    const knownRelations = (readWarehouseCatalog(projectRoot).snapshot?.relations ?? []).map((relation) => ({
+      relation: relation.relation,
+      columns: relation.columns.map((column) => column.name),
+      primaryKey: relation.primaryKey,
+    }));
+    const groupingIdentityGap = groupingIdentityGapOfSql(extractBlockStudioSql(source) ?? '', knownRelations);
     const certification = await timer.time('certifier_rules', () => new Certifier(options.enterprise ? ENTERPRISE_RULES : undefined).evaluate(
       record,
       testResults ?? undefined,
-      invariantEval ? { invariantResults: invariantEval.invariantResults } : undefined,
+      {
+        ...(invariantEval ? { invariantResults: invariantEval.invariantResults } : {}),
+        ...(groupingIdentityGap ? { groupingIdentityGap } : {}),
+      },
     ));
     const checklist = buildBlockStudioCertificationChecklist({
       source,
