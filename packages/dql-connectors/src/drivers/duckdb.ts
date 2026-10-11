@@ -135,7 +135,10 @@ export class DuckDBConnector implements DatabaseConnector {
   /**
    * Close this connector's connections (including open read scopes, whose
    * transactions would otherwise block the final checkpoint), then release its
-   * share of the file's Database. See `acquireDuckDBDatabase`.
+   * share of the file's Database. See `acquireDuckDBDatabase`. Every reference
+   * this connector held (database, connection, release closure, scopes) is
+   * dropped first, so the driver's native objects become collectable; the file
+   * handle itself is freed at the next GC (see `collectGarbage`).
    */
   async disconnect(): Promise<void> {
     const connection = this.connection;
@@ -148,6 +151,19 @@ export class DuckDBConnector implements DatabaseConnector {
     await Promise.allSettled(scopes.map((close) => close()));
     if (connection) await closeDuckDBConnection(connection);
     await release?.();
+  }
+
+  /**
+   * Ask V8 to collect now. duckdb-node (1.1) keeps the file open after
+   * `Database#close` until its native objects are garbage-collected, so a host
+   * that must delete or unmount the file right after `disconnect()` calls this
+   * (a no-op unless the process runs with `--expose-gc`).
+   */
+  static collectGarbage(): boolean {
+    const gc = (globalThis as { gc?: () => void }).gc;
+    if (typeof gc !== 'function') return false;
+    gc();
+    return true;
   }
 
   async ping(): Promise<boolean> {
