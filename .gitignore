@@ -45,3 +45,5 @@ output/
 dql-manifest.json
 *.duckdb
 *.duckdb.wal
+playwright-report/
+test-results/
