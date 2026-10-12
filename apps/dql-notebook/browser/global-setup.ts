@@ -172,6 +172,15 @@ export default async function globalSetup(): Promise<() => Promise<void>> {
 
   try {
     await waitForHealth(baseUrl, server, logPath);
+    // A fresh project opens the full-screen Guided Setup review once per CLI
+    // version. Acknowledge it the way finishing that review does, so the
+    // journeys land in the product rather than behind the setup dialog.
+    const ack = await fetch(`${baseUrl}/api/onboarding/acknowledge`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{}',
+    });
+    if (!ack.ok) throw new Error(`Acknowledging Guided Setup failed: HTTP ${ack.status} ${await ack.text()}`);
   } catch (error) {
     await stop();
     throw error;

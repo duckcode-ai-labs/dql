@@ -25,7 +25,8 @@ test('opens the app and the runtime reports healthy', async ({ page, request }) 
 });
 
 test('theme choice sets data-theme, persists dql-theme, and survives a reload', async ({ page }) => {
-  await page.getByRole('button', { name: /^Theme:/ }).click();
+  // The theme button's visible text is the current theme; its title names it.
+  await page.getByTitle(/^Theme:/).click();
   await page.getByRole('menuitemradio', { name: /Obsidian/ }).click();
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'obsidian');
   expect(await page.evaluate(() => window.localStorage.getItem('dql-theme'))).toBe('obsidian');
@@ -33,7 +34,7 @@ test('theme choice sets data-theme, persists dql-theme, and survives a reload', 
   await page.reload();
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'obsidian');
 
-  await page.getByRole('button', { name: /^Theme:/ }).click();
+  await page.getByTitle(/^Theme:/).click();
   await page.getByRole('menuitemradio', { name: /White/ }).click();
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'white');
   expect(await page.evaluate(() => window.localStorage.getItem('dql-theme'))).toBe('white');
@@ -49,12 +50,17 @@ test('opens a notebook and runs its cell against the seeded warehouse', async ({
 });
 
 test('Blocks lists the certified blocks', async ({ page }) => {
-  await page.getByRole('button', { name: 'Blocks', exact: true }).click();
+  await page.getByRole('button', { name: 'Blocks', exact: true }).first().click();
+  // Blocks are grouped by domain; the fixture's three blocks sit under "orders".
+  await expect(page.getByText(/3 blocks/)).toBeVisible();
+  await page.getByRole('button', { name: /^orders\s*\d+$/ }).click();
   await expect(page.getByText('top_customers').first()).toBeVisible();
 });
 
 test('Lineage draws a graph', async ({ page }) => {
   await page.getByRole('button', { name: 'Lineage', exact: true }).click();
+  // Lineage starts from a picked asset; tracing a block draws its graph.
+  await page.getByRole('button', { name: 'top_customers', exact: true }).click();
   await expect(page.locator('.react-flow__node').first()).toBeVisible();
 });
 
