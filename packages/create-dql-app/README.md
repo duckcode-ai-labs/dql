@@ -46,9 +46,9 @@ command. From an existing dbt repo, run `dql init ./dql` before `cd dql`.
 
 ## Docs
 
-- [Quickstart](https://github.com/duckcode-ai/dql/blob/main/docs/01-quickstart.md)
-- [Concepts](https://github.com/duckcode-ai/dql/blob/main/docs/02-concepts.md)
-- [Connect your own warehouse](https://github.com/duckcode-ai/dql/blob/main/docs/guides/connect-warehouse.md)
+- [Quickstart](https://github.com/duckcode-ai-labs/dql/blob/main/docs/01-quickstart.md)
+- [Concepts](https://github.com/duckcode-ai-labs/dql/blob/main/docs/02-concepts.md)
+- [Connect your own warehouse](https://github.com/duckcode-ai-labs/dql/blob/main/docs/guides/connect-warehouse.md)
 
 ## License
 

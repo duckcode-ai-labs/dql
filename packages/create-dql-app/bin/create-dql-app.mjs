@@ -191,8 +191,8 @@ ${c.green('✓ Ready.')} Next steps:
 
 Your notebook will open at ${c.cyan('http://127.0.0.1:3474')}.
 
-Docs:   ${c.cyan('https://github.com/duckcode-ai/dql')}
-Issues: ${c.cyan('https://github.com/duckcode-ai/dql/issues')}
+Docs:   ${c.cyan('https://github.com/duckcode-ai-labs/dql')}
+Issues: ${c.cyan('https://github.com/duckcode-ai-labs/dql/issues')}
 `);
 }
 

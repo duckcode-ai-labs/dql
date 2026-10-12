@@ -5,7 +5,7 @@
 ## Clone & install
 
 ```bash
-git clone https://github.com/duckcode-ai/dql.git
+git clone https://github.com/duckcode-ai-labs/dql.git
 cd dql
 pnpm install
 ```
@@ -36,7 +36,7 @@ dql/
 ```
 
 This list is the main packages, not every one. See
-[CONTRIBUTING.md](https://github.com/duckcode-ai/dql/blob/main/CONTRIBUTING.md) for the full list.
+[CONTRIBUTING.md](https://github.com/duckcode-ai-labs/dql/blob/main/CONTRIBUTING.md) for the full list.
 
 ## Common scripts
 

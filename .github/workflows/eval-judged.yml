@@ -15,7 +15,7 @@ jobs:
     name: judged eval (execute + judge)
     runs-on: ubuntu-latest
     # Skip cleanly when no key is configured, so forks without the secret don't fail.
-    if: ${{ github.repository == 'duckcode-ai/dql' }}
+    if: ${{ github.repository_owner == 'duckcode-ai-labs' }}
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
