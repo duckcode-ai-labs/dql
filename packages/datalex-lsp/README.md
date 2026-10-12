@@ -64,5 +64,5 @@ lspconfig.datalex_lsp.setup({})
 ## Status
 
 `v0.1.0` — early. Diagnostics on save work; advanced features are pending.
-File issues at [duckcode-ai/dql/issues](https://github.com/duckcode-ai/dql/issues)
+File issues at [duckcode-ai-labs/dql/issues](https://github.com/duckcode-ai-labs/dql/issues)
 with the `area:datalex-lsp` label.

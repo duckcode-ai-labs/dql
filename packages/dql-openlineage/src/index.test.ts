@@ -33,7 +33,7 @@ describe('OpenLineage emitter', () => {
     expect(url).toBe('http://localhost:5000/api/v1/lineage');
     expect(opts.method).toBe('POST');
     const body = JSON.parse(opts.body);
-    expect(body.producer).toContain('duckcode-ai/dql');
+    expect(body.producer).toContain('duckcode-ai-labs/dql');
     expect(body.job.name).toBe('block.x');
   });
 

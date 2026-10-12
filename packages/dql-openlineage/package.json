@@ -4,6 +4,11 @@
   "description": "OpenLineage event emitter for DQL block and notebook runs.",
   "license": "MIT",
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/duckcode-ai-labs/dql.git",
+    "directory": "packages/dql-openlineage"
+  },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {

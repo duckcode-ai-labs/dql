@@ -5,7 +5,7 @@ A **host** is a program that runs the same server for many people and tells it,
 for every request, who is asking. DQL's [host hooks](../rfcs/0010-host-hooks.md)
 (RFC 0010) are how a host does that. This page says what the server does when a
 host is present. Without a host, nothing on this page applies, except where the
-[changelog](https://github.com/duckcode-ai/dql/blob/main/CHANGELOG.md) says
+[changelog](https://github.com/duckcode-ai-labs/dql/blob/main/CHANGELOG.md) says
 otherwise.
 
 ## What the server does for each request

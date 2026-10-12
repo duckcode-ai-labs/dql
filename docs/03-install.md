@@ -7,7 +7,7 @@ Two paths. Pick whichever matches your toolchain.
 The fastest way. No Node, no pnpm, no native build deps.
 
 ```bash
-git clone https://github.com/duckcode-ai/dql.git
+git clone https://github.com/duckcode-ai-labs/dql.git
 cd dql
 docker compose up
 ```

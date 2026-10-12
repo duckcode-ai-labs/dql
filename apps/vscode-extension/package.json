@@ -7,7 +7,7 @@
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
-    "url": "https://github.com/duckcode-ai/dql.git",
+    "url": "https://github.com/duckcode-ai-labs/dql.git",
     "directory": "apps/vscode-extension"
   },
   "private": false,

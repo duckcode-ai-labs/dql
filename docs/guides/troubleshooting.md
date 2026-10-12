@@ -361,7 +361,7 @@ The architecture is small and readable. Bookmark these:
 
 If you find a bug or rough edge in any of these:
 
-1. File an issue at <https://github.com/duckcode-ai/dql/issues>.
+1. File an issue at <https://github.com/duckcode-ai-labs/dql/issues>.
 2. PRs welcome — every package has tests in `*.test.ts` next to the
    source it covers.
 

@@ -33,7 +33,7 @@ Before a non-trivial change, read the
 Requires Node.js 18, 20, or 22 and pnpm 9.
 
 ```bash
-git clone https://github.com/duckcode-ai/dql.git
+git clone https://github.com/duckcode-ai-labs/dql.git
 cd dql
 pnpm install
 pnpm build
@@ -135,7 +135,7 @@ Use conventional commit prefixes:
 
 ## Good First Issues
 
-Look for issues tagged [`good first issue`](https://github.com/duckcode-ai/dql/issues?q=label%3A%22good+first+issue%22) on GitHub. These are scoped tasks with clear acceptance criteria.
+Look for issues tagged [`good first issue`](https://github.com/duckcode-ai-labs/dql/issues?q=label%3A%22good+first+issue%22) on GitHub. These are scoped tasks with clear acceptance criteria.
 
 Common contribution areas:
 

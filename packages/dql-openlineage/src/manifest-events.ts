@@ -157,7 +157,7 @@ function blockJobFacets(block: ManifestBlockProjection): Record<string, unknown>
   const facets: Record<string, unknown> = {};
   if (block.description) {
     facets.documentation = {
-      _producer: 'https://github.com/duckcode-ai/dql',
+      _producer: 'https://github.com/duckcode-ai-labs/dql',
       _schemaURL:
         'https://openlineage.io/spec/facets/1-0-0/DocumentationJobFacet.json',
       description: block.description,
@@ -165,7 +165,7 @@ function blockJobFacets(block: ManifestBlockProjection): Record<string, unknown>
   }
   if (block.owner) {
     facets.ownership = {
-      _producer: 'https://github.com/duckcode-ai/dql',
+      _producer: 'https://github.com/duckcode-ai-labs/dql',
       _schemaURL:
         'https://openlineage.io/spec/facets/1-0-0/OwnershipJobFacet.json',
       owners: [{ name: block.owner }],
@@ -214,7 +214,7 @@ function blockOutputs(
 
   if (block.outputs && block.outputs.length > 0) {
     facets.schema = {
-      _producer: 'https://github.com/duckcode-ai/dql',
+      _producer: 'https://github.com/duckcode-ai-labs/dql',
       _schemaURL:
         'https://openlineage.io/spec/facets/1-0-0/SchemaDatasetFacet.json',
       fields: block.outputs.map((c) => ({ name: c.name })),
@@ -232,7 +232,7 @@ function blockOutputs(
     }
     if (Object.keys(columnLineage).length > 0) {
       facets.columnLineage = {
-        _producer: 'https://github.com/duckcode-ai/dql',
+        _producer: 'https://github.com/duckcode-ai-labs/dql',
         _schemaURL:
           'https://openlineage.io/spec/facets/1-0-0/ColumnLineageDatasetFacet.json',
         fields: columnLineage,
@@ -265,7 +265,7 @@ function makeEvent(
   return {
     eventType,
     eventTime,
-    producer: 'https://github.com/duckcode-ai/dql',
+    producer: 'https://github.com/duckcode-ai-labs/dql',
     schemaURL:
       'https://openlineage.io/spec/2-0-0/OpenLineage.json#/definitions/RunEvent',
     job,

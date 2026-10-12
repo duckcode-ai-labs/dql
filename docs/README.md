@@ -60,4 +60,4 @@ How DQL is built.
 
 ---
 
-Bug or feature request? [Open an issue](https://github.com/duckcode-ai/dql/issues).
+Bug or feature request? [Open an issue](https://github.com/duckcode-ai-labs/dql/issues).
