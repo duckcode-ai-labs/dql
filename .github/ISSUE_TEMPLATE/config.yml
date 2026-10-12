@@ -3,6 +3,6 @@ contact_links:
   - name: Security policy
     url: https://github.com/duckcode-ai-labs/dql/blob/main/SECURITY.md
     about: Report vulnerabilities through the documented security process.
-  - name: Discussions
-    url: https://github.com/duckcode-ai-labs/dql/discussions
-    about: Use Discussions for design questions and broader language proposals.
+  - name: Getting help
+    url: https://github.com/duckcode-ai-labs/dql/blob/main/SUPPORT.md
+    about: Where to ask questions and how to propose larger changes (write an RFC).

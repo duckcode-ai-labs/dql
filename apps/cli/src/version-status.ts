@@ -102,6 +102,39 @@ function classifyInvocationSource(projectRoot: string, runtimeUrl: string): DqlR
   return 'dev_or_unknown';
 }
 
+/**
+ * True when `candidate` is a strictly higher semver than `current`
+ * (major.minor.patch, then a release beats any prerelease of the same
+ * version, then prerelease identifiers compared per semver). Unparseable
+ * input falls back to plain inequality so a strange version still surfaces.
+ */
+export function isNewerDqlVersion(candidate: string, current: string): boolean {
+  const parse = (v: string) => {
+    const m = /^v?(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?(?:\+.*)?$/.exec(v.trim());
+    return m ? { core: [Number(m[1]), Number(m[2]), Number(m[3])], pre: m[4] ? m[4].split('.') : [] } : undefined;
+  };
+  const a = parse(candidate);
+  const b = parse(current);
+  if (!a || !b) return candidate !== current;
+  for (let i = 0; i < 3; i++) {
+    if (a.core[i] !== b.core[i]) return a.core[i] > b.core[i];
+  }
+  if (a.pre.length === 0 || b.pre.length === 0) return a.pre.length === 0 && b.pre.length > 0;
+  for (let i = 0; i < Math.max(a.pre.length, b.pre.length); i++) {
+    const x = a.pre[i];
+    const y = b.pre[i];
+    if (x === undefined) return false;
+    if (y === undefined) return true;
+    if (x === y) continue;
+    const xn = /^\d+$/.test(x);
+    const yn = /^\d+$/.test(y);
+    if (xn && yn) return Number(x) > Number(y);
+    if (xn !== yn) return !xn;
+    return x > y;
+  }
+  return false;
+}
+
 export function resolveDqlRuntimeVersionStatus(input: {
   projectRoot: string;
   runningVersion: string;
@@ -114,10 +147,12 @@ export function resolveDqlRuntimeVersionStatus(input: {
   if (installed && input.runningVersion !== 'unknown' && installed !== input.runningVersion) {
     drift.push(`The running DQL server is ${input.runningVersion}, but this project's local install is ${installed}. Restart via the project (npx dql / npm run notebook) or align the versions — fixes in one are invisible in the other.`);
   }
-  if (latest && input.runningVersion !== 'unknown' && input.runningVersion !== latest) {
+  // Only an OLDER running/installed version is drift: a build ahead of npm
+  // (an unreleased checkout or a locally packed tarball) is not.
+  if (latest && input.runningVersion !== 'unknown' && isNewerDqlVersion(latest, input.runningVersion)) {
     drift.push(`A newer dql-cli is published (${latest}; running ${input.runningVersion}).`);
   }
-  if (latest && installed && installed !== latest) {
+  if (latest && installed && isNewerDqlVersion(latest, installed)) {
     drift.push(`The project pins/installs ${installed}, but ${latest} is the latest published version.`);
   }
   const upgradeCommand = installed

@@ -17,7 +17,8 @@ It is written as a practical maintainer checklist, not a marketing document.
 - `[x]` source-based install path is documented
 - `[x]` local-first quickstart exists
 - `[x]` starter project can be scaffolded with `dql init`
-- `[x]` starter project includes local sample data
+- `[ ]` starter project includes local sample data (it does not: the starter has a
+  welcome notebook and config only; try the sample dbt project in the README)
 - `[x]` users can create new assets with `dql new block`
 - `[x]` users can create dashboards and workbooks with `dql new dashboard` and `dql new workbook`
 - `[x]` users can create semantic scaffolds with `dql new semantic-block`
@@ -161,14 +162,12 @@ template lives in `create-dql-app`; the example dbt project is external.
 
 ## Current Release Decision
 
-`1.14.3-rc.1` is an unpublished prerelease target, not a published release.
-The working-tree manifests and starter CLI range target `1.14.3-rc.1`; the
-current registry `latest` is `1.14.2`, and the release candidate remains absent
-until the tag workflow publishes it to `next`. G5 package, registry, tag, and
-exact-version clean-install evidence must be captured before this document
-calls the release candidate published.
+The manifests and starter CLI range read `1.17.3`. Versions `1.13.5` through
+`1.17.2` were published by hand and have no git tags, so no tag-driven release
+has run since `v1.14.3-rc.1`. Registry, tag, and exact-version clean-install
+evidence must be captured before this document calls `1.17.3` published.
 
-The candidate contains the Ask AI governed-cascade recovery, stable
+The `1.14.3-rc.1` candidate contained the Ask AI governed-cascade recovery, stable
 conversation selection persistence, phase-specific provider diagnostics, and
 Research receipts. Its local OSS evidence does not verify the private office
 repository, metadata/vector indexes, fiscal calendar, provider configuration,

@@ -4,12 +4,11 @@ Pick whichever channel matches what you need:
 
 | What you need | Where to go |
 |---|---|
-| **Design questions, broader proposals** | [GitHub Discussions](https://github.com/duckcode-ai-labs/dql/discussions) |
+| **Design questions, broader proposals** | [Open an issue](https://github.com/duckcode-ai-labs/dql/issues/new/choose) or write an RFC (below). GitHub Discussions are not enabled. |
 | **File a reproducible bug** | [Open a bug report](https://github.com/duckcode-ai-labs/dql/issues/new?template=bug_report.yml) |
 | **Request a feature** | [Open a feature request](https://github.com/duckcode-ai-labs/dql/issues/new?template=feature_request.yml) |
 | **Propose a language or schema change** | RFC under [`docs/rfcs/`](docs/rfcs/) — see the [template](docs/rfcs/0000-template.md) |
 | **Report a security issue** | Follow [SECURITY.md](SECURITY.md) (do **not** open a public issue) |
-| **Manifest-spec interop questions** | [duckcode-ai/manifest-spec](https://github.com/duckcode-ai/manifest-spec) |
 | **DataLex-side governance questions** | [duckcode-ai/DataLex](https://github.com/duckcode-ai/DataLex) |
 
 ## Triage SLA

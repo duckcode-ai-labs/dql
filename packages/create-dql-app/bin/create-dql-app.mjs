@@ -167,10 +167,14 @@ async function main() {
   const pm = detectPackageManager();
   const installCmd = pm === 'npm' ? 'npm install' : `${pm} install`;
   const runCmd = pm === 'npm' ? 'npm run notebook' : `${pm} notebook`;
+  // Drivers always install with npm (it ships with Node): pnpm 10 skips
+  // duckdb's native build script and Yarn Berry has no --prefix equivalent,
+  // so neither yields a driver the runtime can load from .dql/connectors.
+  const connectorInstall = (pkg) => `npm install --prefix .dql/connectors ${pkg}`;
   const connectorTip = [
     c.dim('# Optional database driver install before running queries:'),
-    c.dim('#   DuckDB/local files: npm install --prefix .dql/connectors duckdb'),
-    c.dim('#   Snowflake:       npm install --prefix .dql/connectors snowflake-sdk'),
+    c.dim(`#   DuckDB/local files: ${connectorInstall('duckdb')}`),
+    c.dim(`#   Snowflake:       ${connectorInstall('snowflake-sdk')}`),
     c.dim('#   Databricks:      no extra package'),
   ].join('\n  ');
   const dbtTip = dbtSibling

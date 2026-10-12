@@ -19,8 +19,9 @@ dql/
 ├── apps/
 │   ├── cli/              # dql CLI entry
 │   ├── dql-notebook/     # Vite + React notebook
-│   ├── vscode-extension/ # VS Code extension
-│   └── docs/             # Plain-markdown docs (this folder)
+│   ├── notebook-browser/ # browser notebook build
+│   ├── desktop/          # Tauri desktop shell
+│   └── vscode-extension/ # VS Code extension
 ├── packages/
 │   ├── dql-core/         # parser + AST + semantic + lineage
 │   ├── dql-compiler/     # IR + emitters
@@ -31,19 +32,23 @@ dql/
 │   ├── dql-lsp/          # language server
 │   ├── dql-charts/       # chart specs
 │   └── dql-ui/           # shared tokens + primitives
-└── docs/                 # legacy md (migrating into apps/docs/)
+└── docs/                 # documentation (built with MkDocs, see mkdocs.yml)
 ```
+
+This list is the main packages, not every one. See
+[CONTRIBUTING.md](https://github.com/duckcode-ai-labs/dql/blob/main/CONTRIBUTING.md) for the full list.
 
 ## Common scripts
 
 ```bash
 pnpm build         # turbo-driven full build
-pnpm dev           # watch all packages
-pnpm test          # vitest across packages
-pnpm lint          # eslint + tsc --noEmit
-pnpm -F @duckcodeailabs/dql-notebook-app dev   # just the notebook
-pnpm -F @duckcodeailabs/docs dev               # just the docs site
+pnpm test          # tests across packages
+pnpm -F @duckcodeailabs/dql-notebook-app dev   # just the notebook UI (Vite)
+pip install -r requirements-docs.txt && mkdocs serve   # the docs site
 ```
+
+There is no root `dev` or `lint` script. Type-check one package with
+`npx tsc --noEmit` from its folder.
 
 ## Running the CLI from source
 

@@ -12,15 +12,16 @@ agent memory, issues, old worktrees, and ignored planning files.
 
 ## Verified snapshot
 
-Last checked: **2026-08-25**
+Last checked: **2026-10-11** (repository rows from `main` at `9b1bdd53`; npm
+and tag rows from the 2026-10-11 readiness review, not re-queried since)
 
 | Fact                | Verified state                                                                                          | Evidence                                                                                                                |
 | ------------------- | ------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| Primary branch      | `main` and `origin/main` point at `26e3408`; the checkout is intentionally dirty with the Ask AI implementation and `1.14.3-rc.1` release-prep work | `git status --short --branch`; `git rev-parse main origin/main`; `git rev-list --left-right --count main...origin/main` |
-| Release target      | All 19 release manifests and the starter CLI range target unpublished prerelease `1.14.3-rc.1`; it may publish only with npm tag `next` and exact expected version | Release manifest audit; starter template manifest; `scripts/release-packages.mjs --dry-run --tag next --expected-version 1.14.3-rc.1` |
-| npm publication     | Package-by-package registry audit records `latest=1.14.2` for the 19 release packages; `1.14.3-rc.1` is absent | Current-state npm audit (2026-08-25) |
-| Published CLI       | `@duckcodeailabs/dql-cli@latest` is `1.14.2`; `1.14.3-rc.1` requires post-publication exact-version clean local/global install smoke | `npm view @duckcodeailabs/dql-cli dist-tags`; `scripts/smoke-cli-install.mjs` |
-| Release tag         | Local `v1.14.2` identifies `26e3408`; no `v1.14.3-rc.1` tag has been created | `git tag --points-at 26e3408`; `git tag -l v1.14.3-rc.1` |
+| Primary branch      | `main` was at `9b1bdd53` when this snapshot was refreshed | `git rev-parse main origin/main`; `git rev-list --left-right --count main...origin/main` |
+| Release target      | The release manifests and the starter CLI range read `1.17.3`; `apps/desktop` and `apps/dql-notebook` are private and not part of the release set | Release manifest audit; starter template manifest; `scripts/release-packages.mjs --dry-run --tag <tag> --expected-version <version>` |
+| npm publication     | Versions `1.13.5` through `1.17.2` were published by hand, not by the release workflow. `1.17.3` is the version in the manifests; check the registry before calling it published | `npm view @duckcodeailabs/dql-cli dist-tags versions`; readiness review 2026-10-11 |
+| Published CLI       | Not re-queried in this refresh. After any publish, run the exact-version clean local and global install smoke | `npm view @duckcodeailabs/dql-cli dist-tags`; `scripts/smoke-cli-install.mjs` |
+| Release tag         | Newest git tag is `v1.14.3-rc.1`; no tag exists for later versions. The release workflow did not publish them | `git tag --sort=-creatordate` |
 
 The missing `v1.11.3` through `v1.11.10` and `v1.12.4` through `v1.12.9` tags
 are release-history debt. They do not invalidate the verified npm publication,

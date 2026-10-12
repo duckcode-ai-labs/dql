@@ -67,5 +67,9 @@ EXPOSE 3474 3479
 
 # Bind 0.0.0.0 inside the container; map a single port from 127.0.0.1 on
 # the host with `-p 127.0.0.1:3474:3474` to keep loopback-only on the host.
+# A non-loopback binding needs DQL_SERVER_TOKEN and DQL_ALLOWED_ORIGINS or the
+# server refuses to start, e.g.:
+#   docker run -p 127.0.0.1:3474:3474 -e DQL_SERVER_TOKEN=... \
+#     -e DQL_ALLOWED_ORIGINS=http://127.0.0.1:3474 -v "$PWD":/workspace <image>
 ENTRYPOINT ["dql-docker-entrypoint"]
 CMD ["dql", "notebook", "--host", "0.0.0.0", "--no-open"]

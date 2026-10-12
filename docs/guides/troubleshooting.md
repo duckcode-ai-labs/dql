@@ -239,7 +239,7 @@ node -e "
 ### Every certified block answer cites the same block, even when wrong
 
 The FTS5 retrieval threshold is too loose for your domain. Tune in
-[`packages/dql-agent/src/answer-loop.ts`](../../packages/dql-agent/src/answer-loop.ts):
+[`packages/dql-agent/src/answer-loop.ts`](https://github.com/duckcode-ai-labs/dql/blob/main/packages/dql-agent/src/answer-loop.ts):
 
 ```ts
 const CERTIFIED_HIT_THRESHOLD = 0.18;   // raise to 0.30 for stricter matching
@@ -352,12 +352,12 @@ is non-deterministic. Either:
 
 The architecture is small and readable. Bookmark these:
 
-- Block lifecycle and certification: [`packages/dql-governance/src/certifier.ts`](../../packages/dql-governance/src/certifier.ts)
-- Apps + dashboards parsing: [`packages/dql-core/src/apps/`](../../packages/dql-core/src/apps/)
-- Persona registry: [`packages/dql-project/src/persona.ts`](../../packages/dql-project/src/persona.ts)
-- RLS lowering: [`packages/dql-compiler/src/ir/lowering.ts:440`](../../packages/dql-compiler/src/ir/lowering.ts) (`applyRLSDecorators`)
-- Agent answer loop: [`packages/dql-agent/src/answer-loop.ts`](../../packages/dql-agent/src/answer-loop.ts)
-- Slack server: [`packages/dql-slack/src/server.ts`](../../packages/dql-slack/src/server.ts)
+- Block lifecycle and certification: [`packages/dql-governance/src/certifier.ts`](https://github.com/duckcode-ai-labs/dql/blob/main/packages/dql-governance/src/certifier.ts)
+- Apps + dashboards parsing: [`packages/dql-core/src/apps/`](https://github.com/duckcode-ai-labs/dql/tree/main/packages/dql-core/src/apps)
+- Persona registry: [`packages/dql-project/src/persona.ts`](https://github.com/duckcode-ai-labs/dql/blob/main/packages/dql-project/src/persona.ts)
+- RLS lowering: [`packages/dql-compiler/src/ir/lowering.ts:440`](https://github.com/duckcode-ai-labs/dql/blob/main/packages/dql-compiler/src/ir/lowering.ts) (`applyRLSDecorators`)
+- Agent answer loop: [`packages/dql-agent/src/answer-loop.ts`](https://github.com/duckcode-ai-labs/dql/blob/main/packages/dql-agent/src/answer-loop.ts)
+- Slack server: [`packages/dql-slack/src/server.ts`](https://github.com/duckcode-ai-labs/dql/blob/main/packages/dql-slack/src/server.ts)
 
 If you find a bug or rough edge in any of these:
 
@@ -370,4 +370,4 @@ If you find a bug or rough edge in any of these:
 ## Need more?
 
 - The end-to-end story: [tutorials](../tutorials/README.md).
-- The roadmap: [../../ROADMAP.md](../../ROADMAP.md).
+- The roadmap: [ROADMAP.md](https://github.com/duckcode-ai-labs/dql/blob/main/ROADMAP.md).

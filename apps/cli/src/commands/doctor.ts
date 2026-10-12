@@ -75,9 +75,15 @@ export async function runDoctor(targetPath: string | null, flags: CLIFlags, rest
       detail: existsSync(join(projectRoot, 'dql.config.json')) ? 'found' : 'missing',
     },
     {
+      // Layout v2 projects (the create-dql-app starter) keep blocks under
+      // domains/<domain>/blocks; older projects use a top-level blocks/.
       name: 'blocks/',
-      ok: existsSync(join(projectRoot, 'blocks')),
-      detail: existsSync(join(projectRoot, 'blocks')) ? 'found' : 'missing',
+      ok: existsSync(join(projectRoot, 'blocks')) || existsSync(join(projectRoot, 'domains')),
+      detail: existsSync(join(projectRoot, 'blocks'))
+        ? 'found'
+        : existsSync(join(projectRoot, 'domains'))
+          ? 'found domains/ (blocks live in domains/<domain>/blocks)'
+          : 'missing (create domains/<domain>/blocks or blocks/)',
     },
     {
       name: 'semantic-layer/',
