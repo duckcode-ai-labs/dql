@@ -1,6 +1,6 @@
 # DQL
 
-[![CI](https://github.com/duckcode-ai/dql/actions/workflows/ci.yml/badge.svg)](https://github.com/duckcode-ai/dql/actions/workflows/ci.yml)
+[![CI](https://github.com/duckcode-ai-labs/dql/actions/workflows/ci.yml/badge.svg)](https://github.com/duckcode-ai-labs/dql/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/npm/v/@duckcodeailabs/dql-cli?label=dql-cli)](https://www.npmjs.com/package/@duckcodeailabs/dql-cli)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](./LICENSE)
 [![Node](https://img.shields.io/badge/node-20%20%7C%2022%20%7C%2024%20LTS-green)](https://nodejs.org)
@@ -49,19 +49,22 @@ the same reviewed assets, with clear labels when analysis is still draft.
 
 Use one of these two paths.
 
-### Path 1: Try the separate Jaffle Shop example
+### Path 1: Try DQL on the Jaffle Shop sample dbt project
 
-This is the fastest way to see DQL working end to end without embedding example
-fixtures in this product repo.
+The sample is a plain dbt + DuckDB project in a separate repository. It does
+not ship a `dql/` folder, so you create one with `create-dql-app`.
 
 ```bash
 git clone https://github.com/duckcode-ai/jaffle-shop-duckdb.git
 cd jaffle-shop-duckdb
-./setup.sh
+./setup.sh                        # the example's own setup script
+dbt parse                         # only if target/manifest.json is missing
 
+npx create-dql-app@latest dql
 cd dql
 npm install
 npm install --prefix .dql/connectors duckdb
+npm run sync
 npm run notebook
 ```
 
@@ -69,14 +72,13 @@ Open the local URL printed in the terminal, usually `http://127.0.0.1:3474`.
 
 What to check first:
 
-1. Home shows dbt artifacts, database connection, blocks, notebooks, and Apps.
-2. Blocks shows certified examples built on top of the dbt project.
-3. Apps opens the Jaffle Growth Command Center.
-4. Lineage shows how sources, dbt models, blocks, dashboards, and Apps connect.
+1. Home shows dbt artifacts and the database connection.
+2. Lineage shows how the dbt models connect.
+3. In a notebook, run a query against a Jaffle Shop model.
 
-Follow the example repo's
-[Jaffle Shop tutorial](https://github.com/duckcode-ai/jaffle-shop-duckdb/blob/main/docs/tutorials/jaffle/README.md)
-for the full DataLex + DQL story.
+The example repository pins an old DQL release (`@duckcodeailabs/dql-cli`
+1.7.1, Node `>=20 <23`), so its own docs and tutorial may not match the current
+CLI. Use the commands above until it is updated.
 
 ### Path 2: Add DQL to your own dbt repo
 
@@ -189,18 +191,16 @@ Run `npm exec -- dql --help` for the live command list, or use the
 [complete CLI reference](./docs/reference/cli.md) for commands, subcommands,
 flags, examples, and exit codes.
 
-> **Stuck on `dql: command not found` after installing?** Before **1.6.30** a
-> global install could fail on Node 23/24 (the current LTS is Node 24), and a
-> failed `npm i -g` never links the `dql` binary. Just reinstall `@latest` on any
-> Node ≥20 — you don't need a working `dql` or an older Node. The escape hatch
-> that needs no PATH setup at all is `npx @duckcodeailabs/dql-cli@latest notebook`.
+> **Stuck on `dql: command not found` after installing?** A failed
+> `npm i -g` never links the `dql` binary. Reinstall `@latest` on any Node 20 or
+> newer. The escape hatch that needs no PATH setup at all is
+> `npx @duckcodeailabs/dql-cli@latest notebook`.
 > More in the [install guide](docs/03-install.md#upgrade) and
 > [troubleshooting](docs/guides/troubleshooting.md#dql-says-command-not-found).
 
 ## Before you install
 
-- Use Node `20` or newer — `20`, `22`, or `24` LTS. (Releases before 1.6.30
-  capped at Node 22; 1.6.30+ installs on Node 23 and 24 too.)
+- Use Node `20` or newer. CI tests Node 20, 22, and 24.
 - Use npm `10+`.
 - Use a dbt project if you want dbt import and lineage.
 - Python and native build tools are only needed when native database packages
@@ -234,8 +234,9 @@ python3 --version
 xcode-select -p
 ```
 
-Expected Node versions are `v20.x` or `v22.x`. If an optional connector install
-shows `node-gyp rebuild`, switch to Node `22` LTS and retry:
+Expected Node versions are `v20.x` or newer (`v22.x` and `v24.x` are tested).
+If an optional connector install shows `node-gyp rebuild`, switch to Node `22`
+LTS and retry:
 
 ```bash
 rm -rf node_modules package-lock.json
@@ -347,28 +348,23 @@ All docs live in [`docs/`](./docs/). Start with these:
 - Lineage
 - Source control workflow
 - Local agent/MCP runtime
-- Telemetry off by default
+- No usage telemetry
 
 DQL OSS is a single-user local workspace. Hosted multi-user governance,
 managed secrets, audit logs, approval workflows, and permissions-aware team
 retrieval belong to the commercial product.
 
-## Privacy and telemetry
+## Privacy
 
-Telemetry is off by default and collects no PII. It does not send file names,
-query contents, warehouse URLs, or block names. If enabled with
-`dql telemetry on`, DQL sends only anonymized event names, enum-valued counters,
-and durations. Opt out with `dql telemetry off`, `DO_NOT_TRACK=1`, or
-`DQL_TELEMETRY_DISABLED=1`.
-
-The full event schema is documented in
-[`packages/dql-telemetry/README.md`](./packages/dql-telemetry/README.md).
+The DQL CLI does not send usage telemetry. There is no `dql telemetry` command.
+The unused `@duckcodeailabs/dql-telemetry` package is deprecated (see its
+[README](./packages/dql-telemetry/README.md)).
 
 ## Contributing
 
 See [CONTRIBUTING.md](./CONTRIBUTING.md) and
 [docs/contribute/repo-layout.md](./docs/contribute/repo-layout.md). Bugs and
-feature requests: [open an issue](https://github.com/duckcode-ai/dql/issues).
+feature requests: [open an issue](https://github.com/duckcode-ai-labs/dql/issues).
 
 ## License
 

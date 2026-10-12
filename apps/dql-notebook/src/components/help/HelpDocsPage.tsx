@@ -23,7 +23,7 @@ const SECTIONS = [
   { title: 'Troubleshooting', mins: '—' },
 ];
 
-const CLI_REFERENCE_URL = 'https://github.com/duckcode-ai/dql/blob/main/docs/reference/cli.md';
+const CLI_REFERENCE_URL = 'https://github.com/duckcode-ai-labs/dql/blob/main/docs/reference/cli.md';
 
 export function HelpDocsPage() {
   const { state, dispatch } = useNotebook();
@@ -102,9 +102,9 @@ export function HelpDocsPage() {
         })}
         <div style={{ height: 1, background: 'var(--border-subtle)', margin: '12px 10px' }} />
         <div style={{ padding: '0 10px', display: 'flex', flexDirection: 'column', gap: 7, fontSize: 11.5 }}>
-          <a href="https://github.com/duckcode-ai/dql#readme" target="_blank" rel="noreferrer" style={{ color: t.accent, textDecoration: 'none' }}>Keyboard shortcuts</a>
+          <a href="https://github.com/duckcode-ai-labs/dql#readme" target="_blank" rel="noreferrer" style={{ color: t.accent, textDecoration: 'none' }}>Keyboard shortcuts</a>
           <a href={CLI_REFERENCE_URL} target="_blank" rel="noreferrer" style={{ color: t.accent, textDecoration: 'none' }}>CLI reference</a>
-          <a href="https://github.com/duckcode-ai/dql/discussions" target="_blank" rel="noreferrer" style={{ color: t.accent, textDecoration: 'none' }}>Community &amp; support</a>
+          <a href="https://github.com/duckcode-ai-labs/dql/discussions" target="_blank" rel="noreferrer" style={{ color: t.accent, textDecoration: 'none' }}>Community &amp; support</a>
         </div>
         <div style={{ flex: 1 }} />
         <div style={{ margin: '12px 10px 0', border: '1px solid var(--border-subtle)', borderRadius: 9, background: t.appBg, padding: '10px 11px', fontSize: 11, color: t.textMuted, lineHeight: 1.5 }}>

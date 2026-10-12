@@ -187,7 +187,7 @@ auditors get a per-PR snapshot of governance evidence.
 
 ## What `dql verify` actually checks
 
-From [`apps/cli/src/commands/verify.ts`](../../apps/cli/src/commands/verify.ts):
+From [`apps/cli/src/commands/verify.ts`](https://github.com/duckcode-ai-labs/dql/blob/main/apps/cli/src/commands/verify.ts):
 
 | Check | Drift signal |
 |---|---|

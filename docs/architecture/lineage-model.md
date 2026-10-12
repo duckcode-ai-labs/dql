@@ -100,6 +100,6 @@ for one set of filter values.
 
 Table-level lineage is fully open-source. **Column-level lineage is a
 commercial feature** in the DuckCode Cloud build — see the
-[OSS/Cloud boundary](https://github.com/duckcode-ai/dql/blob/main/ROADMAP.md#commercial-gate--osscloud-boundary).
+[OSS/Cloud boundary](https://github.com/duckcode-ai-labs/dql/blob/main/ROADMAP.md#commercial-gate--osscloud-boundary).
 The manifest output is identical in both builds; column-level is gated at
 the surface, not in the graph.

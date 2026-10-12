@@ -121,13 +121,18 @@ export function formatDisplayValue(
   }
   if (numeric !== undefined) {
     if (kind === 'currency') {
+      // A Dataset measure owns its currency. Legacy results without a
+      // governed unit retain the established USD fallback.
+      const currency = options.meta?.unit && /^[A-Z]{3}$/.test(options.meta.unit) ? options.meta.unit : 'USD';
+      const compactDigits = fixed ?? 1;
       return new Intl.NumberFormat('en-US', {
         style: 'currency',
-        // A Dataset measure owns its currency. Legacy results without a
-        // governed unit retain the established USD fallback.
-        currency: options.meta?.unit && /^[A-Z]{3}$/.test(options.meta.unit) ? options.meta.unit : 'USD',
+        currency,
+        // Compact currency sets its minimum explicitly: Node 24's ICU changed
+        // the implied minimum ($60 instead of $60.0). Keep the currency's own
+        // digits, capped at the compact maximum, on every Node version.
         ...(compact
-          ? { notation: 'compact', maximumFractionDigits: fixed ?? 1 }
+          ? { notation: 'compact', minimumFractionDigits: Math.min(currencyFractionDigits(currency), compactDigits), maximumFractionDigits: compactDigits }
           : { minimumFractionDigits: fixed ?? 2, maximumFractionDigits: fixed ?? 2 }),
       }).format(numeric);
     }
@@ -142,6 +147,10 @@ export function formatDisplayValue(
   if (kind === 'boolean') return value ? 'Yes' : 'No';
   if (kind === 'json' || typeof value === 'object') return JSON.stringify(value);
   return String(value);
+}
+
+function currencyFractionDigits(currency: string): number {
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency }).resolvedOptions().minimumFractionDigits ?? 2;
 }
 
 export function formatChartValue(column: string, value: number, format?: string, meta?: DisplayColumnMeta): string {

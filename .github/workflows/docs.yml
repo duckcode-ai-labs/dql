@@ -30,10 +30,7 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install -r requirements-docs.txt
-      # Permissive build for now: pre-existing source docs reference paths
-      # the mkdocs source tree doesn't see. Cleanup before turning --strict
-      # back on is a follow-up chore.
-      - run: mkdocs build --site-dir _site
+      - run: mkdocs build --strict --site-dir _site
       - uses: actions/upload-pages-artifact@v3
         with:
           path: _site

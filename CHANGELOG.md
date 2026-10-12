@@ -8,6 +8,8 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+Changes merged after `v1.17.3` (`git log 2ad841be..main`). Not on npm yet.
+
 ### Highlights
 
 - **Rules for hosted servers (RFC 0010).** When a host resolves a person for
@@ -646,6 +648,149 @@ This project adheres to [Semantic Versioning](https://semver.org/).
   cite them under the same contract; Research says **Team documents not
   read** when pages are held back from an off-machine model.
 
+---
+
+> The sections for `v1.14.4` to `v1.17.3` below were split out of the old
+> Unreleased notes on 2026-10-11. Each lists the commit subjects between that
+> release's `chore(release)` commit and the one before it (`git log
+> <previous>..<release>`), without merges. The longer notes for `v1.15.0` are
+> kept under it. These versions were published to npm by hand and have no git
+> tags.
+
+## v1.17.3 - 2026-09-17
+
+- fix(ask): the tables that connect the others are described first
+- feat(ask): AI-written SQL understands marker tables and wide questions
+- feat(ask): AI-written SQL follows the Modeling map and reads the skills
+- fix(ask): no machine path in answers; golden suite ignores a local mf
+- feat(eval): each graded answer records what it sent to the AI model
+- fix(ask): every Ask AI call says how hard to think again
+- fix(eval): a question the runtime never answers fails on its own
+- feat(eval): score an answer against a benchmark's correct rows
+- fix(release): stopping a publish puts the package manifests back
+
+## v1.17.2 - 2026-09-16
+
+- fix(notebooks): the create dialog names the file the server writes
+- feat(skills): a skill can start private and be published when it is ready
+- feat(blocks): a block can start private and be published when it is ready
+- feat(notebooks): a notebook can start private and be published when it is ready
+- fix(git): discard keeps what git cannot return, and a commit takes only what was chosen
+- fix(modeling): a follow-up may name the models its own draft added
+- feat(modeling): a follow-up message edits the draft on screen instead of starting over
+- fix(modeling): asking to build something out asks for the models it needs, and an AI change edits the model on the map
+- fix(modeling): an entity id the AI spells in snake_case resolves to the model on the map
+- fix(modeling): every door says what it opens, and authoring AI stays in the area you are looking at
+- fix(modeling): a relationship key dbt does not document is unproven, not missing
+- fix(modeling): certifying needs both models' grain and key columns, so a certified join binds Ask
+- fix(modeling): columns come from the warehouse when dbt documents none, so relationships can be built without dbt docs
+- fix(semantic): an empty dbt semantic manifest no longer replaces a native DQL semantic layer
+- fix(modeling): What Ask will do describes a list of relationships at each level
+- feat(ask): certified relationships bind AI-written joins; visible Ask scope; author what Ask enforces
+- feat(modeling): one Modeling page, terms and concepts, and a relationship builder that checks the join
+
+## v1.17.1 - 2026-09-14
+
+- test(agent): lane audit counts the frame test for non-additive metrics
+- test(research): golden lane investigation-revenue-drop replaces the hypothesis research case
+- fix(research): investigate the level, and never add up a metric that is itself a change
+- feat(research): the trace page draws an investigation as a branching flow; specs updated for drivers
+- feat(research): consented AI wording checked against the figures, driver-breakdown actions, a shared driver chart
+- feat(research): breakdowns run three at a time, and the report records each one's reconciliation
+- feat(mcp): answer_question carries a Research investigation, compact
+- test(research): Research finds a planted drop in real data, from governed queries and no AI call
+- fix(research): breakdowns worth reading on real data
+- feat(research): drivers in the notebook, and Ask offers "Investigate the drivers" for a why-question
+- feat(research): the investigation breaks the change down, drills in, and reports the drivers
+- feat(research): verdicts on drivers and dimensions, seasonality and confidence
+- feat(research): choose the dimensions to break a change down by
+- feat(research): split a change across a dimension's members, and a ratio's change into mix and rate
+
+## v1.17.0 - 2026-09-12
+
+- fix(ask): a governed composition shows its DQL in "How it was answered"
+- fix(research): a filter on a raw column is the governed dimension over that column
+- fix(notebook): a tab without the LAN access token asks for the link instead of loading forever
+- feat(research): a numeric season or year is the period when no date field is known
+- fix(research): read a period token as the period asked about, and a monthly stamp as a complete month
+- fix(research): read a why-question for what it measures, and offer real choices when it names none
+- fix(research): the coverage check may draft SQL when the headline had to
+- fix(notebook): a Research answer is headed as a Research report, not an AI-generated answer
+- fix(notebook): a Research run's actions and inspector name it as Research
+- fix(research): frame the period asked about, measure a block through its metric, never sum before the data
+- feat(notebook): the Research report and "How it was researched"
+- feat(research)!: Research runs the investigation; the hypothesis engine is removed
+- feat(research): the investigation executor, a three-minute Research budget and one receipt
+- feat(research): the investigation core, framing a change and measuring it exactly
+- refactor(ask-host): open one request's context once and run several readings over it
+- feat(ask-pipeline): run a reading settled elsewhere without an AI reading
+- fix(workbench): a quiet Ask composer, certified blocks that stay certified, and Git you can connect
+- feat(ask): "How it was answered" as numbered steps and the full trace as a decision flow
+- fix(ask): "How it was answered" shows the DQL the answer ran again, not only the SQL
+
+## v1.16.0 - 2026-09-11
+
+- fix(ask): AI-written SQL on the jaffle lane — one-to-many totals, percent points, draft budget, path-free prompts
+- test(ask): office lane re-recorded with the drafter's identity and standard-term guidance
+- fix(ask): AI-written SQL on a repo with no semantic layer — the NBA lane at 18/18
+- fix(ask): AI-written SQL looks again at a zero count; a fiscal year on its field applies; office lane re-recorded
+- feat(ask): two governed sources — certified blocks and authored semantics; everything else is AI-written SQL
+- fix(ask): semantic metrics the engine did not run, names in other capitals, and the office readings
+
+## v1.15.8 - 2026-09-11
+
+- feat(ask): follow-ups edit the previous AI-drafted SQL; an office-shaped golden lane carries the office question
+- fix(ask): a warehouse join proof tests a key named for the table it points at
+- fix(ask): a join no governed relationship covers sends the full reading to AI-drafted SQL instead of shrinking the question
+- feat(ask): AI-drafted SQL finds its tables through the catalog, locates stated values, and reads governed metric definitions
+- fix(ask): AI-drafted SQL is checked before it runs, stays in scope, and says what it filters on
+- fix(ask): AI-drafted SQL reads the user's context and looks across every table before declining
+
+## v1.15.7 - 2026-09-11
+
+- feat(ask): when no governed tier answers, the AI writes SQL from the schema, and every run tells its story
+
+## v1.15.6 - 2026-09-11
+
+- fix(ask): a reading's own checks no longer block a correct answer after fields are fetched
+- fix(ask): an out-of-scope ref spelled with the wrong kind and a schema still names its owning domain
+
+## v1.15.5 - 2026-09-11
+
+- fix(ask): the relations a reading names are described before it is prepared
+- fix(ask): the context assembles in seconds, the composer's SQL is proven by what it reads, and a warehouse observation joins the relation dbt spelled
+- fix(ask): unify manifest discovery and physical execution bindings
+
+## v1.15.4 - 2026-09-10
+
+- feat(ask): the cascade is reachable again — ranked columns reach the reading, a retrieval gap is retrieved before it is a gap, and SQL is the last tier
+
+## v1.15.3 - 2026-09-10
+
+- fix(ask): every literal is proven against its field before SQL — a relative period becomes its dates, a value a field cannot take is asked back
+
+## v1.15.2 - 2026-09-10
+
+- fix(ask): the MetricFlow manifest lives with the dbt project, a Snowflake identifier keeps dbt's case, the context is assembled within a budget and on the record
+
+## v1.15.1 - 2026-09-10
+
+- fix(ask): coverage is satisfied through lineage, an aggregate has a number's type, a provider exit is classified, a denied scope is explained
+- fix(context): a rule and a question intersect, a purpose keys its context, a hint matches its object, ownership is a set
+- feat(context): a mandatory rule is one field, physical context follows its entity, a rate carries its period
+- feat(context): Domain Studio reads Ask's warehouse proofs; the ledger names the compiler's joins
+- docs(context): tracker W10 carries the fixture commit
+- test(context): a multi-domain fixture with a decoy, and the term two domains could not share
+- feat(modeling): a business concept — one thing known under several keys
+- feat(ask): every surface reads the same projection
+- feat(ask): the vocabulary is a view over the pack, a policy is enforced, a join has one proof
+- docs(spec): amend the trust contract before the context-contract work
+
+## v1.15.0 - 2026-09-09
+
+63 commits since 1.14.6. `git log ec167df7..63f6e327` lists them; the notes
+below were written while the release was being built.
+
 ### Ask analyst: one plan, five tools
 
 - The model-facing tool surface is five tools: `describe_relation`,
@@ -865,7 +1010,26 @@ This project adheres to [Semantic Versioning](https://semver.org/).
   host-validated rival candidates; the zero-provider clarification returns
   with the single turn/clarification owner in the next release.
 
----
+## v1.14.6 - 2026-09-01
+
+- fix(ask): big-repo Ask reliability — catalog-truth refusals, budget walls, never-dead-end close
+
+## v1.14.5 - 2026-09-01
+
+- fix(ask): generic request nouns are not fields — stop false unmodeled refusals
+
+## v1.14.4 - 2026-09-01
+
+19 commits since `v1.14.3-rc.1` (`git log v1.14.3-rc.1..003e0dd4`); the features:
+
+- feat(ask): deterministic member binding — grounded literals and clicked selections execute with zero dispatches
+- feat(ask): meaningful deterministic answers for executed runs — P4 facts renderer wiring
+- feat(ask): host-first semantic execution — zero-dispatch turns when no decision exists
+- feat(ask): a typed time window, from the question all the way into the query
+- feat: add authoritative Ask agent runtime v2
+- feat(ask): restore retrieval-first analytical follow-ups
+- feat(ask): rework orchestration and trace evidence
+- feat(ask): add retrieval-first analytical orchestration
 
 ## v1.14.3-rc.1 - 2026-08-25
 

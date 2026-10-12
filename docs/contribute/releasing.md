@@ -1,12 +1,31 @@
 # Release process
 
-DQL uses one version across OSS publishable packages. The authoritative npm
-publication path is the `vX.Y.Z` or `vX.Y.Z-prerelease` tag workflow in
+DQL uses one version across OSS publishable packages. The current version is
+`1.17.3` (see `apps/cli/package.json`); the last git tag is `v1.14.3-rc.1`,
+because `1.13.5` to `1.17.3` were published by hand. The repository is
+`duckcode-ai-labs/dql`.
+
+The authoritative npm publication path is the `vX.Y.Z` or
+`vX.Y.Z-prerelease` tag workflow in
 [`.github/workflows/release.yml`](../../.github/workflows/release.yml). It runs
 `scripts/release-packages.mjs`, which builds the workspace, rewrites
 `workspace:*` dependencies to concrete versions for packing/publishing, and
-restores the repo manifests afterward. A release tag publishes npm packages
-only; it never publishes the VS Code extension.
+restores the repo manifests afterward. The workflow runs only for the
+`duckcode-ai-labs` owner, needs the `NPM_TOKEN` repository secret (mapped to
+`NODE_AUTH_TOKEN`), and publishes with `--provenance` (it has
+`id-token: write`). On GitHub Actions the script stops before building if
+`NODE_AUTH_TOKEN` is missing. Provenance only works when the package's `repository.url` matches the
+GitHub repository, so keep every manifest pointing at
+`https://github.com/duckcode-ai-labs/dql`.
+
+The OpenLineage producer URI emitted in lineage events
+(`packages/dql-openlineage/src`) also points at
+`https://github.com/duckcode-ai-labs/dql`.
+
+The 19 release packages include the VS Code extension's language support
+package, which is published to npm as `dql-language-support` with the rest.
+The Visual Studio Marketplace listing is separate: it is published only from a
+manual `workflow_dispatch` run with `publish_extension=true`.
 
 Every dry run and publish must name an npm dist-tag explicitly. Stable versions
 must use `latest`; prereleases (including release candidates) must use `next`.
@@ -50,7 +69,20 @@ git push origin v1.7.0
 ```
 
 6. Monitor the tag workflow. It is the authoritative npm publication path.
-7. Smoke the published packages:
+   `pnpm release:dry-run` runs the same steps (build, pack every package,
+   report what would be published or skipped) without publishing.
+7. After a release candidate, point `next` at it and check `latest` did not
+   move. The tag workflow already publishes an rc with `--tag next`, so run
+   this only if `next` is wrong. Each command needs an npm login with publish
+   rights on the `@duckcodeailabs` scope:
+
+```bash
+npm dist-tag add @duckcodeailabs/dql-cli@1.7.0-rc.1 next
+npm dist-tag ls @duckcodeailabs/dql-cli
+```
+
+   Repeat for each of the 19 packages (`npm dist-tag ls` shows the tags).
+8. Smoke the published packages:
 
 ```bash
 npx @duckcodeailabs/dql-cli@1.7.0 --version
@@ -63,7 +95,8 @@ not use `@latest` or `@next` as the post-publish proof: the release script's
 own smoke uses the exact CLI package spec so a moving dist-tag cannot mask a
 wrong publication.
 
-For the current `1.14.3-rc.1` candidate, record both independent facts:
+For a release candidate (shown here with `1.14.3-rc.1`), record both
+independent facts:
 
 ```bash
 npx @duckcodeailabs/dql-cli@1.14.3-rc.1 --version
@@ -94,6 +127,11 @@ git rev-parse v1.7.0^{}
 pnpm release:publish -- --tag latest --expected-version 1.7.0
 ```
 
+The fallback publishes with your own npm login: run `npm login` first (an
+account with publish rights on the `@duckcodeailabs` scope) and approve the
+OTP or web prompt when `pnpm publish` asks. It does not need `NODE_AUTH_TOKEN`;
+that variable is only read on GitHub Actions. Check with `npm whoami`.
+
 Use `--tag next --expected-version 1.7.0-rc.1` for an authorized prerelease
 fallback. The script will reject a stable version with `next`, a prerelease
 with `latest`, or any expected version that differs from the manifests.
@@ -109,14 +147,17 @@ fallback does not make VS Code Marketplace publication automatic.
 - Keep generated templates on the same CLI range as the release.
 - The notebook React app is served by the CLI; the release script builds the
   workspace before packing so the CLI ships fresh notebook assets.
-- The VS Code extension ships separately through the Marketplace and only from
-  an explicit `workflow_dispatch` run with `publish_extension=true`.
+- The VS Code extension's npm package (`dql-language-support`) ships with the
+  other packages. The Marketplace listing ships separately, only from an
+  explicit `workflow_dispatch` run with `publish_extension=true`.
+- Provenance is added only when `GITHUB_ACTIONS=true`. The local same-SHA
+  fallback publishes without it.
 
 ## What Ships
 
 | Artifact | Where |
 | --- | --- |
-| npm packages | `npmjs.com/org/duckcodeailabs` |
+| npm packages (19, with provenance) | `npmjs.com/org/duckcodeailabs`, plus `create-dql-app` and `dql-language-support` |
 | `create-dql-app` templates | npm tarball |
 | Notebook app assets | bundled inside `@duckcodeailabs/dql-cli` |
 | VS Code extension | Marketplace |

@@ -1,11 +1,18 @@
 # Convenience compose file for running DQL in a container.
 #
+#   export DQL_SERVER_TOKEN="$(openssl rand -hex 24)"   # required, see below
 #   docker compose up                 # notebook on http://127.0.0.1:3474
 #   docker compose --profile slack up # also start the Slack bot on :3479
 #   docker compose --profile ollama up# also start an Ollama daemon on :11434
 #
-# All ports are mapped to 127.0.0.1 on the host, so the security posture
-# matches the native `dql notebook` (loopback-only).
+# All ports are mapped to 127.0.0.1 on the host, so nothing else on your
+# network can reach the notebook.
+#
+# Inside the container the notebook binds 0.0.0.0, which DQL treats as a
+# non-loopback binding: it refuses to start without DQL_SERVER_TOKEN and
+# DQL_ALLOWED_ORIGINS, and every /api/ request except /api/health needs the
+# token. `docker compose up` prints a link that carries it
+# (http://127.0.0.1:3474/#dql_token=...). Open that link once per browser tab.
 #
 # The `./` mount at /workspace lets this compose file serve either a real DQL
 # project (when dql.config.json is present) or this framework repo. In the
@@ -28,6 +35,9 @@ services:
       - ./:/workspace
     environment:
       DQL_HOST: 0.0.0.0
+      DQL_SERVER_TOKEN: ${DQL_SERVER_TOKEN:?set DQL_SERVER_TOKEN to a long random string before docker compose up}
+      # Add the origin you browse from if you map a different host port.
+      DQL_ALLOWED_ORIGINS: ${DQL_ALLOWED_ORIGINS:-http://127.0.0.1:3474,http://localhost:3474}
       # Optional credentials. Empty values keep Docker startup smooth; the UI
       # Settings page shows what is configured and provider calls return clear
       # setup errors when a selected provider is missing credentials.

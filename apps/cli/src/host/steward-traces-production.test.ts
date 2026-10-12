@@ -59,7 +59,7 @@ beforeAll(async () => {
       resolvePrincipal: (req) => people[String(req.headers['x-test-person'] ?? '')] ?? null,
       authorize: (principal, action) => {
         if (action !== 'hint.review') return { allow: true };
-        // As dql-enterprise answers in Production: everyone who may draft (creators and stewards) gets the next
+        // As an embedding host answers in Production: everyone who may draft (creators and stewards) gets the next
         // link; only the steward, who holds the action by role, is marked read-only.
         const refusal = { allow: false, reason: 'Production follows main.', next: { label: 'Open my draft space', href: '/e/draft' } };
         if (principal.id === wes.id) return { allow: false, reason: 'Production follows main.' };
