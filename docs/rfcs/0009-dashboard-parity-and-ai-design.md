@@ -6,7 +6,7 @@
 | **Status**         | Accepted; building step by step                                       |
 | **Created**        | 2026-09-24                                                            |
 | **Builds on**      | RFC 0007 (Datasets and tile queries), RFC 0008 (App Builder commercial) |
-| **Implementation** | branch `claude/app-builder-commercial`                                |
+| **Implementation** | landed on `main`                                                      |
 
 ## Summary
 

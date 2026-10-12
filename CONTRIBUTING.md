@@ -165,12 +165,12 @@ Before treating a change as OSS-ready, review the launch checklist:
 - [`docs/oss-readiness-checklist.md`](./docs/oss-readiness-checklist.md)
 - [`docs/contribute/releasing.md`](./docs/contribute/releasing.md)
 
-## Shared design contract (Governed Analytics Cloud embed)
+## Shared design contract (host applications that embed DQL)
 
-DQL is embedded by the Governed Analytics Cloud, which reskins it to the global
-theme. A small set of names is a **shared contract** the cloud depends on — don't
+DQL can be embedded by a host application, which reskins it to its global
+theme. A small set of names is a **shared contract** hosts depend on — don't
 rename them without coordinating: the `data-theme` values
 (`paper`/`white`/`obsidian`), the `--bg-*`/`--text-*`/`--accent*`/`--border-*`
-vars, and the `dql-theme` storage key (with its cross-tab `storage` listener). The
-cloud's build runs a contract check that fails on a break. See [`AGENTS.md`](AGENTS.md)
-for the full list and the canonical source (`@duckcodeai/design-tokens`).
+vars, and the `dql-theme` storage key (with its cross-tab `storage` listener). A
+host's build may run a contract check that fails on a break. See [`AGENTS.md`](AGENTS.md)
+for the full list.

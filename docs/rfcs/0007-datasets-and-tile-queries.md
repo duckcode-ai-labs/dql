@@ -6,7 +6,7 @@
 | **Status**         | Accepted; implemented behind `apps.datasets` for the pilot             |
 | **Created**        | 2026-09-10 (revised 2026-09-17)                                        |
 | **Targets**        | DQL after `1.17.3`, local opt-in                                       |
-| **Implementation** | branch `claude/app-builder-v2-datasets-57c4c7`, `b5a34727`..`8e0d3f4c` |
+| **Implementation** | landed on `main`, `b5a34727`..`8e0d3f4c`                               |
 | **Amends**         | `PRD-004`, `PRD-007`, `AGT-026` (adds a field-query tile kind)         |
 
 ## Summary
