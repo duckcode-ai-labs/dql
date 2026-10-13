@@ -1,4 +1,4 @@
-# `@duckcodeailabs/dql-compiler`
+# `@zlens/dql-compiler`
 
 Compiler for DQL source files.
 
@@ -7,13 +7,13 @@ It parses DQL, runs semantic analysis, lowers dashboards/workbooks into intermed
 ## Install
 
 ```bash
-pnpm add @duckcodeailabs/dql-compiler
+pnpm add @zlens/dql-compiler
 ```
 
 ## Example
 
 ```ts
-import { compile } from '@duckcodeailabs/dql-compiler';
+import { compile } from '@zlens/dql-compiler';
 
 const source = `
 block revenue_by_segment {

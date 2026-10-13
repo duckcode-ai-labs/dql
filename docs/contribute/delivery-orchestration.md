@@ -1,7 +1,7 @@
 # OSS delivery orchestration
 
 This playbook defines how maintainers, contributors, and coding agents deliver
-DQL OSS changes from request to verified evidence. It is a documentation and
+ZLens OSS changes from request to verified evidence. It is a documentation and
 handoff contract, not a new autonomous agent runtime.
 
 Start every task with [Current DQL truth](./current-dql-truth.md). Live
@@ -67,7 +67,7 @@ own acceptance claim.
 - is different from the implementer for a `verified` claim;
 - reviews the diff against the task contract and current baseline;
 - repeats risk-proportionate checks from a clean state;
-- uses the built `dql notebook` CLI and designated fixture for UI acceptance;
+- uses the built `zlens notebook` CLI and designated fixture for UI acceptance;
 - reports pass, fail, or blocked with exact evidence and remaining risk;
 - rejects hidden scope expansion and commercial leakage.
 

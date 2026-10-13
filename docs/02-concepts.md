@@ -2,7 +2,7 @@
 
 > ~4 minutes · the mental model behind every feature
 
-DQL has six primitives. Once these click, the rest of the docs read like
+ZLens has six primitives. Once these click, the rest of the docs read like
 reference material.
 
 ## 1. Notebook
@@ -62,7 +62,7 @@ dashboard pages, Apps, or other blocks.
 
 The shared vocabulary of the business — **metrics** (measures),
 **dimensions** (attributes), **hierarchies** (drill paths), **cubes**
-(pre-joined fact/dim sets). DQL imports from dbt's semantic layer by default
+(pre-joined fact/dim sets). ZLens imports from dbt's semantic layer by default
 and lets you author the rest locally.
 
 In a DQL cell, `@metric("revenue")` and `@dim("customer.segment")` resolve
@@ -73,7 +73,7 @@ against the semantic layer — no hand-written joins.
 A graph of every **dbt/source/table -> semantic metric -> block -> notebook ->
 dashboard page -> App** edge in the project, built from AST-level SQL parsing
 and dbt artifacts. The lineage panel renders it with React Flow; the CLI
-exposes it via `dql lineage impact <name>` and friends.
+exposes it via `zlens lineage impact <name>` and friends.
 
 Lineage answers three questions:
 

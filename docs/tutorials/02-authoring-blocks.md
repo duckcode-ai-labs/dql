@@ -106,14 +106,14 @@ Hit **Cmd-S**. Block Studio auto-validates.
 | `invariants` | Free-form post-conditions used as prompt grounding for the agent. |
 | `query` | Your SQL. Triple-quoted so multi-line is comfortable. |
 | `visualization` | Default chart for tiles that don't override it. |
-| `tests` | Assertions run by `dql certify` against the real connection. |
+| `tests` | Assertions run by `zlens certify` against the real connection. |
 
 ---
 
 ## Step 3 — Run the certification gate
 
 ```bash
-dql certify blocks/revenue_by_month.dql
+zlens certify blocks/revenue_by_month.dql
 ```
 
 (The default connection from `dql.config.json` is used automatically.)
@@ -133,10 +133,10 @@ test assertions pass.
 ## Step 4 — Confirm it landed in the manifest
 
 ```bash
-dql compile
+zlens compile
 ```
 
-This rebuilds `dql-manifest.json` — the dbt-like artifact for the DQL
+This rebuilds `dql-manifest.json` — the dbt-like artifact for the ZLens
 workspace. Your block appears under `blocks` with its status, domain, chart
 type, and table dependencies (`dev.orders`).
 
@@ -145,7 +145,7 @@ type, and table dependencies (`dev.orders`).
 ## Step 5 — See it in the lineage graph
 
 ```bash
-dql lineage --block revenue_by_month
+zlens lineage --block revenue_by_month
 ```
 
 > **You should see** the block reading from the orders model, which in turn
@@ -211,8 +211,8 @@ block "daily_orders" {
 ```
 
 ```bash
-dql certify blocks/avg_order_value.dql
-dql certify blocks/daily_orders.dql
+zlens certify blocks/avg_order_value.dql
+zlens certify blocks/daily_orders.dql
 ```
 
 > **You should see** both flip to `certified` — three certified blocks,

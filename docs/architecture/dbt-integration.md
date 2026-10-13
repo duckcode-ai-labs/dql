@@ -1,11 +1,11 @@
-# How DQL fits with dbt
+# How ZLens fits with dbt
 
-dbt is the **modeling** tool. DQL is the **reporting + governance** layer.
+dbt is the **modeling** tool. ZLens is the **reporting + governance** layer.
 They share a single source of truth: `target/manifest.json`.
 
 ## Division of concerns
 
-| Concern | dbt | DQL |
+| Concern | dbt | ZLens |
 | --- | --- | --- |
 | Transform raw → marts | ✅ | — |
 | Tests on models | ✅ | — |
@@ -20,13 +20,13 @@ They share a single source of truth: `target/manifest.json`.
 
 ## The integration surface
 
-DQL reads `target/manifest.json`. That's it — no dbt-API calls, no YAML
-duplication, no "DQL's version of a model." When present, DQL also reads
+ZLens reads `target/manifest.json`. That's it — no dbt-API calls, no YAML
+duplication, no "ZLens's version of a model." When present, ZLens also reads
 `target/semantic_manifest.json` for MetricFlow semantic models, metrics,
 measures, dimensions, entities, and saved queries.
 
 ```
-dbt models     ─▶  target/manifest.json  ─▶  DQL semantic layer
+dbt models     ─▶  target/manifest.json  ─▶  ZLens semantic layer
 dbt metrics    ─┘                         │
 dbt sources    ─┘                         ▼
                                      DQL blocks
@@ -40,23 +40,23 @@ dbt sources    ─┘                         ▼
 # In your dbt project:
 dbt build
 
-# In your DQL project:
-dql compile .
-dql sync dbt .
-dql agent reindex
+# In your ZLens project:
+zlens compile .
+zlens sync dbt .
+zlens agent reindex
 ```
 
-Add these DQL commands to your CI after `dbt build`: `dql compile .` rebuilds
-the DQL manifest and lineage graph, `dql sync dbt .` verifies artifact paths and
-cache status, and `dql agent reindex` refreshes the governed answer index.
+Add these ZLens commands to your CI after `dbt build`: `zlens compile .` rebuilds
+the DQL manifest and lineage graph, `zlens sync dbt .` verifies artifact paths and
+cache status, and `zlens agent reindex` refreshes the governed answer index.
 
-## What DQL does *not* do
+## What ZLens does *not* do
 
 - **Transform raw data.** Use dbt for that.
 - **Schedule model runs.** Use dbt + Airflow/Dagster/dbt Cloud.
-- **Replace MetricFlow.** DQL extends it, never competes with it.
+- **Replace MetricFlow.** ZLens extends it, never competes with it.
 
-## What to move to DQL
+## What to move to ZLens
 
 The user-facing outputs of your analytics stack: reports, dashboards, ad
 hoc notebooks, certified shared blocks. All the stuff that used to live in

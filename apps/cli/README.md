@@ -1,6 +1,6 @@
-# `@duckcodeailabs/dql-cli`
+# `zlens`
 
-Official command-line interface for DQL.
+Official command-line interface for ZLens.
 
 Use the CLI to scaffold projects, validate blocks, preview charts locally, and build static bundles without DuckCode Studio.
 
@@ -11,29 +11,29 @@ database drivers, reinstall those project-local dependencies for the active
 runtime.
 
 ```bash
-npm i -D @duckcodeailabs/dql-cli@latest
-npx dql --version
+npm i -D zlens@latest
+npx zlens --version
 ```
 
 Project-local installation is recommended for existing repositories. npm puts
-the executable in `node_modules/.bin`, so use `npx dql ...` or the repository's
+the executable in `node_modules/.bin`, so use `npx zlens ...` or the repository's
 `npm run ...` scripts. A bare shell command requires a global installation:
 
 ```bash
-npm i -g @duckcodeailabs/dql-cli@latest
-dql --version
+npm i -g zlens@latest
+zlens --version
 ```
 
 Or run it without adding a dependency:
 
 ```bash
-npx @duckcodeailabs/dql-cli --help
+npx zlens --help
 ```
 
 From this repo, you can also run:
 
 ```bash
-pnpm exec dql --help
+pnpm exec zlens --help
 ```
 
 ## Quick Start
@@ -41,7 +41,7 @@ pnpm exec dql --help
 These commands use the project-local CLI installed by the starter templates.
 
 ```bash
-npx create-dql-app@latest my-dql-project
+npx create-zlens-app@latest my-dql-project
 cd my-dql-project
 npm install
 npm run doctor
@@ -54,32 +54,32 @@ If you want the dbt-integrated starter instead, use the Jaffle Shop semantic-lay
 git clone https://github.com/dbt-labs/Semantic-Layer-Online-Course.git jaffle-shop
 cd jaffle-shop
 pip install dbt-duckdb && dbt deps && dbt build --profiles-dir .
-npm i -D @duckcodeailabs/dql-cli
-npx dql init .
-npx dql semantic import dbt .
+npm i -D zlens
+npx zlens init .
+npx zlens semantic import dbt .
 npm run notebook
 ```
 
 ## Common Commands
 
-The examples below use the short `dql` form. For a project-local installation,
-run them as `npm exec -- dql ...` or through a repository script. See the
+The examples below use the short `zlens` form. For a project-local installation,
+run them as `npm exec -- zlens ...` or through a repository script. See the
 [complete CLI reference](../../docs/reference/cli.md) for every command,
 subcommand, flag, and exit code.
 
-- `dql init [directory]` — create a starter DQL project
-- `dql new block <name>` — scaffold a new DQL block in the current project
-- `dql new semantic-block <name>` — scaffold a semantic block plus companion YAML files
-- `dql new dashboard <name>` — scaffold a new dashboard in `dashboards/`
-- `dql new workbook <name>` — scaffold a new workbook in `workbooks/`
-- `dql doctor [path]` — check local setup, config, and starter folders
-- `dql parse <file.dql>` — parse and validate a DQL block
-- `dql fmt <file.dql>` — format a DQL file
-- `dql validate [path]` — validate DQL files and semantic references
-- `dql certify <file.dql>` — run certification checks
-- `dql preview <file.dql>` — preview a block in the browser
-- `dql build <file.dql>` — build a static bundle in `dist/`
-- `dql serve [directory]` — serve a built bundle locally
+- `zlens init [directory]` — create a starter ZLens project
+- `zlens new block <name>` — scaffold a new DQL block in the current project
+- `zlens new semantic-block <name>` — scaffold a semantic block plus companion YAML files
+- `zlens new dashboard <name>` — scaffold a new dashboard in `dashboards/`
+- `zlens new workbook <name>` — scaffold a new workbook in `workbooks/`
+- `zlens doctor [path]` — check local setup, config, and starter folders
+- `zlens parse <file.dql>` — parse and validate a DQL block
+- `zlens fmt <file.dql>` — format a DQL file
+- `zlens validate [path]` — validate DQL files and semantic references
+- `zlens certify <file.dql>` — run certification checks
+- `zlens preview <file.dql>` — preview a block in the browser
+- `zlens build <file.dql>` — build a static bundle in `dist/`
+- `zlens serve [directory]` — serve a built bundle locally
 
 ## Learn More
 

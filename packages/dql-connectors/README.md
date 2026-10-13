@@ -1,19 +1,19 @@
-# `@duckcodeailabs/dql-connectors`
+# `@zlens/connectors`
 
-Query execution and connector layer for DQL.
+Query execution and connector layer for ZLens.
 
 It provides connection management, driver normalization, SQL parameter handling, and query execution across supported databases and local engines.
 
 ## Install
 
 ```bash
-pnpm add @duckcodeailabs/dql-connectors
+pnpm add @zlens/connectors
 ```
 
 ## Example
 
 ```ts
-import { QueryExecutor } from '@duckcodeailabs/dql-connectors';
+import { QueryExecutor } from '@zlens/connectors';
 
 const executor = new QueryExecutor();
 

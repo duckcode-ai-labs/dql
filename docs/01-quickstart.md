@@ -3,16 +3,16 @@
 > ~10 minutes · ends with the dbt DAG imported, a certified block, a
 > manifest, and end-to-end lineage
 
-DQL adds an analytics layer on top of a dbt project: certified blocks,
+ZLens adds an analytics layer on top of a dbt project: certified blocks,
 dashboards in Apps, notebooks, and governed agent answers — all as files in
-git. This quickstart adds DQL to **your own dbt repo**. No external warehouse,
+git. This quickstart adds ZLens to **your own dbt repo**. No external warehouse,
 hosted account, SSO, or team RBAC is required.
 
 > **Just want to see it running?** Use the separate
 > [jaffle-shop-duckdb](https://github.com/duckcode-ai/jaffle-shop-duckdb)
 > example and follow its
 > [Jaffle Shop tutorial](https://github.com/duckcode-ai/jaffle-shop-duckdb/blob/main/docs/tutorials/jaffle/README.md).
-> The rest of this page builds a DQL workspace from scratch on your repo.
+> The rest of this page builds a ZLens workspace from scratch on your repo.
 
 ## 1. Make your dbt manifest fresh
 
@@ -21,29 +21,29 @@ cd your-dbt-repo
 dbt parse        # or dbt build — either writes target/manifest.json
 ```
 
-## 2. Scaffold the DQL workspace
+## 2. Scaffold the ZLens workspace
 
 From the dbt repo root:
 
 ```bash
-npx create-dql-app@latest dql
+npx create-zlens-app@latest dql
 cd dql
 npm install
 ```
 
 The scaffolder detects the parent dbt project and wires it into
-`dql.config.json`. DQL stays isolated under `./dql`; your dbt files are
-untouched. The generated project installs the DQL CLI locally, so `npm run
-...` works without a global `dql` binary.
+`dql.config.json`. ZLens stays isolated under `./dql`; your dbt files are
+untouched. The generated project installs the ZLens CLI locally, so `npm run
+...` works without a global `zlens` binary.
 
 If you already installed the CLI globally, that only installs the command. It
 does not create a `dql/` folder. Use this equivalent path:
 
 ```bash
 cd your-dbt-repo
-dql init ./dql
+zlens init ./dql
 cd dql
-dql doctor
+zlens doctor
 ```
 
 Point the default connection at your dbt warehouse in `dql.config.json`. For a
@@ -62,7 +62,7 @@ Install only the database driver your project uses:
 
 | Database | Extra install before running queries | Notes |
 | --- | --- | --- |
-| Databricks SQL | none | Built into DQL through HTTPS |
+| Databricks SQL | none | Built into ZLens through HTTPS |
 | DuckDB or local CSV/Parquet/JSON files | `npm install --prefix .dql/connectors duckdb` | Needed for `duckdb` and `file` connections |
 | Snowflake | `npm install --prefix .dql/connectors snowflake-sdk` | Needed for Snowflake connections |
 
@@ -76,8 +76,8 @@ npm run doctor
 npm run sync
 ```
 
-`dql doctor` verifies the project shape, notebook assets, and default
-connection. `dql sync dbt` imports the dbt models and sources into the DQL
+`zlens doctor` verifies the project shape, notebook assets, and default
+connection. `zlens sync dbt` imports the dbt models and sources into the DQL
 manifest so lineage connects end to end.
 
 ## 4. Start the notebook
@@ -117,7 +117,7 @@ npm run compile
 npm run lineage
 ```
 
-`dql compile` writes `dql-manifest.json`, the dbt-like artifact for the DQL
+`zlens compile` writes `dql-manifest.json`, the dbt-like artifact for the ZLens
 workspace: blocks, notebooks, Apps, dashboard pages, semantic objects, dbt
 imports, and lineage edges. `npm run lineage` summarizes how data flows from
 sources through dbt models into blocks, dashboard pages, and Apps.
@@ -133,6 +133,6 @@ You should have:
 ## Where to go next
 
 - [Tutorials — end to end](tutorials/README.md) *(blocks → dashboards & Apps → agent → CI)*
-- [DQL in 5 concepts](04-dql-in-5-concepts.md)
+- [ZLens in 5 concepts](04-dql-in-5-concepts.md)
 - [Block Studio dbt-first workflow](guides/block-studio.md)
 - [Import your dbt project](guides/import-dbt.md)

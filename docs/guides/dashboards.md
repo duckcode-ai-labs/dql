@@ -2,7 +2,7 @@
 
 > ~3 minutes · ends with an HTML file you can host anywhere
 
-DQL dashboards are **compiled static HTML**. No SaaS DB, no login, no
+ZLens dashboards are **compiled static HTML**. No SaaS DB, no login, no
 runtime server — just a file. Host on S3, GitHub Pages, Vercel, a USB stick.
 
 ## 1. Mark a notebook as a dashboard
@@ -24,13 +24,13 @@ dashboard: {
 Or scaffold one:
 
 ```bash
-dql dashboard new overview --from notebooks/jaffle-overview.dql
+zlens dashboard new overview --from notebooks/jaffle-overview.dql
 ```
 
 ## 2. Compile
 
 ```bash
-dql compile dashboards/overview.dql --out build/
+zlens compile dashboards/overview.dql --out build/
 # ✓ compiled 4 cells
 # ✓ emitted build/overview.html (312 KB, self-contained)
 ```

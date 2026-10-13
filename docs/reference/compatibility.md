@@ -9,7 +9,7 @@
 
 ## Connectors
 
-DQL uses a flat install. Databricks SQL is built in; DuckDB/local files and
+ZLens uses a flat install. Databricks SQL is built in; DuckDB/local files and
 Snowflake install project-local driver packages into `.dql/connectors/`. See
 [Connectors](./connectors.md).
 
@@ -22,7 +22,7 @@ Snowflake install project-local driver packages into `.dql/connectors/`. See
 ## Editor support
 
 - **VS Code** — [`dql.dql-language-support`](https://marketplace.visualstudio.com/items?itemName=dql.dql-language-support) extension (syntax, snippets, LSP)
-- **Any LSP client** — `@duckcodeailabs/dql-lsp` speaks standard LSP
+- **Any LSP client** — `@zlens/dql-lsp` speaks standard LSP
 
 ## What's in this repo
 

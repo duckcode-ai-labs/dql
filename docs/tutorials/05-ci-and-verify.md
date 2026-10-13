@@ -1,8 +1,8 @@
-# 05 — CI and `dql verify`
+# 05 — CI and `zlens verify`
 
-**Who this is for:** platform engineers wiring DQL into CI and audits.
+**Who this is for:** platform engineers wiring ZLens into CI and audits.
 
-**What you'll do:** add a GitHub Actions workflow that runs `dql verify`
+**What you'll do:** add a GitHub Actions workflow that runs `zlens verify`
 on every PR, demonstrate that drift is caught, and walk through what the
 check covers.
 
@@ -13,7 +13,7 @@ check covers.
 
 ---
 
-## Why `dql verify`?
+## Why `zlens verify`?
 
 The DQL manifest (`dql-manifest.json`) is the single source of truth for
 downstream tooling: lineage, the MCP server, the knowledge graph, the UI's
@@ -21,7 +21,7 @@ lineage drawer, and external systems via the OpenLineage exporter. If the
 manifest drifts from the source tree, every downstream consumer is reading
 a lie.
 
-`dql verify`:
+`zlens verify`:
 
 1. Reads `dql-manifest.json` from disk.
 2. Recompiles the manifest in-memory from source.
@@ -30,7 +30,7 @@ a lie.
 4. Returns a non-zero exit code on drift, prints a structured diff, and
    tells you exactly which files to recompile.
 
-It's the "did you forget to commit `dql compile`?" guard.
+It's the "did you forget to commit `zlens compile`?" guard.
 
 ---
 
@@ -39,8 +39,8 @@ It's the "did you forget to commit `dql compile`?" guard.
 From a clean tree:
 
 ```bash
-dql compile          # ensure dql-manifest.json is fresh
-dql verify
+zlens compile          # ensure dql-manifest.json is fresh
+zlens verify
 ```
 
 > **You should see**
@@ -54,7 +54,7 @@ Now intentionally introduce drift:
 # rename a block in the file but DON'T recompile
 sed -i.bak 's/revenue_by_month/revenue_by_month_v2/' \
   blocks/revenue_by_month.dql
-dql verify
+zlens verify
 ```
 
 > **You should see**
@@ -63,7 +63,7 @@ dql verify
 >     - blocks: removed "revenue_by_month"
 >     - blocks: added "revenue_by_month_v2"
 >
->   Run `dql compile` to regenerate, then commit.
+>   Run `zlens compile` to regenerate, then commit.
 > ```
 
 Exit code is **1** — perfect for CI gates.
@@ -72,20 +72,20 @@ Restore:
 
 ```bash
 mv blocks/revenue_by_month.dql.bak blocks/revenue_by_month.dql
-dql compile
-dql verify        # green again
+zlens compile
+zlens verify        # green again
 ```
 
 ---
 
 ## Step 2 — Add the GitHub Actions workflow
 
-The DQL workspace lives inside your dbt repo and installs the CLI as a dev
+The ZLens workspace lives inside your dbt repo and installs the CLI as a dev
 dependency, so CI is plain npm. Create `.github/workflows/dql-ci.yml`:
 
 ```yaml
 # .github/workflows/dql-ci.yml
-name: DQL CI
+name: ZLens CI
 
 on:
   pull_request:
@@ -98,7 +98,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: dql      # the DQL workspace inside the repo
+        working-directory: dql      # the ZLens workspace inside the repo
     steps:
       - uses: actions/checkout@v4
 
@@ -112,24 +112,24 @@ jobs:
         run: npm ci
 
       - name: Validate DQL sources
-        run: npx dql validate
+        run: npx zlens validate
 
       - name: Compile manifest
-        run: npx dql compile
+        run: npx zlens compile
 
       - name: Verify manifest is reproducible
-        run: npx dql verify
+        run: npx zlens verify
 
       - name: Golden answer-routing eval
-        run: npx dql eval . --min-route-accuracy 0.9 --min-refusal 0.8 --min-answer-rate 0.9
+        run: npx zlens eval . --min-route-accuracy 0.9 --min-refusal 0.8 --min-answer-rate 0.9
 ```
 
 Commit the workflow. The first PR you open runs all the steps and
 fails fast on the first red light.
 
-Seed `eval/*.yaml` with certified, generated, and safe-refusal questions. `dql
+Seed `eval/*.yaml` with certified, generated, and safe-refusal questions. `zlens
 eval` is deterministic and CI-safe; it reports route accuracy, refusal recall,
-and answer rate for answerable cases. Use `dql agent eval --execute` in a
+and answer rate for answerable cases. Use `zlens agent eval --execute` in a
 credentialed environment when you also want generated SQL previews compared
 against expected rows.
 
@@ -139,7 +139,7 @@ against expected rows.
 > - name: Certify changed blocks
 >   run: |
 >     for blk in $(git diff --name-only origin/main... | grep '^dql/blocks/.*\.dql$'); do
->       npx dql certify "${blk#dql/}"
+>       npx zlens certify "${blk#dql/}"
 >     done
 > ```
 
@@ -151,13 +151,13 @@ In GitHub repository settings → **Branches** → **Branch protection rules**
 for `main`:
 
 1. **Require status checks to pass before merging** ✓
-2. Add the `DQL CI / verify` check to the required checks.
+2. Add the `ZLens CI / verify` check to the required checks.
 3. **Require branches to be up to date before merging** ✓ — so a stale
-   PR can't sneak past `dql verify`.
+   PR can't sneak past `zlens verify`.
 
 Now any PR that edits a block but forgets to recompile, or renames a
 dashboard without rebuilding the App, cannot merge. The fix is always:
-`dql compile && git add dql-manifest.json && git commit`.
+`zlens compile && git add dql-manifest.json && git commit`.
 
 ---
 
@@ -171,7 +171,7 @@ For audited industries, archive certifier output as part of the PR:
     mkdir -p /tmp/dql-reports
     for blk in $(git diff --name-only origin/main... | grep '^dql/blocks/.*\.dql$'); do
       name=$(basename "$blk" .dql)
-      npx dql certify "${blk#dql/}" --format json > /tmp/dql-reports/$name.json
+      npx zlens certify "${blk#dql/}" --format json > /tmp/dql-reports/$name.json
     done
 
 - uses: actions/upload-artifact@v4
@@ -185,7 +185,7 @@ auditors get a per-PR snapshot of governance evidence.
 
 ---
 
-## What `dql verify` actually checks
+## What `zlens verify` actually checks
 
 From [`apps/cli/src/commands/verify.ts`](https://github.com/duckcode-ai-labs/dql/blob/main/apps/cli/src/commands/verify.ts):
 

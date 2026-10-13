@@ -18,8 +18,8 @@ inside Block Studio for authoring and review, but normal Ask retrieval does not
 offer it as answer evidence; Ask can route through a block only after that block
 is certified.
 
-DQL does not replace dbt. dbt owns models, transformations, tests, and semantic
-definitions. DQL owns reusable answer blocks, chart configuration, notebooks,
+ZLens does not replace dbt. dbt owns models, transformations, tests, and semantic
+definitions. ZLens owns reusable answer blocks, chart configuration, notebooks,
 Apps, AI pins, certification labels, and answer-level lineage.
 
 ## 1. Open Block Studio
@@ -27,7 +27,7 @@ Apps, AI pins, certification labels, and answer-level lineage.
 Start the notebook UI:
 
 ```bash
-npx dql notebook ./dql
+npx zlens notebook ./dql
 ```
 
 Click **Blocks**. If no block is selected, Block Studio shows four starting
@@ -79,7 +79,7 @@ ORDER BY transaction_date
 }
 ```
 
-If you click a semantic metric while editing a SQL block, DQL does not silently
+If you click a semantic metric while editing a SQL block, ZLens does not silently
 mix it into the query. The UI asks whether to create a Semantic Block or insert
 an advanced semantic reference explicitly.
 
@@ -139,7 +139,7 @@ The importer splits semicolon-delimited statements, common `GO` batches, and
 repeated `-- name:` / `-- title:` query headers. For each statement it detects
 tables, joins, parameters, literals, grain, outputs, and source metadata.
 
-Before saving a new draft, DQL runs a reuse-first check:
+Before saving a new draft, ZLens runs a reuse-first check:
 
 - exact SQL match -> reuse the existing block
 - same SQL shape with different values -> reuse with new parameter values
@@ -159,7 +159,7 @@ compatible blocks.
 For batch migration from the CLI:
 
 ```bash
-dql import sql ./legacy-sql --domain finance --owner analytics
+zlens import sql ./legacy-sql --domain finance --owner analytics
 ```
 
 The import command autosaves valid candidates as `_drafts` blocks, reports
@@ -198,9 +198,9 @@ Run these commands after dbt artifacts change:
 
 ```bash
 dbt build
-npx dql compile ./dql
-npx dql sync dbt ./dql
-cd dql && npx dql agent reindex
+npx zlens compile ./dql
+npx zlens sync dbt ./dql
+cd dql && npx zlens agent reindex
 ```
 
 ## Verify it worked

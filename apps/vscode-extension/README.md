@@ -1,4 +1,4 @@
-# DQL Language Support
+# DQL for ZLens
 
 VS Code extension for DQL with:
 

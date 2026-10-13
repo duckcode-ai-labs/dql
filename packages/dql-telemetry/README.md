@@ -1,10 +1,10 @@
 # @duckcodeailabs/dql-telemetry
 
-> **Deprecated.** No DQL package or CLI command uses this package, and there is
-> no `dql telemetry` command. DQL does not send usage telemetry. The package is
+> **Deprecated.** No ZLens package or CLI command uses this package, and there is
+> no `zlens telemetry` command. ZLens does not send usage telemetry. The package is
 > kept only so existing installs keep resolving, and it may be removed in a
 > future release. Do not add it to new projects. The text below describes the
-> library as written, not a feature of the DQL CLI.
+> library as written, not a feature of the ZLens CLI.
 
 Opt-in, privacy-first usage telemetry for DQL.
 

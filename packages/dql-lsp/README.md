@@ -1,19 +1,19 @@
-# `@duckcodeailabs/dql-lsp`
+# `@zlens/dql-lsp`
 
 Language-server primitives for DQL tooling.
 
-This package powers completions, hover text, diagnostics, and editor integrations such as the DQL VS Code extension.
+This package powers completions, hover text, diagnostics, and editor integrations such as the DQL for ZLens VS Code extension.
 
 ## Install
 
 ```bash
-pnpm add @duckcodeailabs/dql-lsp
+pnpm add @zlens/dql-lsp
 ```
 
 ## Example
 
 ```ts
-import { DQLLanguageService } from '@duckcodeailabs/dql-lsp';
+import { DQLLanguageService } from '@zlens/dql-lsp';
 
 const service = new DQLLanguageService();
 

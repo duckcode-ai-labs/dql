@@ -1,19 +1,19 @@
-# `@duckcodeailabs/dql-charts`
+# `@zlens/charts`
 
-React chart and content component library for DQL.
+React chart and content component library for ZLens.
 
 It provides reusable chart renderers, themes, layout primitives, and notebook-style content blocks for building UI around compiled DQL results.
 
 ## Install
 
 ```bash
-pnpm add @duckcodeailabs/dql-charts react react-dom
+pnpm add @zlens/charts react react-dom
 ```
 
 ## Example
 
 ```tsx
-import { BarChart } from '@duckcodeailabs/dql-charts';
+import { BarChart } from '@zlens/charts';
 
 export function RevenueChart() {
   return (
@@ -33,7 +33,7 @@ export function RevenueChart() {
 
 ## Common Uses
 
-- embed DQL chart components in React apps
+- embed ZLens chart components in React apps
 - reuse theme primitives across analytics views
 - render chart, table, note, and narrative blocks consistently
 

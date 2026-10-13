@@ -1,4 +1,4 @@
-# `@duckcodeailabs/dql-governance`
+# `@zlens/governance`
 
 Governance helpers for testing, certification, policy checks, and cost estimation.
 
@@ -7,13 +7,13 @@ This package is useful when you want to turn DQL blocks into durable, reviewable
 ## Install
 
 ```bash
-pnpm add @duckcodeailabs/dql-governance
+pnpm add @zlens/governance
 ```
 
 ## Example
 
 ```ts
-import { TestRunner } from '@duckcodeailabs/dql-governance';
+import { TestRunner } from '@zlens/governance';
 
 const runner = new TestRunner({
   async execute(sql) {

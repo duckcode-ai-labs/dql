@@ -1,10 +1,11 @@
 # {{PROJECT_NAME}}
 
-A DQL project scaffolded by `create-dql-app`.
+A ZLens project scaffolded by `create-zlens-app`.
 
-DQL means **Domain Query Language**. It is the open-source analytics language
-for turning source data, SQL, dbt models, business terms, notebooks,
-dashboards, apps, and lineage into one Git-versioned project.
+ZLens is the open-source analytics layer for turning source data, SQL, dbt
+models, business terms, notebooks, dashboards, apps, and lineage into one
+Git-versioned project. You write the analytics as blocks in DQL
+(**Domain Query Language**), ZLens's query language.
 
 The core path is:
 
@@ -23,7 +24,7 @@ connects technical lineage with business lineage.
 
 ## Connect your warehouse
 
-Edit `dql.config.json` or open the notebook connection panel. DQL uses a flat
+Edit `dql.config.json` or open the notebook connection panel. ZLens uses a flat
 install by default: Databricks SQL works through the built-in HTTP connector,
 and DuckDB or Snowflake drivers can be installed project-locally when needed.
 Add your warehouse connection in the notebook or config.
@@ -37,7 +38,7 @@ Choose one database path before running queries:
 
 | Database | Extra install | Notes |
 | --- | --- | --- |
-| Databricks SQL | none | Built into DQL through HTTPS |
+| Databricks SQL | none | Built into ZLens through HTTPS |
 | DuckDB or local CSV/Parquet/JSON files | `npm install --prefix .dql/connectors duckdb` | Needed for `duckdb` and `file` connections |
 | Snowflake | `npm install --prefix .dql/connectors snowflake-sdk` | Needed for Snowflake connections |
 
@@ -62,15 +63,15 @@ Open `notebooks/welcome.dqlnb` first. It shows the starter workflow:
 
 ## Connect an AI agent
 
-After `npm run doctor` passes, DQL can expose the same governed project context
+After `npm run doctor` passes, ZLens can expose the same governed project context
 to Claude Code, Codex, Cursor, Claude Desktop, or any MCP client:
 
 ```bash
 npm run compile
-npx dql mcp test
-npx dql connect claude-code
-# or: npx dql connect codex
-# or: npx dql connect all
+npx zlens mcp test
+npx zlens connect claude-code
+# or: npx zlens connect codex
+# or: npx zlens connect all
 ```
 
 Claude Code uses project `.mcp.json` and `CLAUDE.md`. Codex uses project
@@ -87,7 +88,7 @@ detected at scaffold time), then:
 
 ```bash
 dbt parse          # inside the dbt project
-npx dql sync dbt   # import models + lineage into DQL
+npx zlens sync dbt   # import models + lineage into ZLens
 ```
 
 No dbt project handy? Try the example repo:

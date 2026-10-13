@@ -1,20 +1,20 @@
-# @duckcodeailabs/dql-plugin-api
+# @zlens/plugin-api
 
-Stable plugin contracts for DQL. **Frozen at v1.0** — breaking changes
+Stable plugin contracts for ZLens. **Frozen at v1.0** — breaking changes
 require a major version bump and a 6-month deprecation window.
 
 ## Exports
 
 ```ts
-import type { Connector } from '@duckcodeailabs/dql-plugin-api/connector';
-import type { ChartRenderer } from '@duckcodeailabs/dql-plugin-api/chart';
-import type { RulePack } from '@duckcodeailabs/dql-plugin-api/governance';
+import type { Connector } from '@zlens/plugin-api/connector';
+import type { ChartRenderer } from '@zlens/plugin-api/chart';
+import type { RulePack } from '@zlens/plugin-api/governance';
 ```
 
 Or all at once:
 
 ```ts
-import type { Connector, ChartRenderer, RulePack } from '@duckcodeailabs/dql-plugin-api';
+import type { Connector, ChartRenderer, RulePack } from '@zlens/plugin-api';
 ```
 
 ## Connector
@@ -51,6 +51,6 @@ At v1.0:
 Consumers can assert compatibility at runtime:
 
 ```ts
-import { PLUGIN_API_VERSION } from '@duckcodeailabs/dql-plugin-api';
-if (!PLUGIN_API_VERSION.startsWith('1.')) throw new Error('incompatible DQL');
+import { PLUGIN_API_VERSION } from '@zlens/plugin-api';
+if (!PLUGIN_API_VERSION.startsWith('1.')) throw new Error('incompatible ZLens');
 ```

@@ -1,6 +1,6 @@
 # Agentic analytics answer flow
 
-This is the operating contract for a fast, governed answer in a large DQL
+This is the operating contract for a fast, governed answer in a large ZLens
 project. It is deliberately a routing system, not a "generate SQL for every
 question" system.
 
@@ -57,7 +57,7 @@ raw fact-to-fact join and the fanout errors it creates.
 
 ### Analytical composition before execution
 
-For metric questions, DQL freezes one versioned analytical frame before it
+For metric questions, ZLens freezes one versioned analytical frame before it
 chooses an executable asset. The frame records the metric concept, entity
 grain, dimension roles, canonical member values, reporting-time role,
 calendar/timezone, completeness policy, comparison alignment, ranking basis,
@@ -84,12 +84,12 @@ Examples:
 The selected plan is immutable. A compatible certified block is adopted as the
 complete implementation; otherwise the semantic adapter compiles that same
 plan; a plan over raw tables is handed to the AI, which writes review-required
-SQL from the schema (amendment A-004). DQL does not rebuild the question from
+SQL from the schema (amendment A-004). ZLens does not rebuild the question from
 scratch after a route has been selected.
 
 ### Receipts, explanation, and repair
 
-The execution graph produces a receipt before DQL creates business prose. Every
+The execution graph produces a receipt before ZLens creates business prose. Every
 number, comparison, rank, freshness statement, and material caveat in the
 deterministic narrative points to a result fact and that receipt. Unsupported
 numbers or causal claims fail closed.

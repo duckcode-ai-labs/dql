@@ -6,66 +6,66 @@ Real fixes for the things that bite people first.
 
 ## Setup
 
-### `dql` says "command not found"
+### `zlens` says "command not found"
 
 **In a scaffolded project** the CLI is a local dev dependency, exposed through
 npm scripts (`npm run notebook`, `npm run compile`, …). For ad-hoc commands
 use `npx`:
 
 ```bash
-npx dql --version
-npx dql certify blocks/revenue_by_month.dql
+npx zlens --version
+npx zlens certify blocks/revenue_by_month.dql
 ```
 
-If `npx dql` still fails, re-run `npm install` — the dependency link
+If `npx zlens` still fails, re-run `npm install` — the dependency link
 probably broke.
 
-**With a global install** (`npm i -g @duckcodeailabs/dql-cli`), a bare `dql`
+**With a global install** (`npm i -g zlens`), a bare `zlens`
 that reports "command not found" almost always means one of three things:
 
 ```bash
-npx @duckcodeailabs/dql-cli@latest --version   # escape hatch: no PATH needed at all
-which -a dql            # a stale Homebrew / venv / old global copy shadowing it?
+npx zlens@latest --version   # escape hatch: no PATH needed at all
+which -a zlens          # a stale Homebrew / venv / old global copy shadowing it?
 hash -r                 # clear the shell's cached path, or just open a new terminal
 npm prefix -g           # ensure "<that path>/bin" is on your $PATH
-npm i -g @duckcodeailabs/dql-cli@latest   # a failed earlier install never links the bin
+npm i -g zlens@latest   # a failed earlier install never links the bin
 ```
 
 The last one is the usual culprit for existing users: before **1.6.30**, a
 global install could **fail on Node 23/24** (the current LTS is Node 24). A
-failed `npm i -g` never creates the `dql` symlink, so the command is missing
+failed `npm i -g` never creates the `zlens` symlink, so the command is missing
 even though "install" appeared to run. Reinstalling `@latest` on any Node ≥20
-fixes it — see [How do I upgrade DQL?](#how-do-i-upgrade-dql) below.
+fixes it — see [How do I upgrade ZLens?](#how-do-i-upgrade-zlens) below.
 
-### How do I upgrade DQL?
+### How do I upgrade ZLens?
 
-DQL is plain npm packages — upgrading is just installing the latest version.
+ZLens is plain npm packages — upgrading is just installing the latest version.
 
 ```bash
 # Global CLI
-npm i -g @duckcodeailabs/dql-cli@latest && dql --version
+npm i -g zlens@latest && zlens --version
 
 # Project-local CLI (recommended)
-npm i -D @duckcodeailabs/dql-cli@latest && npx dql --version
+npm i -D zlens@latest && npx zlens --version
 ```
 
-You do **not** need a working `dql` to upgrade, and you do **not** need to
-downgrade Node — 1.6.30+ installs on Node 20, 22, and 24. If `dql --version`
+You do **not** need a working `zlens` to upgrade, and you do **not** need to
+downgrade Node — 1.6.30+ installs on Node 20, 22, and 24. If `zlens --version`
 still shows the old number afterward, run `hash -r` (or open a new shell) and
-check `which -a dql` for a shadowing copy.
+check `which -a zlens` for a shadowing copy.
 
-### `dql --version` works, but `cd dql` says "no such file or directory"
+### `zlens --version` works, but `cd dql` says "no such file or directory"
 
 The CLI install only installs the command. It does not create a project folder.
-From your dbt repo root, initialize DQL first:
+From your dbt repo root, initialize ZLens first:
 
 ```bash
-dql init ./dql
+zlens init ./dql
 cd dql
-dql doctor
+zlens doctor
 ```
 
-Use `dql init .` only if you want DQL folders directly in the current repo
+Use `zlens init .` only if you want ZLens folders directly in the current repo
 root.
 
 ### Optional connector package errors
@@ -92,11 +92,11 @@ npm install
 
 ### Preview doesn't open
 
-`dql preview` opens your default browser. If you're on a headless box or
+`zlens preview` opens your default browser. If you're on a headless box or
 the open command silently fails:
 
 ```bash
-dql preview blocks/revenue_by_month.dql --no-open
+zlens preview blocks/revenue_by_month.dql --no-open
 ```
 
 It still serves on localhost; the URL is printed in the console output.
@@ -105,7 +105,7 @@ It still serves on localhost; the URL is printed in the console output.
 
 ## Authoring blocks
 
-### `dql certify` says `tests-pass: ✗` but the data looks right
+### `zlens certify` says `tests-pass: ✗` but the data looks right
 
 The certifier runs the block against `defaultConnection` from
 `dql.config.json` (or the connection you pass with `--connection`). If
@@ -113,7 +113,7 @@ your local DuckDB doesn't have the tables but your prod warehouse does,
 you'll see different test results. Pin the connection explicitly:
 
 ```bash
-dql certify blocks/foo.dql --connection duckdb
+zlens certify blocks/foo.dql --connection duckdb
 ```
 
 — and make sure the connection actually contains the tables the block
@@ -132,7 +132,7 @@ query = """
 
 ### Block doesn't show up in the manifest
 
-`dql compile` only scans `blocks/`, `dashboards/`, `workbooks/`, and
+`zlens compile` only scans `blocks/`, `dashboards/`, `workbooks/`, and
 `apps/<id>/blocks/` (when configured). If your block lives somewhere
 else, add the directory to `dql.config.json`:
 
@@ -146,14 +146,14 @@ else, add the directory to `dql.config.json`:
 
 The manifest keys by `block.name` (the string after `block "..."`). If
 two `.dql` files both declare `block "foo"`, the second one silently
-overwrites the first — but `dql validate` catches it as an error. Run
-`dql validate` early.
+overwrites the first — but `zlens validate` catches it as an error. Run
+`zlens validate` early.
 
 ---
 
 ## Apps + Local Policies
 
-### `dql app build` says "homepage references unknown dashboard"
+### `zlens app build` says "homepage references unknown dashboard"
 
 Either:
 
@@ -208,12 +208,12 @@ domains.
 
 ## Agent
 
-### `dql agent ask` says "KG not built"
+### `zlens agent ask` says "KG not built"
 
 Run the reindex:
 
 ```bash
-dql agent reindex
+zlens agent reindex
 ```
 
 That's the build step for `.dql/cache/agent-kg.sqlite`. It's also a no-op
@@ -225,7 +225,7 @@ Check `available()` per-provider:
 
 ```bash
 node -e "
-  const a = require('@duckcodeailabs/dql-agent');
+  const a = require('@zlens/agent');
   for (const name of ['claude','openai','gemini','ollama']) {
     a.buildProvider(name).available().then(ok => console.log(name, ok));
   }
@@ -260,7 +260,7 @@ that failure.
   appropriate, then use **Refresh snapshot and prepare retry**. Do not replace
   the governed relation with a similarly named table.
 - `PERMISSION_DENIED`: change to an explicitly authorized connection or request
-  access. DQL will not retry another source automatically.
+  access. ZLens will not retry another source automatically.
 - `DIALECT_ERROR` or `AMBIGUOUS_COLUMN`: open the retained DQL/SQL in Notebook,
   edit the derived copy, and rerun through the normal guards. The source run and
   its receipt remain unchanged.
@@ -269,7 +269,7 @@ that failure.
   the plan, so the result cannot be narrated or saved as a complete answer.
 
 For “today” and other relative periods, `latest_complete` also needs a governed
-reporting-time dimension and an authorized freshness observation. DQL performs
+reporting-time dimension and an authorized freshness observation. ZLens performs
 one bounded lookup using the already selected semantic metric/time members. A
 missing table or permission during that lookup is reported with the same stable
 warehouse failure code.
@@ -304,20 +304,20 @@ In order of likelihood:
 The bot acks immediately ("Working on it…") then posts the real reply
 via `response_url`. If the response URL POST fails (firewall, DNS,
 timeouts), Slack will not retry. Check the bot logs for the failed
-fetch — `dql slack serve` doesn't yet have structured logging; pipe to
+fetch — `zlens slack serve` doesn't yet have structured logging; pipe to
 a file or wrap with `2>&1 | tee dql-slack.log`.
 
 ---
 
-## CI / `dql verify`
+## CI / `zlens verify`
 
-### `dql verify` says "drift" but the diff looks empty
+### `zlens verify` says "drift" but the diff looks empty
 
 The diff prints terse change descriptions. To see the full per-block
 diff, use `--format json`:
 
 ```bash
-dql verify --format json | jq
+zlens verify --format json | jq
 ```
 
 Common silent drift causes:
@@ -330,11 +330,11 @@ If you can't pin it, force a fresh compile and inspect:
 
 ```bash
 mv dql-manifest.json /tmp/old-manifest.json
-dql compile
+zlens compile
 diff /tmp/old-manifest.json dql-manifest.json | head -80
 ```
 
-### `dql certify` is non-deterministic in CI
+### `zlens certify` is non-deterministic in CI
 
 If a block test like `assert row_count >= 100` flickers, the underlying data
 is non-deterministic. Either:

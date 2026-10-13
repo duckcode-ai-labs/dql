@@ -1,6 +1,6 @@
 # OpenLineage export
 
-DQL emits [OpenLineage](https://openlineage.io) events from block and
+ZLens emits [OpenLineage](https://openlineage.io) events from block and
 notebook runs so your existing metadata platform sees DQL-level lineage
 alongside dbt-level lineage.
 
@@ -55,10 +55,10 @@ Verified against:
 - Block runs
 - Notebook cell runs (one event per cell)
 - Dashboard compilations
-- dbt-backed DQL compile/sync metadata, when dbt artifacts are configured
+- dbt-backed ZLens compile/sync metadata, when dbt artifacts are configured
 
 ## Schema version
 
-DQL currently emits [OpenLineage spec
+ZLens currently emits [OpenLineage spec
 0.19](https://openlineage.io/spec). Facet support is full for `schema`,
 `columnLineage` (commercial build), and `sql`.
