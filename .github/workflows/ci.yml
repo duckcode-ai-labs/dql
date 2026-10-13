@@ -201,12 +201,8 @@ jobs:
   # setup seeds a temp copy of the jaffle fixture and starts the server with
   # cassette replay, so no live model is ever called.
   e2e:
-    name: playwright e2e (diag ${{ matrix.shard }})
+    name: playwright e2e
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        shard: [1, 2, 3, 4, 5, 6, 7, 8]
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -217,28 +213,15 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
       - run: pnpm -F @duckcodeailabs/dql-notebook-app exec playwright install --with-deps chromium
-      - run: sudo apt-get install -y -qq gdb >/dev/null
-      - name: e2e, looped with fresh servers (TEMPORARY DIAGNOSTIC)
-        working-directory: apps/dql-notebook
+      - run: pnpm -F @duckcodeailabs/dql-notebook-app test:e2e
         env:
           CI: "true"
           E2E_SKIP_BUILD: "1"
-          E2E_DIAG: "1"
-          E2E_DIAG_DEBUGGER: ${{ '0' }}
-        run: |
-          fails=0
-          for i in 1 2 3 4 5 6 7 8 9 10; do
-            echo "::group::iteration $i"
-            if ! pnpm test:e2e --output=test-results/iter-$i; then fails=$((fails+1)); echo "ITERATION $i FAILED"; fi
-            echo "::endgroup::"
-          done
-          echo "FAILS=$fails"
-          test $fails -eq 0
       - name: upload Playwright report
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-report-${{ matrix.shard }}
+          name: playwright-report
           path: |
             apps/dql-notebook/playwright-report/
             apps/dql-notebook/test-results/
