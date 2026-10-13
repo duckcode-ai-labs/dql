@@ -5,6 +5,8 @@ import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 
+import { copyLicenseFiles } from './package-license-files.mjs';
+
 export const RELEASE_PACKAGE_PATHS = [
   // Order matters — leaf packages first, leaves of leaves before that. The
   // CLI is published last because it depends on every other workspace package.
@@ -28,6 +30,14 @@ export const RELEASE_PACKAGE_PATHS = [
   'apps/cli',
   'packages/create-dql-app',
 ];
+
+/**
+ * The file name each release package carries the Apache-2.0 text under. vsce
+ * looks for LICENSE.txt, so the VS Code extension keeps that name.
+ */
+export function licenseFileFor(relPath) {
+  return relPath === 'apps/vscode-extension' ? 'LICENSE.txt' : 'LICENSE';
+}
 
 export const RELEASE_TAGS = new Set(['latest', 'next']);
 
@@ -391,6 +401,9 @@ export async function main({ argv = process.argv.slice(2), cwd = process.cwd(), 
     for (const { relPath, manifest } of packageManifests) {
       const packageDir = path.join(cwd, relPath);
       pruneDistTestArtifacts(packageDir);
+      // Each package's prepack does this too; doing it here as well keeps the
+      // licence text in the tarball when npm/pnpm run with ignore-scripts.
+      copyLicenseFiles(packageDir, { licenseFile: licenseFileFor(relPath), root: cwd });
       if (release.dryRun) {
         console.log(`\n==> Packing ${relPath} for npm dist-tag ${release.tag}`);
         await run('pnpm', ['pack', '--pack-destination', artifactsDir], packageDir);

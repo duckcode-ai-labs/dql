@@ -3,6 +3,7 @@
   "version": "1.6.1",
   "private": true,
   "description": "Tauri desktop wrapper for the DQL notebook + CLI sidecar.",
+  "license": "Apache-2.0",
   "scripts": {
     "dev": "tauri dev",
     "build": "echo 'skipping tauri build — use release-desktop workflow'",

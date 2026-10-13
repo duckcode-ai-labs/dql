@@ -2,12 +2,16 @@
   "name": "@duckcodeailabs/dql-plugin-api",
   "version": "1.17.3",
   "description": "Stable plugin contracts for DQL \u2014 connectors, chart renderers, governance rule packs. Frozen at v1.0.",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "type": "module",
   "repository": {
     "type": "git",
     "url": "https://github.com/duckcode-ai-labs/dql.git",
     "directory": "packages/dql-plugin-api"
+  },
+  "homepage": "https://github.com/duckcode-ai-labs/dql",
+  "bugs": {
+    "url": "https://github.com/duckcode-ai-labs/dql/issues"
   },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -31,11 +35,14 @@
   },
   "files": [
     "dist",
-    "README.md"
+    "README.md",
+    "LICENSE",
+    "NOTICE"
   ],
   "scripts": {
     "build": "rm -rf dist tsconfig.tsbuildinfo && tsc",
-    "test": "vitest run"
+    "test": "vitest run",
+    "prepack": "node ../../scripts/package-license-files.mjs"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

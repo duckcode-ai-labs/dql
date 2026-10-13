@@ -29,6 +29,20 @@ Changes merged after `v1.17.3` (`git log 2ad841be..main`). Not on npm yet.
   hook, and fail-closed handling of malformed answers; hooks belong to one
   server instance. The host package exports the statement check.
 
+### Licence: Apache-2.0 for every package
+
+- `create-dql-app`, `@duckcodeailabs/dql-openlineage`,
+  `@duckcodeailabs/dql-plugin-api` and `@duckcodeailabs/dql-telemetry` change
+  from MIT to Apache-2.0 from the next release, so every DQL package is now
+  Apache-2.0. Versions already on npm (up to and including 1.17.2) keep the
+  MIT licence they were published under.
+- `LICENSE` is now the verbatim Apache License 2.0 text, and a new `NOTICE`
+  names the copyright holder (DuckCode AI Labs). Every npm package and the VS
+  Code extension now ship both files; a test packs each one to check.
+- Every published `package.json` links the repository home page and issue
+  tracker. `THIRD_PARTY_NOTICES.md` records the upstream licences of the
+  GitLab and jaffle-shop test fixtures.
+
 ### Certified answers first
 
 - A certified block now answers a question when it computes the same thing as

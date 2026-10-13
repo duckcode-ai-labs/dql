@@ -22,18 +22,25 @@
     "test:offline": "node scripts/test-offline.mjs",
     "bench:manifest": "tsx bench/manifest-bench.ts",
     "clean": "rm -rf dist tsconfig.tsbuildinfo",
-    "prepublishOnly": "pnpm run build"
+    "prepublishOnly": "pnpm run build",
+    "prepack": "node ../../scripts/package-license-files.mjs"
   },
   "publishConfig": {
     "access": "public"
   },
   "files": [
-    "dist"
+    "dist",
+    "LICENSE",
+    "NOTICE"
   ],
   "repository": {
     "type": "git",
     "url": "https://github.com/duckcode-ai-labs/dql.git",
     "directory": "apps/cli"
+  },
+  "homepage": "https://github.com/duckcode-ai-labs/dql",
+  "bugs": {
+    "url": "https://github.com/duckcode-ai-labs/dql/issues"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.104.2",

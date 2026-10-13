@@ -21,15 +21,22 @@
     "build:bundle": "node build.mjs",
     "test": "vitest run --passWithNoTests",
     "clean": "rm -rf dist tsconfig.tsbuildinfo",
-    "prepublishOnly": "pnpm run build"
+    "prepublishOnly": "pnpm run build",
+    "prepack": "node ../../scripts/package-license-files.mjs"
   },
   "files": [
-    "dist"
+    "dist",
+    "LICENSE",
+    "NOTICE"
   ],
   "repository": {
     "type": "git",
     "url": "https://github.com/duckcode-ai-labs/dql.git",
     "directory": "packages/dql-runtime"
+  },
+  "homepage": "https://github.com/duckcode-ai-labs/dql",
+  "bugs": {
+    "url": "https://github.com/duckcode-ai-labs/dql/issues"
   },
   "publishConfig": {
     "access": "public"
