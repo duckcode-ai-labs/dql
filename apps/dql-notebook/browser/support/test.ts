@@ -1,4 +1,8 @@
 import { test as base, expect } from '@playwright/test';
+import { execFile } from 'node:child_process';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+const here = dirname(fileURLToPath(import.meta.url));
 
 // DIAGNOSTIC BRANCH ONLY: on a hang, pause V8 and print the JS stack.
 export const test = base.extend({
@@ -30,6 +34,11 @@ export const test = base.extend({
     });
     const timers = [20_000, 30_000, 40_000].map((ms) => setTimeout(() => {
       console.log(tag, `WATCHDOG ${ms}ms: sending Debugger.pause`);
+      if (ms === 20_000 && process.platform === 'linux') {
+        execFile('bash', [join(here, 'hang-dump.sh')], { timeout: 60_000, maxBuffer: 20 * 1024 * 1024 }, (err, stdout, stderr) => {
+          console.log(stdout); if (stderr) console.log('hang-dump stderr:', stderr.slice(0, 2000)); if (err) console.log('hang-dump error:', String(err));
+        });
+      }
       if (!debuggerUpfront) void cdp.send('Debugger.enable').then(() => console.log(tag, 'late Debugger.enable ok')).catch((err) => console.log(tag, 'late enable failed', String(err)));
       void cdp.send('Debugger.pause').then(() => console.log(tag, 'pause ack')).catch((err) => console.log(tag, 'pause failed', String(err)));
       void cdp.send('Runtime.evaluate', { expression: '1+1', timeout: 2000 }).then(() => console.log(tag, 'evaluate ok')).catch((err) => console.log(tag, 'evaluate failed', String(err)));
