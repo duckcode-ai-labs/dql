@@ -15683,7 +15683,7 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
         ...(run?.askAgentRuntimeMode ? { runtimeMode: run.askAgentRuntimeMode } : {}),
       };
       // RFC 0010: a reviewer reading someone else's trace gets it rebuilt from an allowlist: how it was answered, no value.
-      res.end(serializeJSON(ownsRun ? detail : traceDetailForReviewer(detail, { secret: traceReviewSecret(), dialect: connection?.driver, run })));
+      res.end(serializeJSON(ownsRun ? detail : traceDetailForReviewer(detail, { secret: traceReviewSecret(), dialect: connection?.driver, run, catalog: askPipelineHost.catalogNames() })));
       return;
     }
 
@@ -15778,7 +15778,7 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
         ...(run?.askAgentRuntimeMode ? { runtimeMode: run.askAgentRuntimeMode } : {}),
       };
       // RFC 0010: a reviewer reading someone else's trace gets it rebuilt from an allowlist: how it was answered, no value.
-      res.end(serializeJSON(ownsRun ? detail : traceDetailForReviewer(detail, { secret: traceReviewSecret(), dialect: connection?.driver, run })));
+      res.end(serializeJSON(ownsRun ? detail : traceDetailForReviewer(detail, { secret: traceReviewSecret(), dialect: connection?.driver, run, catalog: askPipelineHost.catalogNames() })));
       return;
     }
 

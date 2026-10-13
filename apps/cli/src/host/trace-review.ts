@@ -73,7 +73,7 @@ const DIALECTS: Record<string, { doubleQuoteIdentifier: boolean; hashComments: b
   sqlite: { doubleQuoteIdentifier: false, hashComments: false, tripleQuotes: false, nestedComments: false, qQuotes: false },
 };
 
-interface LiteralReading { backslash: boolean; doubleQuoteString: boolean; tripleQuote: boolean; hashComment: boolean; nested: boolean; qQuote: boolean }
+interface LiteralReading { backslash: boolean; doubleQuoteString: boolean; tripleQuote: boolean; hashComment: boolean; nested: boolean; qQuote: boolean; keepQuoted?: (content: string) => boolean }
 const Q_CLOSE: Record<string, string> = { '[': ']', '{': '}', '(': ')', '<': '>' };
 
 /** Marks the contents of every string literal, quoted string, dollar-quoted string and comment under one reading of the SQL. */
@@ -149,7 +149,9 @@ function markLiterals(sql: string, masked: Uint8Array, reading: LiteralReading):
         }
         j += 1;
       }
-      mark(i + 1, j);
+      // On a dialect where "…" may be a string, a "…" that names one of the project's relations or columns is read as
+      // the identifier it is, so the tables and joins stay readable.
+      if (!(c === '"' && reading.keepQuoted?.(sql.slice(i + 1, j)))) mark(i + 1, j);
       i = j + 1;
       continue;
     }
@@ -166,7 +168,7 @@ const NUMBER = /(?<![A-Za-z0-9_$"`])(?:0[xX][0-9a-fA-F]+|\d+(?:\.\d*)?(?:[eE][+-
  * nested comments, BigQuery triple quotes, Oracle `q'[…]'`, with and without backslash escapes) and whatever is a
  * literal in ANY reading is masked. Reading too much as a literal only hides more.
  */
-export function maskSqlLiterals(sql: string, dialect?: string): string {
+export function maskSqlLiterals(sql: string, dialect?: string, keepQuoted?: (content: string) => boolean): string {
   const profile = DIALECTS[(dialect ?? '').toLowerCase()];
   const either = [false, true];
   const masked = new Uint8Array(sql.length);
@@ -175,7 +177,7 @@ export function maskSqlLiterals(sql: string, dialect?: string): string {
       for (const tripleQuote of profile ? [profile.tripleQuotes] : either) {
         for (const hashComment of profile ? [profile.hashComments] : either) {
           for (const nested of profile ? [profile.nestedComments] : either) {
-            for (const qQuote of profile ? [profile.qQuotes] : either) markLiterals(sql, masked, { backslash, doubleQuoteString, tripleQuote, hashComment, nested, qQuote });
+            for (const qQuote of profile ? [profile.qQuotes] : either) markLiterals(sql, masked, { backslash, doubleQuoteString, tripleQuote, hashComment, nested, qQuote, ...(keepQuoted ? { keepQuoted } : {}) });
           }
         }
       }
@@ -194,53 +196,104 @@ export function maskSqlLiterals(sql: string, dialect?: string): string {
 }
 
 /**
- * Names a result column or an alias may keep: what the project names (vocabulary refs, Dataset metrics and dimensions,
- * the relations read, result columns the answer tied to a ref) and the columns a statement reads by qualified name.
- * Anything else may be a value the model named a column after (`AS Chicago`, a pivot) and is renamed `column_<n>`.
+ * Names a result column or a SQL identifier may keep: what the project itself names (the catalog the Ask host knows:
+ * relations and their parts, their columns, metrics, measures, dimensions, entities, models and block outputs; and the
+ * refs, Dataset metrics and dimensions and relations of this run). Anything else may be a value the model named
+ * something after (`AS Chicago`, a pivot, a CTE column) and is renamed, the same way everywhere it appears.
  */
 export class ColumnNames {
   private readonly known = new Set<string>();
   private readonly renamed = new Map<string, string>();
+  private tables = 0;
+  private columns = 0;
   constructor(names: Iterable<string>) { for (const name of names) this.add(name); }
   add(name: string): void {
-    const clean = name.replace(/^["`[]|["`\]]$/g, '').trim().toLowerCase();
+    const clean = unquote(name).toLowerCase();
     if (clean) this.known.add(clean);
   }
   /** Every part of a ref (`metric:orders.order_total` → orders, order_total) is a name the project uses. */
   addRef(ref: string): void {
     for (const part of ref.replace(/^[a-z_]+:/i, '').split(/[.:/]/)) this.add(part);
   }
-  isKnown(name: string): boolean { return this.known.has(name.replace(/^["`[]|["`\]]$/g, '').trim().toLowerCase()); }
-  /** The name as a reviewer reads it: kept when known, otherwise the same `column_<n>` everywhere it appears. */
-  name(name: string): string {
+  isKnown(name: string): boolean { return this.known.has(unquote(name).toLowerCase()); }
+  /** The name as a reviewer reads it: kept when known, otherwise `column_<n>` (or `t_<n>` for a table alias), the same everywhere. */
+  name(name: string, kind: 'column' | 'table' = 'column'): string {
     if (this.isKnown(name)) return name;
-    const key = name.trim().toLowerCase();
-    if (!this.renamed.has(key)) this.renamed.set(key, `column_${this.renamed.size + 1}`);
+    const key = unquote(name).toLowerCase();
+    if (!this.renamed.has(key)) this.renamed.set(key, kind === 'table' ? `t_${++this.tables}` : `column_${++this.columns}`);
     return this.renamed.get(key)!;
   }
 }
 
-/** Learns the columns a statement reads by qualified name (`c.customer_name`, `"dev"."orders"`): real names, not values. */
-function learnQualified(sql: string, names: ColumnNames): void {
-  for (const match of sql.matchAll(/(?:"[^"]+"|`[^`]+`|[A-Za-z_][A-Za-z0-9_$]*)(?:\.(?:"[^"]+"|`[^`]+`|[A-Za-z_][A-Za-z0-9_$]*))+/g)) {
-    for (const part of match[0].match(/"[^"]+"|`[^`]+`|[A-Za-z_][A-Za-z0-9_$]*/g) ?? []) names.add(part);
-  }
-}
+const unquote = (name: string) => name.trim().replace(/^["`[]|["`\]]$/g, '').replace(/""/g, '"').trim();
 
-/** Types a `CAST(x AS …)` names: not aliases. */
-const SQL_TYPES = new Set(['int', 'integer', 'bigint', 'smallint', 'tinyint', 'hugeint', 'ubigint', 'int64', 'float', 'float64', 'double', 'real', 'decimal', 'numeric', 'number', 'varchar', 'char', 'text', 'string', 'date', 'datetime', 'time', 'timestamp', 'timestamptz', 'timestamp_ntz', 'timestamp_tz', 'boolean', 'bool', 'interval', 'json', 'variant', 'bytes', 'blob', 'uuid', 'struct', 'array', 'map', 'object', 'signed', 'unsigned', 'materialized', 'not', 'double precision']);
+/** Words SQL itself uses (keywords, types, date parts): not names a model chose. */
+const SQL_WORDS = new Set(`
+select from where group by order having limit offset join inner left right full outer cross on using as and or not in is null like ilike rlike
+between case when then else end distinct all any some union intersect except minus with recursive asc desc nulls first last over partition
+rows range groups unbounded preceding following current row true false interval cast try_cast exists filter within top fetch next only
+lateral natural qualify window tablesample values set escape similar to at zone collate pivot unpivot for apply grouping sets cube rollup
+day days month months year years week weeks quarter quarters hour hours minute minutes second seconds millisecond milliseconds microsecond
+epoch dow doy isodow isoyear dayofweek dayofyear century decade millennium timezone
+int integer bigint smallint tinyint hugeint ubigint uinteger usmallint utinyint int2 int4 int8 int64 float float4 float8 float64 double real
+decimal numeric number varchar nvarchar char nchar character varying text string date datetime datetime2 time timestamp timestamptz
+timestamp_ntz timestamp_tz timestamp_ltz boolean bool interval json jsonb variant bytes bytea blob uuid struct array map object signed
+unsigned materialized precision unique primary key default returning
+`.trim().split(/\s+/));
 
-/** The masked statement with unknown aliases and unknown quoted identifiers renamed (`AS Chicago` → `AS column_1`). */
+const IDENT_CHAR = /[A-Za-z0-9_$]/;
+
+/**
+ * The masked statement (maskSqlLiterals) with every identifier the project does not name renamed, as whole tokens:
+ * unquoted, "double-quoted", `backticked` and [bracketed] identifiers, aliases with or without AS, CTE names and their
+ * columns, table aliases. SQL's own words and function names stay. A qualifier (`p.` in `p.total`) becomes `t_<n>`,
+ * anything else `column_<n>`. A "…" or […] that holds a masked value (`?`) is left as it is.
+ */
 export function maskSqlNames(masked: string, names: ColumnNames): string {
-  learnQualified(masked, names);
-  return masked
-    .replace(/"([^"?]*)"|`([^`?]*)`/g, (whole, dq: string | undefined, bq: string | undefined) => {
-      const inner = dq ?? bq ?? '';
-      if (!inner || names.isKnown(inner)) return whole;
-      const quote = whole[0]!;
-      return `${quote}${names.name(inner)}${quote}`;
-    })
-    .replace(/\b(AS\s+)([A-Za-z_][A-Za-z0-9_$]*)\b/gi, (whole, as: string, alias: string) => (SQL_TYPES.has(alias.toLowerCase()) ? whole : `${as}${names.name(alias)}`));
+  const n = masked.length;
+  type Token = { start: number; end: number; name: string; open: string; close: string; word: boolean };
+  const tokens: Token[] = [];
+  let i = 0;
+  while (i < n) {
+    const c = masked[i]!;
+    if (c === "'") { const end = masked.indexOf("'", i + 1); i = end < 0 ? n : end + 1; continue; }
+    if (c === '-' && masked[i + 1] === '-') { const end = masked.indexOf('\n', i); i = end < 0 ? n : end; continue; }
+    if (c === '/' && masked[i + 1] === '*') { const end = masked.indexOf('*/', i + 2); i = end < 0 ? n : end + 2; continue; }
+    if (c === '"' || c === '`' || c === '[') {
+      const close = c === '[' ? ']' : c;
+      let j = i + 1;
+      while (j < n && !(masked[j] === close && masked[j + 1] !== close)) j += masked[j] === close ? 2 : 1;
+      const inner = masked.slice(i + 1, j);
+      // A masked string ("?"), an array or index ([?, ?]) or nothing at all is not an identifier.
+      if (inner && !/[?,'"]/.test(inner) && !(c === '[' && /^\s*$/.test(inner))) tokens.push({ start: i, end: j + 1, name: inner, open: c, close, word: false });
+      i = j + 1;
+      continue;
+    }
+    if (/[A-Za-z_]/.test(c) && !IDENT_CHAR.test(masked[i - 1] ?? '')) {
+      let j = i + 1;
+      while (j < n && IDENT_CHAR.test(masked[j]!)) j += 1;
+      tokens.push({ start: i, end: j, name: masked.slice(i, j), open: '', close: '', word: true });
+      i = j;
+      continue;
+    }
+    i += 1;
+  }
+  const after = (token: Token) => masked.slice(token.end).match(/^\s*(\S)/)?.[1];
+  // A name used as a qualifier anywhere is a table (or CTE) alias.
+  const qualifiers = new Set(tokens.filter((token) => masked[token.end] === '.').map((token) => unquote(token.name).toLowerCase()));
+  // A function call keeps its name; a CTE's header (`p(a, b) AS (`) is not one.
+  const isCall = (token: Token) => after(token) === '(' && !/^\s*\([^()]*\)\s+AS\s*\(/i.test(masked.slice(token.end));
+  let out = '';
+  let at = 0;
+  for (const token of tokens) {
+    const word = token.name.toLowerCase();
+    const keep = token.word && (SQL_WORDS.has(word) || isCall(token)) || names.isKnown(token.name);
+    if (keep) continue;
+    const renamed = names.name(token.name, qualifiers.has(unquote(token.name).toLowerCase()) ? 'table' : 'column');
+    out += masked.slice(at, token.start) + (token.word ? renamed : `${token.open}${renamed}${token.close}`);
+    at = token.end;
+  }
+  return out + masked.slice(at);
 }
 
 // ── The pipeline receipt ───────────────────────────────────────────────────────────────────────────────────
@@ -538,20 +591,47 @@ function reviewerLinks(value: unknown): Rec[] {
   }));
 }
 
-/** A value that looks like a hash, anywhere in a summary the trace store keeps: re-keyed. */
-function rekeyHashes(value: unknown, rekey: Rekey, key = ''): unknown {
-  if (typeof value === 'string') return /fingerprint$/i.test(key) || /^(?:sha256:)?[0-9a-f]{16,}$/i.test(value) ? rekey(value) : value;
-  if (Array.isArray(value)) return value.map((item) => rekeyHashes(item, rekey));
-  const record = rec(value);
-  if (!record) return value;
-  return Object.fromEntries(Object.entries(record).map(([name, item]) => [name, rekeyHashes(item, rekey, name)]));
+/** The V4 decision summary from an allowlist: counts, enums and its fingerprint re-keyed. A field added later stays out. */
+export function reviewerDecisionSummary(value: unknown, rekey: Rekey): Rec | undefined {
+  const summary = rec(value);
+  if (!summary) return undefined;
+  const understood = rec(summary.understoodRequest);
+  const ranking = rec(understood?.ranking);
+  const selected = rec(summary.selectedPlan);
+  const incident = rec(summary.terminalIncident);
+  const branches = rec(summary.researchBranchSummary);
+  return defined({
+    version: num(summary.version),
+    summaryFingerprint: rekey(summary.summaryFingerprint),
+    ...(understood ? {
+      understoodRequest: defined({
+        measures: num(understood.measures), dimensions: num(understood.dimensions), entityRequested: bool(understood.entityRequested), outputCount: num(understood.outputCount),
+        ...(ranking ? { ranking: defined({ direction: code(ranking.direction), limit: num(ranking.limit), defaultedLimit: bool(ranking.defaultedLimit) }) } : {}),
+        conversationBinding: code(understood.conversationBinding),
+      }),
+    } : {}),
+    evidenceByRole: recs(summary.evidenceByRole).map((item) => defined({ role: code(item.role), candidateCount: num(item.candidateCount) })),
+    tierDecisions: recs(summary.tierDecisions).map((item) => defined({ tier: code(item.tier), outcome: code(item.outcome), planFrozen: bool(item.planFrozen) })),
+    ...(selected ? { selectedPlan: defined({ tier: code(selected.tier), planFrozen: bool(selected.planFrozen), reviewRequired: bool(selected.reviewRequired) }) } : {}),
+    ...(incident ? { terminalIncident: defined({ version: num(incident.version), code: code(incident.code), boundary: code(incident.boundary), origin: code(incident.origin), impact: code(incident.impact), safeAction: code(incident.safeAction) }) } : {}),
+    ...(branches ? {
+      researchBranchSummary: defined({
+        version: num(branches.version), totalBranches: num(branches.totalBranches), completedBranches: num(branches.completedBranches), receiptBackedBranches: num(branches.receiptBackedBranches),
+        failedBranches: num(branches.failedBranches), timedOutBranches: num(branches.timedOutBranches), skippedBranches: num(branches.skippedBranches), partialSuccess: bool(branches.partialSuccess),
+        failureReasons: recs(branches.failureReasons).map((item) => defined({ code: code(item.code), branchCount: num(item.branchCount) })),
+        availableChildPlans: recs(branches.availableChildPlans).map((item) => defined({ tier: code(item.tier), frozenPlanCount: num(item.frozenPlanCount), branchCount: num(item.branchCount), reviewRequired: bool(item.reviewRequired) })),
+        linkedChildRunCount: num(branches.linkedChildRunCount), safeAction: code(branches.safeAction),
+      }),
+    } : {}),
+    safeNextAction: code(summary.safeNextAction),
+  });
 }
 
 // ── The answer and the whole detail ────────────────────────────────────────────────────────────────────────
 
 /** The names a reviewer may see in a run's result and SQL (see ColumnNames). */
-export function columnNamesOfRun(run: unknown): ColumnNames {
-  const names = new ColumnNames([]);
+export function columnNamesOfRun(run: unknown, catalog: Iterable<string> = []): ColumnNames {
+  const names = new ColumnNames(catalog);
   const record = rec(run);
   const receipt = rec(record?.diagnosticReceiptV9);
   const intent = rec(receipt?.intent);
@@ -583,8 +663,8 @@ export function reviewerAnswer(value: unknown, dialect?: string, names: ColumnNa
   if (!answer) return undefined;
   const gap = rec(answer.gap);
   const dql = rec(answer.dqlArtifact);
-  // The SQL first: the columns it reads by qualified name are real names.
-  const sql = typeof answer.sql === 'string' ? maskSqlNames(maskSqlLiterals(answer.sql, dialect), names) : undefined;
+  // The SQL first, so a name is numbered where it first appears.
+  const sql = typeof answer.sql === 'string' ? maskSqlNames(maskSqlLiterals(answer.sql, dialect, (content) => names.isKnown(content)), names) : undefined;
   const columns = arr(answer.columns).map((column) => (typeof column === 'string' ? column : str(rec(column)?.name))).filter((name): name is string => Boolean(name)).map((name) => names.name(name));
   return defined({
     status: code(answer.status),
@@ -611,13 +691,15 @@ export interface ReviewerTraceOptions {
   dialect?: string;
   /** The saved run, for the names its result and SQL may keep (ColumnNames). */
   run?: unknown;
+  /** The names the project itself uses (the Ask host's catalog: relations, columns, metrics, dimensions, block outputs). */
+  catalog?: Iterable<string>;
 }
 
 /** The trace detail as a reviewer who is not the asker reads it: rebuilt from REVIEWER_TRACE_FIELDS, with `valuesWithheld: true`. */
 export function traceDetailForReviewer(detail: Rec, options: ReviewerTraceOptions): Rec {
   const traceId = str(rec(detail.envelope)?.traceId) ?? '';
   const rekey = traceRekey(options.secret, traceId);
-  const names = columnNamesOfRun(options.run);
+  const names = columnNamesOfRun(options.run, options.catalog);
   const ids = new CandidateIds();
   const out: Rec = { valuesWithheld: true };
   for (const field of REVIEWER_TRACE_FIELDS) {
@@ -627,7 +709,7 @@ export function traceDetailForReviewer(detail: Rec, options: ReviewerTraceOption
       case 'spans': out.spans = reviewerSpans(detail.spans, ids); break;
       case 'candidateDecisions': out.candidateDecisions = reviewerCandidateDecisions(detail.candidateDecisions, ids); break;
       case 'links': out.links = reviewerLinks(detail.links); break;
-      case 'decisionSummary': out.decisionSummary = rekeyHashes(detail.decisionSummary, rekey); break;
+      case 'decisionSummary': out.decisionSummary = reviewerDecisionSummary(detail.decisionSummary, rekey); break;
       // The answer first: the names its SQL reads are learnt before the receipt's aliases are named.
       case 'runtimeAnswerV1': break;
       case 'runtimeReceiptV9': break;

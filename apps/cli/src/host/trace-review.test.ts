@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
-import { ColumnNames, maskSqlLiterals, maskSqlNames, RECEIPT_V9_FIELDS, reviewerAnswer, reviewerReceiptV9, reviewerSpans, rowCountBucket, traceDetailForReviewer, traceRekey } from './trace-review.js';
+import { ColumnNames, maskSqlLiterals, maskSqlNames, RECEIPT_V9_FIELDS, reviewerAnswer, reviewerDecisionSummary, reviewerReceiptV9, reviewerSpans, rowCountBucket, traceDetailForReviewer, traceRekey } from './trace-review.js';
 
 const rekey = traceRekey('secret', 'trace-1');
 const sha = (text: string) => createHash('sha256').update(text).digest('hex');
@@ -47,13 +47,44 @@ describe('maskSqlLiterals', () => {
 });
 
 describe('names a result and its SQL may keep', () => {
-  it('renames an alias or a quoted identifier the project does not name (a value), the same way in the columns', () => {
-    const names = new ColumnNames([]);
-    names.addRef('metric:orders.order_total');
-    const sql = maskSqlNames(maskSqlLiterals('SELECT c.customer_name, SUM(CASE WHEN l.location_name = \'Chicago\' THEN o.order_total END) AS Chicago, SUM(o.order_total) AS "Brittany Johnson", CAST(o.order_total AS INTEGER) AS order_total FROM "jaffle_shop"."dev"."orders" AS o JOIN customers c ON c.id = o.customer_id', 'duckdb'), names);
-    expect(sql).toBe('SELECT c.customer_name, SUM(CASE WHEN l.location_name = \'?\' THEN o.order_total END) AS column_2, SUM(o.order_total) AS "column_1", CAST(o.order_total AS INTEGER) AS order_total FROM "jaffle_shop"."dev"."orders" AS o JOIN customers c ON c.id = o.customer_id');
-    expect(['customer_name', 'Chicago', 'Brittany Johnson', 'order_total'].map((column) => names.name(column))).toEqual(['customer_name', 'column_2', 'column_1', 'order_total']);
+  const catalog = ['jaffle_shop', 'dev', 'orders', 'customers', 'locations', 'customer_name', 'customer_id', 'location_name', 'location_id', 'order_total', 'order_id', 'id'];
+
+  it('renames, as whole tokens, every identifier the project does not name: aliases with or without AS, quoted, bracketed; tables stay readable', () => {
+    const names = new ColumnNames(catalog);
+    const sql = maskSqlNames(maskSqlLiterals('SELECT c.customer_name, SUM(CASE WHEN l.location_name = \'Chicago\' THEN o.order_total END) AS Chicago, SUM(o.order_total) AS "Brittany Johnson", CAST(o.order_total AS INTEGER) AS order_total, o.order_total::text WHVAL17, o.order_id WHVAL18, SUM(o.order_total) Brooklyn FROM "jaffle_shop"."dev"."orders" AS o JOIN customers c ON c.id = o.customer_id', 'duckdb'), names);
+    expect(sql).toBe('SELECT t_1.customer_name, SUM(CASE WHEN t_2.location_name = \'?\' THEN t_3.order_total END) AS column_1, SUM(t_3.order_total) AS "column_2", CAST(t_3.order_total AS INTEGER) AS order_total, t_3.order_total::text column_3, t_3.order_id column_4, SUM(t_3.order_total) column_5 FROM "jaffle_shop"."dev"."orders" AS t_3 JOIN customers t_1 ON t_1.id = t_3.customer_id');
+    expect(['customer_name', 'Chicago', 'Brittany Johnson', 'order_total', 'WHVAL17'].map((column) => names.name(column))).toEqual(['customer_name', 'column_1', 'column_2', 'order_total', 'column_3']);
     expect(reviewerAnswer({ columns: ['West', 'CA', 'M-0003', '2024', 'a@b.test'] }, 'duckdb', new ColumnNames([]))?.columns).toEqual(['column_1', 'column_2', 'column_3', 'column_4', 'column_5']);
+  });
+
+  it('an alias carried through a CTE or a subquery is renamed where it is made and wherever it is read', () => {
+    for (const sql of [
+      'WITH p AS (SELECT c.customer_name, SUM(o.order_total) AS Chicago FROM orders o JOIN customers c ON c.customer_id = o.customer_id GROUP BY 1) SELECT p.customer_name, p.Chicago FROM p ORDER BY p.Chicago DESC',
+      'SELECT s.customer_name, s.Chicago FROM (SELECT c.customer_name, SUM(o.order_total) AS Chicago FROM orders o JOIN customers c ON c.customer_id = o.customer_id GROUP BY 1) s',
+      'WITH p(customer_name, Chicago) AS (SELECT c.customer_name, SUM(o.order_total) FROM orders o JOIN customers c ON c.customer_id = o.customer_id GROUP BY 1) SELECT * FROM p',
+    ]) {
+      const names = new ColumnNames(catalog);
+      const masked = maskSqlNames(maskSqlLiterals(sql, 'duckdb'), names);
+      expect(masked, sql).not.toMatch(/Chicago/);
+      expect(names.name('Chicago')).toMatch(/^column_\d+$/);
+      expect(masked).toContain('customer_name');
+    }
+  });
+
+  it('brackets: [Chicago] on SQLite and SQL Server is renamed; an array or an index is not an identifier', () => {
+    for (const dialect of ['sqlite', 'sqlserver', 'mssql', undefined]) {
+      const names = new ColumnNames(catalog);
+      expect(maskSqlNames(maskSqlLiterals('SELECT [WHVAL14], SUM(order_total) AS [Chicago] FROM orders', dialect), names), String(dialect)).toBe('SELECT [column_1], SUM(order_total) AS [column_2] FROM orders');
+    }
+    expect(maskSqlNames(maskSqlLiterals("SELECT list_value(1, 2)[1], x['k'] FROM orders", 'duckdb'), new ColumnNames(catalog))).toBe("SELECT list_value(?, ?)[?], column_1['?'] FROM orders");
+  });
+
+  it('where "…" may be a string, the project\'s own relation names stay readable and a "…" value is masked, never garbled', () => {
+    for (const dialect of ['sqlite', 'mysql', 'databricks', undefined]) {
+      const names = new ColumnNames(catalog);
+      expect(maskSqlNames(maskSqlLiterals('SELECT o.order_total FROM "jaffle_shop"."dev"."orders" o JOIN "jaffle_shop"."dev"."customers" c ON c.customer_id = o.customer_id WHERE c.customer_name = "Ryan Byrd"', dialect, (content) => names.isKnown(content)), names), String(dialect))
+        .toBe('SELECT t_1.order_total FROM "jaffle_shop"."dev"."orders" t_1 JOIN "jaffle_shop"."dev"."customers" t_2 ON t_2.customer_id = t_1.customer_id WHERE t_2.customer_name = "?"');
+    }
   });
 });
 
@@ -128,7 +159,22 @@ describe('traceDetailForReviewer', () => {
     expect(Object.keys(detail).sort()).toEqual(['candidateDecisions', 'decisionSummary', 'envelope', 'links', 'runtimeAnswerV1', 'runtimeMode', 'spans', 'valuesWithheld']);
     expect(detail.envelope.questionFingerprint).toMatch(/^hmac:/);
     expect(detail.candidateDecisions[0].candidateId).toBe('candidate_1');
-    expect(detail.decisionSummary.someFingerprint).toMatch(/^hmac:/);
+    expect(detail.decisionSummary).toEqual({ evidenceByRole: [], tierDecisions: [] });
     expect(reviewerAnswer({ sql: "SELECT 'x'" }, 'duckdb')).toEqual({ sql: "SELECT '?'", sqlLiteralsMasked: true, columns: [] });
+  });
+});
+
+describe('reviewerDecisionSummary', () => {
+  it('keeps counts and enums, re-keys its fingerprint, and leaves out a field it does not know', () => {
+    const summary = reviewerDecisionSummary({
+      version: 1, summaryFingerprint: 'sha256:abc', understoodRequest: { measures: 1, dimensions: 2, entityRequested: true, outputCount: 3, conversationBinding: 'none', note: 'Ryan Byrd' },
+      evidenceByRole: [{ role: 'metric', candidateCount: 2, candidateIds: ['member:x=["Ryan Byrd"]'] }], tierDecisions: [{ tier: 'semantic', outcome: 'executable', planFrozen: true }],
+      terminalIncident: { version: 1, code: 'ANALYTICAL_EXECUTION_FAILED', boundary: 'sql.execute', origin: 'warehouse', impact: 'execution_failed', safeAction: 'inspect_failure', message: 'Ryan Byrd' },
+      safeNextAction: 'none', aFieldAddedTomorrow: 'Ryan Byrd',
+    }, rekey) as any;
+    expect(JSON.stringify(summary)).not.toMatch(/Ryan|sha256/);
+    expect(summary.summaryFingerprint).toMatch(/^hmac:/);
+    expect(summary.understoodRequest).toEqual({ measures: 1, dimensions: 2, entityRequested: true, outputCount: 3, conversationBinding: 'none' });
+    expect(summary.terminalIncident.code).toBe('ANALYTICAL_EXECUTION_FAILED');
   });
 });

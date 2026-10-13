@@ -95,11 +95,35 @@ const READINGS: Record<string, string> = {
     measures: [{ ref: 'metric:orders.order_total', scope: [{ ref: 'dimension:locations.location_name', op: 'eq', values: ['philadelphia shop'], source: 'question' }] }],
     groupBy: [{ ref: 'entity:customers.customer', role: 'key' }], display: ['dimension:customers.customer_name'], ordering: { ref: 'metric:orders.order_total', direction: 'desc' }, limit: 5, expectedShape: 'ranking',
   }),
+  'top customers by order total at the philadelphia shop through a cte': intent({
+    measures: [{ ref: 'metric:orders.order_total', scope: [{ ref: 'dimension:locations.location_name', op: 'eq', values: ['philadelphia shop'], source: 'question' }] }],
+    groupBy: [{ ref: 'entity:customers.customer', role: 'key' }], display: ['dimension:customers.customer_name'], ordering: { ref: 'metric:orders.order_total', direction: 'desc' }, limit: 5, expectedShape: 'ranking',
+  }),
+  'top customers by order total at the philadelphia shop through a subquery': intent({
+    measures: [{ ref: 'metric:orders.order_total', scope: [{ ref: 'dimension:locations.location_name', op: 'eq', values: ['philadelphia shop'], source: 'question' }] }],
+    groupBy: [{ ref: 'entity:customers.customer', role: 'key' }], display: ['dimension:customers.customer_name'], ordering: { ref: 'metric:orders.order_total', direction: 'desc' }, limit: 5, expectedShape: 'ranking',
+  }),
+  'top customers by order total at the philadelphia shop without as': intent({
+    measures: [{ ref: 'metric:orders.order_total', scope: [{ ref: 'dimension:locations.location_name', op: 'eq', values: ['philadelphia shop'], source: 'question' }] }],
+    groupBy: [{ ref: 'entity:customers.customer', role: 'key' }], display: ['dimension:customers.customer_name'], ordering: { ref: 'metric:orders.order_total', direction: 'desc' }, limit: 5, expectedShape: 'ranking',
+  }),
+  'top customers by order total at the philadelphia shop in brackets': intent({
+    measures: [{ ref: 'metric:orders.order_total', scope: [{ ref: 'dimension:locations.location_name', op: 'eq', values: ['philadelphia shop'], source: 'question' }] }],
+    groupBy: [{ ref: 'entity:customers.customer', role: 'key' }], display: ['dimension:customers.customer_name'], ordering: { ref: 'metric:orders.order_total', direction: 'desc' }, limit: 5, expectedShape: 'ranking',
+  }),
   'hi': JSON.stringify({ version: 1, kind: 'conversation', reading: 'a greeting', measures: [], groupBy: [], display: [], filters: [], expectedShape: 'scalar', unresolved: [], provenance: {}, reply: 'Hello! Last time Brittany Johnson led with 1223 in lifetime spend; ask me anything.' }),
 };
 const SQL = `SELECT c.customer_name, SUM(o.order_total) AS order_total FROM "jaffle_shop"."dev"."orders" o JOIN "jaffle_shop"."dev"."customers" c ON o.customer_id = c.customer_id JOIN "jaffle_shop"."dev"."locations" l ON o.location_id = l.location_id WHERE l.location_name = 'Philadelphia' GROUP BY c.customer_name ORDER BY order_total DESC LIMIT 5`;
 /** Columns named after a shop (a value), one of them quoted. */
 const PIVOT_SQL = `SELECT c.customer_name, SUM(o.order_total) AS Philadelphia, COUNT(o.order_id) AS "Brooklyn" FROM "jaffle_shop"."dev"."orders" o JOIN "jaffle_shop"."dev"."customers" c ON o.customer_id = c.customer_id WHERE o.location_id IN (SELECT location_id FROM "jaffle_shop"."dev"."locations" WHERE location_name = 'Philadelphia') GROUP BY c.customer_name ORDER BY 2 DESC LIMIT 5`;
+const FROM_PHILADELPHIA = `FROM "jaffle_shop"."dev"."orders" o JOIN "jaffle_shop"."dev"."customers" c ON o.customer_id = c.customer_id WHERE o.location_id IN (SELECT location_id FROM "jaffle_shop"."dev"."locations" WHERE location_name = 'Philadelphia') GROUP BY c.customer_name`;
+/** AI-written statements that name a column after a shop (a value: Chicago) in the ways a reviewer's renaming must catch. */
+const NAMED_SQL: Record<string, string> = {
+  'through a cte': `WITH p AS (SELECT c.customer_name, SUM(o.order_total) AS Chicago ${FROM_PHILADELPHIA}) SELECT p.customer_name, p.Chicago FROM p ORDER BY p.Chicago DESC LIMIT 5`,
+  'through a subquery': `SELECT s.customer_name, s.Chicago FROM (SELECT c.customer_name, SUM(o.order_total) AS Chicago ${FROM_PHILADELPHIA}) s ORDER BY s.Chicago DESC LIMIT 5`,
+  'without as': `SELECT c.customer_name, SUM(o.order_total) Chicago ${FROM_PHILADELPHIA} ORDER BY 2 DESC LIMIT 5`,
+  'in brackets': `SELECT c.customer_name, SUM(o.order_total) AS [Chicago] ${FROM_PHILADELPHIA} ORDER BY 2 DESC LIMIT 5`,
+};
 const model = {
   name: 'scripted',
   available: async () => true,
@@ -107,7 +131,7 @@ const model = {
     const prompt = messages.map((message) => message.content).join('\n');
     const question = [...prompt.matchAll(/QUESTION:\s*(.+)$/gm)].at(-1)?.[1]?.trim().toLowerCase().replace(/^"|"$/g, '') ?? '';
     if (prompt.includes('JSON AnalyticalIntent')) return READINGS[question] ?? intent({ unresolved: [{ clause: question, options: [], material: true }] });
-    if (prompt.includes('You write exactly ONE read-only SQL statement')) return prompt.includes('side by side') ? PIVOT_SQL : SQL;
+    if (prompt.includes('You write exactly ONE read-only SQL statement')) return Object.entries(NAMED_SQL).find(([marker]) => question.includes(marker))?.[1] ?? (prompt.includes('side by side') ? PIVOT_SQL : SQL);
     return 'Brittany Johnson leads with 1223.';
   },
 } as unknown as DqlModelProvider;
@@ -250,6 +274,22 @@ describe('a steward reading another person\'s trace on the real pipeline: no war
     expect(answer.columns.some((column: string) => /^column_\d+$/.test(column))).toBe(true);
     expect(answer.sql).not.toMatch(/Philadelphia|Brooklyn/);
   }, 120_000);
+
+  for (const marker of Object.keys(NAMED_SQL)) {
+    it(`a column named after a value ${marker}: renamed in the columns and everywhere in the SQL, tables still readable`, async () => {
+      const run = await ask(`top customers by order total at the philadelphia shop ${marker}`);
+      const ownColumns = (run.artifacts ?? []).map((artifact: any) => artifact?.payload?.result?.columns).find(Array.isArray);
+      expect(JSON.stringify(ownColumns), `${marker}: the statement ran and Wes's own result has the column`).toMatch(/Chicago/);
+      await sweep(marker, run);
+      const { bodies } = await readAsSteward(run);
+      const answer = bodies[0]?.runtimeAnswerV1;
+      expect(answer.columns.some((column: string) => /^column_\d+$/.test(column)), marker).toBe(true);
+      expect(answer.sql, marker).not.toMatch(/Chicago/i);
+      // The project's own relations stay readable; nothing is garbled into "?"column_n.
+      expect(answer.sql, marker).toContain('"jaffle_shop"."dev"."orders"');
+      expect(answer.sql, marker).not.toMatch(/"\?"[A-Za-z_]/);
+    }, 120_000);
+  }
 
   it('a chat reply that restates figures', async () => {
     await sweep('chat', await ask('hi'));

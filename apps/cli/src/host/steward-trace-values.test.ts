@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import type { Server } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -6,7 +6,7 @@ import { createHash } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { AgentRunExecutors } from '@duckcodeailabs/dql-agent';
 import type { QueryExecutor } from '@duckcodeailabs/dql-connectors';
-import { startLocalServer } from '../local-runtime.js';
+import { hostedProjectFile, startLocalServer } from '../local-runtime.js';
 import type { DqlPrincipal } from './request-context.js';
 
 /**
@@ -172,8 +172,9 @@ describe('a steward reading another person\'s trace', () => {
       // tables and joins, the SQL with every literal masked, the columns and the row count.
       const answer = read.body.runtimeAnswerV1;
       // member_name and open_amount are not names this project's vocabulary or the statement reads by qualified name.
-      expect(answer).toMatchObject({ status: 'completed', gap: { kind: 'not_retrieved' }, failedStage: 'execute', executionErrorWithheld: true, sqlParamCount: 1, columns: ['column_2', 'column_3'], rowCountBucket: '1', sqlLiteralsMasked: true, dqlArtifact: { kind: 'semantic', name: 'q', metrics: ['order_total'], dimensions: ['customer_name'] } });
-      expect(answer.sql).toBe("SELECT member_name, open_amount AS column_1 FROM claims WHERE adjuster_id = ? AND region IN ('?', '?') AND note = '?' --?\nORDER BY open_amount DESC LIMIT ?");
+      expect(answer).toMatchObject({ status: 'completed', gap: { kind: 'not_retrieved' }, failedStage: 'execute', executionErrorWithheld: true, sqlParamCount: 1, columns: ['column_1', 'column_2'], rowCountBucket: '1', sqlLiteralsMasked: true, dqlArtifact: { kind: 'semantic', name: 'q', metrics: ['order_total'], dimensions: ['customer_name'] } });
+      // Nothing this empty project names: every identifier is renamed, the same way in the SQL and the columns.
+      expect(answer.sql).toBe("SELECT column_1, column_2 AS column_3 FROM column_4 WHERE column_5 = ? AND column_6 IN ('?', '?') AND column_7 = '?' --?\nORDER BY column_2 DESC LIMIT ?");
       const v9 = read.body.runtimeReceiptV9;
       expect(v9.tiers).toEqual([{ round: 1, tier: 'semantic', outcome: 'refused' }, { round: 97, tier: 'exploratory', outcome: 'prepared' }]);
       expect(v9.refusals).toEqual([{ tier: 'semantic', code: 'not_semantic', repairable: false }]);
@@ -209,5 +210,22 @@ describe('the asker reading their own trace', () => {
     expect(read.body.valuesWithheld).toBeUndefined();
     expect(read.body?.runtimeAnswerV1).toMatchObject({ rowsSample: [{ member_name: c('ROW'), open_amount: 98765.43 }], sqlParams: [c('PARAM')] });
     for (const where of ['GROUNDING', 'FILTER', 'READING', 'RESOLVE-REPLY', 'EXECUTED-PROOF', 'CHECK-MESSAGE', 'STORY-DETAIL', 'HEADLINE', 'SQL-IN-1', 'PROOF', 'EVALUATION', 'DQL-FILTER', 'COMPILED', 'NEW-FIELD']) expect(read.text, where).toContain(c(where));
+  });
+});
+
+describe('the key a reviewer\'s fingerprints are keyed under', () => {
+  it('without a host secret, the project\'s own key file is not readable through any file route, by the steward or anyone', async () => {
+    // A reviewer read above made the key; it lives in .dql/local/private/trace-salt.
+    const relative = '.dql/local/private/trace-salt';
+    expect(readFileSync(join(projectRoot, relative), 'utf8').trim()).toMatch(/^[0-9a-f]{64}$/);
+    expect(hostedProjectFile(projectRoot, relative, { privateDrafts: true })).toBeNull();
+    expect(hostedProjectFile(projectRoot, relative, { privateDrafts: false })).toBeNull();
+    for (const route of ['/api/notebook/file?path=', '/api/notebook-content?path=']) {
+      for (const person of ['sam', 'wes']) {
+        const read = await call(person, `${route}${encodeURIComponent(relative)}`);
+        expect(read.status, `${person} ${route}`).toBeGreaterThanOrEqual(400);
+        expect(read.text).not.toMatch(/[0-9a-f]{64}/);
+      }
+    }
   });
 });
