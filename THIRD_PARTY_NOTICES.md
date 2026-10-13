@@ -39,17 +39,40 @@ beside the fixture. The upstream project on gitlab.com now requires sign-in;
 the licence was read from public copies of the repository on GitHub
 (for example `tconbeer/gitlab-analytics-sqlfmt`, `LICENSE.md`).
 
-**`apps/cli/test/fixtures/jaffle-golden`** holds a dbt manifest
-(`target/manifest.json`, including model SQL, semantic models and metrics) built
-from dbt Labs' [`jaffle-shop`](https://github.com/dbt-labs/jaffle-shop)
-project, and a subset of its sample rows (`seeds/seed.json`). That repository
-does not publish a licence file (GitHub reports no licence for it). Its sample
-data is produced by dbt Labs'
-[`jaffle-shop-generator`](https://github.com/dbt-labs/jaffle-shop-generator),
-which is Apache-2.0, and its predecessors
-[`jaffle-shop-classic`](https://github.com/dbt-labs/jaffle-shop-classic) and
-[`jaffle_shop_duckdb`](https://github.com/dbt-labs/jaffle_shop_duckdb) are
-Apache-2.0. jaffle_shop and jaffle-shop are dbt Labs' sample projects.
+**`apps/cli/test/fixtures/jaffle-golden`** is a dbt project snapshot
+(`target/manifest.json`) shaped like dbt Labs' sample project
+[`jaffle-shop`](https://github.com/dbt-labs/jaffle-shop), plus a subset of its
+sample rows (`seeds/seed.json`). The `jaffle-shop` repository publishes no
+licence (GitHub reports none), so the manifest's code was replaced on
+2026-10-13; licences below were checked on that date.
+
+- Model SQL, the project's own macros (`cents_to_dollars` and its adapter
+  variants, `generate_schema_name`) and the unit-test rows and descriptions in
+  the manifest were written for this repository and are covered by the DQL
+  licence. They keep jaffle-shop's model, column, macro and test names and
+  produce the same columns, but contain no upstream SQL or unit-test text.
+- The manifest's remaining project metadata (model, column, semantic-model,
+  metric and saved-query names, descriptions and definitions, and the
+  configuration of the generic tests) is as `dbt parse` produced it from
+  `jaffle-shop`. It is kept because the golden harness's recorded provider
+  responses (`test-cassettes/golden`) are keyed on prompts built from it;
+  replacing it means re-recording those cassettes with a live provider.
+- The dbt macros the manifest lists come from dbt-core and dbt-adapters
+  ([`dbt-labs/dbt-core`](https://github.com/dbt-labs/dbt-core),
+  [`dbt-labs/dbt-adapters`](https://github.com/dbt-labs/dbt-adapters)),
+  [`dbt-duckdb`](https://github.com/duckdb/dbt-duckdb),
+  [`dbt-utils`](https://github.com/dbt-labs/dbt-utils) and
+  [`dbt-date`](https://github.com/godatadriven/dbt-date), all Apache-2.0.
+- The sample rows are produced by dbt Labs'
+  [`jaffle-shop-generator`](https://github.com/dbt-labs/jaffle-shop-generator),
+  which is Apache-2.0.
+
+The Apache-2.0 predecessors
+[`jaffle_shop_duckdb`](https://github.com/dbt-labs/jaffle_shop_duckdb) and
+[`jaffle-shop-classic`](https://github.com/dbt-labs/jaffle-shop-classic) were
+not used: they have only `customers` and `orders` marts, without the
+products, supplies, locations, order items and semantic layer the golden
+questions are about.
 
 **`apps/cli/test/fixtures/jaffle-semantic`**,
 **`apps/cli/test/fixtures/jaffle-supply-chain`** and
