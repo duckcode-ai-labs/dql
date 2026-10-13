@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "test": "vitest run --passWithNoTests --hookTimeout 30000 --testTimeout 20000",
+    "test:e2e": "playwright test",
     "preview": "vite preview",
     "clean": "rm -rf dist"
   },
@@ -35,6 +36,7 @@
     "zustand": "^5.0.0"
   },
   "devDependencies": {
+    "@playwright/test": "1.52.0",
     "@tailwindcss/vite": "^4.0.0",
     "@types/react": "^18.3.0",
     "@types/react-dom": "^18.3.0",
