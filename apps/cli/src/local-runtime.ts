@@ -5702,6 +5702,11 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
    * `readOnly` for the people who hold the action by role, and only those read everyone's traces. A `next` link
    * says nothing about the role (every person who may draft gets one), so it never grants this.
    */
+  /**
+   * Whether the person reading an Ask trace asked it: always without a host; with one, when the run is theirs
+   * (the owner-scoped run store finds it). A steward or admin who opens someone else's trace to review hints is not.
+   */
+  const traceReaderOwnsRun = async (runId: string): Promise<boolean> => currentRecordOwner() === undefined || Boolean(await agentRunStore.get(runId));
   const hostedMayReviewAllRuns = async (): Promise<boolean> => {
     if (!hostedRequest()) return false;
     const principal = currentPrincipal();
@@ -15634,6 +15639,8 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
         return;
       }
       const run = await traceRuns.get(runId);
+      // A reviewer reading someone else's trace sees how it was answered, never its values (RFC 0010).
+      const answer = run ? traceAnswerProjection(run, { values: await traceReaderOwnsRun(runId) }) : undefined;
       const projectedTrace = {
         ...trace,
         envelope: projectAuthoritativeV8TraceEnvelope(trace.envelope, run),
@@ -15650,7 +15657,7 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
         ...(run?.diagnosticReceiptV6 ? { runtimeReceiptV6: run.diagnosticReceiptV6 } : {}),
         ...(run?.diagnosticReceiptV8 ? { runtimeReceiptV8: run.diagnosticReceiptV8 } : {}),
         ...(run?.diagnosticReceiptV9 ? { runtimeReceiptV9: run.diagnosticReceiptV9 } : {}),
-        ...(run?.diagnosticReceiptV9 && traceAnswerProjection(run) ? { runtimeAnswerV1: traceAnswerProjection(run) } : {}),
+        ...(run?.diagnosticReceiptV9 && answer ? { runtimeAnswerV1: answer } : {}),
         ...(run?.askAgentRuntimeMode ? { runtimeMode: run.askAgentRuntimeMode } : {}),
       }));
       return;
@@ -15729,6 +15736,8 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
         return;
       }
       const run = await traceRuns.get(trace.envelope.runId);
+      // A reviewer reading someone else's trace sees how it was answered, never its values (RFC 0010).
+      const answer = run ? traceAnswerProjection(run, { values: await traceReaderOwnsRun(trace.envelope.runId) }) : undefined;
       const projectedTrace = {
         ...trace,
         envelope: projectAuthoritativeV8TraceEnvelope(trace.envelope, run),
@@ -15742,7 +15751,7 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
         ...(run?.diagnosticReceiptV6 ? { runtimeReceiptV6: run.diagnosticReceiptV6 } : {}),
         ...(run?.diagnosticReceiptV8 ? { runtimeReceiptV8: run.diagnosticReceiptV8 } : {}),
         ...(run?.diagnosticReceiptV9 ? { runtimeReceiptV9: run.diagnosticReceiptV9 } : {}),
-        ...(run?.diagnosticReceiptV9 && traceAnswerProjection(run) ? { runtimeAnswerV1: traceAnswerProjection(run) } : {}),
+        ...(run?.diagnosticReceiptV9 && answer ? { runtimeAnswerV1: answer } : {}),
         ...(run?.askAgentRuntimeMode ? { runtimeMode: run.askAgentRuntimeMode } : {}),
       }));
       return;
@@ -47016,8 +47025,19 @@ const RUNTIME_SNAPSHOT_MAX_AGE_MS = 60 * 60 * 1000; // 1 hour
  * The answer an Ask pipeline trace explains: its SQL, DQL, columns and a small
  * row sample, read from the saved run at this local API boundary (the trace
  * store itself keeps no SQL or rows).
+ *
+ * `values: false` is the trace as someone other than the asker reads it (a
+ * steward reviewing hints, RFC 0010): what the answer was built on (status,
+ * refusal, stage, SQL, DQL, columns, row count) and nothing that came out of
+ * the warehouse. The row sample goes, the SQL parameters are only counted
+ * (a parameter can carry a value bound from an earlier result), and the
+ * warehouse's error text goes (a driver error can quote a row's value).
  */
-export function traceAnswerProjection(run: { status?: string; artifacts?: Array<{ kind?: string; payload?: unknown }>; evaluations?: unknown[] }): Record<string, unknown> | undefined {
+export function traceAnswerProjection(
+  run: { status?: string; artifacts?: Array<{ kind?: string; payload?: unknown }>; evaluations?: unknown[] },
+  options: { values?: boolean } = {},
+): Record<string, unknown> | undefined {
+  const values = options.values !== false;
   const artifact = run.artifacts?.find((item) => item.kind === 'answer') ?? run.artifacts?.[0];
   const payload = (artifact?.payload && typeof artifact.payload === 'object' ? artifact.payload : {}) as Record<string, unknown>;
   const result = (payload.result && typeof payload.result === 'object' ? payload.result : {}) as { columns?: unknown[]; rows?: unknown[]; rowCount?: number };
@@ -47026,15 +47046,15 @@ export function traceAnswerProjection(run: { status?: string; artifacts?: Array<
     // How the turn ended, so the trace tells a gap, a clarification and a failure apart.
     ...(typeof run.status === 'string' ? { status: run.status } : {}),
     ...(gap ? { gap: { ...(typeof gap.kind === 'string' ? { kind: gap.kind } : {}), ...(typeof gap.message === 'string' ? { message: gap.message } : {}) } } : {}),
-    ...(typeof payload.executionError === 'string' ? { executionError: payload.executionError } : {}),
+    ...(values && typeof payload.executionError === 'string' ? { executionError: payload.executionError } : {}),
     ...(typeof payload.failedStage === 'string' ? { failedStage: payload.failedStage } : {}),
     ...(typeof payload.certifiedBlockRef === 'string' ? { certifiedBlockRef: payload.certifiedBlockRef } : {}),
     ...(Array.isArray(payload.proof) ? { proof: payload.proof.filter((line) => typeof line === 'string').slice(0, 40) } : {}),
     ...(typeof payload.sql === 'string' ? { sql: payload.sql } : {}),
-    ...(Array.isArray(payload.sqlParams) ? { sqlParams: payload.sqlParams } : {}),
+    ...(Array.isArray(payload.sqlParams) ? (values ? { sqlParams: payload.sqlParams } : { sqlParamCount: payload.sqlParams.length }) : {}),
     ...(payload.dqlArtifact && typeof payload.dqlArtifact === 'object' ? { dqlArtifact: payload.dqlArtifact } : {}),
     ...(Array.isArray(result.columns) ? { columns: result.columns } : {}),
-    ...(Array.isArray(result.rows) ? { rowsSample: result.rows.slice(0, 20) } : {}),
+    ...(values && Array.isArray(result.rows) ? { rowsSample: result.rows.slice(0, 20) } : {}),
     ...(typeof result.rowCount === 'number' ? { rowCount: result.rowCount } : {}),
     ...(Array.isArray(run.evaluations) && run.evaluations.length ? { evaluations: run.evaluations } : {}),
   };

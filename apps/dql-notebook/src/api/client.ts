@@ -1724,6 +1724,8 @@ export interface AskTraceEnvelopeV1 {
 export interface AskTraceAnswerV1 {
   sql?: string;
   sqlParams?: unknown[];
+  /** In place of sqlParams and rowsSample when someone other than the asker reads the trace (a steward reviewing hints): no values. */
+  sqlParamCount?: number;
   dqlArtifact?: { kind?: string; name?: string; source?: string; metrics?: string[]; dimensions?: string[] };
   columns?: Array<string | { name: string }>;
   rowsSample?: Array<Record<string, unknown> | unknown[]>;
