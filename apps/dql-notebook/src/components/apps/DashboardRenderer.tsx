@@ -178,6 +178,14 @@ function createDashboardRunScope(): string {
 /**
  * Grid renderer for `.dqld` dashboards backed by the live dashboard run API.
  */
+/**
+ * A run whose story can be read: not partial, not incomplete, and not stale. A stale run (superseded by a later one,
+ * or the project changed while it ran) records no evidence, so asking for its story is a 404.
+ */
+export function dashboardRunIsSettled(result: { partial?: boolean; incomplete?: unknown; stale?: boolean } | null | undefined): boolean {
+  return Boolean(result) && !result!.partial && !result!.incomplete && !result!.stale;
+}
+
 export function DashboardRenderer({
   appId,
   dashboard,
@@ -572,10 +580,10 @@ export function DashboardRenderer({
         setNowMs(settledAt);
         setPartialFromInteraction(Boolean(result.partial && boundedRefresh));
       }
-      setBusinessStory(result?.partial || result?.incomplete ? null : result?.story ?? null);
+      setBusinessStory(dashboardRunIsSettled(result) ? result?.story ?? null : null);
       latestRunIdRef.current = result?.runId ?? null;
       onRunChange?.(accepted);
-      if (result?.runId && !result.partial && !result.incomplete) {
+      if (result?.runId && dashboardRunIsSettled(result)) {
         void api.getDashboardStory(appId, dashboard.id, result.runId).then((storyResult) => {
           if (!isCurrent() || !storyResult || latestRunIdRef.current !== storyResult.runId) return;
           if (storyResult.snapshotId !== result.snapshotId || storyResult.filterFingerprint !== result.filterFingerprint || storyResult.resultFingerprint !== result.resultFingerprint || storyResult.personaFingerprint !== result.personaFingerprint) return;
@@ -2027,7 +2035,7 @@ function DashboardTile({
               ) : null}
             </div>
           ) : !isCompactMetric ? (
-            <div style={{ marginTop: 5, fontSize: 11, opacity: 0.58, fontFamily: 'var(--font-mono, monospace)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{blockRef}</div>
+            <div style={{ marginTop: 5, fontSize: 11, color: 'var(--text-secondary)', fontFamily: 'var(--font-mono, monospace)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{blockRef}</div>
           ) : null}
         </div>
       )}
