@@ -14,6 +14,14 @@ const ASK_CASSETTES_FRESH = false;
 test.beforeEach(async ({ page }) => {
   await page.goto('/');
   await expect(page.getByRole('button', { name: 'Ask', exact: true })).toBeVisible();
+  // The app shows itself once every Inter file has loaded (src/interface-fonts.ts). Clicking while one is still
+  // loading let Chromium wait forever on a font lookup on the 4-core CI runner, so the journeys start from there.
+  await expect
+    .poll(() => page.evaluate(() => {
+      const inter = [...document.fonts].filter((face) => face.family.replace(/["']/g, '') === 'Inter');
+      return inter.length > 0 && inter.every((face) => face.status === 'loaded');
+    }), { message: 'every Inter font file has loaded' })
+    .toBe(true);
 });
 
 test('opens the app and the runtime reports healthy', async ({ page, request }) => {
