@@ -7,7 +7,7 @@ for pid in $(pgrep -f -- "--type=renderer"); do
   ps -L -o tid,stat,pcpu,wchan:32,comm -p "$pid" | head -40
   cat /proc/$pid/stack 2>/dev/null | head -5 || true
   sudo -n gdb -p "$pid" -batch -nx -ex "set pagination off" -ex "info sharedlibrary" 2>/dev/null | grep -cE "^0x" || true
-  sudo -n gdb -p "$pid" -batch -nx -ex "set pagination off" -ex "thread 1" -ex "bt 60" -ex "thread apply all bt 6" 2>&1 | grep -vE "^\[New LWP|^warning|Missing separate" | head -220
+  sudo -n gdb -p "$pid" -batch -nx -ex "set pagination off" -ex "thread 1" -ex "bt 60" -ex "thread apply all bt 30" 2>&1 | grep -vE "^\[New LWP|^warning|Missing separate" | head -600
 done
 for pid in $(pgrep -f "headless_shell" | while read p; do grep -qa -- "--type=" /proc/$p/cmdline || echo $p; done); do
   echo "----- browser $pid -----"
