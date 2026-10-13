@@ -167,6 +167,10 @@ export default async function globalSetup(): Promise<() => Promise<void>> {
         server.once('exit', () => { clearTimeout(timer); done(); });
       });
     }
+    if (process.env.E2E_DIAG && existsSync(logPath)) {
+      console.log('----- DIAG server.log (tail) -----');
+      console.log(readFileSync(logPath, 'utf8').split('\n').slice(-150).join('\n'));
+    }
     rmSync(workDir, { recursive: true, force: true });
   };
 
