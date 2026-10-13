@@ -17,7 +17,8 @@ export const test = base.extend({
     page.on('requestfinished', (r) => { if (process.env.E2E_DIAG_NET) console.log(tag, 'fin', Date.now() % 100000, r.url().slice(0, 120)); });
     page.on('requestfailed', (r) => console.log(tag, 'reqfailed', r.url().slice(0, 120), r.failure()?.errorText));
     const cdp = await page.context().newCDPSession(page);
-    await cdp.send('Debugger.enable');
+    const debuggerUpfront = process.env.E2E_DIAG_DEBUGGER === '1';
+    if (debuggerUpfront) await cdp.send('Debugger.enable');
     const scripts = new Map<string, string>();
     cdp.on('Debugger.scriptParsed', (e) => scripts.set(e.scriptId, e.url));
     cdp.on('Debugger.paused', (e) => {
@@ -29,6 +30,7 @@ export const test = base.extend({
     });
     const timers = [20_000, 30_000, 40_000].map((ms) => setTimeout(() => {
       console.log(tag, `WATCHDOG ${ms}ms: sending Debugger.pause`);
+      if (!debuggerUpfront) void cdp.send('Debugger.enable').then(() => console.log(tag, 'late Debugger.enable ok')).catch((err) => console.log(tag, 'late enable failed', String(err)));
       void cdp.send('Debugger.pause').then(() => console.log(tag, 'pause ack')).catch((err) => console.log(tag, 'pause failed', String(err)));
       void cdp.send('Runtime.evaluate', { expression: '1+1', timeout: 2000 }).then(() => console.log(tag, 'evaluate ok')).catch((err) => console.log(tag, 'evaluate failed', String(err)));
     }, ms));
