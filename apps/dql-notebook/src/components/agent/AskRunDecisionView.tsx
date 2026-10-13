@@ -119,7 +119,8 @@ function DecisionNodeDetail({ node, explanation, answer, t }: { node: DecisionNo
       {node.calls?.length ? (<><div style={detailLabel(t)}>{node.calls.length === 1 ? 'AI call' : 'AI calls'}</div><AiCallList calls={node.calls} t={t} openReplies={node.calls.length === 1} /></>) : null}
       {node.checks?.length ? (<><div style={detailLabel(t)}>Checks</div><AskRunChecks checks={node.checks} t={t} /></>) : null}
       {showAnswer && answer?.dqlArtifact?.source ? (<><div style={detailLabel(t)}>DQL</div><pre style={detailCode(t)}>{answer.dqlArtifact.source}</pre></>) : null}
-      {showAnswer && answer?.sql ? (<><div style={detailLabel(t)}>SQL that ran</div><pre style={detailCode(t)}>{answer.sql}</pre></>) : null}
+      {showAnswer && answer?.sql ? (<><div style={detailLabel(t)}>{answer.sqlLiteralsMasked ? 'SQL that ran (its values shown as ?)' : 'SQL that ran'}</div><pre style={detailCode(t)}>{answer.sql}</pre></>) : null}
+      {node.kind === 'warehouse' && answer?.rowCount !== undefined && !answer.rowsSample ? <p style={{ margin: '10px 0 0', fontSize: 12, color: t.textMuted }}>{answer.rowCount} row{answer.rowCount === 1 ? '' : 's'}; the rows are the asker's to see.</p> : null}
       {node.kind === 'warehouse' && answer ? <RowsSample answer={answer} t={t} /> : null}
       {node.kind === 'end' ? (<><div style={detailLabel(t)}>Data used</div><AskRunDataUsed data={explanation.dataUsed} t={t} /></>) : null}
       {step?.notes.length ? (<><div style={detailLabel(t)}>Notes</div><ul style={{ margin: 0, paddingLeft: 16, fontSize: 12, color: t.textSecondary, display: 'grid', gap: 3 }}>{step.notes.map((note) => <li key={note}>{note}</li>)}</ul></>) : null}

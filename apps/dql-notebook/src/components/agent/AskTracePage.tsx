@@ -370,7 +370,9 @@ function TraceHeader({ trace, t, onRefresh }: { trace: AskTraceDataV1; t: Theme;
         {envelope.droppedRecordCount > 0 ? <span role="status">· {envelope.droppedRecordCount} bounded records omitted</span> : null}
       </div>
       <div style={{ marginTop: 9, fontSize: 11, color: t.textMuted, lineHeight: 1.45 }}>
-        {trace.runtimeReceiptV9
+        {trace.valuesWithheld
+          ? 'You are reviewing someone else\'s question. This trace shows how it was read and answered: each step and its outcome, refusals, timings, the tables and joins, and the SQL with its values shown as ?. It holds none of its values: no result rows, AI replies, check messages or words of the question.'
+          : trace.runtimeReceiptV9
           ? 'This local trace keeps the run record: what each AI call was for, how long it took and its reply, the checks, the SQL that ran and a sample of its rows. Full prompts, credentials and file paths are not kept.'
           : 'This local trace contains typed execution evidence only. Prompts, SQL text, result rows, provider responses, credentials, and file paths are not retained.'}
       </div>

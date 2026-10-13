@@ -368,7 +368,7 @@ export function explainAskRun(input: ExplainAskRunInput): RunExplanation | undef
       const fixed = checks.filter((check) => !check.passed && (check.attempt ?? 0) < lastAttempt).length;
       push({
         id: 'checks', kind: 'checks', title: 'Checked before running', outcome: failedNow.length ? 'failed' : 'done',
-        reason: failedNow.length ? `${failedNow.length} check${failedNow.length === 1 ? '' : 's'} failed: ${failedNow[0]!.message}` : fixed ? `All checks passed after ${fixed} failed check${fixed === 1 ? ' was' : 's were'} fixed.` : `All ${latest.length} check${latest.length === 1 ? '' : 's'} passed.`,
+        reason: failedNow.length ? `${failedNow.length} check${failedNow.length === 1 ? '' : 's'} failed: ${failedNow[0]!.message || failedNow[0]!.label}` : fixed ? `All checks passed after ${fixed} failed check${fixed === 1 ? ' was' : 's were'} fixed.` : `All ${latest.length} check${latest.length === 1 ? '' : 's'} passed.`,
         checks,
       });
     }

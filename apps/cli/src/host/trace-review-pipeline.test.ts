@@ -1,0 +1,194 @@
+import { cpSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import type { Server } from 'node:http';
+import { tmpdir } from 'node:os';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { canonicalResultBindingValue, canonicalResultRowFingerprint, memberOptionId } from '@duckcodeailabs/dql-agent';
+import { startLocalServer } from '../local-runtime.js';
+import { createSeededSqliteExecutor, type GoldenSeed } from '../testkit/seeded-sqlite-executor.js';
+import type { DqlModelProvider, DqlPrincipal } from './request-context.js';
+import { RECEIPT_V9_FIELDS } from './trace-review.js';
+
+/**
+ * A STEWARD READING SOMEONE ELSE'S ASK TRACE, ON THE REAL ASK PIPELINE (RFC 0010). The jaffle-golden fixture on its
+ * seeded engine, with a scripted model (the host's model hook) that reads each question as a person's model would and
+ * writes SQL when asked. Wes asks; Sam (who reviews answers, `hint.review`) opens
+ * each of Wes's traces by run and by id. The oracle is the warehouse itself: every customer, location, product and
+ * supply name in the seed, and every distinctive value in Wes's own rows. None may appear anywhere in what Sam reads,
+ * while Wes's own runs carry them (the positive control).
+ *
+ * Scenarios: a member grounded in the warehouse ("ryan byrd" stored as "Ryan Byrd"), two members with one name and
+ * the person's choice of one (member selection), a misspelt member the warehouse holds no match for, AI-written SQL
+ * with a literal and a follow-up bound to one of its rows, and a chat reply that restates figures. A Research run's
+ * report and story are covered in steward-trace-values.test.ts (a Research run needs many model calls to script).
+ */
+const here = dirname(fileURLToPath(import.meta.url));
+const fixtureDir = resolve(here, '../../test/fixtures/jaffle-golden');
+const seed = JSON.parse(readFileSync(join(fixtureDir, 'seeds', 'seed.json'), 'utf8')) as GoldenSeed;
+
+const wes: DqlPrincipal = { id: 'u-wes', kind: 'person', email: 'wes@example.test', source: 'host' };
+const sam: DqlPrincipal = { id: 'u-sam', kind: 'person', email: 'sam@example.test', source: 'host' };
+const people: Record<string, DqlPrincipal> = { wes, sam };
+
+const servers: Server[] = [];
+let root = '';
+let base = '';
+
+/** Names in the warehouse that only results or groundings carry (the metric and table names are not among them). */
+function seedNames(): string[] {
+  const tables = (seed as unknown as { tables: Record<string, { rows: Array<Record<string, unknown>> }> }).tables;
+  const out = new Set<string>();
+  for (const [table, column] of [['dev.customers', 'customer_name'], ['dev.locations', 'location_name'], ['dev.products', 'product_name'], ['dev.supplies', 'supply_name']] as const) {
+    for (const row of tables[table]?.rows ?? []) if (typeof row[column] === 'string' && (row[column] as string).length >= 5) out.add(row[column] as string);
+  }
+  return [...out];
+}
+
+/** Distinctive values of a run's rows: strings of 5+ characters, numbers with decimals or of 4+ digits. */
+function rowValues(run: any): string[] {
+  const out = new Set<string>();
+  for (const artifact of run?.artifacts ?? []) {
+    for (const row of artifact?.payload?.result?.rows ?? []) {
+      for (const value of Object.values(row ?? {})) {
+        if (typeof value === 'number' && Number.isFinite(value) && (!Number.isInteger(value) || Math.abs(value) >= 1000)) out.add(String(value));
+        else if (typeof value === 'string' && value.length >= 5 && !/^\d{4}-\d{2}-\d{2}/.test(value)) out.add(value);
+      }
+    }
+  }
+  return [...out];
+}
+
+const leaksIn = (text: string, values: string[]) => values.filter((value) => text.includes(JSON.stringify(value).slice(1, -1)) || text.toLowerCase().includes(value.toLowerCase()));
+
+const call = async (person: string, method: string, path: string, body?: unknown) => {
+  const response = await fetch(`${base}${path}`, {
+    method,
+    headers: { 'Content-Type': 'application/json', 'x-test-person': person },
+    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+  });
+  const text = await response.text();
+  let parsed: any;
+  try { parsed = text ? JSON.parse(text) : undefined; } catch { parsed = undefined; }
+  return { status: response.status, text, body: parsed };
+};
+const ask = async (question: string, extra: Record<string, unknown> = {}) => (await call('wes', 'POST', '/api/agent-runs', { question, requestedMode: 'ask', ...extra })).body?.run;
+
+const NAME = { ref: 'dimension:customers.customer_name', op: 'eq', source: 'question' } as const;
+const intent = (fields: Record<string, unknown>) => JSON.stringify({ version: 1, kind: 'analytics', reading: 'as asked', measures: [], groupBy: [], display: [], filters: [], expectedShape: 'scalar', unresolved: [], provenance: {}, ...fields });
+/** How the scripted model reads each question (the last QUESTION: line of the prompt). */
+const READINGS: Record<string, string> = {
+  'what is the total revenue for ryan byrd': intent({ measures: [{ ref: 'metric:orders.order_total' }], filters: [{ ...NAME, values: ['ryan byrd'] }] }),
+  'what is the total revenue for jordan lee': intent({ measures: [{ ref: 'metric:orders.order_total' }], filters: [{ ...NAME, values: ['jordan lee'] }] }),
+  'total revenue for byrd': intent({ measures: [{ ref: 'metric:orders.order_total' }], filters: [{ ...NAME, values: ['byrd'] }] }),
+  'total revenue for son': intent({ measures: [{ ref: 'metric:orders.order_total' }], filters: [{ ...NAME, values: ['son'] }] }),
+  'what is the total revenue for jordan': intent({ measures: [{ ref: 'metric:orders.order_total' }], filters: [{ ...NAME, values: ['jordan'] }] }),
+  'what is the total revenue for that customer': intent({ measures: [{ ref: 'metric:orders.order_total' }], filters: [{ ...NAME, values: ['that customer'] }] }),
+  'top customers by order total at the philadelphia shop': intent({
+    measures: [{ ref: 'metric:orders.order_total', scope: [{ ref: 'dimension:locations.location_name', op: 'eq', values: ['philadelphia shop'], source: 'question' }] }],
+    groupBy: [{ ref: 'entity:customers.customer', role: 'key' }], display: ['dimension:customers.customer_name'], ordering: { ref: 'metric:orders.order_total', direction: 'desc' }, limit: 5, expectedShape: 'ranking',
+  }),
+  'hi': JSON.stringify({ version: 1, kind: 'conversation', reading: 'a greeting', measures: [], groupBy: [], display: [], filters: [], expectedShape: 'scalar', unresolved: [], provenance: {}, reply: 'Hello! Last time Brittany Johnson led with 1223 in lifetime spend; ask me anything.' }),
+};
+const SQL = `SELECT c.customer_name, SUM(o.order_total) AS order_total FROM "jaffle_shop"."dev"."orders" o JOIN "jaffle_shop"."dev"."customers" c ON o.customer_id = c.customer_id JOIN "jaffle_shop"."dev"."locations" l ON o.location_id = l.location_id WHERE l.location_name = 'Philadelphia' GROUP BY c.customer_name ORDER BY order_total DESC LIMIT 5`;
+const model = {
+  name: 'scripted',
+  available: async () => true,
+  generate: async (messages: Array<{ role: string; content: string }>) => {
+    const prompt = messages.map((message) => message.content).join('\n');
+    const question = [...prompt.matchAll(/QUESTION:\s*(.+)$/gm)].at(-1)?.[1]?.trim().toLowerCase().replace(/^"|"$/g, '') ?? '';
+    if (prompt.includes('JSON AnalyticalIntent')) return READINGS[question] ?? intent({ unresolved: [{ clause: question, options: [], material: true }] });
+    if (prompt.includes('You write exactly ONE read-only SQL statement')) return SQL;
+    return 'Brittany Johnson leads with 1223.';
+  },
+} as unknown as DqlModelProvider;
+
+beforeAll(async () => {
+  if (!process.env.DQL_METRICFLOW_BIN) process.env.DQL_METRICFLOW_BIN = join(tmpdir(), 'dql-trace-review-no-metricflow', 'mf');
+  root = mkdtempSync(join(tmpdir(), 'dql-trace-review-'));
+  cpSync(fixtureDir, root, { recursive: true });
+  rmSync(join(root, '.dql'), { recursive: true, force: true });
+  rmSync(join(root, 'test-cassettes'), { recursive: true, force: true });
+  const port = await startLocalServer({
+    rootDir: root, projectRoot: root, executor: createSeededSqliteExecutor(seed), connection: { driver: 'sqlite', filepath: ':memory:' }, preferredPort: 0,
+    hostHooks: {
+      resolvePrincipal: (req) => people[String(req.headers['x-test-person'] ?? '')] ?? null,
+      authorize: (principal, action) => ({ allow: action !== 'hint.review' || principal.id === sam.id, reason: 'Only a steward may review.' }),
+      modelProvider: () => ({ id: 'bedrock', provider: model }),
+      isInBoundary: () => true,
+    },
+    captureServer: (created) => { servers.push(created); },
+  });
+  base = `http://127.0.0.1:${port}`;
+}, 120_000);
+
+afterAll(async () => {
+  await Promise.all(servers.splice(0).map((server) => new Promise<void>((done) => server.close(() => done()))));
+  if (root) rmSync(root, { recursive: true, force: true });
+});
+
+/** Sam reads Wes's run's trace by run and by id; Wes's own run (with its receipt) is the control. */
+async function readAsSteward(run: any): Promise<{ texts: string[]; own: string }> {
+  expect(run?.id, 'Wes\'s run').toBeTruthy();
+  const listed = (await call('sam', 'GET', '/api/ask-traces?limit=100')).body?.traces ?? [];
+  const traceId = listed.find((trace: { runId: string }) => trace.runId === run.id)?.traceId as string | undefined;
+  expect(traceId, 'Sam lists Wes\'s trace').toBeTruthy();
+  const byRun = await call('sam', 'GET', `/api/ask-traces/by-run/${encodeURIComponent(run.id)}`);
+  const byId = await call('sam', 'GET', `/api/ask-traces/${traceId}`);
+  expect(byRun.status).toBe(200);
+  expect(byId.status).toBe(200);
+  expect(byRun.body?.valuesWithheld).toBe(true);
+  for (const field of ['runtimeReceiptV5', 'runtimeReceiptV6', 'runtimeReceiptV8', 'runtimeDecisionSummary']) expect(byRun.body?.[field], field).toBeUndefined();
+  return { texts: [byRun.text, byId.text, JSON.stringify(listed)], own: JSON.stringify(run) };
+}
+
+const names = seedNames();
+const sweep = async (label: string, run: any, control = true) => {
+  const { texts, own } = await readAsSteward(run);
+  const values = [...names, ...rowValues(run)];
+  // Every field of the real receipt is classified (kept, reduced or dropped): a new field fails here until it is.
+  for (const key of Object.keys(run?.diagnosticReceiptV9 ?? {})) expect(Object.keys(RECEIPT_V9_FIELDS), `${label}: receipt field ${key} is classified in trace-review.ts`).toContain(key);
+  // Positive control: Wes's own run (receipts and rows) carries warehouse values, so a clean read by Sam means something.
+  if (control) expect(leaksIn(own, values).length, `${label}: Wes's own run carries warehouse values`).toBeGreaterThan(0);
+  const found = texts.flatMap((text) => leaksIn(text, values));
+  expect([...new Set(found)], `${label}: values in what Sam reads`).toEqual([]);
+};
+
+describe('a steward reading another person\'s trace on the real pipeline: no warehouse value anywhere', () => {
+  it('a member grounded in the warehouse ("ryan byrd" read as Ryan Byrd)', async () => {
+    await sweep('grounding', await ask('what is the total revenue for ryan byrd'));
+  }, 120_000);
+
+  it('two members with one name; a partial name that matches several (a clarification) and the person\'s choice (member selection)', async () => {
+    await sweep('two members', await ask('what is the total revenue for jordan lee'));
+    const clarify = await ask('total revenue for son');
+    await sweep('clarify', clarify);
+    // The options the clarification offers are the warehouse's own members; the person picks the first.
+    const option = [...JSON.stringify(clarify).matchAll(/"(member:dimension:customers\.customer_name=\[[^\]]*\])"/g)].map((match) => JSON.parse(`"${match[1]}"`) as string)[0];
+    expect(option, 'a member option to choose').toBeTruthy();
+    await sweep('member selection', await ask('total revenue for son', { selectedEvidenceId: option }));
+  }, 240_000);
+
+  it('a partial name widened to the one member the warehouse holds', async () => {
+    await sweep('widened', await ask('total revenue for byrd'));
+  }, 120_000);
+
+  it('AI-written SQL with a literal, and a follow-up bound to one of its rows', async () => {
+    const first = await ask('top customers by order total at the philadelphia shop');
+    await sweep('ai sql', first);
+    const artifact = (first.artifacts ?? []).find((item: any) => item?.payload?.result?.rows?.length);
+    const row = artifact?.payload?.result?.rows?.[0];
+    expect(row, 'a row to bind').toBeTruthy();
+    const result = artifact.payload.result;
+    const columns = (result.columns ?? []).map((column: any) => (typeof column === 'string' ? column : column.name));
+    const resultFingerprint = JSON.stringify(first).match(/"resultFingerprint":"([^"]+)"/)?.[1];
+    expect(resultFingerprint, 'the persisted result\'s fingerprint').toBeTruthy();
+    const binding = { version: 1, sourceRunId: first.id, sourceArtifactId: artifact.id, canonicalColumn: 'customer_name', value: canonicalResultBindingValue(row.customer_name), rowFingerprint: canonicalResultRowFingerprint({ columns }, row), resultFingerprint };
+    // The binding is checked against Wes's persisted result; whatever the reading does with it, Sam sees none of it.
+    await sweep('result binding', await ask('what is the total revenue for that customer', { selectedResultBinding: binding, threadId: first.threadId }), false);
+  }, 240_000);
+
+  it('a chat reply that restates figures', async () => {
+    await sweep('chat', await ask('hi'));
+  }, 120_000);
+});

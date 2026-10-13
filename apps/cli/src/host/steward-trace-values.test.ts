@@ -5,24 +5,23 @@ import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { AgentRunExecutors } from '@duckcodeailabs/dql-agent';
 import type { QueryExecutor } from '@duckcodeailabs/dql-connectors';
-import { startLocalServer, traceAnswerProjection } from '../local-runtime.js';
+import { startLocalServer } from '../local-runtime.js';
 import type { DqlPrincipal } from './request-context.js';
 
 /**
- * Ask observability with a host: a steward (`hint.review`) who opens another person's trace to review hints reads how
- * the answer was made (status, SQL, columns, row count) and none of its values: no row sample, no SQL parameter
- * values, no warehouse error text. The asker's own trace, and DQL without a host, keep them.
+ * Ask observability with a host: a steward (`hint.review`) who opens another person's trace to review hints reads it
+ * rebuilt from an allowlist (trace-review.ts). Here the answer and its pipeline receipt carry a canary in EVERY place a
+ * receipt is known to quote a value: member grounding, intent filters and scopes, the reading and a model reply, AI
+ * call replies, proofs, check messages, refusal and tier details, the failure message, unmet obligations, the clause
+ * ledger, required-filter text, question words, a Research run's story (its report headline) and investigation, and
+ * the answer's rows, parameters, error text, evaluation messages, gap message and DQL filters and compiled SQL. A
+ * field the receipt does not have yet is in there too. Not one canary may reach the steward; the asker keeps them all.
  */
 const wes: DqlPrincipal = { id: 'u-wes', kind: 'person', email: 'wes@harbor.example', source: 'host' };
 const sam: DqlPrincipal = { id: 'u-sam', kind: 'person', email: 'sam@harbor.example', source: 'host' };
 const people: Record<string, DqlPrincipal> = { wes, sam };
-
-/** Values only a result carries: a member's name and an amount to the cent. */
-const NAME = 'CANARY-MEMBER-Ortega';
-const AMOUNT = 98765.43;
-const PARAM = 'CANARY-BOUND-ADJ-77';
-const ERROR = "Could not convert string 'CANARY-ROW-VALUE' to INT32";
-const CANARY = /CANARY-|98765\.43/;
+const CANARY = /CANARY|98765\.43/;
+const c = (where: string) => `CANARY-${where}`;
 
 const servers: Server[] = [];
 let projectRoot = '';
@@ -37,31 +36,74 @@ const call = async (person: string, path: string) => {
   return { status: response.status, text, body: parsed };
 };
 
+const filter = (where: string) => ({ ref: 'dimension:customers.customer_name', op: 'eq', values: [c(where)], source: 'question' });
+const receipt = {
+  version: 1,
+  vocabularyFingerprint: 'sha256:vocab',
+  intent: {
+    version: 1, kind: 'analytics', reading: c('READING'), reply: c('INTENT-REPLY'),
+    measures: [{ ref: 'metric:orders.order_total', scope: [filter('SCOPE')], alias: 'order_total' }],
+    groupBy: [{ ref: 'entity:customers.customer', role: 'key' }], display: ['dimension:customers.customer_name'],
+    filters: [filter('FILTER')], expectedShape: 'ranking', unresolved: [{ clause: c('UNRESOLVED'), options: [], material: true }], provenance: { 'metric:orders.order_total': `q:${c('PROVENANCE')}` },
+    time: { ref: 'dimension:orders.ordered_at', grain: 'month', window: { start: '2025-01-01', end: '2026-01-01', expression: c('WINDOW') } },
+  },
+  reading: c('RECEIPT-READING'),
+  dispatches: [{ purpose: 'intent:resolve', ms: 12, reply: c('RESOLVE-REPLY'), label: 'read', attempt: 1 }, { purpose: 'intent:draft', ms: 30, reply: `SELECT * FROM t WHERE name = '${c('DRAFT-REPLY')}'`, label: 'draft', outcome: 'sql' }],
+  candidates: [{ tier: 'exploratory', trust: 'review_required', proof: [`applied on the data: customer_name = ${c('CANDIDATE-PROOF')}`], sqlFingerprint: 'sha256:sql', engine: 'duckdb' }],
+  checks: [{ id: 'stated_values', label: c('CHECK-LABEL'), passed: true, message: `applies '${c('CHECK-MESSAGE')}'`, attempt: 1 }],
+  refusals: [{ tier: 'semantic', code: 'not_semantic', message: c('REFUSAL-MESSAGE'), repairable: false }],
+  tiers: [{ round: 1, tier: 'semantic', outcome: 'refused', detail: c('TIER-DETAIL') }, { round: 97, tier: 'exploratory', outcome: 'prepared' }],
+  executed: { tier: 'exploratory', sqlFingerprint: 'sha256:sql', rowCount: 1, ms: 4, proofs: [`applied on the data: customer_name = ${c('EXECUTED-PROOF')}`] },
+  timings: { resolve: 12, total: 50 },
+  reuse: 'none',
+  build: { note: c('BUILD') },
+  uncovered: [c('UNCOVERED')],
+  outOfScope: [{ ref: c('OUT-OF-SCOPE') }],
+  coverage: [{ word: c('COVERAGE'), state: 'uncertain' }],
+  grounding: [`customer_name: "x" is stored as "${c('GROUNDING')}"`, `discovery: ${c('DISCOVERY')}`],
+  failure: { stage: 'execute', reason: 'sql_error', message: c('FAILURE-MESSAGE'), problems: [{ path: 'x', message: c('PROBLEM') }], warehouse: { class: 'sql_error', message: c('WAREHOUSE-MESSAGE') } },
+  warehouse: { attempts: 1, failures: 0, executions: 1 },
+  lastCompletedPhase: 'execute',
+  physicalBindings: [{ relation: '"jaffle_shop"."dev"."customers"', completeness: 'complete', columns: 4, targetFingerprint: 'sha256:t' }],
+  unmet: [{ obligation: 'display_label', message: c('UNMET'), refs: ['dimension:customers.customer_name'] }],
+  ledger: { clauses: [{ clause: c('LEDGER') }], measures: [], entries: [] },
+  context: {
+    version: 1, timings: { relevance: 3 },
+    enforced: { policies: [], requiredFilters: [`region = '${c('REQUIRED-FILTER')}'`], gaps: [c('GAP')] },
+    rendered: { byKind: { metric: 2 }, charsByKind: {}, totalChars: 10, truncated: [], skills: ['skill:x'], hints: ['hint:h1', c('HINT TEXT with space')] },
+    used: { joins: [{ source: 'ai', authority: 'none', relations: ['orders', 'customers'], keys: [{ from: 'customer_id', to: 'customer_id' }] }], relations: ['"jaffle_shop"."dev"."orders"'], tier: 'exploratory', engine: 'duckdb' },
+  },
+  policies: [{ policyId: 'policy:p', field: 'region', effect: 'required_filter' }],
+  story: [
+    { version: 1, phase: 'report', title: `Revenue fell 98765.43 at ${c('STORY-TITLE')}`, detail: `latest month with data is ${c('STORY-DETAIL')}; coverage 87%`, state: 'done', at: 1 },
+    { version: 1, phase: 'execute', title: 'Ran it', state: 'done', ms: 4, at: 2 },
+  ],
+  investigation: { headline: { text: `Revenue fell ${c('HEADLINE')}` }, queries: [{ receipt: { grounding: [c('INVESTIGATION-GROUNDING')] } }] },
+  aFieldAddedTomorrow: c('NEW-FIELD'),
+};
+
 const answerExecutor = ((input: { request: { question: string } }) => ({
   summary: `Answer to ${input.request.question}`,
-  answer: 'The largest open claim is listed below.',
+  answer: `The largest open claim is ${c('ANSWER-TEXT')}.`,
   status: 'completed',
   trustState: 'review_required',
   stopReason: 'generated_answer',
-  // The Ask pipeline's receipt: a trace explains the answer (runtimeAnswerV1) only for a run that has one.
-  askPipelineReceipt: {
-    version: 9, vocabularyFingerprint: 'v', dispatches: [], candidates: [], refusals: [],
-    tiers: [{ round: 1, tier: 'relational', outcome: 'prepared' }],
-    executed: { tier: 'relational', sqlFingerprint: 'sha256:x', rowCount: 1, ms: 3, proofs: [] },
-    timings: {}, reuse: 'none',
-  },
+  askPipelineReceipt: receipt,
   artifacts: [{
     id: 'answer-1', kind: 'answer', title: 'Answer', trustState: 'review_required',
     payload: {
       text: 'ok',
-      sql: 'SELECT member_name, open_amount FROM claims WHERE adjuster_id = ? ORDER BY open_amount DESC LIMIT 1',
-      sqlParams: [PARAM],
-      executionError: ERROR,
+      sql: `SELECT member_name, open_amount FROM claims WHERE adjuster_id = ? AND region IN ('${c('SQL-IN-1')}', '${c('SQL-IN-2')}') AND note = 'it''s ${c('SQL-QUOTED')}' -- ${c('SQL-COMMENT')}\nORDER BY open_amount DESC LIMIT 98765`,
+      sqlParams: [c('PARAM')],
+      executionError: `Could not convert string '${c('ERROR')}' to INT32`,
       failedStage: 'execute',
-      result: { columns: ['member_name', 'open_amount'], rows: [{ member_name: NAME, open_amount: AMOUNT }], rowCount: 1 },
+      gap: { kind: 'not_retrieved', message: `no stored value matches "${c('GAP-MESSAGE')}"` },
+      proof: [`applied on the data: member_name = ${c('PROOF')}`],
+      dqlArtifact: { kind: 'semantic', name: 'q', metrics: ['order_total'], dimensions: ['customer_name'], filters: [{ values: [c('DQL-FILTER')] }], compiledSql: `SELECT 1 WHERE x = '${c('COMPILED')}'`, source: c('DQL-SOURCE') },
+      result: { columns: ['member_name', 'open_amount'], rows: [{ member_name: c('ROW'), open_amount: 98765.43 }], rowCount: 1 },
     },
   }],
-  evaluations: [],
+  evaluations: [{ id: 'pipeline-preparation', label: 'Prepared', passed: true, severity: 'info', message: c('EVALUATION') }],
   nextActions: [],
 })) as unknown as NonNullable<AgentRunExecutors['generated_answer']>;
 
@@ -107,21 +149,34 @@ const traceIdOf = async (runId: string) => {
 };
 
 describe('a steward reading another person\'s trace', () => {
-  it('sees how it was answered (SQL, columns, row count, stage) and no value: by run and by id', async () => {
+  it('reads how it was answered and not one canary, by run and by id', async () => {
     const traceId = await traceIdOf(runs.wes!);
     for (const path of [`/api/ask-traces/by-run/${encodeURIComponent(runs.wes!)}`, `/api/ask-traces/${traceId}`]) {
       const read = await call('sam', path);
       expect(read.status, path).toBe(200);
-      const answer = read.body?.runtimeAnswerV1;
-      expect(answer, path).toMatchObject({ sql: expect.stringContaining('FROM claims'), columns: ['member_name', 'open_amount'], rowCount: 1, failedStage: 'execute', sqlParamCount: 1 });
-      expect(answer.rowsSample, path).toBeUndefined();
-      expect(answer.sqlParams, path).toBeUndefined();
-      expect(answer.executionError, path).toBeUndefined();
-      expect(read.text, path).not.toMatch(CANARY);
+      expect(read.text.match(new RegExp(`${CANARY.source}[A-Z0-9-]*`, 'g')) ?? [], path).toEqual([]);
+      expect(read.body.valuesWithheld, path).toBe(true);
+      // What the hint review still has: stages, tiers and their outcomes and refusal codes, timings, counts, the refs, the
+      // tables and joins, the SQL with every literal masked, the columns and the row count.
+      const answer = read.body.runtimeAnswerV1;
+      expect(answer).toMatchObject({ status: 'completed', gap: { kind: 'not_retrieved' }, failedStage: 'execute', executionErrorWithheld: true, sqlParamCount: 1, columns: ['member_name', 'open_amount'], rowCount: 1, sqlLiteralsMasked: true, dqlArtifact: { kind: 'semantic', name: 'q', metrics: ['order_total'], dimensions: ['customer_name'] } });
+      expect(answer.sql).toBe("SELECT member_name, open_amount FROM claims WHERE adjuster_id = ? AND region IN ('?', '?') AND note = '?' --?\nORDER BY open_amount DESC LIMIT ?");
+      const v9 = read.body.runtimeReceiptV9;
+      expect(v9.tiers).toEqual([{ round: 1, tier: 'semantic', outcome: 'refused' }, { round: 97, tier: 'exploratory', outcome: 'prepared' }]);
+      expect(v9.refusals).toEqual([{ tier: 'semantic', code: 'not_semantic', repairable: false }]);
+      expect(v9.checks).toEqual([{ id: 'stated_values', label: 'Applies every value the question states', passed: true, attempt: 1 }]);
+      expect(v9.dispatches.map((d: { purpose: string; reply?: string }) => [d.purpose, d.reply])).toEqual([['intent:resolve', undefined], ['intent:draft', undefined]]);
+      expect(v9.intent).toMatchObject({ kind: 'analytics', measures: [{ ref: 'metric:orders.order_total', scope: [{ ref: 'dimension:customers.customer_name', op: 'eq' }] }], filters: [{ ref: 'dimension:customers.customer_name', op: 'eq' }], time: { ref: 'dimension:orders.ordered_at', grain: 'month' } });
+      expect(v9.context.used).toMatchObject({ relations: ['"jaffle_shop"."dev"."orders"'], engine: 'duckdb', joins: [{ relations: ['orders', 'customers'], keys: [{ from: 'customer_id', to: 'customer_id' }] }] });
+      expect(v9.context.rendered.hints).toEqual(['hint:h1']);
+      expect(v9.context.enforced.requiredFilterCount).toBe(1);
+      expect(v9.story).toEqual([{ version: 1, phase: 'report', title: 'Wrote the report', state: 'done', at: 1 }, { version: 1, phase: 'execute', title: 'Ran on the warehouse', state: 'done', ms: 4, at: 2 }]);
+      for (const gone of ['reading', 'grounding', 'ledger', 'investigation', 'uncovered', 'coverage', 'outOfScope', 'build', 'aFieldAddedTomorrow']) expect(v9[gone], gone).toBeUndefined();
+      for (const gone of ['runtimeReceiptV5', 'runtimeReceiptV6', 'runtimeReceiptV8', 'runtimeDecisionSummary']) expect(read.body[gone], gone).toBeUndefined();
     }
   });
 
-  it('the list holds none of her values either', async () => {
+  it('the list holds none of her values either, and says why it ended in value-free words', async () => {
     const list = await call('sam', '/api/ask-traces?limit=100');
     expect(list.status).toBe(200);
     expect(list.text).not.toMatch(CANARY);
@@ -129,24 +184,11 @@ describe('a steward reading another person\'s trace', () => {
 });
 
 describe('the asker reading their own trace', () => {
-  it('keeps the row sample, the parameters and the error (positive control)', async () => {
+  it('keeps everything (positive control: every canary is in the run a steward reads)', async () => {
     const read = await call('sam', `/api/ask-traces/by-run/${encodeURIComponent(runs.sam!)}`);
     expect(read.status).toBe(200);
-    expect(read.body?.runtimeAnswerV1).toMatchObject({ rowsSample: [{ member_name: NAME, open_amount: AMOUNT }], sqlParams: [PARAM], executionError: ERROR });
-  });
-});
-
-describe('traceAnswerProjection', () => {
-  const run = {
-    status: 'completed',
-    artifacts: [{ kind: 'answer', payload: { sql: 'SELECT 1', sqlParams: [PARAM], executionError: ERROR, result: { columns: ['a'], rows: [{ a: AMOUNT }], rowCount: 1 } } }],
-  };
-  it('keeps values by default (DQL without a host, the asker)', () => {
-    expect(traceAnswerProjection(run)).toMatchObject({ rowsSample: [{ a: AMOUNT }], sqlParams: [PARAM], executionError: ERROR });
-  });
-  it('drops every value with values: false', () => {
-    const projection = traceAnswerProjection(run, { values: false });
-    expect(projection).toEqual({ status: 'completed', sql: 'SELECT 1', sqlParamCount: 1, columns: ['a'], rowCount: 1 });
-    expect(JSON.stringify(projection)).not.toMatch(CANARY);
+    expect(read.body.valuesWithheld).toBeUndefined();
+    expect(read.body?.runtimeAnswerV1).toMatchObject({ rowsSample: [{ member_name: c('ROW'), open_amount: 98765.43 }], sqlParams: [c('PARAM')] });
+    for (const where of ['GROUNDING', 'FILTER', 'READING', 'RESOLVE-REPLY', 'EXECUTED-PROOF', 'CHECK-MESSAGE', 'STORY-DETAIL', 'HEADLINE', 'SQL-IN-1', 'PROOF', 'EVALUATION', 'DQL-FILTER', 'COMPILED', 'NEW-FIELD']) expect(read.text, where).toContain(c(where));
   });
 });

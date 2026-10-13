@@ -1724,8 +1724,12 @@ export interface AskTraceEnvelopeV1 {
 export interface AskTraceAnswerV1 {
   sql?: string;
   sqlParams?: unknown[];
-  /** In place of sqlParams and rowsSample when someone other than the asker reads the trace (a steward reviewing hints): no values. */
+  /** In place of sqlParams when someone other than the asker reads the trace (a steward reviewing hints): no values. */
   sqlParamCount?: number;
+  /** The SQL's literals (strings, numbers, comments) are masked as `?`: the trace is read by someone other than the asker. */
+  sqlLiteralsMasked?: boolean;
+  /** The warehouse said why it failed, in words that can quote a value: withheld from someone other than the asker. */
+  executionErrorWithheld?: boolean;
   dqlArtifact?: { kind?: string; name?: string; source?: string; metrics?: string[]; dimensions?: string[] };
   columns?: Array<string | { name: string }>;
   rowsSample?: Array<Record<string, unknown> | unknown[]>;
@@ -1759,6 +1763,11 @@ export interface AskTraceDataV1 {
   runtimeAnswerV1?: AskTraceAnswerV1;
   /** Server-owned Ask rollout mode joined from the durable run; old traces omit it. */
   runtimeMode?: 'authoritative_v2' | 'pipeline_v3';
+  /**
+   * Someone other than the asker (a steward reviewing hints) is reading this trace: it was rebuilt to carry how the
+   * question was answered and none of its values (no rows, AI replies, check messages, question words; SQL masked).
+   */
+  valuesWithheld?: boolean;
 }
 
 export interface AskTraceStoreStatusV1 {

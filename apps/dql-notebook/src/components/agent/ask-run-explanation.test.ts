@@ -178,3 +178,36 @@ describe('how an Ask run was answered, as steps in plain words', () => {
     expect(plainReason('semantic_compile_failed', 'the native semantic engine could not compose metrics revenue')).toBe('The semantic engine could not compile this question: the native semantic engine could not compose metrics revenue.');
   });
 });
+
+describe('a trace read by someone other than the asker (values withheld)', () => {
+  // The shape the server sends a steward reviewing hints (apps/cli host/trace-review.ts): no reading, no AI replies,
+  // check labels without messages, story steps titled by their phase, no proofs, the SQL masked.
+  const withheld = base({
+    intent: { kind: 'analytics', measures: [], groupBy: [], display: [], filters: [{ ref: 'column:sales.opportunities.competitor', op: 'eq' }] },
+    dispatches: [
+      { purpose: 'intent:resolve', ms: 14_000, label: 'read', attempt: 1, at: 1 },
+      { purpose: 'intent:draft', ms: 5_000, label: 'draft', attempt: 1, outcome: 'sql', at: 2 },
+      { purpose: 'intent:draft', ms: 4_000, label: 'fix', attempt: 2, outcome: 'sql', at: 3 },
+    ],
+    tiers: [{ round: 97, tier: 'exploratory', outcome: 'prepared' }],
+    checks: [
+      { id: 'stated_values', label: 'Applies every value the question states', passed: false, attempt: 1 },
+      { id: 'stated_values', label: 'Applies every value the question states', passed: true, attempt: 2 },
+    ],
+    story: [{ phase: 'schema', title: 'Wrote SQL from the tables', state: 'done', at: 2 }],
+    executed: { tier: 'exploratory', rowCount: 1, ms: 120, proofs: [] },
+    timings: { resolve: 14_000, schema_draft: 9_000, total: 24_000 },
+    context: { used: { relations: ['sales.opportunities'], joins: [] } },
+    warehouse: { attempts: 1, failures: 0, executions: 1 },
+  });
+
+  it('still explains every step, with the check labels standing in for their messages', () => {
+    const explanation = explainAskRun({ receipt: withheld, payload: { sql: "SELECT COUNT(*) FROM sales.opportunities WHERE competitor = '?'", sqlLiteralsMasked: true, rowCount: 1, columns: ['count'] }, status: 'completed' }) as RunExplanation;
+    expect(explanation.ending).toBe('answered');
+    expect(explanation.steps.map((step) => step.kind)).toEqual(['read', 'semantic', 'ai_sql', 'checks', 'warehouse', 'answer']);
+    expect(explanation.aiCalls.every((call) => call.reply === undefined)).toBe(true);
+    expect(explanation.steps.find((step) => step.kind === 'checks')!.reason).toBe('All checks passed after 1 failed check was fixed.');
+    expect(explanation.steps.find((step) => step.kind === 'ai_sql')!.sql).toContain("'?'");
+    expect(explanation.dataUsed.tables).toEqual(['sales.opportunities']);
+  });
+});
