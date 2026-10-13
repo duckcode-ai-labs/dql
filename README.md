@@ -368,7 +368,12 @@ feature requests: [open an issue](https://github.com/duckcode-ai-labs/dql/issues
 
 ## License
 
-[Apache-2.0](./LICENSE), except four packages that are MIT:
+Every package in this repository is licensed under the
+[Apache License 2.0](./LICENSE); see also [NOTICE](./NOTICE). Each npm package
+ships both files. Third-party material and its licences are listed in
+[THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md).
+
 `create-dql-app`, `@duckcodeailabs/dql-openlineage`,
-`@duckcodeailabs/dql-plugin-api` and `@duckcodeailabs/dql-telemetry`. Each
-package's `package.json` names its license.
+`@duckcodeailabs/dql-plugin-api` and `@duckcodeailabs/dql-telemetry`
+were published as MIT up to and including 1.17.2; every later release is
+Apache-2.0. Versions already on npm keep the licence they were published under.

@@ -26,7 +26,18 @@ Every npm package DQL depends on carries its own licence in its package.
 ## Test fixtures
 
 These fixtures are used only by the test suite. They are not part of any npm
-package or built app.
+package or built app. Upstream licences were checked on 2026-10-13.
+
+**`apps/cli/test/fixtures/bigrepo-arr`** is a reduced slice of the dbt
+manifest of GitLab's `snowflake-dbt` project (`transform/snowflake-dbt` in the
+`gitlab-data/analytics` repository, dbt project `gitlab_snowflake`): model
+names, descriptions and column lists only, with SQL, tests, macros and data
+removed. Upstream licence: MIT, Copyright GitLab B.V. The full upstream
+licence text is in
+[`UPSTREAM-LICENSE`](apps/cli/test/fixtures/bigrepo-arr/UPSTREAM-LICENSE)
+beside the fixture. The upstream project on gitlab.com now requires sign-in;
+the licence was read from public copies of the repository on GitHub
+(for example `tconbeer/gitlab-analytics-sqlfmt`, `LICENSE.md`).
 
 **`apps/cli/test/fixtures/jaffle-golden`** is a dbt project snapshot
 (`target/manifest.json`) shaped like dbt Labs' sample project
@@ -62,3 +73,9 @@ The Apache-2.0 predecessors
 not used: they have only `customers` and `orders` marts, without the
 products, supplies, locations, order items and semantic layer the golden
 questions are about.
+
+**`apps/cli/test/fixtures/jaffle-semantic`**,
+**`apps/cli/test/fixtures/jaffle-supply-chain`** and
+**`packages/dql-mcp/src/tools/__tests__/fixtures/jaffle-shop.datalex-manifest.json`**
+were written for this repository. They reuse the jaffle-shop table and column
+names but no upstream SQL or data, and are covered by the DQL licence.

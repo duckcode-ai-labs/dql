@@ -2,9 +2,12 @@
   "name": "create-dql-app",
   "version": "1.17.3",
   "description": "Scaffold a new DQL project. Run with: npx create-dql-app <name>",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "author": "DuckCode AI Labs",
   "homepage": "https://github.com/duckcode-ai-labs/dql",
+  "bugs": {
+    "url": "https://github.com/duckcode-ai-labs/dql/issues"
+  },
   "repository": {
     "type": "git",
     "url": "https://github.com/duckcode-ai-labs/dql.git",
@@ -24,12 +27,15 @@
   "files": [
     "bin",
     "templates",
-    "README.md"
+    "README.md",
+    "LICENSE",
+    "NOTICE"
   ],
   "type": "module",
   "scripts": {
     "test": "node test/smoke.mjs",
-    "build": "echo 'no build step \u2014 pure JS'"
+    "build": "echo 'no build step \u2014 pure JS'",
+    "prepack": "node ../../scripts/package-license-files.mjs"
   },
   "engines": {
     "node": ">=20"

@@ -52,4 +52,6 @@ command. From an existing dbt repo, run `dql init ./dql` before `cd dql`.
 
 ## License
 
-MIT
+[Apache-2.0](https://github.com/duckcode-ai-labs/dql/blob/main/LICENSE). The
+package ships `LICENSE` and `NOTICE`. Versions up to and including 1.17.2 were
+published as MIT and keep that licence.

@@ -30,16 +30,23 @@
   "scripts": {
     "build": "rm -rf dist tsconfig.tsbuildinfo && tsc",
     "test": "vitest run --passWithNoTests",
-    "clean": "rm -rf dist tsconfig.tsbuildinfo"
+    "clean": "rm -rf dist tsconfig.tsbuildinfo",
+    "prepack": "node ../../scripts/package-license-files.mjs"
   },
   "files": [
     "dist",
-    "src/styles"
+    "src/styles",
+    "LICENSE",
+    "NOTICE"
   ],
   "repository": {
     "type": "git",
     "url": "https://github.com/duckcode-ai-labs/dql.git",
     "directory": "packages/dql-ui"
+  },
+  "homepage": "https://github.com/duckcode-ai-labs/dql",
+  "bugs": {
+    "url": "https://github.com/duckcode-ai-labs/dql/issues"
   },
   "publishConfig": {
     "access": "public"

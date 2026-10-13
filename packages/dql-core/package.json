@@ -113,10 +113,13 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "clean": "rm -rf dist tsconfig.tsbuildinfo",
-    "prepublishOnly": "pnpm run build"
+    "prepublishOnly": "pnpm run build",
+    "prepack": "node ../../scripts/package-license-files.mjs"
   },
   "files": [
-    "dist"
+    "dist",
+    "LICENSE",
+    "NOTICE"
   ],
   "keywords": [
     "dql",
@@ -131,6 +134,10 @@
     "type": "git",
     "url": "https://github.com/duckcode-ai-labs/dql.git",
     "directory": "packages/dql-core"
+  },
+  "homepage": "https://github.com/duckcode-ai-labs/dql",
+  "bugs": {
+    "url": "https://github.com/duckcode-ai-labs/dql/issues"
   },
   "publishConfig": {
     "access": "public"
