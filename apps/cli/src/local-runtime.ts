@@ -276,7 +276,7 @@ import type {
 import { listRemoteMcpSettings, saveRemoteMcpSettings } from './llm/mcp-config.js';
 import { knowledgeSessionFor } from './host/knowledge-sources.js';
 import { ledgeredProvider, withAnswerKnowledge, withKnowledgeWithheld } from './host/answer-knowledge.js';
-import { traceDetailForReviewer } from './host/trace-review.js';
+import { traceDetailForReviewer, traceListEntryForReviewer } from './host/trace-review.js';
 import { knowledgeContextSource, type AskStoryStepV1, type KnowledgeSession } from '@duckcodeailabs/dql-agent';
 import {
   composeBusinessExplanation,
@@ -5717,6 +5717,8 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
    * (the owner-scoped run store finds it). A steward or admin who opens someone else's trace to review hints is not.
    */
   const traceReaderOwnsRun = async (runId: string): Promise<boolean> => currentRecordOwner() === undefined || Boolean(await agentRunStore.get(runId));
+  /** The key a reviewer's trace fingerprints are re-keyed under: the host's trace secret, or this project's own. */
+  const traceReviewSecret = (): string => (questionKey ??= traceQuestionKey(projectRoot, hostHooks?.traceSalt));
   /**
    * With a host, whether this person reviews answers for the workspace (`hint.review`, the steward's action), and so
    * reads every person's Ask traces. A host with no `authorize` rule never grants it: people keep to their own.
@@ -15621,15 +15623,17 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
         const run = await runsForList.get(trace.runId);
         if (!run) return scoped ? null : trace;
         const questionPreview = askTraceQuestionPreview(run.question);
-        // A reviewer listing someone else's question reads why it ended in words that carry none of its values.
+        // A reviewer listing someone else's question reads why it ended in words that carry none of its values, and
+        // the entry's fingerprints re-keyed (trace-review.ts).
         const ownsRun = !reviewsAll || await traceReaderOwnsRun(trace.runId);
-        return {
+        const entry = {
           ...projectAuthoritativeV8TraceEnvelope(trace, run),
           ...(questionPreview ? { questionPreview } : {}),
           scenarioLabel: askTraceScenarioLabel(run),
           reason: askTraceReason(run, { values: ownsRun }),
           ...(run.askAgentRuntimeMode ? { runtimeMode: run.askAgentRuntimeMode } : {}),
         };
+        return ownsRun ? entry : traceListEntryForReviewer(entry as unknown as Record<string, unknown>, traceReviewSecret());
       }));
       const traces = listed.filter((trace): trace is NonNullable<typeof trace> => trace !== null);
       res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
@@ -15679,7 +15683,7 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
         ...(run?.askAgentRuntimeMode ? { runtimeMode: run.askAgentRuntimeMode } : {}),
       };
       // RFC 0010: a reviewer reading someone else's trace gets it rebuilt from an allowlist: how it was answered, no value.
-      res.end(serializeJSON(ownsRun ? detail : traceDetailForReviewer(detail)));
+      res.end(serializeJSON(ownsRun ? detail : traceDetailForReviewer(detail, { secret: traceReviewSecret(), dialect: connection?.driver, run })));
       return;
     }
 
@@ -15774,7 +15778,7 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
         ...(run?.askAgentRuntimeMode ? { runtimeMode: run.askAgentRuntimeMode } : {}),
       };
       // RFC 0010: a reviewer reading someone else's trace gets it rebuilt from an allowlist: how it was answered, no value.
-      res.end(serializeJSON(ownsRun ? detail : traceDetailForReviewer(detail)));
+      res.end(serializeJSON(ownsRun ? detail : traceDetailForReviewer(detail, { secret: traceReviewSecret(), dialect: connection?.driver, run })));
       return;
     }
 

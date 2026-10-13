@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { REFUSAL_SENTENCES, containsInternalCode, explainAskRun, isAskPipelineReceipt, plainReason, plainRefs, type RunExplanation } from './ask-run-explanation';
+import { REFUSAL_SENTENCES, containsInternalCode, explainAskRun, isAskPipelineReceipt, plainReason, plainRefs, rowCountWords, type RunExplanation } from './ask-run-explanation';
 
 const base = (overrides: Record<string, unknown>) => ({ version: 1, dispatches: [], tiers: [], candidates: [], refusals: [], story: [], timings: {}, ...overrides });
 
@@ -195,19 +195,23 @@ describe('a trace read by someone other than the asker (values withheld)', () =>
       { id: 'stated_values', label: 'Applies every value the question states', passed: true, attempt: 2 },
     ],
     story: [{ phase: 'schema', title: 'Wrote SQL from the tables', state: 'done', at: 2 }],
-    executed: { tier: 'exploratory', rowCount: 1, ms: 120, proofs: [] },
+    executed: { tier: 'exploratory', rowCountBucket: '2-10', ms: 120, proofs: [] },
     timings: { resolve: 14_000, schema_draft: 9_000, total: 24_000 },
     context: { used: { relations: ['sales.opportunities'], joins: [] } },
     warehouse: { attempts: 1, failures: 0, executions: 1 },
   });
 
   it('still explains every step, with the check labels standing in for their messages', () => {
-    const explanation = explainAskRun({ receipt: withheld, payload: { sql: "SELECT COUNT(*) FROM sales.opportunities WHERE competitor = '?'", sqlLiteralsMasked: true, rowCount: 1, columns: ['count'] }, status: 'completed' }) as RunExplanation;
+    const explanation = explainAskRun({ receipt: withheld, payload: { sql: "SELECT COUNT(*) AS column_1 FROM sales.opportunities WHERE competitor = '?'", sqlLiteralsMasked: true, rowCountBucket: '2-10', columns: ['column_1'] }, status: 'completed' }) as RunExplanation;
     expect(explanation.ending).toBe('answered');
     expect(explanation.steps.map((step) => step.kind)).toEqual(['read', 'semantic', 'ai_sql', 'checks', 'warehouse', 'answer']);
     expect(explanation.aiCalls.every((call) => call.reply === undefined)).toBe(true);
     expect(explanation.steps.find((step) => step.kind === 'checks')!.reason).toBe('All checks passed after 1 failed check was fixed.');
     expect(explanation.steps.find((step) => step.kind === 'ai_sql')!.sql).toContain("'?'");
     expect(explanation.dataUsed.tables).toEqual(['sales.opportunities']);
+    // A row-count range, not the count.
+    expect(explanation.steps.find((step) => step.kind === 'warehouse')!.reason).toBe('About 2-10 rows.');
+    expect(rowCountWords('none')).toBe('No rows');
+    expect(rowCountWords('1')).toBe('1 row');
   });
 });

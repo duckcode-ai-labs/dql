@@ -1734,6 +1734,8 @@ export interface AskTraceAnswerV1 {
   columns?: Array<string | { name: string }>;
   rowsSample?: Array<Record<string, unknown> | unknown[]>;
   rowCount?: number;
+  /** In place of rowCount for someone other than the asker: a range ('none', '1', '2-10', '11-100', '101-1000', 'more than 1000'). */
+  rowCountBucket?: string;
   evaluations?: Array<{ id?: string; label?: string; passed?: boolean; message?: string }>;
   status?: string;
   gap?: { kind?: string; message?: string };

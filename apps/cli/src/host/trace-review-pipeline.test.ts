@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { cpSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import type { Server } from 'node:http';
 import { tmpdir } from 'node:os';
@@ -8,7 +9,7 @@ import { canonicalResultBindingValue, canonicalResultRowFingerprint, memberOptio
 import { startLocalServer } from '../local-runtime.js';
 import { createSeededSqliteExecutor, type GoldenSeed } from '../testkit/seeded-sqlite-executor.js';
 import type { DqlModelProvider, DqlPrincipal } from './request-context.js';
-import { RECEIPT_V9_FIELDS } from './trace-review.js';
+import { RECEIPT_V9_FIELDS, rowCountBucket } from './trace-review.js';
 
 /**
  * A STEWARD READING SOMEONE ELSE'S ASK TRACE, ON THE REAL ASK PIPELINE (RFC 0010). The jaffle-golden fixture on its
@@ -59,7 +60,9 @@ function rowValues(run: any): string[] {
   return [...out];
 }
 
-const leaksIn = (text: string, values: string[]) => values.filter((value) => text.includes(JSON.stringify(value).slice(1, -1)) || text.toLowerCase().includes(value.toLowerCase()));
+const escapeRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+/** The values a text holds, each as a whole token (a number inside a hex hash is not that number). */
+const leaksIn = (text: string, values: string[]) => values.filter((value) => [value, JSON.stringify(value).slice(1, -1)].some((form) => new RegExp(`(?<![0-9A-Za-z])${escapeRegExp(form)}(?![0-9A-Za-z])`, 'i').test(text)));
 
 const call = async (person: string, method: string, path: string, body?: unknown) => {
   const response = await fetch(`${base}${path}`, {
@@ -88,9 +91,15 @@ const READINGS: Record<string, string> = {
     measures: [{ ref: 'metric:orders.order_total', scope: [{ ref: 'dimension:locations.location_name', op: 'eq', values: ['philadelphia shop'], source: 'question' }] }],
     groupBy: [{ ref: 'entity:customers.customer', role: 'key' }], display: ['dimension:customers.customer_name'], ordering: { ref: 'metric:orders.order_total', direction: 'desc' }, limit: 5, expectedShape: 'ranking',
   }),
+  'top customers by order total at the philadelphia shop side by side': intent({
+    measures: [{ ref: 'metric:orders.order_total', scope: [{ ref: 'dimension:locations.location_name', op: 'eq', values: ['philadelphia shop'], source: 'question' }] }],
+    groupBy: [{ ref: 'entity:customers.customer', role: 'key' }], display: ['dimension:customers.customer_name'], ordering: { ref: 'metric:orders.order_total', direction: 'desc' }, limit: 5, expectedShape: 'ranking',
+  }),
   'hi': JSON.stringify({ version: 1, kind: 'conversation', reading: 'a greeting', measures: [], groupBy: [], display: [], filters: [], expectedShape: 'scalar', unresolved: [], provenance: {}, reply: 'Hello! Last time Brittany Johnson led with 1223 in lifetime spend; ask me anything.' }),
 };
 const SQL = `SELECT c.customer_name, SUM(o.order_total) AS order_total FROM "jaffle_shop"."dev"."orders" o JOIN "jaffle_shop"."dev"."customers" c ON o.customer_id = c.customer_id JOIN "jaffle_shop"."dev"."locations" l ON o.location_id = l.location_id WHERE l.location_name = 'Philadelphia' GROUP BY c.customer_name ORDER BY order_total DESC LIMIT 5`;
+/** Columns named after a shop (a value), one of them quoted. */
+const PIVOT_SQL = `SELECT c.customer_name, SUM(o.order_total) AS Philadelphia, COUNT(o.order_id) AS "Brooklyn" FROM "jaffle_shop"."dev"."orders" o JOIN "jaffle_shop"."dev"."customers" c ON o.customer_id = c.customer_id WHERE o.location_id IN (SELECT location_id FROM "jaffle_shop"."dev"."locations" WHERE location_name = 'Philadelphia') GROUP BY c.customer_name ORDER BY 2 DESC LIMIT 5`;
 const model = {
   name: 'scripted',
   available: async () => true,
@@ -98,7 +107,7 @@ const model = {
     const prompt = messages.map((message) => message.content).join('\n');
     const question = [...prompt.matchAll(/QUESTION:\s*(.+)$/gm)].at(-1)?.[1]?.trim().toLowerCase().replace(/^"|"$/g, '') ?? '';
     if (prompt.includes('JSON AnalyticalIntent')) return READINGS[question] ?? intent({ unresolved: [{ clause: question, options: [], material: true }] });
-    if (prompt.includes('You write exactly ONE read-only SQL statement')) return SQL;
+    if (prompt.includes('You write exactly ONE read-only SQL statement')) return prompt.includes('side by side') ? PIVOT_SQL : SQL;
     return 'Brittany Johnson leads with 1223.';
   },
 } as unknown as DqlModelProvider;
@@ -128,7 +137,7 @@ afterAll(async () => {
 });
 
 /** Sam reads Wes's run's trace by run and by id; Wes's own run (with its receipt) is the control. */
-async function readAsSteward(run: any): Promise<{ texts: string[]; own: string }> {
+async function readAsSteward(run: any): Promise<{ texts: string[]; own: string; bodies: any[] }> {
   expect(run?.id, 'Wes\'s run').toBeTruthy();
   const listed = (await call('sam', 'GET', '/api/ask-traces?limit=100')).body?.traces ?? [];
   const traceId = listed.find((trace: { runId: string }) => trace.runId === run.id)?.traceId as string | undefined;
@@ -139,18 +148,60 @@ async function readAsSteward(run: any): Promise<{ texts: string[]; own: string }
   expect(byId.status).toBe(200);
   expect(byRun.body?.valuesWithheld).toBe(true);
   for (const field of ['runtimeReceiptV5', 'runtimeReceiptV6', 'runtimeReceiptV8', 'runtimeDecisionSummary']) expect(byRun.body?.[field], field).toBeUndefined();
-  return { texts: [byRun.text, byId.text, JSON.stringify(listed)], own: JSON.stringify(run) };
+  return { texts: [byRun.text, byId.text, JSON.stringify(listed)], own: JSON.stringify(run), bodies: [byRun.body, byId.body] };
 }
 
 const names = seedNames();
+const sha = (text: string) => createHash('sha256').update(text).digest('hex');
+
+/** Every [key, value] whose key names a fingerprint, anywhere in a body. */
+function fingerprints(value: unknown, key = ''): Array<[string, unknown]> {
+  if (Array.isArray(value)) return value.flatMap((item) => fingerprints(item, key));
+  if (value && typeof value === 'object') return Object.entries(value as Record<string, unknown>).flatMap(([name, item]) => fingerprints(item, name));
+  return /fingerprint$/i.test(key) ? [[key, value]] : [];
+}
+
+/** The sha256 of each thing a reader could guess: each value, each statement Wes's run ran (alone, with parameters), its rows. */
+function guessDigests(run: any, values: string[]): string[] {
+  const inputs: string[] = [...values];
+  for (const artifact of run?.artifacts ?? []) {
+    const payload = artifact?.payload ?? {};
+    const result = payload.result ?? {};
+    for (const sql of [payload.sql, result.sql, payload.dqlArtifact?.compiledSql].filter((item) => typeof item === 'string')) {
+      inputs.push(sql, `${sql}\n${JSON.stringify(payload.sqlParams ?? [])}`, `${sql}\n[]`, sql.trim(), sql.replace(/\s+/g, ' ').trim());
+    }
+    if (Array.isArray(result.rows)) {
+      inputs.push(JSON.stringify(result.rows), JSON.stringify({ columns: result.columns, rows: result.rows }));
+      for (const row of result.rows) inputs.push(JSON.stringify(row), ...Object.values(row ?? {}).map(String));
+    }
+  }
+  for (const option of JSON.stringify(run ?? {}).match(/member:[^"\\]+=\[[^\]]*\]/g) ?? []) inputs.push(option.replace(/\\"/g, '"'));
+  return inputs.map(sha);
+}
 const sweep = async (label: string, run: any, control = true) => {
-  const { texts, own } = await readAsSteward(run);
+  const { texts, own, bodies } = await readAsSteward(run);
   const values = [...names, ...rowValues(run)];
   // Every field of the real receipt is classified (kept, reduced or dropped): a new field fails here until it is.
   for (const key of Object.keys(run?.diagnosticReceiptV9 ?? {})) expect(Object.keys(RECEIPT_V9_FIELDS), `${label}: receipt field ${key} is classified in trace-review.ts`).toContain(key);
   // Positive control: Wes's own run (receipts and rows) carries warehouse values, so a clean read by Sam means something.
   if (control) expect(leaksIn(own, values).length, `${label}: Wes's own run carries warehouse values`).toBeGreaterThan(0);
   const found = texts.flatMap((text) => leaksIn(text, values));
+  // No hash a guess could be tested against: no bare sha256, every fingerprint keyed to this trace, and no hex in what Sam
+  // reads is (a piece of) the sha256 of a value, of the statement as it ran (with or without its parameters), or of rows.
+  const joined = texts.join('\n');
+  expect(joined.match(/sha256:[0-9a-f]+/g) ?? [], `${label}: unkeyed hashes`).toEqual([]);
+  for (const body of bodies) for (const [key, value] of fingerprints(body)) expect(value, `${label}: ${key}`).toMatch(/^hmac:[0-9a-f]{32}$/);
+  const digests = guessDigests(run, values);
+  const hexes = [...new Set(joined.match(/[0-9a-f]{12,}/g) ?? [])];
+  const confirmed = hexes.filter((hex) => digests.some((digest) => digest.includes(hex.slice(0, 12)) || digest.includes(hex.slice(-12))));
+  expect(confirmed, `${label}: hashes of values, SQL or rows`).toEqual([]);
+  // A range, never the exact row count.
+  for (const body of bodies) {
+    expect(JSON.stringify(body), `${label}: an exact row count`).not.toMatch(/"rowCount"\s*:/);
+    const answer = body?.runtimeAnswerV1;
+    const rows = (run?.artifacts ?? []).find((artifact: any) => Array.isArray(artifact?.payload?.result?.rows))?.payload?.result;
+    if (answer && rows && typeof rows.rowCount === 'number') expect(answer.rowCountBucket, label).toBe(rowCountBucket(rows.rowCount));
+  }
   expect([...new Set(found)], `${label}: values in what Sam reads`).toEqual([]);
 };
 
@@ -161,12 +212,14 @@ describe('a steward reading another person\'s trace on the real pipeline: no war
 
   it('two members with one name; a partial name that matches several (a clarification) and the person\'s choice (member selection)', async () => {
     await sweep('two members', await ask('what is the total revenue for jordan lee'));
-    const clarify = await ask('total revenue for son');
+    const thread = (await call('wes', 'POST', '/api/agent/threads', { surface: 'notebook', title: 'which one' })).body?.thread?.id as string;
+    const clarify = await ask('total revenue for son', { threadId: thread });
     await sweep('clarify', clarify);
     // The options the clarification offers are the warehouse's own members; the person picks the first.
     const option = [...JSON.stringify(clarify).matchAll(/"(member:dimension:customers\.customer_name=\[[^\]]*\])"/g)].map((match) => JSON.parse(`"${match[1]}"`) as string)[0];
     expect(option, 'a member option to choose').toBeTruthy();
-    await sweep('member selection', await ask('total revenue for son', { selectedEvidenceId: option }));
+    // Choosing an option continues the clarification (a link whose choice fingerprint is of the option, a warehouse value).
+    await sweep('member selection', await ask('total revenue for son', { selectedEvidenceId: option, threadId: thread }));
   }, 240_000);
 
   it('a partial name widened to the one member the warehouse holds', async () => {
@@ -187,6 +240,16 @@ describe('a steward reading another person\'s trace on the real pipeline: no war
     // The binding is checked against Wes's persisted result; whatever the reading does with it, Sam sees none of it.
     await sweep('result binding', await ask('what is the total revenue for that customer', { selectedResultBinding: binding, threadId: first.threadId }), false);
   }, 240_000);
+
+  it('AI-written SQL whose columns are named after values (a pivot): renamed column_<n> in the columns and the SQL', async () => {
+    const run = await ask('top customers by order total at the philadelphia shop side by side');
+    await sweep('pivot', run);
+    const { bodies } = await readAsSteward(run);
+    const answer = bodies[0]?.runtimeAnswerV1;
+    expect(answer?.columns, 'the pivot ran').toBeTruthy();
+    expect(answer.columns.some((column: string) => /^column_\d+$/.test(column))).toBe(true);
+    expect(answer.sql).not.toMatch(/Philadelphia|Brooklyn/);
+  }, 120_000);
 
   it('a chat reply that restates figures', async () => {
     await sweep('chat', await ask('hi'));

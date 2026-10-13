@@ -2,6 +2,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import type { Server } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { createHash } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { AgentRunExecutors } from '@duckcodeailabs/dql-agent';
 import type { QueryExecutor } from '@duckcodeailabs/dql-connectors';
@@ -76,7 +77,9 @@ const receipt = {
   policies: [{ policyId: 'policy:p', field: 'region', effect: 'required_filter' }],
   story: [
     { version: 1, phase: 'report', title: `Revenue fell 98765.43 at ${c('STORY-TITLE')}`, detail: `latest month with data is ${c('STORY-DETAIL')}; coverage 87%`, state: 'done', at: 1 },
-    { version: 1, phase: 'execute', title: 'Ran it', state: 'done', ms: 4, at: 2 },
+    // A Research drill program is named after the member it drills into.
+    { version: 1, phase: 'drill', title: 'Drilled in', programId: `drill:${c('DRILL-MEMBER')}:dimension:customers.customer_name`, queryId: `q:${c('DRILL-QUERY')}`, state: 'done', at: 2 },
+    { version: 1, phase: 'execute', title: 'Ran it', state: 'done', ms: 4, at: 3 },
   ],
   investigation: { headline: { text: `Revenue fell ${c('HEADLINE')}` }, queries: [{ receipt: { grounding: [c('INVESTIGATION-GROUNDING')] } }] },
   aFieldAddedTomorrow: c('NEW-FIELD'),
@@ -93,7 +96,7 @@ const answerExecutor = ((input: { request: { question: string } }) => ({
     id: 'answer-1', kind: 'answer', title: 'Answer', trustState: 'review_required',
     payload: {
       text: 'ok',
-      sql: `SELECT member_name, open_amount FROM claims WHERE adjuster_id = ? AND region IN ('${c('SQL-IN-1')}', '${c('SQL-IN-2')}') AND note = 'it''s ${c('SQL-QUOTED')}' -- ${c('SQL-COMMENT')}\nORDER BY open_amount DESC LIMIT 98765`,
+      sql: `SELECT member_name, open_amount AS CANARY_ALIAS FROM claims WHERE adjuster_id = ? AND region IN ('${c('SQL-IN-1')}', '${c('SQL-IN-2')}') AND note = 'it''s ${c('SQL-QUOTED')}' -- ${c('SQL-COMMENT')}\nORDER BY open_amount DESC LIMIT 98765`,
       sqlParams: [c('PARAM')],
       executionError: `Could not convert string '${c('ERROR')}' to INT32`,
       failedStage: 'execute',
@@ -141,6 +144,15 @@ afterAll(async () => {
   if (projectRoot) rmSync(projectRoot, { recursive: true, force: true });
 });
 
+/** Every [key, value] whose key names a fingerprint, anywhere in a body. */
+function fingerprints(value: unknown, key = ''): Array<[string, unknown]> {
+  if (Array.isArray(value)) return value.flatMap((item) => fingerprints(item, key));
+  if (value && typeof value === 'object') return Object.entries(value as Record<string, unknown>).flatMap(([name, item]) => fingerprints(item, name));
+  return /fingerprint$/i.test(key) ? [[key, value]] : [];
+}
+
+const sha = (text: string) => createHash('sha256').update(text).digest('hex');
+
 const traceIdOf = async (runId: string) => {
   const listed = (await call('sam', '/api/ask-traces?limit=100')).body as { traces: Array<{ traceId: string; runId: string }> };
   const trace = listed.traces.find((entry) => entry.runId === runId);
@@ -159,18 +171,25 @@ describe('a steward reading another person\'s trace', () => {
       // What the hint review still has: stages, tiers and their outcomes and refusal codes, timings, counts, the refs, the
       // tables and joins, the SQL with every literal masked, the columns and the row count.
       const answer = read.body.runtimeAnswerV1;
-      expect(answer).toMatchObject({ status: 'completed', gap: { kind: 'not_retrieved' }, failedStage: 'execute', executionErrorWithheld: true, sqlParamCount: 1, columns: ['member_name', 'open_amount'], rowCount: 1, sqlLiteralsMasked: true, dqlArtifact: { kind: 'semantic', name: 'q', metrics: ['order_total'], dimensions: ['customer_name'] } });
-      expect(answer.sql).toBe("SELECT member_name, open_amount FROM claims WHERE adjuster_id = ? AND region IN ('?', '?') AND note = '?' --?\nORDER BY open_amount DESC LIMIT ?");
+      // member_name and open_amount are not names this project's vocabulary or the statement reads by qualified name.
+      expect(answer).toMatchObject({ status: 'completed', gap: { kind: 'not_retrieved' }, failedStage: 'execute', executionErrorWithheld: true, sqlParamCount: 1, columns: ['column_2', 'column_3'], rowCountBucket: '1', sqlLiteralsMasked: true, dqlArtifact: { kind: 'semantic', name: 'q', metrics: ['order_total'], dimensions: ['customer_name'] } });
+      expect(answer.sql).toBe("SELECT member_name, open_amount AS column_1 FROM claims WHERE adjuster_id = ? AND region IN ('?', '?') AND note = '?' --?\nORDER BY open_amount DESC LIMIT ?");
       const v9 = read.body.runtimeReceiptV9;
       expect(v9.tiers).toEqual([{ round: 1, tier: 'semantic', outcome: 'refused' }, { round: 97, tier: 'exploratory', outcome: 'prepared' }]);
       expect(v9.refusals).toEqual([{ tier: 'semantic', code: 'not_semantic', repairable: false }]);
       expect(v9.checks).toEqual([{ id: 'stated_values', label: 'Applies every value the question states', passed: true, attempt: 1 }]);
+      expect(v9.executed).toMatchObject({ tier: 'exploratory', rowCountBucket: '1', sqlFingerprint: expect.stringMatching(/^hmac:[0-9a-f]{32}$/) });
+      expect(v9.executed.rowCount).toBeUndefined();
+      // No unkeyed hash anywhere: every fingerprint is keyed to this trace (hmac:), ids are ids.
+      expect(read.text.match(/sha256:[0-9a-f]+/g) ?? [], path).toEqual([]);
+      for (const value of [c('ROW'), c('PARAM'), c('FILTER'), String(98765.43)]) expect(read.text, `${path}: a hash of ${value}`).not.toContain(sha(value).slice(0, 12));
+      for (const [key, value] of fingerprints(read.body)) expect(value, `${path} ${key}`).toMatch(/^hmac:[0-9a-f]{32}$/);
       expect(v9.dispatches.map((d: { purpose: string; reply?: string }) => [d.purpose, d.reply])).toEqual([['intent:resolve', undefined], ['intent:draft', undefined]]);
       expect(v9.intent).toMatchObject({ kind: 'analytics', measures: [{ ref: 'metric:orders.order_total', scope: [{ ref: 'dimension:customers.customer_name', op: 'eq' }] }], filters: [{ ref: 'dimension:customers.customer_name', op: 'eq' }], time: { ref: 'dimension:orders.ordered_at', grain: 'month' } });
       expect(v9.context.used).toMatchObject({ relations: ['"jaffle_shop"."dev"."orders"'], engine: 'duckdb', joins: [{ relations: ['orders', 'customers'], keys: [{ from: 'customer_id', to: 'customer_id' }] }] });
       expect(v9.context.rendered.hints).toEqual(['hint:h1']);
       expect(v9.context.enforced.requiredFilterCount).toBe(1);
-      expect(v9.story).toEqual([{ version: 1, phase: 'report', title: 'Wrote the report', state: 'done', at: 1 }, { version: 1, phase: 'execute', title: 'Ran on the warehouse', state: 'done', ms: 4, at: 2 }]);
+      expect(v9.story).toEqual([{ version: 1, phase: 'report', title: 'Wrote the report', state: 'done', at: 1 }, { version: 1, phase: 'drill', title: 'Drilled in', state: 'done', at: 2 }, { version: 1, phase: 'execute', title: 'Ran on the warehouse', state: 'done', ms: 4, at: 3 }]);
       for (const gone of ['reading', 'grounding', 'ledger', 'investigation', 'uncovered', 'coverage', 'outOfScope', 'build', 'aFieldAddedTomorrow']) expect(v9[gone], gone).toBeUndefined();
       for (const gone of ['runtimeReceiptV5', 'runtimeReceiptV6', 'runtimeReceiptV8', 'runtimeDecisionSummary']) expect(read.body[gone], gone).toBeUndefined();
     }
