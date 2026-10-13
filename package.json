@@ -1,6 +1,7 @@
 {
   "name": "dql",
   "private": true,
+  "license": "Apache-2.0",
   "packageManager": "pnpm@9.15.0",
   "repository": {
     "type": "git",
@@ -8,7 +9,7 @@
   },
   "scripts": {
     "build": "turbo run build",
-    "test": "turbo run test",
+    "test": "node --test scripts/license-files.test.mjs && turbo run test",
     "clean": "turbo run clean",
     "release:dry-run": "pnpm build && pnpm test && node ./scripts/release-packages.mjs --dry-run",
     "release:publish": "node ./scripts/release-packages.mjs --publish",

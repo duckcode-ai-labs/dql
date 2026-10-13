@@ -10,6 +10,10 @@
     "url": "https://github.com/duckcode-ai-labs/dql.git",
     "directory": "apps/vscode-extension"
   },
+  "homepage": "https://github.com/duckcode-ai-labs/dql",
+  "bugs": {
+    "url": "https://github.com/duckcode-ai-labs/dql/issues"
+  },
   "private": false,
   "engines": {
     "vscode": "^1.85.0"
@@ -29,7 +33,8 @@
     "syntaxes",
     "snippets",
     "README.md",
-    "LICENSE.txt"
+    "LICENSE.txt",
+    "NOTICE"
   ],
   "publishConfig": {
     "access": "public"
@@ -66,8 +71,9 @@
     "typecheck": "tsc -p . --noEmit",
     "build": "pnpm run typecheck && node ./scripts/build.mjs",
     "dev": "node ./scripts/build.mjs --watch",
-    "package": "vsce package --no-dependencies",
-    "publish:vsce": "vsce publish --no-dependencies"
+    "package": "node ../../scripts/package-license-files.mjs --license-file LICENSE.txt && vsce package --no-dependencies",
+    "publish:vsce": "node ../../scripts/package-license-files.mjs --license-file LICENSE.txt && vsce publish --no-dependencies",
+    "prepack": "node ../../scripts/package-license-files.mjs --license-file LICENSE.txt"
   },
   "dependencies": {},
   "devDependencies": {

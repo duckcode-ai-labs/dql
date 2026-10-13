@@ -47,3 +47,10 @@ dql-manifest.json
 *.duckdb.wal
 playwright-report/
 test-results/
+# Licence copies written into each package at pack time by
+# scripts/package-license-files.mjs; the root LICENSE and NOTICE are the source.
+# (apps/vscode-extension/LICENSE.txt is tracked: vsce needs it in the tree.)
+/apps/*/LICENSE
+/apps/*/NOTICE
+/packages/*/LICENSE
+/packages/*/NOTICE
