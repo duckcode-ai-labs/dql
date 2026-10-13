@@ -79,6 +79,42 @@ describe('names a result and its SQL may keep', () => {
     expect(maskSqlNames(maskSqlLiterals("SELECT list_value(1, 2)[1], x['k'] FROM orders", 'duckdb'), new ColumnNames(catalog))).toBe("SELECT list_value(?, ?)[?], column_1['?'] FROM orders");
   });
 
+  it('a quoted identifier holding a comma, an apostrophe or an escaped quote is renamed on every dialect that quotes that way', () => {
+    const select = (open: string, close: string) => {
+      const q = (name: string) => `${open}${name.split(close).join(close + close)}${close}`;
+      return `SELECT ${["Chicago's", 'Chicago, IL', 'Smith, John', "O'Brien", `Chicago ${close}Loop${close}`].map((name) => `SUM(order_total) AS ${q(name)}`).join(', ')} FROM orders`;
+    };
+    for (const [dialect, open, close] of [['duckdb', '"', '"'], ['snowflake', '"', '"'], ['sqlserver', '[', ']'], ['mssql', '[', ']'], ['bigquery', '`', '`']] as const) {
+      const sql = select(open, close);
+      const names = new ColumnNames(catalog);
+      const masked = maskSqlNames(maskSqlLiterals(sql, dialect, (content) => names.isKnown(content)), names, dialect);
+      expect(masked, `${dialect}: ${sql}`).not.toMatch(/Chicago|Smith|John|Brien|Loop/);
+      expect(masked.match(/column_\d+/g)?.length, dialect).toBe(5);
+      expect(masked.endsWith('FROM orders'), dialect).toBe(true);
+    }
+    const names = new ColumnNames(catalog);
+    expect(maskSqlNames(maskSqlLiterals('SELECT SUM(order_total) AS [Lee, Ann] FROM orders', 'sqlserver'), names, 'sqlserver')).toBe('SELECT SUM(order_total) AS [column_1] FROM orders');
+  });
+
+  it('identifiers in any script, and MySQL names that start with a digit, are renamed whole', () => {
+    const names = new ColumnNames(catalog);
+    const masked = maskSqlNames(maskSqlLiterals('SELECT SUM(order_total) AS Chicagö, SUM(order_total) AS 東京, SUM(order_total) München, SUM(order_total) AS 2024West, order_total FROM orders', 'duckdb'), names, 'duckdb');
+    expect(masked).toBe('SELECT SUM(order_total) AS column_1, SUM(order_total) AS column_2, SUM(order_total) column_3, SUM(order_total) AS column_4, order_total FROM orders');
+    // A digit inside a name is part of the name, not a number to mask.
+    expect(maskSqlLiterals('SELECT x FROM t WHERE y = Ö1', 'duckdb')).toBe('SELECT x FROM t WHERE y = Ö1');
+  });
+
+  it('a keyword used as an alias is renamed (after AS, or without AS before a comma or FROM); keywords used as SQL stay', () => {
+    const names = new ColumnNames([...catalog, 'ordered_at']);
+    const masked = maskSqlNames(maskSqlLiterals('SELECT SUM(order_total) AS Top, SUM(order_total) AS Year, SUM(order_total) AS "Key", SUM(order_total) AS Current, SUM(order_total) Month, CAST(order_total AS INTEGER) AS order_total, EXTRACT(year FROM ordered_at) AS order_id FROM orders ORDER BY order_total DESC, order_id ASC NULLS LAST', 'duckdb'), names, 'duckdb');
+    expect(masked).toBe('SELECT SUM(order_total) AS column_1, SUM(order_total) AS column_2, SUM(order_total) AS "column_3", SUM(order_total) AS column_4, SUM(order_total) column_5, CAST(order_total AS INTEGER) AS order_total, EXTRACT(year FROM ordered_at) AS order_id FROM orders ORDER BY order_total DESC, order_id ASC NULLS LAST');
+  });
+
+  it('[…] after an expression is an index and a list of values a list; where the dialect reads it as a name and it stands as one, it is renamed; names inside a list are read', () => {
+    expect(maskSqlNames(maskSqlLiterals('SELECT order_id[1], [1, 2], (order_id)[2], [Chicago] FROM orders', 'sqlite'), new ColumnNames(catalog), 'sqlite')).toBe('SELECT order_id[?], [?, ?], (order_id)[?], [column_1] FROM orders');
+    expect(maskSqlNames(maskSqlLiterals('SELECT order_id[1], [Chicago, order_id] FROM orders', 'duckdb'), new ColumnNames(catalog), 'duckdb')).toBe('SELECT order_id[?], [column_1, order_id] FROM orders');
+  });
+
   it('where "…" may be a string, the project\'s own relation names stay readable and a "…" value is masked, never garbled', () => {
     for (const dialect of ['sqlite', 'mysql', 'databricks', undefined]) {
       const names = new ColumnNames(catalog);

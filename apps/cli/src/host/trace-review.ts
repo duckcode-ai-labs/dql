@@ -51,7 +51,7 @@ export function rowCountBucket(count: unknown): string | undefined {
 // ── SQL ────────────────────────────────────────────────────────────────────────────────────────────────────
 
 /** What a dialect's SQL may hold, by connection driver. A driver not listed is read every way. */
-const DIALECTS: Record<string, { doubleQuoteIdentifier: boolean; hashComments: boolean; tripleQuotes: boolean; nestedComments: boolean; qQuotes: boolean }> = {
+const DIALECTS: Record<string, { doubleQuoteIdentifier: boolean; hashComments: boolean; tripleQuotes: boolean; nestedComments: boolean; qQuotes: boolean; brackets?: boolean }> = {
   duckdb: { doubleQuoteIdentifier: true, hashComments: false, tripleQuotes: false, nestedComments: true, qQuotes: false },
   motherduck: { doubleQuoteIdentifier: true, hashComments: false, tripleQuotes: false, nestedComments: true, qQuotes: false },
   postgres: { doubleQuoteIdentifier: true, hashComments: false, tripleQuotes: false, nestedComments: true, qQuotes: false },
@@ -61,8 +61,8 @@ const DIALECTS: Record<string, { doubleQuoteIdentifier: boolean; hashComments: b
   trino: { doubleQuoteIdentifier: true, hashComments: false, tripleQuotes: false, nestedComments: false, qQuotes: false },
   presto: { doubleQuoteIdentifier: true, hashComments: false, tripleQuotes: false, nestedComments: false, qQuotes: false },
   athena: { doubleQuoteIdentifier: true, hashComments: false, tripleQuotes: false, nestedComments: false, qQuotes: false },
-  sqlserver: { doubleQuoteIdentifier: true, hashComments: false, tripleQuotes: false, nestedComments: true, qQuotes: false },
-  mssql: { doubleQuoteIdentifier: true, hashComments: false, tripleQuotes: false, nestedComments: true, qQuotes: false },
+  sqlserver: { doubleQuoteIdentifier: true, hashComments: false, tripleQuotes: false, nestedComments: true, qQuotes: false, brackets: true },
+  mssql: { doubleQuoteIdentifier: true, hashComments: false, tripleQuotes: false, nestedComments: true, qQuotes: false, brackets: true },
   oracle: { doubleQuoteIdentifier: true, hashComments: false, tripleQuotes: false, nestedComments: false, qQuotes: true },
   clickhouse: { doubleQuoteIdentifier: true, hashComments: true, tripleQuotes: false, nestedComments: true, qQuotes: false },
   mysql: { doubleQuoteIdentifier: false, hashComments: true, tripleQuotes: false, nestedComments: false, qQuotes: false },
@@ -70,10 +70,10 @@ const DIALECTS: Record<string, { doubleQuoteIdentifier: boolean; hashComments: b
   bigquery: { doubleQuoteIdentifier: false, hashComments: true, tripleQuotes: true, nestedComments: false, qQuotes: false },
   databricks: { doubleQuoteIdentifier: false, hashComments: false, tripleQuotes: false, nestedComments: true, qQuotes: false },
   spark: { doubleQuoteIdentifier: false, hashComments: false, tripleQuotes: false, nestedComments: true, qQuotes: false },
-  sqlite: { doubleQuoteIdentifier: false, hashComments: false, tripleQuotes: false, nestedComments: false, qQuotes: false },
+  sqlite: { doubleQuoteIdentifier: false, hashComments: false, tripleQuotes: false, nestedComments: false, qQuotes: false, brackets: true },
 };
 
-interface LiteralReading { backslash: boolean; doubleQuoteString: boolean; tripleQuote: boolean; hashComment: boolean; nested: boolean; qQuote: boolean; keepQuoted?: (content: string) => boolean }
+interface LiteralReading { backslash: boolean; doubleQuoteString: boolean; tripleQuote: boolean; hashComment: boolean; nested: boolean; qQuote: boolean; brackets: boolean; keepQuoted?: (content: string) => boolean }
 const Q_CLOSE: Record<string, string> = { '[': ']', '{': '}', '(': ')', '<': '>' };
 
 /** Marks the contents of every string literal, quoted string, dollar-quoted string and comment under one reading of the SQL. */
@@ -126,6 +126,13 @@ function markLiterals(sql: string, masked: Uint8Array, reading: LiteralReading):
       i = end < 0 ? n : end + 1;
       continue;
     }
+    // SQL Server and SQLite read [ … ] as a name (`]]` is one `]`): a quote inside it starts no string.
+    if (c === '[' && reading.brackets) {
+      let j = i + 1;
+      while (j < n && !(sql[j] === ']' && sql[j + 1] !== ']')) j += sql[j] === ']' ? 2 : 1;
+      i = j + 1;
+      continue;
+    }
     if (c === '"' && !reading.doubleQuoteString) {
       let j = i + 1;
       while (j < n && !(sql[j] === '"' && sql[j + 1] !== '"')) j += sql[j] === '"' ? 2 : 1;
@@ -159,7 +166,7 @@ function markLiterals(sql: string, masked: Uint8Array, reading: LiteralReading):
   }
 }
 
-const NUMBER = /(?<![A-Za-z0-9_$"`])(?:0[xX][0-9a-fA-F]+|\d+(?:\.\d*)?(?:[eE][+-]?\d+)?|\.\d+(?:[eE][+-]?\d+)?)(?![A-Za-z0-9_$])/g;
+const NUMBER = /(?<![\p{L}\p{N}\p{M}_$"`])(?:0[xX][0-9a-fA-F]+|\d+(?:\.\d*)?(?:[eE][+-]?\d+)?|\.\d+(?:[eE][+-]?\d+)?)(?![\p{L}\p{N}\p{M}_$])/gu;
 
 /**
  * A statement with every literal masked: the contents of each string (`'?'`), each number (`?`), each comment.
@@ -177,7 +184,9 @@ export function maskSqlLiterals(sql: string, dialect?: string, keepQuoted?: (con
       for (const tripleQuote of profile ? [profile.tripleQuotes] : either) {
         for (const hashComment of profile ? [profile.hashComments] : either) {
           for (const nested of profile ? [profile.nestedComments] : either) {
-            for (const qQuote of profile ? [profile.qQuotes] : either) markLiterals(sql, masked, { backslash, doubleQuoteString, tripleQuote, hashComment, nested, qQuote, ...(keepQuoted ? { keepQuoted } : {}) });
+            for (const qQuote of profile ? [profile.qQuotes] : either) {
+              for (const brackets of profile ? [profile.brackets === true] : either) markLiterals(sql, masked, { backslash, doubleQuoteString, tripleQuote, hashComment, nested, qQuote, brackets, ...(keepQuoted ? { keepQuoted } : {}) });
+            }
           }
         }
       }
@@ -241,18 +250,46 @@ timestamp_ntz timestamp_tz timestamp_ltz boolean bool interval json jsonb varian
 unsigned materialized precision unique primary key default returning
 `.trim().split(/\s+/));
 
-const IDENT_CHAR = /[A-Za-z0-9_$]/;
+const IDENT_CHAR = /[\p{L}\p{N}\p{M}_$]/u;
+const IDENT_START = /[\p{L}\p{M}_]/u;
+
+/** SQL's structural words: where one stands without AS after an expression, it is SQL, not an alias. */
+const STRUCTURAL_WORDS = new Set(`
+select from where group by order having limit offset join inner left right full outer cross on using as and or not in is null like ilike rlike
+between case when then else end distinct all any some union intersect except minus with recursive asc desc nulls first last over partition
+rows range groups unbounded preceding following current row true false interval cast try_cast exists filter within fetch next only lateral
+natural qualify window tablesample values set escape similar to at zone collate pivot unpivot for apply grouping sets cube rollup
+materialized unique primary default returning precision varying
+`.trim().split(/\s+/));
+
+/** Dialects that read [name] as an identifier (an unknown one may, too). */
+const BRACKET_DIALECTS = new Set(['sqlserver', 'mssql', 'fabric', 'synapse', 'sqlite', 'sybase', 'access']);
 
 /**
  * The masked statement (maskSqlLiterals) with every identifier the project does not name renamed, as whole tokens:
- * unquoted, "double-quoted", `backticked` and [bracketed] identifiers, aliases with or without AS, CTE names and their
- * columns, table aliases. SQL's own words and function names stay. A qualifier (`p.` in `p.total`) becomes `t_<n>`,
- * anything else `column_<n>`. A "…" or […] that holds a masked value (`?`) is left as it is.
+ * unquoted (any script, `2024West` too), "double-quoted", `backticked` and [bracketed] identifiers (an escaped quote
+ * read as the one character it stands for), aliases with or without AS (a keyword used as an alias too), CTE names and
+ * their columns, table aliases. SQL's own words and function names stay. A qualifier (`p.` in `p.total`) becomes
+ * `t_<n>`, anything else `column_<n>`. Only the masker's own `"?"` is a masked value; `[…]` is an identifier where the
+ * dialect reads it so and it stands where a name would, never right after an expression (an index).
  */
-export function maskSqlNames(masked: string, names: ColumnNames): string {
+export function maskSqlNames(masked: string, names: ColumnNames, dialect?: string): string {
   const n = masked.length;
+  const lower = (dialect ?? '').toLowerCase();
+  const brackets = !lower || BRACKET_DIALECTS.has(lower) || !DIALECTS[lower];
   type Token = { start: number; end: number; name: string; open: string; close: string; word: boolean };
   const tokens: Token[] = [];
+  /** The last significant character before `at`, and the word that ends there (if one does). */
+  const before = (at: number): { char?: string; word?: string } => {
+    let k = at - 1;
+    while (k >= 0 && /\s/.test(masked[k]!)) k -= 1;
+    if (k < 0) return {};
+    let w = k;
+    while (w >= 0 && IDENT_CHAR.test(masked[w]!)) w -= 1;
+    return { char: masked[k], ...(w < k ? { word: masked.slice(w + 1, k + 1).toLowerCase() } : {}) };
+  };
+  const afterExpression = (prev: { char?: string; word?: string }) => prev.char !== undefined
+    && (/[)\]"`?]/.test(prev.char) || (prev.word !== undefined && !SQL_WORDS.has(prev.word)));
   let i = 0;
   while (i < n) {
     const c = masked[i]!;
@@ -263,13 +300,18 @@ export function maskSqlNames(masked: string, names: ColumnNames): string {
       const close = c === '[' ? ']' : c;
       let j = i + 1;
       while (j < n && !(masked[j] === close && masked[j + 1] !== close)) j += masked[j] === close ? 2 : 1;
-      const inner = masked.slice(i + 1, j);
-      // A masked string ("?"), an array or index ([?, ?]) or nothing at all is not an identifier.
-      if (inner && !/[?,'"]/.test(inner) && !(c === '[' && /^\s*$/.test(inner))) tokens.push({ start: i, end: j + 1, name: inner, open: c, close, word: false });
-      i = j + 1;
+      const raw = masked.slice(i + 1, j);
+      const name = raw.split(close + close).join(close);
+      let identifier = raw !== '' && raw !== '?';
+      // An index or a list follows an expression (`x[1]`, `f(a)[1]`); a list literal holds only masked values.
+      if (c === '[') identifier = identifier && brackets && !afterExpression(before(i)) && !/^[\s?,]*$/.test(raw);
+      if (identifier) tokens.push({ start: i, end: j + 1, name, open: c, close, word: false });
+      // A list or an index is read on: the names inside it are tokens of their own.
+      i = c === '[' && !identifier ? i + 1 : j + 1;
       continue;
     }
-    if (/[A-Za-z_]/.test(c) && !IDENT_CHAR.test(masked[i - 1] ?? '')) {
+    const startsName = IDENT_START.test(c) || (/\p{N}/u.test(c) && /^\p{N}+[\p{L}\p{M}_$]/u.test(masked.slice(i)));
+    if (startsName && !IDENT_CHAR.test(masked[i - 1] ?? '')) {
       let j = i + 1;
       while (j < n && IDENT_CHAR.test(masked[j]!)) j += 1;
       tokens.push({ start: i, end: j, name: masked.slice(i, j), open: '', close: '', word: true });
@@ -278,16 +320,27 @@ export function maskSqlNames(masked: string, names: ColumnNames): string {
     }
     i += 1;
   }
-  const after = (token: Token) => masked.slice(token.end).match(/^\s*(\S)/)?.[1];
+  const next = (token: Token) => masked.slice(token.end).match(/^\s*(\S)/u)?.[1];
+  const nextWord = (token: Token) => masked.slice(token.end).match(/^\s*([\p{L}_][\p{L}\p{N}\p{M}_$]*)/u)?.[1]?.toLowerCase();
   // A name used as a qualifier anywhere is a table (or CTE) alias.
   const qualifiers = new Set(tokens.filter((token) => masked[token.end] === '.').map((token) => unquote(token.name).toLowerCase()));
   // A function call keeps its name; a CTE's header (`p(a, b) AS (`) is not one.
-  const isCall = (token: Token) => after(token) === '(' && !/^\s*\([^()]*\)\s+AS\s*\(/i.test(masked.slice(token.end));
+  const isCall = (token: Token) => next(token) === '(' && !/^\s*\([^()]*\)\s+AS\s*\(/i.test(masked.slice(token.end));
+  /** A word SQL itself uses keeps its meaning, unless it stands where an alias does. */
+  const sqlWord = (token: Token): boolean => {
+    const word = token.name.toLowerCase();
+    if (!token.word || !SQL_WORDS.has(word)) return false;
+    const prev = before(token.start);
+    // After AS it names something (`AS Top`, `AS Year`), except a CAST's type (`AS INTEGER)`) or `AS MATERIALIZED (`.
+    if (prev.word === 'as') return next(token) === ')' || next(token) === '(';
+    // Without AS, a non-structural word right after an expression and before `,`, FROM or the end is an alias (`SUM(x) Year,`).
+    const aliasEnd = next(token) === undefined || next(token) === ',' || nextWord(token) === 'from';
+    return !(afterExpression(prev) && aliasEnd && !STRUCTURAL_WORDS.has(word));
+  };
   let out = '';
   let at = 0;
   for (const token of tokens) {
-    const word = token.name.toLowerCase();
-    const keep = token.word && (SQL_WORDS.has(word) || isCall(token)) || names.isKnown(token.name);
+    const keep = names.isKnown(token.name) || sqlWord(token) || (token.word && !SQL_WORDS.has(token.name.toLowerCase()) && isCall(token));
     if (keep) continue;
     const renamed = names.name(token.name, qualifiers.has(unquote(token.name).toLowerCase()) ? 'table' : 'column');
     out += masked.slice(at, token.start) + (token.word ? renamed : `${token.open}${renamed}${token.close}`);
@@ -664,7 +717,7 @@ export function reviewerAnswer(value: unknown, dialect?: string, names: ColumnNa
   const gap = rec(answer.gap);
   const dql = rec(answer.dqlArtifact);
   // The SQL first, so a name is numbered where it first appears.
-  const sql = typeof answer.sql === 'string' ? maskSqlNames(maskSqlLiterals(answer.sql, dialect, (content) => names.isKnown(content)), names) : undefined;
+  const sql = typeof answer.sql === 'string' ? maskSqlNames(maskSqlLiterals(answer.sql, dialect, (content) => names.isKnown(content)), names, dialect) : undefined;
   const columns = arr(answer.columns).map((column) => (typeof column === 'string' ? column : str(rec(column)?.name))).filter((name): name is string => Boolean(name)).map((name) => names.name(name));
   return defined({
     status: code(answer.status),

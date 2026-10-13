@@ -33,7 +33,6 @@ const sam: DqlPrincipal = { id: 'u-sam', kind: 'person', email: 'sam@example.tes
 const people: Record<string, DqlPrincipal> = { wes, sam };
 
 const servers: Server[] = [];
-let root = '';
 let base = '';
 
 /** Names in the warehouse that only results or groundings carry (the metric and table names are not among them). */
@@ -111,6 +110,18 @@ const READINGS: Record<string, string> = {
     measures: [{ ref: 'metric:orders.order_total', scope: [{ ref: 'dimension:locations.location_name', op: 'eq', values: ['philadelphia shop'], source: 'question' }] }],
     groupBy: [{ ref: 'entity:customers.customer', role: 'key' }], display: ['dimension:customers.customer_name'], ordering: { ref: 'metric:orders.order_total', direction: 'desc' }, limit: 5, expectedShape: 'ranking',
   }),
+  'top customers by order total at the philadelphia shop with an apostrophe': intent({
+    measures: [{ ref: 'metric:orders.order_total', scope: [{ ref: 'dimension:locations.location_name', op: 'eq', values: ['philadelphia shop'], source: 'question' }] }],
+    groupBy: [{ ref: 'entity:customers.customer', role: 'key' }], display: ['dimension:customers.customer_name'], ordering: { ref: 'metric:orders.order_total', direction: 'desc' }, limit: 5, expectedShape: 'ranking',
+  }),
+  'top customers by order total at the philadelphia shop with a comma': intent({
+    measures: [{ ref: 'metric:orders.order_total', scope: [{ ref: 'dimension:locations.location_name', op: 'eq', values: ['philadelphia shop'], source: 'question' }] }],
+    groupBy: [{ ref: 'entity:customers.customer', role: 'key' }], display: ['dimension:customers.customer_name'], ordering: { ref: 'metric:orders.order_total', direction: 'desc' }, limit: 5, expectedShape: 'ranking',
+  }),
+  'top customers by order total at the philadelphia shop in another script': intent({
+    measures: [{ ref: 'metric:orders.order_total', scope: [{ ref: 'dimension:locations.location_name', op: 'eq', values: ['philadelphia shop'], source: 'question' }] }],
+    groupBy: [{ ref: 'entity:customers.customer', role: 'key' }], display: ['dimension:customers.customer_name'], ordering: { ref: 'metric:orders.order_total', direction: 'desc' }, limit: 5, expectedShape: 'ranking',
+  }),
   'hi': JSON.stringify({ version: 1, kind: 'conversation', reading: 'a greeting', measures: [], groupBy: [], display: [], filters: [], expectedShape: 'scalar', unresolved: [], provenance: {}, reply: 'Hello! Last time Brittany Johnson led with 1223 in lifetime spend; ask me anything.' }),
 };
 const SQL = `SELECT c.customer_name, SUM(o.order_total) AS order_total FROM "jaffle_shop"."dev"."orders" o JOIN "jaffle_shop"."dev"."customers" c ON o.customer_id = c.customer_id JOIN "jaffle_shop"."dev"."locations" l ON o.location_id = l.location_id WHERE l.location_name = 'Philadelphia' GROUP BY c.customer_name ORDER BY order_total DESC LIMIT 5`;
@@ -123,6 +134,9 @@ const NAMED_SQL: Record<string, string> = {
   'through a subquery': `SELECT s.customer_name, s.Chicago FROM (SELECT c.customer_name, SUM(o.order_total) AS Chicago ${FROM_PHILADELPHIA}) s ORDER BY s.Chicago DESC LIMIT 5`,
   'without as': `SELECT c.customer_name, SUM(o.order_total) Chicago ${FROM_PHILADELPHIA} ORDER BY 2 DESC LIMIT 5`,
   'in brackets': `SELECT c.customer_name, SUM(o.order_total) AS [Chicago] ${FROM_PHILADELPHIA} ORDER BY 2 DESC LIMIT 5`,
+  'with an apostrophe': `SELECT c.customer_name, SUM(o.order_total) AS "Chicago's" ${FROM_PHILADELPHIA} ORDER BY 2 DESC LIMIT 5`,
+  'with a comma': `SELECT c.customer_name, SUM(o.order_total) AS "Chicago, IL" ${FROM_PHILADELPHIA} ORDER BY 2 DESC LIMIT 5`,
+  'in another script': `SELECT c.customer_name, SUM(o.order_total) AS Chicagö ${FROM_PHILADELPHIA} ORDER BY 2 DESC LIMIT 5`,
 };
 const model = {
   name: 'scripted',
@@ -136,14 +150,16 @@ const model = {
   },
 } as unknown as DqlModelProvider;
 
-beforeAll(async () => {
-  if (!process.env.DQL_METRICFLOW_BIN) process.env.DQL_METRICFLOW_BIN = join(tmpdir(), 'dql-trace-review-no-metricflow', 'mf');
-  root = mkdtempSync(join(tmpdir(), 'dql-trace-review-'));
-  cpSync(fixtureDir, root, { recursive: true });
-  rmSync(join(root, '.dql'), { recursive: true, force: true });
-  rmSync(join(root, 'test-cassettes'), { recursive: true, force: true });
+const roots: string[] = [];
+/** A hosted server on the fixture; `driver` is the dialect Ask writes and the reviewer's SQL is read as (the engine stays the seeded one). */
+async function startServer(driver: 'sqlite' | 'duckdb'): Promise<string> {
+  const projectRoot = mkdtempSync(join(tmpdir(), 'dql-trace-review-'));
+  roots.push(projectRoot);
+  cpSync(fixtureDir, projectRoot, { recursive: true });
+  rmSync(join(projectRoot, '.dql'), { recursive: true, force: true });
+  rmSync(join(projectRoot, 'test-cassettes'), { recursive: true, force: true });
   const port = await startLocalServer({
-    rootDir: root, projectRoot: root, executor: createSeededSqliteExecutor(seed), connection: { driver: 'sqlite', filepath: ':memory:' }, preferredPort: 0,
+    rootDir: projectRoot, projectRoot, executor: createSeededSqliteExecutor(seed), connection: { driver, filepath: ':memory:' }, preferredPort: 0,
     hostHooks: {
       resolvePrincipal: (req) => people[String(req.headers['x-test-person'] ?? '')] ?? null,
       authorize: (principal, action) => ({ allow: action !== 'hint.review' || principal.id === sam.id, reason: 'Only a steward may review.' }),
@@ -152,12 +168,17 @@ beforeAll(async () => {
     },
     captureServer: (created) => { servers.push(created); },
   });
-  base = `http://127.0.0.1:${port}`;
+  return `http://127.0.0.1:${port}`;
+}
+
+beforeAll(async () => {
+  if (!process.env.DQL_METRICFLOW_BIN) process.env.DQL_METRICFLOW_BIN = join(tmpdir(), 'dql-trace-review-no-metricflow', 'mf');
+  base = await startServer('sqlite');
 }, 120_000);
 
 afterAll(async () => {
   await Promise.all(servers.splice(0).map((server) => new Promise<void>((done) => server.close(() => done()))));
-  if (root) rmSync(root, { recursive: true, force: true });
+  for (const projectRoot of roots.splice(0)) rmSync(projectRoot, { recursive: true, force: true });
 });
 
 /** Sam reads Wes's run's trace by run and by id; Wes's own run (with its receipt) is the control. */
@@ -275,7 +296,7 @@ describe('a steward reading another person\'s trace on the real pipeline: no war
     expect(answer.sql).not.toMatch(/Philadelphia|Brooklyn/);
   }, 120_000);
 
-  for (const marker of Object.keys(NAMED_SQL)) {
+  for (const marker of ['through a cte', 'through a subquery', 'without as', 'in brackets']) {
     it(`a column named after a value ${marker}: renamed in the columns and everywhere in the SQL, tables still readable`, async () => {
       const run = await ask(`top customers by order total at the philadelphia shop ${marker}`);
       const ownColumns = (run.artifacts ?? []).map((artifact: any) => artifact?.payload?.result?.columns).find(Array.isArray);
@@ -294,4 +315,25 @@ describe('a steward reading another person\'s trace on the real pipeline: no war
   it('a chat reply that restates figures', async () => {
     await sweep('chat', await ask('hi'));
   }, 120_000);
+});
+
+describe('on a DuckDB connection (`"…"` is a name): quoted and non-ASCII names the project does not use', () => {
+  beforeAll(async () => { base = await startServer('duckdb'); }, 120_000);
+  const aliases: Record<string, string> = { 'with an apostrophe': "Chicago's", 'with a comma': 'Chicago, IL', 'in another script': 'Chicagö' };
+  for (const [marker, alias] of Object.entries(aliases)) {
+    it(`a column named ${JSON.stringify(alias)} is renamed in the columns and the SQL`, async () => {
+      const run = await ask(`top customers by order total at the philadelphia shop ${marker}`);
+      const ownColumns = (run.artifacts ?? []).map((artifact: any) => artifact?.payload?.result?.columns).find(Array.isArray);
+      expect(JSON.stringify(ownColumns), `${marker}: the statement ran and Wes's own result has the column`).toContain(JSON.stringify(alias).slice(1, -1));
+      await sweep(marker, run);
+      const { texts, bodies } = await readAsSteward(run);
+      for (const text of texts) expect(text, marker).not.toContain(JSON.stringify(alias).slice(1, -1));
+      const answer = bodies[0]?.runtimeAnswerV1;
+      expect(answer.columns.some((column: string) => /^column_\d+$/.test(column)), marker).toBe(true);
+      expect(answer.sql, marker).toContain('"jaffle_shop"."dev"."orders"');
+      // Renamed whole: no piece of the name left beside the new one (`column_1ö`).
+      expect(answer.sql, marker).not.toMatch(/(?:column|t)_\d+[\p{L}\p{M}]|[\p{L}\p{M}]column_\d+/u);
+      expect(answer.sql, marker).not.toMatch(/[^\x00-\x7f]/);
+    }, 120_000);
+  }
 });
