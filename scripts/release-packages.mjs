@@ -256,11 +256,32 @@ async function packageVersionExists(root, packageName, version) {
 }
 
 /**
+ * The published range for a `workspace:` dependency, following pnpm's own
+ * publish rules: `workspace:*` becomes the exact version, `workspace:^` and
+ * `workspace:~` keep their operator, and an explicit range is kept as written.
+ *
+ * Every release package is published in lockstep at one version, and the
+ * packages share internal APIs that change between minor releases. A caret
+ * range let an older CLI install a newer sibling: `@duckcodeailabs/dql-cli@1.7.1`
+ * declared `"@duckcodeailabs/dql-agent": "^1.7.1"`, resolved 1.17.2, and every
+ * command then crashed with `does not provide an export named 'answer'`.
+ * Pinning keeps each published CLI on the exact siblings it was built and
+ * tested with.
+ */
+export function publishedWorkspaceRange(spec, version) {
+  const range = spec.slice('workspace:'.length);
+  if (range === '' || range === '*') return version;
+  if (range === '^' || range === '~') return `${range}${version}`;
+  return range;
+}
+
+/**
  * Prepare package manifests for npm pack/publish.
  *
- * - Replace all "workspace:*" dependency versions with the actual package
- *   version. pnpm publish is supposed to do this automatically, but it doesn't
- *   always work reliably when running from the release script.
+ * - Replace all "workspace:*" dependency versions with the exact package
+ *   version (see publishedWorkspaceRange). pnpm publish is supposed to do this
+ *   automatically, but it doesn't always work reliably when running from the
+ *   release script.
  * - Remove per-package prepublishOnly hooks. The script has already run the
  *   workspace build once, and those hooks rebuild dist/ after pruning compiled
  *   test files from the package payload.
@@ -299,7 +320,7 @@ function preparePackageManifests(root) {
         if (typeof version === 'string' && version.startsWith('workspace:')) {
           const resolvedVersion = versionMap.get(name);
           if (resolvedVersion) {
-            deps[name] = `^${resolvedVersion}`;
+            deps[name] = publishedWorkspaceRange(version, resolvedVersion);
             changed = true;
           } else {
             console.warn(`  Warning: ${relPath} depends on ${name} (${version}) but no workspace package found`);
