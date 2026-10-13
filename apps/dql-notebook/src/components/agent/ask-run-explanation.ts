@@ -86,6 +86,11 @@ export interface ExplainAskRunInput {
 /** An outcome in the reader's words. */
 export const OUTCOME_WORDS: Record<RunStepOutcome, string> = { done: 'Done', refused: 'Not used', skipped: 'Skipped', failed: 'Failed', not_reached: 'Not reached' };
 
+/** A row-count range (a trace read by someone other than the asker) in words: "No rows", "1 row", "About 2-10 rows". */
+export function rowCountWords(bucket: string): string {
+  return bucket === 'none' ? 'No rows' : bucket === '1' ? '1 row' : `About ${bucket} rows`;
+}
+
 /** A duration for a step or call; nothing for an unmeasured or trivial one. */
 export function formatRunMs(ms: number | undefined): string {
   if (ms === undefined || !Number.isFinite(ms) || ms < 50) return '';
@@ -368,7 +373,7 @@ export function explainAskRun(input: ExplainAskRunInput): RunExplanation | undef
       const fixed = checks.filter((check) => !check.passed && (check.attempt ?? 0) < lastAttempt).length;
       push({
         id: 'checks', kind: 'checks', title: 'Checked before running', outcome: failedNow.length ? 'failed' : 'done',
-        reason: failedNow.length ? `${failedNow.length} check${failedNow.length === 1 ? '' : 's'} failed: ${failedNow[0]!.message}` : fixed ? `All checks passed after ${fixed} failed check${fixed === 1 ? ' was' : 's were'} fixed.` : `All ${latest.length} check${latest.length === 1 ? '' : 's'} passed.`,
+        reason: failedNow.length ? `${failedNow.length} check${failedNow.length === 1 ? '' : 's'} failed: ${failedNow[0]!.message || failedNow[0]!.label}` : fixed ? `All checks passed after ${fixed} failed check${fixed === 1 ? ' was' : 's were'} fixed.` : `All ${latest.length} check${latest.length === 1 ? '' : 's'} passed.`,
         checks,
       });
     }
@@ -381,7 +386,7 @@ export function explainAskRun(input: ExplainAskRunInput): RunExplanation | undef
       push({
         id: 'warehouse', kind: 'warehouse', title: 'Ran on the warehouse', outcome: 'done',
         ...(num(executed.ms) !== undefined ? { ms: num(executed.ms) } : {}),
-        reason: `${rowCount === undefined ? 'Returned rows' : `${rowCount} row${rowCount === 1 ? '' : 's'}`}${retried ? ', after the warehouse rejected a first attempt' : ''}.`,
+        reason: `${rowCount === undefined ? (str(executed.rowCountBucket) ? rowCountWords(str(executed.rowCountBucket)!) : 'Returned rows') : `${rowCount} row${rowCount === 1 ? '' : 's'}`}${retried ? ', after the warehouse rejected a first attempt' : ''}.`,
         ...(rowCount !== undefined ? { rows: rowCount } : {}),
         story: story.filter((entry) => entry.phase === 'execute'),
       });

@@ -276,6 +276,7 @@ import type {
 import { listRemoteMcpSettings, saveRemoteMcpSettings } from './llm/mcp-config.js';
 import { knowledgeSessionFor } from './host/knowledge-sources.js';
 import { ledgeredProvider, withAnswerKnowledge, withKnowledgeWithheld } from './host/answer-knowledge.js';
+import { traceDetailForReviewer, traceListEntryForReviewer } from './host/trace-review.js';
 import { knowledgeContextSource, type AskStoryStepV1, type KnowledgeSession } from '@duckcodeailabs/dql-agent';
 import {
   composeBusinessExplanation,
@@ -1607,9 +1608,25 @@ function askTraceScenarioLabel(run: Pick<AgentRun, 'requestedMode' | 'route'>): 
  * One plain sentence on why this run was answered, held or refused, for the trace list. It reads only the run's
  * stop reason and its gap message (a sentence about what was missing), never the answer, SQL or any value.
  */
-export function askTraceReason(run: Pick<AgentRun, 'stopReason' | 'status' | 'artifacts' | 'evaluations'>): string {
-  const gap = traceAnswerProjection(run)?.gap as { message?: unknown } | undefined;
-  const gapMessage = typeof gap?.message === 'string' ? gap.message.trim().slice(0, 300) : '';
+/** A gap in words, with nothing from the question or the warehouse in it. */
+const ASK_TRACE_GAP_SENTENCES: Record<string, string> = {
+  not_retrieved: 'No rows matched what was asked.',
+  not_modeled: 'The project does not model part of the question.',
+  ambiguous: 'The question had more than one meaning.',
+  unsupported: 'The governed engines cannot express the question.',
+  denied: 'A project policy does not allow the question.',
+};
+
+/**
+ * Why a listed trace ended. `values: false` is the list as a reviewer reads someone else's question (RFC 0010): the
+ * gap's own message quotes the question's literals and what the warehouse holds ("no stored value matches …", "2
+ * customers share the name …"), so only the kind of gap is said.
+ */
+export function askTraceReason(run: Pick<AgentRun, 'stopReason' | 'status' | 'artifacts' | 'evaluations'>, options: { values?: boolean } = {}): string {
+  const gap = traceAnswerProjection(run)?.gap as { message?: unknown; kind?: unknown } | undefined;
+  const gapMessage = options.values === false
+    ? (typeof gap?.kind === 'string' ? ASK_TRACE_GAP_SENTENCES[gap.kind] ?? '' : '')
+    : typeof gap?.message === 'string' ? gap.message.trim().slice(0, 300) : '';
   const byStop: Record<AgentRun['stopReason'], string> = {
     certified_answer_found: 'Answered from a certified block.',
     governed_semantic_answer: 'Answered from the governed semantic layer.',
@@ -5695,6 +5712,13 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
     if (!principal || !hostHooks) return false;
     return (await authorizeHostRequest(hostHooks, principal, { action, resource: { type: 'project' } })).allow;
   };
+  /**
+   * Whether the person reading an Ask trace asked it: always without a host; with one, when the run is theirs
+   * (the owner-scoped run store finds it). A steward or admin who opens someone else's trace to review hints is not.
+   */
+  const traceReaderOwnsRun = async (runId: string): Promise<boolean> => currentRecordOwner() === undefined || Boolean(await agentRunStore.get(runId));
+  /** The key a reviewer's trace fingerprints are re-keyed under: the host's trace secret, or this project's own. */
+  const traceReviewSecret = (): string => (questionKey ??= traceQuestionKey(projectRoot, hostHooks?.traceSalt));
   /**
    * With a host, whether this person reviews answers for the workspace (`hint.review`, the steward's action), and so
    * reads every person's Ask traces. A host with no `authorize` rule never grants it: people keep to their own.
@@ -15599,13 +15623,17 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
         const run = await runsForList.get(trace.runId);
         if (!run) return scoped ? null : trace;
         const questionPreview = askTraceQuestionPreview(run.question);
-        return {
+        // A reviewer listing someone else's question reads why it ended in words that carry none of its values, and
+        // the entry's fingerprints re-keyed (trace-review.ts).
+        const ownsRun = !reviewsAll || await traceReaderOwnsRun(trace.runId);
+        const entry = {
           ...projectAuthoritativeV8TraceEnvelope(trace, run),
           ...(questionPreview ? { questionPreview } : {}),
           scenarioLabel: askTraceScenarioLabel(run),
-          reason: askTraceReason(run),
+          reason: askTraceReason(run, { values: ownsRun }),
           ...(run.askAgentRuntimeMode ? { runtimeMode: run.askAgentRuntimeMode } : {}),
         };
+        return ownsRun ? entry : traceListEntryForReviewer(entry as unknown as Record<string, unknown>, traceReviewSecret());
       }));
       const traces = listed.filter((trace): trace is NonNullable<typeof trace> => trace !== null);
       res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
@@ -15634,6 +15662,7 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
         return;
       }
       const run = await traceRuns.get(runId);
+      const ownsRun = await traceReaderOwnsRun(runId);
       const projectedTrace = {
         ...trace,
         envelope: projectAuthoritativeV8TraceEnvelope(trace.envelope, run),
@@ -15642,7 +15671,7 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
       // The canonical Ask story is persisted on the AgentRun, not rebuilt from
       // spans. Join it only at this local API boundary so trace storage never
       // becomes prompt/result retention and old runs explicitly omit it.
-      res.end(serializeJSON({
+      const detail: Record<string, unknown> = {
         ...projectedTrace,
         ...(run?.diagnosticReceiptV4?.summary ? { decisionSummary: run.diagnosticReceiptV4.summary } : {}),
         ...(run?.diagnosticReceiptV5?.summary ? { runtimeDecisionSummary: run.diagnosticReceiptV5.summary } : {}),
@@ -15652,7 +15681,9 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
         ...(run?.diagnosticReceiptV9 ? { runtimeReceiptV9: run.diagnosticReceiptV9 } : {}),
         ...(run?.diagnosticReceiptV9 && traceAnswerProjection(run) ? { runtimeAnswerV1: traceAnswerProjection(run) } : {}),
         ...(run?.askAgentRuntimeMode ? { runtimeMode: run.askAgentRuntimeMode } : {}),
-      }));
+      };
+      // RFC 0010: a reviewer reading someone else's trace gets it rebuilt from an allowlist: how it was answered, no value.
+      res.end(serializeJSON(ownsRun ? detail : traceDetailForReviewer(detail, { secret: traceReviewSecret(), dialect: connection?.driver, run, catalog: askPipelineHost.catalogNames() })));
       return;
     }
 
@@ -15729,12 +15760,13 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
         return;
       }
       const run = await traceRuns.get(trace.envelope.runId);
+      const ownsRun = await traceReaderOwnsRun(trace.envelope.runId);
       const projectedTrace = {
         ...trace,
         envelope: projectAuthoritativeV8TraceEnvelope(trace.envelope, run),
       };
       res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-      res.end(serializeJSON({
+      const detail: Record<string, unknown> = {
         ...projectedTrace,
         ...(run?.diagnosticReceiptV4?.summary ? { decisionSummary: run.diagnosticReceiptV4.summary } : {}),
         ...(run?.diagnosticReceiptV5?.summary ? { runtimeDecisionSummary: run.diagnosticReceiptV5.summary } : {}),
@@ -15744,7 +15776,9 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
         ...(run?.diagnosticReceiptV9 ? { runtimeReceiptV9: run.diagnosticReceiptV9 } : {}),
         ...(run?.diagnosticReceiptV9 && traceAnswerProjection(run) ? { runtimeAnswerV1: traceAnswerProjection(run) } : {}),
         ...(run?.askAgentRuntimeMode ? { runtimeMode: run.askAgentRuntimeMode } : {}),
-      }));
+      };
+      // RFC 0010: a reviewer reading someone else's trace gets it rebuilt from an allowlist: how it was answered, no value.
+      res.end(serializeJSON(ownsRun ? detail : traceDetailForReviewer(detail, { secret: traceReviewSecret(), dialect: connection?.driver, run, catalog: askPipelineHost.catalogNames() })));
       return;
     }
 

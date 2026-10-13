@@ -1268,6 +1268,12 @@ export interface AskPipelineHost {
   execute: AgentRouteExecutor;
   /** Open one request's context; a request without an AI model gets the blocked result instead. */
   openScope(context: AskRouteContext, options?: { route?: AskEmittedRoute }): Promise<{ scope: AskRequestScope } | { blocked: AgentRouteExecutorResult }>;
+  /**
+   * Every name the project itself uses (lower case): relations and their parts, their columns (from the manifest and
+   * from the warehouse columns probed so far), metrics, measures, dimensions, entities, models and block outputs. A
+   * trace read by someone other than the asker keeps an identifier only when it is one of these (host/trace-review.ts).
+   */
+  catalogNames(): Set<string>;
 }
 
 export function createAskPipelineRouteExecutor(deps: AskPipelineHostDeps): AgentRouteExecutor {
@@ -2625,8 +2631,29 @@ export function createAskPipelineHost(deps: AskPipelineHostDeps): AskPipelineHos
     const opened = await openRequest(context);
     return 'blocked' in opened ? opened.blocked : opened.answer();
   };
+  const catalogNames = (): Set<string> => {
+    const names = new Set<string>();
+    const add = (name: unknown) => { if (typeof name === 'string' && name.trim()) names.add(name.trim().replace(/^["`[]|["`\]]$/g, '').toLowerCase()); };
+    let source = vocabularyCache?.source;
+    if (!source) {
+      try { source = buildVocabularySource(sourceInputFor(undefined)); } catch { source = undefined; }
+    }
+    const relations = [...(source?.relations ?? []), ...[...probedColumns.values()].map((entry) => entry.relation).filter((relation): relation is ProbedRelation => Boolean(relation))];
+    for (const relation of relations) {
+      for (const part of [relation.database, relation.schema, relation.name]) add(part);
+      for (const column of [...(relation.columns ?? []), ...((relation as { embeddedColumns?: Array<{ name: string }> }).embeddedColumns ?? [])]) add(column.name);
+    }
+    for (const list of [source?.metrics, source?.measures, source?.dimensions, source?.entities]) {
+      for (const item of (list ?? []) as Array<{ name: string; model?: string; physical?: { column?: string } }>) { add(item.name); add(item.model); add(item.physical?.column); }
+    }
+    for (const model of source?.models ?? []) { add(model.name); for (const part of (model.relation ?? '').split('.')) add(part); }
+    for (const block of source?.blocks ?? []) { add(block.name); for (const output of block.contract?.outputs ?? []) add(output); }
+    return names;
+  };
+
   return {
     execute,
+    catalogNames,
     openScope: async (context, options) => {
       const opened = await openRequest(context, options);
       return 'blocked' in opened ? opened : { scope: opened.scope };
