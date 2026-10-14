@@ -142,6 +142,7 @@ export const REFUSAL_SENTENCES: Record<string, string> = {
   policy_conflict: 'The question contradicts a required filter.',
   exploration_not_opted_in: 'AI-written SQL is turned off for this project.',
   exploration_unavailable: 'No AI model is available to write SQL.',
+  exploration_tables_unavailable: 'No tables could be read for this project, so the data was not checked.',
   exploration_declined: 'The AI looked at the tables and found nothing that answers this.',
   exploration_check_failed: 'The AI-written SQL failed a check, so it was not run.',
   exploration_failed: 'The AI could not write SQL for this question.',

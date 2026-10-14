@@ -443,8 +443,10 @@ export function SemanticPanel() {
       setCompatibleDimensionNames(new Set());
       setSelectedDimensions(new Set());
       setComposeCompatibilityState('error');
+      // The runtime's own sentence says what to change; the error code stays
+      // in the response for diagnostics, not in front of the person.
       setComposeError(compatibilityError instanceof DqlApiError
-        ? `${compatibilityError.code ? `${compatibilityError.code}: ` : ''}${compatibilityError.message}`
+        ? compatibilityError.message || compatibilityError.nextActions?.[0] || 'Semantic compatibility could not be verified.'
         : compatibilityError instanceof Error
           ? compatibilityError.message
           : 'Semantic compatibility could not be verified.');

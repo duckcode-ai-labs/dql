@@ -9,6 +9,7 @@ import {
   assertMetricFlowAskTarget,
   assertDbtCloudMetricInventory,
   compileSemanticRuntimeQuery,
+  describeRuntimeCompatibility,
   getSemanticRuntimeStatus,
   normalizeSemanticRuntimeQueryRequest,
   semanticRuntimeAdapterSupportsHaving,
@@ -448,7 +449,8 @@ describe('shared semantic runtime selector', () => {
     delete process.env.ZLENS_METRICFLOW_BIN;
     mkdirSync(join(root, 'target'), { recursive: true });
     mkdirSync(join(root, '.dql', 'runtimes', 'metricflow', 'bin'), { recursive: true });
-    writeFileSync(join(root, 'target', 'semantic_manifest.json'), '{}');
+    // A dbt semantic layer MetricFlow can read: at least one semantic model.
+    writeFileSync(join(root, 'target', 'semantic_manifest.json'), JSON.stringify({ semantic_models: [{ name: 'orders' }], metrics: [] }));
     const bin = managedMetricFlowBin(root);
     writeFileSync(bin, [
       '#!/bin/sh',
@@ -474,6 +476,62 @@ describe('shared semantic runtime selector', () => {
     });
     expect(result).toMatchObject({ engine: 'metricflow-cli' });
     expect(result?.sql).toContain(join(root, 'profiles'));
+  });
+
+  // F4 (ZLens 0.1.0 e2e): an `mf` on PATH became the active runtime for a
+  // project whose metrics are DQL semantic-layer YAML, and every metric in the
+  // picker failed with "Local MetricFlow returned no compatible dimensions".
+  describe('a detected MetricFlow serves only a semantic layer it can read', () => {
+    const fakeMf = () => {
+      const bin = join(root, 'mf');
+      writeFileSync(bin, [
+        '#!/bin/sh',
+        'if [ "$1" = "--version" ]; then printf "%s\\n" "mf, version 0.14.0"; exit 0; fi',
+        'exit 0',
+      ].join('\n'));
+      chmodSync(bin, 0o755);
+      process.env.ZLENS_METRICFLOW_BIN = bin;
+    };
+    const dqlLayer = () => new SemanticLayer({
+      metrics: [{ name: 'team_wins', label: 'Team wins', description: '', domain: 'nba', sql: 'SUM(wins)', type: 'sum', table: 'team_season_facts' }],
+      dimensions: [{ name: 'team', label: 'Team', description: '', domain: 'nba', sql: 'team_id', type: 'number', table: 'team_season_facts' }],
+    });
+
+    it('auto keeps a DQL semantic layer on the native compiler and says why MetricFlow is not used', async () => {
+      fakeMf();
+      writeFileSync(join(root, 'dql.config.json'), JSON.stringify({ semanticLayer: { provider: 'dql', path: 'semantic-layer' } }));
+      // dbt writes an empty semantic manifest on every parse: it is not a dbt semantic layer.
+      mkdirSync(join(root, 'target'), { recursive: true });
+      writeFileSync(join(root, 'target', 'semantic_manifest.json'), JSON.stringify({ semantic_models: [], metrics: [], project_configuration: {} }));
+      const status = await getSemanticRuntimeStatus(root);
+      expect(status.active).toBe('native');
+      expect(status.adapters.find((adapter) => adapter.id === 'metricflow-cli')).toMatchObject({ ready: true });
+      expect(status.adapters.find((adapter) => adapter.id === 'metricflow-cli')?.detail).toContain('Not used automatically');
+      const compat = await describeRuntimeCompatibility(root, dqlLayer(), ['team_wins'], { semanticLayer: { provider: 'dql' } });
+      expect(compat.engine).toBe('native');
+      expect(compat.dimensions.map((dimension) => dimension.name)).toEqual(['team']);
+    });
+
+    it('auto still selects MetricFlow for a dbt semantic layer', async () => {
+      fakeMf();
+      writeFileSync(join(root, 'dql.config.json'), JSON.stringify({ semanticLayer: { provider: 'dbt', projectPath: '.' } }));
+      expect((await getSemanticRuntimeStatus(root)).active).toBe('metricflow-cli');
+      rmSync(join(root, 'dql.config.json'));
+      mkdirSync(join(root, 'target'), { recursive: true });
+      writeFileSync(join(root, 'target', 'semantic_manifest.json'), JSON.stringify({ semantic_models: [{ name: 'orders' }], metrics: [] }));
+      expect((await getSemanticRuntimeStatus(root)).active).toBe('metricflow-cli');
+    });
+
+    it('an explicit MetricFlow choice over DQL metrics fails with guidance, not a bare code', async () => {
+      fakeMf();
+      writeFileSync(join(root, 'dql.config.json'), JSON.stringify({ semanticLayer: { provider: 'dql', path: 'semantic-layer' } }));
+      const { saveSemanticRuntimePreference } = await import('./semantic-runtime-settings.js');
+      saveSemanticRuntimePreference(root, 'metricflow-cli');
+      const failure = await describeRuntimeCompatibility(root, dqlLayer(), ['team_wins'], { semanticLayer: { provider: 'dql' } }).catch((error: unknown) => error as Error & { code?: string });
+      expect(failure).toMatchObject({ code: 'SEMANTIC_RUNTIME_REQUIRED' });
+      expect((failure as Error).message).toContain('defined in the DQL semantic layer, which MetricFlow does not read');
+      expect((failure as Error).message).toContain('Settings → Semantic runtime');
+    });
   });
 
   it('selects a successfully tested dbt Cloud adapter without exposing its token', async () => {
