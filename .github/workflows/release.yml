@@ -42,7 +42,14 @@ jobs:
           registry-url: https://registry.npmjs.org
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
+      # Same split as ci.yml: the dql-agent heavy lane (4,000-model indexes with a
+      # wall-clock bound, PERF-001/PERF-002) measures several times slower when it
+      # shares the runner with the other suites, so it runs alone after them.
       - run: pnpm test
+        env:
+          ZLENS_AGENT_TEST_LANE: ordinary
+      - name: dql-agent heavy lane (alone)
+        run: pnpm --filter @zlens/agent run test:heavy
       - name: Check the release script guards
         run: node --test scripts/release-publish-guards.test.mjs
       - name: Select npm dist-tag from the release tag
