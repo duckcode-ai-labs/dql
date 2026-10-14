@@ -1,4 +1,4 @@
-import { groupsByLabelsOnly } from '@duckcodeailabs/dql-core';
+import { groupsByLabelsOnly } from '@zlens/core';
 import { parseScopePredicates, type BlockContractMeasure, type BlockContractPredicate } from '../block-contract.js';
 import type { AnalyticalIntentV1 } from '../intent.js';
 import type { VocabularyEntry, VocabularyIndex } from '../vocabulary.js';

@@ -6,21 +6,22 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { QueryExecutor, type ConnectionConfig } from '@duckcodeailabs/dql-connectors';
+import { QueryExecutor, type ConnectionConfig } from '@zlens/connectors';
 import { startLocalServer, type LocalServerOptions } from '../local-runtime.js';
 import { dispatchNotifications } from '../schedule/notifiers/index.js';
 import { snapshotKeyId, verifySnapshot, type SnapshotSigner } from '../snapshot/app-snapshot.js';
 import { hooksWithDeadlines } from './hook-deadline.js';
 import { observabilityFailures } from './observability.js';
 import { withRequestContext, type DqlHostHooks, type DqlPrincipal } from './request-context.js';
+import { readEnv } from '@zlens/core';
 
 /**
- * RFC 0010 rule 1: a hook's answer that DQL cannot use, or a failure DQL did
+ * RFC 0010 rule 1: a hook's answer that ZLens cannot use, or a failure ZLens did
  * not expect while serving a hosted request, is refused or explained in plain
  * words. The failure's own text (which can name code or quote what a hook
  * answered) goes to the server's log under a reference of eight letters.
  */
-const connectorRoot = process.env.DQL_APP_DATASETS_DUCKDB_CONNECTOR_ROOT?.trim();
+const connectorRoot = readEnv('ZLENS_APP_DATASETS_DUCKDB_CONNECTOR_ROOT')?.trim();
 const duckIt = connectorRoot ? it : it.skip;
 const person: DqlPrincipal = { id: 'u-ana', kind: 'person', email: 'ana@example.test', source: 'host' };
 const INTERNALS = /TypeError|is not a function|is not iterable|Cannot read propert|Cannot use 'in'|\.ts:\d+|\.js:\d+/;
@@ -72,11 +73,11 @@ async function serve(hooks: Partial<DqlHostHooks>, options: { warehouse?: boolea
   return { call, projectRoot };
 }
 
-describe('a failure DQL did not expect, with a host', () => {
+describe('a failure ZLens did not expect, with a host', () => {
   duckIt('a notebook query reads a plain sentence and a reference; the failure\'s own text is only in the log, under that reference', async () => {
     const logged: string[] = [];
     vi.spyOn(console, 'warn').mockImplementation((...args: unknown[]) => { logged.push(args.map(String).join(' ')); });
-    // A hook answer whose reading fails in a way DQL did not foresee (a getter that throws a TypeError).
+    // A hook answer whose reading fails in a way ZLens did not foresee (a getter that throws a TypeError).
     const { call } = await serve({
       credentials: () => ({ connection: { get schema(): string { throw new TypeError("Cannot read properties of undefined (reading 'inner-7f3a')"); } } as never }),
     }, { warehouse: true });
@@ -151,7 +152,7 @@ describe('the capability map and the routes decide alike', () => {
   });
 });
 
-// ── Hooks DQL calls for status and effects: answerStatus, pageEdition, traces, traceSalt, delivery, signing, git ──
+// ── Hooks ZLens calls for status and effects: answerStatus, pageEdition, traces, traceSalt, delivery, signing, git ──
 
 const INTERNAL = 'host-internal-7d41 at 10.0.3.7:5432';
 const fixtureRoot = join(dirname(fileURLToPath(import.meta.url)), '../../test/fixtures/app-datasets-pilot');

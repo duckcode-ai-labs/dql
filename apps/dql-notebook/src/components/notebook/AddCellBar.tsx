@@ -17,7 +17,7 @@ import {
   ParamCellIcon,
   FileText,
   Sparkles,
-} from '@duckcodeailabs/dql-ui/icons';
+} from '@zlens/ui/icons';
 
 interface AddCellBarProps {
   afterId?: string;

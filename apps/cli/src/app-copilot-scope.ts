@@ -5,7 +5,7 @@ import {
   loadAppDocument,
   loadDashboardDocument,
   type DashboardFilter,
-} from '@duckcodeailabs/dql-core';
+} from '@zlens/core';
 
 /**
  * What an App's copilot question is scoped to. Resolved on the server from

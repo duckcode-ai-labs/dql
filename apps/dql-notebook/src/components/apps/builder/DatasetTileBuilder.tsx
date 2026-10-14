@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { Blocks, Play, ShieldCheck } from 'lucide-react';
 import { api, type AppBlockRecommendation } from '../../../api/client';
-import type { DatasetDescriptor, DatasetMeasureField } from '@duckcodeailabs/dql-core/datasets/descriptor';
-import { datasetTileVisualizationCompatibility, tileQueryValidationRuns, validateTileQuery, type TileQuery } from '@duckcodeailabs/dql-core/apps/tile-query';
+import type { DatasetDescriptor, DatasetMeasureField } from '@zlens/core/datasets/descriptor';
+import { datasetTileVisualizationCompatibility, tileQueryValidationRuns, validateTileQuery, type TileQuery } from '@zlens/core/apps/tile-query';
 import { TileQueryEditor } from '../builder/TileQueryEditor';
 import { TileLivePreview } from '../builder/TileLivePreview';
 import { humanize } from './studio-ui';
@@ -40,7 +40,7 @@ export function DatasetTileBuilder({
   const blockingMessage = !tileQueryValidationRuns(validation)
     ? validation.diagnostics[0]?.message ?? 'Choose at least one measure, or switch to row details.'
     : detail && !detailSourceEligible
-      ? 'Validate the complete source key before adding a detail tile. DQL will recheck it on every run.'
+      ? 'Validate the complete source key before adding a detail tile. ZLens will recheck it on every run.'
       : !visualization.compatible ? visualization.message : undefined;
   const changeQuery = (next: TileQuery) => {
     setQuery(next);
@@ -52,7 +52,7 @@ export function DatasetTileBuilder({
   const validateSourceGrain = async () => {
     const sourceId = source.sourceId?.trim();
     if (!sourceId) {
-      setSourceValidation({ state: 'failed', message: 'Refresh this source before validation so DQL can use its exact Dataset identity.' });
+      setSourceValidation({ state: 'failed', message: 'Refresh this source before validation so ZLens can use its exact Dataset identity.' });
       return;
     }
     setSourceValidation({ state: 'running' });
@@ -88,7 +88,7 @@ export function DatasetTileBuilder({
     <TileLivePreview sourceId={source.sourceId} query={query} runnable={tileQueryValidationRuns(validation)} reason={validation.diagnostics[0]?.message} />
     <label><span>Tile title <small>Optional</small></span><input value={title} disabled={disabled} onChange={(event) => setTitle(event.target.value)} placeholder={defaultTitle} /></label>
     {needsKeyValidation ? <>
-      <small className="dataset-binding-note">{sourceValidation.state === 'passed' ? sourceValidation.message : detail ? 'Row details need the Dataset key validated on the active warehouse.' : 'DQL checks the Dataset key on the active warehouse when the tile runs. You can validate it now.'}</small>
+      <small className="dataset-binding-note">{sourceValidation.state === 'passed' ? sourceValidation.message : detail ? 'Row details need the Dataset key validated on the active warehouse.' : 'ZLens checks the Dataset key on the active warehouse when the tile runs. You can validate it now.'}</small>
       <button type="button" className="dataset-validate-source" disabled={disabled || sourceValidation.state === 'running'} onClick={() => void validateSourceGrain()}><ShieldCheck size={12} /> {sourceValidation.state === 'running' ? 'Validating full source…' : sourceValidation.state === 'passed' ? 'Validate source keys again' : 'Validate source keys'}</button>
     </> : null}
     {sourceValidation.state === 'failed' && sourceValidation.message ? <small className="dataset-builder-error" role="alert">{sourceValidation.message}</small> : null}

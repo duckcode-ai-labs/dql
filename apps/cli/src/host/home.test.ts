@@ -5,10 +5,11 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
-import { QueryExecutor, type ConnectionConfig } from '@duckcodeailabs/dql-connectors';
+import { QueryExecutor, type ConnectionConfig } from '@zlens/connectors';
 import { startLocalServer } from '../local-runtime.js';
 import type { DqlHostHooks, DqlPageEdition, DqlPrincipal } from './request-context.js';
 import type { DqlRowPolicy } from './row-policy.js';
+import { readEnv } from '@zlens/core';
 
 /**
  * RFC 0010 HH-16: a Home that summarises, following a page, and who an App
@@ -18,7 +19,7 @@ import type { DqlRowPolicy } from './row-policy.js';
  * it. Without a host the same Home works for the one local person.
  */
 const here = dirname(fileURLToPath(import.meta.url));
-const connectorRoot = process.env.DQL_APP_DATASETS_DUCKDB_CONNECTOR_ROOT?.trim();
+const connectorRoot = readEnv('ZLENS_APP_DATASETS_DUCKDB_CONNECTOR_ROOT')?.trim();
 const duckDbIt = connectorRoot ? it : it.skip;
 const fixtureRoot = resolve(here, '../../test/fixtures/app-datasets-pilot');
 const seedWarehouse = resolve(here, '../../../../scripts/seed-eval-warehouse.mjs');

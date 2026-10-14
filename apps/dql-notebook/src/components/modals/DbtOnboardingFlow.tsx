@@ -364,7 +364,7 @@ export function DbtOnboardingFlow({
         {statusLoading && <Notice t={t} title="Checking existing setup…" body="You can resume from the first incomplete step." />}
 
         {stage === 'connect' && !statusLoading && (
-          <Section title="1. Connect the dbt project" description="Point DQL at the existing dbt project and artifact. DQL reads these files in place; it does not create a second semantic copy." t={t}>
+          <Section title="1. Connect the dbt project" description="Point DQL at the existing dbt project and artifact. ZLens reads these files in place; it does not create a second semantic copy." t={t}>
             <div style={{ display: 'flex', gap: 8 }}>
               <button type="button" onClick={() => setSourceMode('local')} style={sourceMode === 'local' ? primaryButton(t) : secondaryButton(t)}>Local path</button>
               <button type="button" onClick={() => setSourceMode('repo')} style={sourceMode === 'repo' ? primaryButton(t) : secondaryButton(t)}>Git repository</button>
@@ -387,7 +387,7 @@ export function DbtOnboardingFlow({
             <Field label="Manifest path" hint="Relative to the dbt project directory" t={t}>
               <input aria-label="dbt manifest path" value={manifestPath} onChange={(event) => setManifestPath(event.target.value)} placeholder="target/manifest.json" style={inputStyle} />
             </Field>
-            <Field label="dbt profiles directory" hint="Optional; auto-detected from the dbt project, DQL project, DBT_PROFILES_DIR, or ~/.dbt" t={t}>
+            <Field label="dbt profiles directory" hint="Optional; auto-detected from the dbt project, ZLens project, DBT_PROFILES_DIR, or ~/.dbt" t={t}>
               <input aria-label="dbt profiles directory" value={profilesDir} onChange={(event) => setProfilesDir(event.target.value)} placeholder="Auto-detect" style={inputStyle} />
             </Field>
             <OwnershipCallout t={t} />
@@ -395,7 +395,7 @@ export function DbtOnboardingFlow({
         )}
 
         {stage === 'inspect' && preview && (
-          <Section title="2. Review dbt artifacts" description="DQL will enable Manifest v3 and dbt-first modeling, then build an immutable snapshot from these sources." t={t}>
+          <Section title="2. Review dbt artifacts" description="ZLens will enable Manifest v3 and dbt-first modeling, then build an immutable snapshot from these sources." t={t}>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 10 }}>
               {Object.entries(preview.counts).map(([label, value]) => <CountCard key={label} label={label} value={value} t={t} />)}
             </div>
@@ -405,7 +405,7 @@ export function DbtOnboardingFlow({
               <ArtifactRow label="semantic_manifest.json" value={artifactLabel(preview.artifacts.semanticManifest)} t={t} />
               <ArtifactRow label="profiles directory" value={preview.profilesDir || 'Optional · not detected'} t={t} />
             </div>
-            <Notice t={t} title="What changes" body="DQL writes project configuration and a rebuildable snapshot. dbt SQL/YAML and MetricFlow formulas remain the source of truth and are never copied into domain folders." />
+            <Notice t={t} title="What changes" body="ZLens writes project configuration and a rebuildable snapshot. dbt SQL/YAML and MetricFlow formulas remain the source of truth and are never copied into domain folders." />
             {preview.warnings?.map((warning) => <Notice key={warning} t={t} title="Repository note" body={warning} />)}
           </Section>
         )}
@@ -715,7 +715,7 @@ function Field({ label, hint, t, children }: { label: string; hint: string; t: T
 }
 
 function OwnershipCallout({ t }: { t: Theme }) {
-  return <Notice t={t} title="Read-only dbt ownership" body="Models, columns, descriptions, tests, lineage, catalog types, and MetricFlow formulas stay in dbt. DQL stores sparse domains, bindings, relationship safety, contracts, skills, blocks, and evaluations." />;
+  return <Notice t={t} title="Read-only dbt ownership" body="Models, columns, descriptions, tests, lineage, catalog types, and MetricFlow formulas stay in dbt. ZLens stores sparse domains, bindings, relationship safety, contracts, skills, blocks, and evaluations." />;
 }
 
 function Notice({ title, body, t }: { title: string; body: string; t: Theme }) {

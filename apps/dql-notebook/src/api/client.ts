@@ -1,6 +1,6 @@
-import type { DashboardVizEncoding } from '@duckcodeailabs/dql-core/apps/viz-encoding';
-import type { DashboardVizStyle } from '@duckcodeailabs/dql-core/apps/viz-style';
-import type { TableDatasetProposal } from '@duckcodeailabs/dql-core/datasets/table-draft';
+import type { DashboardVizEncoding } from '@zlens/core/apps/viz-encoding';
+import type { DashboardVizStyle } from '@zlens/core/apps/viz-style';
+import type { TableDatasetProposal } from '@zlens/core/datasets/table-draft';
 
 export interface WarehouseTableSummary {
   id: string;
@@ -11,10 +11,10 @@ export interface WarehouseTableSummary {
   columnCount: number;
   rowCountEstimate?: number;
 }
-import type { DiffReport } from '@duckcodeailabs/dql-core/format';
-import { normalizeDqlArtifactReference, type DqlArtifactReference } from '@duckcodeailabs/dql-core/artifacts';
-import type { Business360ResultV2 } from '@duckcodeailabs/dql-core/lineage';
-import type { DatasetDescriptor, MetricCapabilityContract, SemanticTileConversionProvenanceV1, TileQuery } from '@duckcodeailabs/dql-core';
+import type { DiffReport } from '@zlens/core/format';
+import { normalizeDqlArtifactReference, type DqlArtifactReference } from '@zlens/core/artifacts';
+import type { Business360ResultV2 } from '@zlens/core/lineage';
+import type { DatasetDescriptor, MetricCapabilityContract, SemanticTileConversionProvenanceV1, TileQuery } from '@zlens/core';
 import type {
   ManifestDbtFirstModeling,
   ManifestModelRelationship,
@@ -34,7 +34,7 @@ import type {
   ManifestKnowledgeEdge,
   ManifestKnowledgeObject,
   ManifestCrossDomainRoute,
-} from '@duckcodeailabs/dql-core';
+} from '@zlens/core';
 import type { AgentAnswerCascade, AgentConversationContext, AgentConversationDqlArtifact } from '../llm/types';
 import type {
   Cell,
@@ -4035,7 +4035,7 @@ async function requestUncached<T>(path: string, options?: RequestInit): Promise<
   } catch (error) {
     if (options?.signal?.aborted) throw error;
     const detail = error instanceof Error && error.message ? ` ${error.message}` : '';
-    throw new Error(`Unable to reach the local DQL notebook server. Check that it is still running, then retry.${detail}`);
+    throw new Error(`Unable to reach the local ZLens notebook server. Check that it is still running, then retry.${detail}`);
   }
   if (!res.ok) {
     reportServerAuthRejected(res.status, res.headers.get('x-dql-sign-in'));
@@ -5035,7 +5035,7 @@ export const api = {
     } catch {
       return {
         ready: false,
-        reason: 'Unable to reach the propose engine. Is the local DQL server running?',
+        reason: 'Unable to reach the propose engine. Is the local ZLens server running?',
         summary: {
           modelsScanned: 0,
           businessModels: 0,
@@ -5143,7 +5143,7 @@ export const api = {
     } catch (error) {
       if (signal?.aborted) throw error;
       const detail = error instanceof Error && error.message ? ` ${error.message}` : '';
-      throw new Error(`Unable to reach the local DQL notebook server. Check that it is still running, then retry.${detail}`);
+      throw new Error(`Unable to reach the local ZLens notebook server. Check that it is still running, then retry.${detail}`);
     }
     if (!res.ok) {
       const text = await res.text().catch(() => '');

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { validateStoryText, type StoryBindingCatalog } from '@duckcodeailabs/dql-core/apps/story-bindings';
+import { validateStoryText, type StoryBindingCatalog } from '@zlens/core/apps/story-bindings';
 import type { DashboardNarrativeV1 } from '../../../api/client';
 import { StoryText } from '../StoryView';
 

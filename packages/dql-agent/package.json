@@ -1,7 +1,7 @@
 {
-  "name": "@duckcodeailabs/dql-agent",
+  "name": "@zlens/agent",
   "version": "1.17.3",
-  "description": "DQL agent: knowledge graph, Skills, block-first answer loop, and pluggable LLM providers (Claude / OpenAI / Gemini / Ollama)",
+  "description": "ZLens agent: knowledge graph, Skills, block-first answer loop, and pluggable LLM providers (Claude / OpenAI / Gemini / Ollama)",
   "license": "Apache-2.0",
   "type": "module",
   "main": "./dist/index.js",
@@ -38,9 +38,9 @@
     "access": "public"
   },
   "dependencies": {
-    "@duckcodeailabs/dql-core": "workspace:*",
-    "@duckcodeailabs/dql-governance": "workspace:*",
-    "@duckcodeailabs/dql-project": "workspace:*",
+    "@zlens/core": "workspace:*",
+    "@zlens/governance": "workspace:*",
+    "@zlens/project": "workspace:*",
     "better-sqlite3": "^12.11.1",
     "js-yaml": "^4.1.1"
   },

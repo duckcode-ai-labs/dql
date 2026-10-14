@@ -1,5 +1,5 @@
 /**
- * `dql app` — manage Apps (consumption-layer artifacts).
+ * `zlens app` — manage Apps (consumption-layer artifacts).
  *
  * New Apps live at `apps/<id>/dql.app.json` and bundle dashboards/notebooks plus
  * declarative members, roles, policies, RLS bindings, and schedules. They're
@@ -7,16 +7,16 @@
  * and read by both the desktop UI and the CLI.
  *
  * Subcommands:
- *   dql app new <id> --domain <domain> [--owner <user>]
- *   dql app generate "<prompt>" [--domain <domain>] [--owner <user>] [--ai-layout]
- *   dql app ls [path]
- *   dql app show <id> [path]
- *   dql app build [path]
- *   dql app reindex [path]
- *   dql app verify <snapshot.html> [--trust-key <public.pem>] [--format json]
- *   dql app key
- *   dql app diff [base] [head] [--html <file>] [--markdown <file>] [--check] [--format json]
- *   dql app check <id> [--format json]
+ *   zlens app new <id> --domain <domain> [--owner <user>]
+ *   zlens app generate "<prompt>" [--domain <domain>] [--owner <user>] [--ai-layout]
+ *   zlens app ls [path]
+ *   zlens app show <id> [path]
+ *   zlens app build [path]
+ *   zlens app reindex [path]
+ *   zlens app verify <snapshot.html> [--trust-key <public.pem>] [--format json]
+ *   zlens app key
+ *   zlens app diff [base] [head] [--html <file>] [--markdown <file>] [--check] [--format json]
+ *   zlens app check <id> [--format json]
  */
 
 import {
@@ -27,7 +27,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { join, relative, resolve } from "node:path";
-import { resolveDbtManifestPath } from "@duckcodeailabs/dql-core";
+import { resolveDbtManifestPath } from "@zlens/core";
 import {
   buildManifest,
   loadAppDocument,
@@ -39,7 +39,7 @@ import {
   type AppDocument,
   type DashboardDocument,
   type ManifestApp,
-} from "@duckcodeailabs/dql-core";
+} from "@zlens/core";
 import type { CLIFlags } from "../args.js";
 import { readSnapshotPublicKey, verifySnapshot, type SnapshotVerification } from "../snapshot/app-snapshot.js";
 import { runAppDiff } from "./app-diff.js";
@@ -82,17 +82,17 @@ export async function runApp(
       return runAppCheck(rest, flags);
     default:
       throw new Error(
-        "Usage: dql app <new|ls|show|build|reindex|verify|key|diff|check> [args]\n" +
-          "  dql app new <id> --domain <domain> [--owner <user>]\n" +
-          '  dql app generate "<prompt>" [--domain <domain>] [--owner <user>] [--ai-layout]\n' +
-          "  dql app ls [path]\n" +
-          "  dql app show <id> [path]\n" +
-          "  dql app build [path]\n" +
-          "  dql app reindex [path]\n" +
-          "  dql app verify <snapshot.html> [--trust-key <public.pem>] [--format json]\n" +
-          "  dql app key\n" +
-          "  dql app diff [base] [head] [--html <file>] [--markdown <file>] [--check]\n" +
-          "  dql app check <id> [--format json]",
+        "Usage: zlens app <new|ls|show|build|reindex|verify|key|diff|check> [args]\n" +
+          "  zlens app new <id> --domain <domain> [--owner <user>]\n" +
+          '  zlens app generate "<prompt>" [--domain <domain>] [--owner <user>] [--ai-layout]\n' +
+          "  zlens app ls [path]\n" +
+          "  zlens app show <id> [path]\n" +
+          "  zlens app build [path]\n" +
+          "  zlens app reindex [path]\n" +
+          "  zlens app verify <snapshot.html> [--trust-key <public.pem>] [--format json]\n" +
+          "  zlens app key\n" +
+          "  zlens app diff [base] [head] [--html <file>] [--markdown <file>] [--check]\n" +
+          "  zlens app check <id> [--format json]",
       );
   }
 }
@@ -103,11 +103,11 @@ async function runAppNew(rest: string[], flags: CLIFlags): Promise<void> {
   const rawId = rest[0];
   if (!rawId) {
     throw new Error(
-      "Usage: dql app new <id> --domain <domain> [--owner <user>]",
+      "Usage: zlens app new <id> --domain <domain> [--owner <user>]",
     );
   }
   const domain = (flags as { domain?: string }).domain?.trim();
-  if (!domain) throw new Error('--domain is required for "dql app new"');
+  if (!domain) throw new Error('--domain is required for "zlens app new"');
 
   const id = suggestAppId(rawId);
   const projectRoot = findProjectRoot(process.cwd());
@@ -142,7 +142,7 @@ async function runAppNew(rest: string[], flags: CLIFlags): Promise<void> {
   console.log("    Project source: unchanged");
   console.log("");
   console.log("  Next steps:");
-  console.log("    1. Run dql notebook and open Apps");
+  console.log("    1. Run zlens notebook and open Apps");
   console.log("    2. Resume the local draft and add governed sources, components, and filters");
   console.log("    3. Run preflight and explicitly Publish to Project when ready");
   console.log("");
@@ -154,7 +154,7 @@ async function runAppGenerate(rest: string[], flags: CLIFlags): Promise<void> {
   const prompt = await readPrompt(rest, flags);
   if (!prompt) {
     throw new Error(
-      'Usage: dql app generate "<prompt>" [--domain <domain>] [--owner <user>] [--ai-layout]',
+      'Usage: zlens app generate "<prompt>" [--domain <domain>] [--owner <user>] [--ai-layout]',
     );
   }
   const projectRoot = findProjectRoot(process.cwd());
@@ -205,7 +205,7 @@ async function runAppGenerate(rest: string[], flags: CLIFlags): Promise<void> {
   }
   console.log("");
   console.log("  Next steps:");
-  console.log("    1. Run dql notebook and resume this draft in Apps");
+  console.log("    1. Run zlens notebook and resume this draft in Apps");
   console.log("    2. Review the typed AI changes, resolve clarifications, and run previews");
   console.log("    3. Explicitly Publish to Project after preflight succeeds");
   console.log("");
@@ -229,7 +229,7 @@ async function runAppList(targetPath: string | null, flags: CLIFlags): Promise<v
   }
   if (apps.length === 0) {
     console.log(
-      "No apps found. Create one with: dql app new <id> --domain <domain>",
+      "No apps found. Create one with: zlens app new <id> --domain <domain>",
     );
     return;
   }
@@ -246,7 +246,7 @@ async function runAppList(targetPath: string | null, flags: CLIFlags): Promise<v
 
 async function runAppShow(rest: string[], flags: CLIFlags): Promise<void> {
   const id = rest[0];
-  if (!id) throw new Error("Usage: dql app show <id>");
+  if (!id) throw new Error("Usage: zlens app show <id>");
   const projectRoot = resolveAppProjectRoot(rest[1] ?? null);
   const apps = collectApps(projectRoot);
   const app = apps.find((a) => a.id === id);
@@ -276,8 +276,8 @@ async function runAppShow(rest: string[], flags: CLIFlags): Promise<void> {
 
 async function runAppBuild(targetPath: string | null, flags: CLIFlags): Promise<void> {
   const projectRoot = resolveAppProjectRoot(targetPath);
-  // Build the manifest with dbt import resolved the same way `dql compile`
-  // does, so `dql app build` produces an identical on-disk artifact.
+  // Build the manifest with dbt import resolved the same way `zlens compile`
+  // does, so `zlens app build` produces an identical on-disk artifact.
   const dbtManifestPath = resolveDbtManifestPath(projectRoot) ?? undefined;
   const manifest = buildManifest({ projectRoot, dbtManifestPath });
 
@@ -345,7 +345,7 @@ async function runAppBuild(targetPath: string | null, flags: CLIFlags): Promise<
 // ---- reindex (alias hook for the agent KG package) ----
 
 async function runAppReindex(targetPath: string | null, flags: CLIFlags): Promise<void> {
-  const { reindexProject } = await import("@duckcodeailabs/dql-agent");
+  const { reindexProject } = await import("@zlens/agent");
   const projectRoot = resolveAppProjectRoot(targetPath);
   const stats = await reindexProject(projectRoot);
   if ((flags as { format?: string }).format === "json") {
@@ -480,7 +480,7 @@ void readdirSync;
 void readFileSync;
 
 /**
- * `dql app verify <file>` — check a signed App snapshot offline (RFC 0008
+ * `zlens app verify <file>` — check a signed App snapshot offline (RFC 0008
  * step 10): the file is unchanged since signing, the signature matches its
  * manifest, and (with --trust-key, or inside the project that signed it) the
  * key is one you trust. Exits 1 when any check fails.
@@ -490,7 +490,7 @@ void readFileSync;
 /** Whether an App's tiles would pass publication: each tile's source and trust, and what stops it. */
 async function runAppCheck(rest: string[], flags: CLIFlags): Promise<void> {
   const id = rest.find((arg) => !arg.startsWith("-"));
-  if (!id) throw new Error("Usage: dql app check <id> [--format json]");
+  if (!id) throw new Error("Usage: zlens app check <id> [--format json]");
   const result = checkAppPublication(findProjectRoot(process.cwd()), id);
   if (!result) throw new Error(`No App with id "${id}" in this project.`);
   if (flags.format === "json") {
@@ -515,7 +515,7 @@ async function runAppCheck(rest: string[], flags: CLIFlags): Promise<void> {
 
 async function runAppVerify(rest: string[], flags: CLIFlags): Promise<void> {
   const file = rest.find((arg) => !arg.startsWith("-"));
-  if (!file) throw new Error("Usage: dql app verify <snapshot.html> [--trust-key <public.pem>] [--format json]");
+  if (!file) throw new Error("Usage: zlens app verify <snapshot.html> [--trust-key <public.pem>] [--format json]");
   const html = readFileSync(resolve(file), "utf-8");
   const trusted: string[] = [];
   let pinnedBy: string | null = null;
@@ -569,7 +569,7 @@ export function renderSnapshotVerification(file: string, result: SnapshotVerific
   return lines.join("\n");
 }
 
-/** `dql app key` — print this project's snapshot public key, to share with people who verify its snapshots. */
+/** `zlens app key` — print this project's snapshot public key, to share with people who verify its snapshots. */
 async function runAppKey(flags: CLIFlags): Promise<void> {
   const key = readSnapshotPublicKey(findProjectRoot(process.cwd()));
   if (!key) {
@@ -580,5 +580,5 @@ async function runAppKey(flags: CLIFlags): Promise<void> {
     console.log(JSON.stringify({ keyId: key.id, publicKeyPem: key.publicKeyPem }, null, 2));
     return;
   }
-  console.log(`Snapshot signing key ${key.id}\n\n${key.publicKeyPem.trim()}\n\nShare this public key; verify with: dql app verify <snapshot.html> --trust-key <public.pem>`);
+  console.log(`Snapshot signing key ${key.id}\n\n${key.publicKeyPem.trim()}\n\nShare this public key; verify with: zlens app verify <snapshot.html> --trust-key <public.pem>`);
 }

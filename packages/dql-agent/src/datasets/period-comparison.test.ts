@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { DatasetDescriptor, TileQuery } from '@duckcodeailabs/dql-core';
+import type { DatasetDescriptor, TileQuery } from '@zlens/core';
 import {
   buildDatasetComparisonPlan,
   executeDatasetComparisonPlan,

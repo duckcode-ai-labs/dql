@@ -242,7 +242,7 @@ describe('ResolvedAnalyticalPlan (AGT-013 / API-006)', () => {
 
   it('AGT-031 binds the grounded member when the provider returns no filter', () => {
     // The provider named the grouping field and forgot the member, so the run
-    // returned every customer. DQL had already grounded "Wesley Jenkins" in
+    // returned every customer. ZLens had already grounded "Wesley Jenkins" in
     // `parsedIntent.filters`; that binding is evidence-backed, not a guess.
     const attribute = {
       id: 'semantic:dimension:customers.customer_type',

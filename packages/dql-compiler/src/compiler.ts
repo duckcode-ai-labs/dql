@@ -1,5 +1,5 @@
-import { parse, analyze, NodeKind, type DataLexContractRegistry, type SemanticLayer } from '@duckcodeailabs/dql-core';
-import type { ProgramNode, DashboardBodyItem } from '@duckcodeailabs/dql-core';
+import { parse, analyze, NodeKind, type DataLexContractRegistry, type SemanticLayer } from '@zlens/core';
+import type { ProgramNode, DashboardBodyItem } from '@zlens/core';
 import { lowerProgram, lowerWorkbookProgram } from './ir/lowering.js';
 import { emitChartSpecs } from './codegen/vega-lite-emitter.js';
 import { emitDashboardHTML, emitWorkbookHTML } from './codegen/html-emitter.js';

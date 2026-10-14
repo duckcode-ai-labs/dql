@@ -1,6 +1,6 @@
 import React from 'react'
 import { createRoot } from 'react-dom/client'
-import '@duckcodeailabs/dql-ui/styles'
+import '@zlens/ui/styles'
 import { resolveAskRunLink } from './components/home/ask-run-link'
 import { installChunkReload } from './chunk-reload'
 import { loadInterfaceFonts } from './interface-fonts'

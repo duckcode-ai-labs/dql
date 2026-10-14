@@ -25,8 +25,8 @@ import {
   type TileQuery,
   type TileQueryFilter,
   type TileQueryValidation,
-} from '@duckcodeailabs/dql-core';
-import type { ConnectionConfig, SQLParamSpec } from '@duckcodeailabs/dql-connectors';
+} from '@zlens/core';
+import type { ConnectionConfig, SQLParamSpec } from '@zlens/connectors';
 
 export class TileQueryCompilationError extends Error {
   constructor(

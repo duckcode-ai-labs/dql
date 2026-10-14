@@ -14,7 +14,7 @@ import type {
   ConnectionConfig,
   QueryExecutor,
   QueryResult,
-} from "@duckcodeailabs/dql-connectors";
+} from "@zlens/connectors";
 
 export type DatasetStorageMode = "local" | "project" | "staged";
 export type DatasetTrustState =

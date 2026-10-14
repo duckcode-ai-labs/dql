@@ -128,7 +128,7 @@ describe('queryViaMetadata — Tier-2 promotion loop entry point', () => {
     expect((result as { dqlArtifact: { source: string } }).dqlArtifact.source).toContain('status = "draft"');
     expect((result as { dqlArtifact: { source: string } }).dqlArtifact.source).toContain('query = """');
     expect((result as { dqlArtifact: { source: string } }).dqlArtifact.source).toContain('SELECT COUNT(DISTINCT customer_id) AS n FROM fct_orders');
-    expect(result.promote).toContain('dql certify --from-draft');
+    expect(result.promote).toContain('zlens certify --from-draft');
   });
 
   it('writes a draft .dql file with status=draft and the proposal metadata', async () => {
@@ -586,7 +586,7 @@ describe('queryViaMetadata — Tier-2 promotion loop entry point', () => {
       question: 'how many active customers?',
       proposedSql: 'SELECT month, revenue FROM fct_orders',
     });
-    expect((out as { error: string }).error).toMatch(/Could not reach DQL runtime/);
+    expect((out as { error: string }).error).toMatch(/Could not reach ZLens runtime/);
     expect(out.draftBlock).toBeDefined();
     expect((out as { dqlArtifact: { source: string } }).dqlArtifact.source).toContain('SELECT month, revenue FROM fct_orders');
   });

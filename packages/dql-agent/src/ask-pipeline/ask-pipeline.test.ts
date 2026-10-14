@@ -1196,7 +1196,7 @@ describe('a provider timeout is retried once, under the same run, when the budge
     version: 1, kind: 'analytics', reading: 'Revenue', measures: [{ ref: 'metric:order_item.revenue' }], groupBy: [], display: [], filters: [],
     expectedShape: 'scalar', unresolved: [], provenance: { 'metric:order_item.revenue': 'q:revenue' },
   });
-  const timeout = () => Object.assign(new Error('The AI model did not respond within 60 seconds.'), { code: 'provider_timeout', detail: 'Retry, choose a faster model, or increase DQL_SUBSCRIPTION_CLI_TIMEOUT_MS.' });
+  const timeout = () => Object.assign(new Error('The AI model did not respond within 60 seconds.'), { code: 'provider_timeout', detail: 'Retry, choose a faster model, or increase ZLENS_SUBSCRIPTION_CLI_TIMEOUT_MS.' });
   function flaky(failures: number, error: () => Error = timeout): AgentProvider & { calls: number } {
     const provider = {
       name: 'ollama', calls: 0, available: async () => true,
@@ -1210,7 +1210,7 @@ describe('a provider timeout is retried once, under the same run, when the budge
     expect(reply.error).toBe('provider_error');
     expect(reply.code).toBe('provider_timeout');
     expect(reply.detail).toContain('did not respond within 60 seconds');
-    expect(reply.detail).toContain('DQL_SUBSCRIPTION_CLI_TIMEOUT_MS');
+    expect(reply.detail).toContain('ZLENS_SUBSCRIPTION_CLI_TIMEOUT_MS');
   });
   it('one timeout then an answer is one resolution of two dispatches', async () => {
     const provider = flaky(1);
@@ -1283,9 +1283,9 @@ describe('a provider timeout is retried once, under the same run, when the budge
     expect(outcome.kind).toBe('failed');
     if (outcome.kind !== 'failed') return;
     expect(outcome.text).toBe('This could not be completed while reading the question: the AI model took too long to read the question; retry the same question');
-    expect(outcome.text).not.toContain('DQL_SUBSCRIPTION_CLI_TIMEOUT_MS');
+    expect(outcome.text).not.toContain('ZLENS_SUBSCRIPTION_CLI_TIMEOUT_MS');
     expect(outcome.receipt.failure?.reason).toBe('provider_timeout');
-    expect(outcome.receipt.failure?.message).toContain('DQL_SUBSCRIPTION_CLI_TIMEOUT_MS');
+    expect(outcome.receipt.failure?.message).toContain('ZLENS_SUBSCRIPTION_CLI_TIMEOUT_MS');
     expect(outcome.receipt.dispatches).toHaveLength(2);
   });
 });
@@ -1545,7 +1545,7 @@ describe('a warehouse failure says which kind it was', () => {
 });
 
 describe('a warehouse failure names only what the statement wrote', () => {
-  // A certified statement over an insurer's claims table, as DQL wrote it, and the warehouse's words when the host's row
+  // A certified statement over an insurer's claims table, as ZLens wrote it, and the warehouse's words when the host's row
   // rule had rewritten it (the excerpt quotes the rewrite: the rule's predicate and the person's region).
   const written = 'SELECT region, COUNT(*) AS open_claims FROM "harbor"."main"."claims" WHERE status = \'open\' GROUP BY region';
   const drift = 'DuckDB query failed: Binder Error: Referenced column "status" not found in FROM clause!\nCandidate bindings: "claims.loss_date", "claims.claim_type"\nLINE 1: ... OR \'West\' = \'All\')) AS "claims" WHERE status = \'open\' GROUP BY region...\n                                                  ^';

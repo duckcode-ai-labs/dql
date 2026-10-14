@@ -6,8 +6,8 @@ import {
   type DatasetMeasureAggregation,
   type DatasetMeasureField,
   type DatasetPhysicalField,
-} from '@duckcodeailabs/dql-core/datasets/descriptor';
-import { renderDatasetAggregateExpression } from '@duckcodeailabs/dql-core/datasets/aggregate-expression';
+} from '@zlens/core/datasets/descriptor';
+import { renderDatasetAggregateExpression } from '@zlens/core/datasets/aggregate-expression';
 import type { AppBlockRecommendation, DatasetAuthoringChange } from '../../api/client';
 
 /**

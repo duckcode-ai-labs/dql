@@ -219,7 +219,7 @@ describe('DQL tool registry', () => {
 
 describe('surface coherence (P0 tool-surface fixes)', () => {
   it('Claude Code allowlist covers every tool the agentic MCP server exposes', () => {
-    // The claude-code provider spawns `dql mcp` (agentic profile) and passes
+    // The claude-code provider spawns `zlens mcp` (agentic profile) and passes
     // --allowedTools from the claude_code surface. A served-but-not-allowed
     // tool is invisible to the model — the two sets must stay aligned.
     const served = new Set(dqlToolNamesForSurface('mcp_agentic'));

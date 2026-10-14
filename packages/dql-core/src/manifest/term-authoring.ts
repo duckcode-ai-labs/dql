@@ -1,5 +1,5 @@
 /**
- * A BUSINESS TERM IS AUTHORED IN THE PRODUCT, not only by `dql new term`. The
+ * A BUSINESS TERM IS AUTHORED IN THE PRODUCT, not only by `zlens new term`. The
  * template the CLI writes is the one Domain Studio and the context-authoring
  * proposals write, so a term reaches the Ask vocabulary the same way whoever
  * wrote it.

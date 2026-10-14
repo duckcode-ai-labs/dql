@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import type { WarehouseTargetContextV1, WarehouseTargetIdentityV1 } from '@duckcodeailabs/dql-core';
+import type { WarehouseTargetContextV1, WarehouseTargetIdentityV1 } from '@zlens/core';
 
 export type SemanticRuntimePreference = 'auto' | 'native' | 'metricflow-cli' | 'dbt-cloud';
 export type SemanticRuntimeTestState = 'missing' | 'configured' | 'passed' | 'failed';

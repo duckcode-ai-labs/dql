@@ -12,7 +12,7 @@
  * R row). It is intentionally conservative — no key data for a relation ⇒ no flag —
  * so it never demotes a correct answer; it is wired warn-only.
  */
-import { analyzeSqlReferences, type SqlReferenceAnalysis } from '@duckcodeailabs/dql-core';
+import { analyzeSqlReferences, type SqlReferenceAnalysis } from '@zlens/core';
 import type { MetadataObject } from './catalog.js';
 
 export interface RelationGrain {

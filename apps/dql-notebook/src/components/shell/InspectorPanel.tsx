@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { cssVar, space, fontSize, fontWeight, radius } from '@duckcodeailabs/dql-ui';
+import { cssVar, space, fontSize, fontWeight, radius } from '@zlens/ui';
 import { useNotebook } from '../../store/NotebookStore';
 import { api } from '../../api/client';
 import { TYPE_TITLES } from '../lineage/lineage-constants';

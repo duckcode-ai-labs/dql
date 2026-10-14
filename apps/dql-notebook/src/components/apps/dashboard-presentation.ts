@@ -1,7 +1,7 @@
 import type { CellChartConfig, QueryResult } from '../../store/types';
 import type { DashboardDocumentResponse, DashboardRunResponse } from '../../api/client';
 import { coerceTrustState, getDashboardItemBlockId, getDqlGenUi, roleForDisplayComponent } from './dashboard-tile-model';
-import { settleGridLayout } from '@duckcodeailabs/dql-core/apps/grid-layout';
+import { settleGridLayout } from '@zlens/core/apps/grid-layout';
 import { formatDashboardValue, formatGenUiLabel, isNumericColumn, type DashboardStory } from './dashboard-format';
 
 /**

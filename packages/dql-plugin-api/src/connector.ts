@@ -48,7 +48,7 @@ export interface ConnectorMetadata {
 
 /**
  * Implement this interface and register the module in cdql.yaml under
- * `plugins.connectors`. DQL will instantiate, connect, and close the
+ * `plugins.connectors`. ZLens will instantiate, connect, and close the
  * connector; plugin authors do not need to manage lifecycle.
  */
 export interface Connector {

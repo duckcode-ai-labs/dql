@@ -17,7 +17,7 @@ import {
   type DashboardTileSourceEvidence,
   type DashboardGridItem,
   type DashboardVizConfig,
-} from "@duckcodeailabs/dql-core";
+} from "@zlens/core";
 import type { KGNode } from "./kg/types.js";
 import type { KGStore } from "./kg/sqlite-fts.js";
 import type { NarrateResult } from "./narrate.js";
@@ -851,7 +851,7 @@ export function planAppFromPrompt(input: PlanAppFromPromptInput): AppPlan {
       ...scopedReports.map((report) =>
         `Run scoped analysis "${report.title}" from app Copilot with the stakeholder question and active filters, then pin or promote only after review.`,
       ),
-      "Run dql app build after accepting the generated files.",
+      "Run zlens app build after accepting the generated files.",
       "Use app Copilot analysis for additional questions, then promote reviewed SQL results to draft or certified blocks.",
     ],
     coverage: {
@@ -2066,7 +2066,7 @@ function buildLayoutItems(tiles: AppPlanTile[]): DashboardGridItem[] {
       reviewStatus: tile.reviewStatus,
       sourceNodeId: tile.sourceNodeId,
       followUpActions: tile.display?.followUpActions ?? [],
-      rationale: tile.display?.rationale ?? tile.rationale ?? "Generated DQL app presentation metadata.",
+      rationale: tile.display?.rationale ?? tile.rationale ?? "Generated ZLens app presentation metadata.",
     });
     if (x + size.w > 12) {
       x = 0;

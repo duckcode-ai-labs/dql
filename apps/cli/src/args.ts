@@ -11,18 +11,18 @@ export interface CLIFlags {
   dryRun?: boolean;
   /** Explicitly apply a migration plan that otherwise defaults to preview-only. */
   apply?: boolean;
-  /** `dql app verify --trust-key <file>`: a public key PEM the snapshot must be signed by. */
+  /** `zlens app verify --trust-key <file>`: a public key PEM the snapshot must be signed by. */
   trustKey?: string;
-  /** `dql app diff --html <file>`: write the visual review report. */
+  /** `zlens app diff --html <file>`: write the visual review report. */
   htmlReport?: string;
-  /** `dql app diff --markdown <file>`: write a PR comment. */
+  /** `zlens app diff --markdown <file>`: write a PR comment. */
   markdownReport?: string;
-  /** `dql propose --plan` — print the deterministic plan; write nothing. */
+  /** `zlens propose --plan` — print the deterministic plan; write nothing. */
   plan?: boolean;
   port: number | null;
   /** HTTP bind host. Defaults to 127.0.0.1; set to 0.0.0.0 inside containers. */
   host?: string | null;
-  /** Server-owned Ask rollout mode for `dql notebook`; validated at launch. */
+  /** Server-owned Ask rollout mode for `zlens notebook`; validated at launch. */
   askRuntimeMode?: string;
   chart: string;
   domain: string;
@@ -37,10 +37,10 @@ export interface CLIFlags {
   skipTests: boolean;
   save?: boolean;
   force?: boolean;
-  /** `dql init --warehouse-first`: model the warehouse directly, no dbt (RFC 0007). */
+  /** `zlens init --warehouse-first`: model the warehouse directly, no dbt (RFC 0007). */
   warehouseFirst?: boolean;
   http?: boolean;
-  /** `dql certify --from-draft <path>` — promote a Tier-2 draft to certified. */
+  /** `zlens certify --from-draft <path>` — promote a Tier-2 draft to certified. */
   fromDraft?: string;
   /** `--contract <id@version>` — DataLex contract id to bind during certify. */
   contract?: string;
@@ -54,12 +54,12 @@ export interface CLIFlags {
   user?: string;
   /** Local runtime URL for agent block execution. */
   runtimeUrl?: string;
-  /** `dql notebook --no-schedules`: do not run the project's App schedules in the notebook. */
+  /** `zlens notebook --no-schedules`: do not run the project's App schedules in the notebook. */
   schedules?: boolean;
   runtime?: string;
   /** Execute generated SQL previews during eval. Default false for route-only eval. */
   execute?: boolean;
-  /** Include AI provider, MCP, and metadata checks in `dql doctor`. */
+  /** Include AI provider, MCP, and metadata checks in `zlens doctor`. */
   ai?: boolean;
   /** Enforce enterprise-ready certification requirements. */
   enterprise?: boolean;
@@ -69,65 +69,65 @@ export interface CLIFlags {
   block?: string;
   question?: string;
   comment?: string;
-  /** `dql agent ask --thread <id>` — continue a persisted conversation thread. */
+  /** `zlens agent ask --thread <id>` — continue a persisted conversation thread. */
   thread?: string;
   /** Local Ask trace commands use an explicit output/profile/mode contract. */
   traceProfile?: 'strict' | 'support';
   traceMode?: 'receipt' | 'compare';
   confirmReviewedIdentifiers?: boolean;
-  /** `dql agent ask/eval --reasoning-effort low|medium|high` — affects provider effort and context depth. */
+  /** `zlens agent ask/eval --reasoning-effort low|medium|high` — affects provider effort and context depth. */
   reasoningEffort?: string;
-  /** `dql agent ask/eval --analysis-depth quick|deep` — controls context budget. */
+  /** `zlens agent ask/eval --analysis-depth quick|deep` — controls context budget. */
   analysisDepth?: string;
-  /** `dql eval --min-route-accuracy <0..1>` — fail CI below this route accuracy. */
+  /** `zlens eval --min-route-accuracy <0..1>` — fail CI below this route accuracy. */
   minRouteAccuracy?: number;
-  /** `dql eval --min-candidate-recall <0..1>` — fail CI below this retrieval recall. */
+  /** `zlens eval --min-candidate-recall <0..1>` — fail CI below this retrieval recall. */
   minCandidateRecall?: number;
-  /** `dql eval --min-refusal <0..1>` — fail CI below this refusal recall. */
+  /** `zlens eval --min-refusal <0..1>` — fail CI below this refusal recall. */
   minRefusal?: number;
-  /** `dql eval --min-answer-rate <0..1>` — fail CI below answer rate on non-refusal cases. */
+  /** `zlens eval --min-answer-rate <0..1>` — fail CI below answer rate on non-refusal cases. */
   minAnswerRate?: number;
-  /** `dql agent eval --min-tool-requirement <0..1>` — fail below this tool-observed requirement pass rate. */
+  /** `zlens agent eval --min-tool-requirement <0..1>` — fail below this tool-observed requirement pass rate. */
   minToolRequirement?: number;
-  /** `dql agent eval --via runtime`: how long one question may take before it is recorded as failed. */
+  /** `zlens agent eval --via runtime`: how long one question may take before it is recorded as failed. */
   caseTimeoutMs?: number;
-  /** `dql agent eval --min-execution-match <0..1>` — fail below this execution_match_rate (catches class-B wrong-number regressions on `expected.rows` cases). */
+  /** `zlens agent eval --min-execution-match <0..1>` — fail below this execution_match_rate (catches class-B wrong-number regressions on `expected.rows` cases). */
   minExecutionMatch?: number;
-  /** `dql agent eval --min-judge-pass <0..1>` — fail below this LLM-judge pass rate (semantic accuracy). */
+  /** `zlens agent eval --min-judge-pass <0..1>` — fail below this LLM-judge pass rate (semantic accuracy). */
   minJudgePass?: number;
-  /** `dql agent eval --max-wrong-certified <n>` — fail if more than n answers were wrongly stamped certified. */
+  /** `zlens agent eval --max-wrong-certified <n>` — fail if more than n answers were wrongly stamped certified. */
   maxWrongCertified?: number;
-  /** `dql agent eval --via runtime|loop` — drive the full runtime, or the answer loop in-process. */
+  /** `zlens agent eval --via runtime|loop` — drive the full runtime, or the answer loop in-process. */
   via?: string;
-  /** `dql agent eval --cassette record|replay` — record provider responses, or replay them offline. */
+  /** `zlens agent eval --cassette record|replay` — record provider responses, or replay them offline. */
   cassette?: string;
-  /** `dql agent eval --max-false-refusal <0..1>` — fail above this share of answerable cases refused. */
+  /** `zlens agent eval --max-false-refusal <0..1>` — fail above this share of answerable cases refused. */
   maxFalseRefusal?: number;
   /**
-   * `dql agent eval --min-grounded-narration <0..1>` — fail BELOW this share of
+   * `zlens agent eval --min-grounded-narration <0..1>` — fail BELOW this share of
    * attempted verified-fact narrations that survived their fact check. Exists
    * because a narration truncation broke every ten-row answer deterministically
    * and no gate could fail on it.
    */
   minGroundedNarration?: number;
-  /** `dql agent eval --min-refusal-recall <0..1>` — fail below this share of must-refuse cases that refused. */
+  /** `zlens agent eval --min-refusal-recall <0..1>` — fail below this share of must-refuse cases that refused. */
   minRefusalRecall?: number;
   /**
-   * `dql agent eval --max-provider-dispatches <n>` — fail when the worst
+   * `zlens agent eval --max-provider-dispatches <n>` — fail when the worst
    * question needed more physical provider round trips than this. Answer
    * quality bought with extra round trips is not free: on a subscription
    * transport each one is a process spawn and tens of seconds of waiting.
    */
   maxProviderDispatches?: number;
-  /** `dql agent eval --max-latency-p95-ms <ms>` — fail above this p95 for answerable cases. */
+  /** `zlens agent eval --max-latency-p95-ms <ms>` — fail above this p95 for answerable cases. */
   maxLatencyP95Ms?: number;
-  /** `dql eval --no-examples` — skip manifest block examples, score yaml cases only. */
+  /** `zlens eval --no-examples` — skip manifest block examples, score yaml cases only. */
   noExamples?: boolean;
-  /** `dql eval --init` — write a starter eval/golden.yaml template into the project. */
+  /** `zlens eval --init` — write a starter eval/golden.yaml template into the project. */
   init?: boolean;
-  /** `dql diff --impact` — compute downstream impact + re-cert gate for changed blocks. */
+  /** `zlens diff --impact` — compute downstream impact + re-cert gate for changed blocks. */
   impact?: boolean;
-  /** `dql diff --impact --write-recertification` — mark impacted semantic YAML as pending recertification. */
+  /** `zlens diff --impact --write-recertification` — mark impacted semantic YAML as pending recertification. */
   writeRecertification?: boolean;
 }
 

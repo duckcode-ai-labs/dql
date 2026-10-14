@@ -1,28 +1,28 @@
 /**
- * `dql propose` — scan dbt evidence and generate a ranked queue of DRAFT blocks.
+ * `zlens propose` — scan dbt evidence and generate a ranked queue of DRAFT blocks.
  *
  * Product principle: **AI drafts, humans certify.** Instead of authoring DQL
- * from a blank file, a new user runs `dql propose` against an existing dbt repo
+ * from a blank file, a new user runs `zlens propose` against an existing dbt repo
  * and gets a draft governance layer: one `block` per high-value model, born
  * `status: draft`, run through the Certifier (verdict stored so a reviewer sees
  * what's missing), demand-ranked, and NEVER auto-certified.
  *
  * Usage:
- *   dql propose [path]                      Propose drafts for the project at path
- *   dql propose --dbt-manifest <path>       Explicit manifest.json path
- *   dql propose --owner <name>              Default owner stamped on drafts
- *   dql propose --limit <n>                 Cap drafts written this run
- *   dql propose --plan                      Show the deterministic PLAN; write nothing
- *   dql propose --dry-run                   Rank only; write nothing
- *   dql propose --enrich                    AI-enrich content (llmContext/examples/
+ *   zlens propose [path]                      Propose drafts for the project at path
+ *   zlens propose --dbt-manifest <path>       Explicit manifest.json path
+ *   zlens propose --owner <name>              Default owner stamped on drafts
+ *   zlens propose --limit <n>                 Cap drafts written this run
+ *   zlens propose --plan                      Show the deterministic PLAN; write nothing
+ *   zlens propose --dry-run                   Rank only; write nothing
+ *   zlens propose --enrich                    AI-enrich content (llmContext/examples/
  *                                           descriptions) via the configured provider
- *   dql propose --format json               Machine-readable output
+ *   zlens propose --format json               Machine-readable output
  */
 
 import { existsSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
-import { loadProjectConfig, resolveDbtManifestPath } from '@duckcodeailabs/dql-core';
-import { propose, proposePlan, resolveLocalOwner, type ProposeSummary, type ProposePlan, type EnrichedContent } from '@duckcodeailabs/dql-agent';
+import { loadProjectConfig, resolveDbtManifestPath } from '@zlens/core';
+import { propose, proposePlan, resolveLocalOwner, type ProposeSummary, type ProposePlan, type EnrichedContent } from '@zlens/agent';
 import type { CLIFlags } from '../args.js';
 import { gatherProposeEnrichment } from '../propose-enrich.js';
 
@@ -49,7 +49,7 @@ export async function runPropose(
   const projectRoot = resolve(pathArg ?? '.');
 
   if (!existsSync(join(projectRoot, 'dql.config.json'))) {
-    console.error('No DQL project found (missing dql.config.json). Run `dql init` first, then `dql propose`.');
+    console.error('No ZLens project found (missing dql.config.json). Run `zlens init` first, then `zlens propose`.');
     process.exitCode = 1;
     return;
   }
@@ -61,7 +61,7 @@ export async function runPropose(
     console.error('');
     if (cfg.dbt?.projectDir) {
       console.error(`    dql.config.json points at dbt project: ${cfg.dbt.projectDir}`);
-      console.error('    Run `dbt parse` (or `dbt compile`) there first, then re-run `dql propose`.');
+      console.error('    Run `dbt parse` (or `dbt compile`) there first, then re-run `zlens propose`.');
     } else {
       console.error('    Add a "dbt" section to dql.config.json, or pass --dbt-manifest <path>.');
     }
@@ -130,7 +130,7 @@ export async function runPropose(
   }
 
   const dryRun = Boolean(flags.dryRun);
-  console.log('\n  DQL Propose — drafts from dbt evidence');
+  console.log('\n  ZLens Propose — drafts from dbt evidence');
   console.log('  ' + '='.repeat(50));
   if (summary.projectName) console.log(`  dbt project:    ${summary.projectName}`);
   console.log(`  Models scanned: ${summary.modelsScanned}`);
@@ -160,13 +160,13 @@ export async function runPropose(
   }
   console.log('');
   console.log('  Next: review the top drafts under blocks/_drafts (or domains/<d>/blocks/_drafts),');
-  console.log('  then `dql certify --from-draft <path> --owner you@example.com` to promote.');
+  console.log('  then `zlens certify --from-draft <path> --owner you@example.com` to promote.');
   console.log('');
 }
 
 /** Pretty-print the deterministic PLAN (classify → plan, writes nothing). */
 function printPlan(plan: ProposePlan): void {
-  console.log('\n  DQL Propose — PLAN (nothing written)');
+  console.log('\n  ZLens Propose — PLAN (nothing written)');
   console.log('  ' + '='.repeat(50));
   console.log(`  Models scanned:    ${plan.totals.modelsScanned}`);
   console.log(`  Business models:   ${plan.totals.businessModels}`);
@@ -190,6 +190,6 @@ function printPlan(plan: ProposePlan): void {
     }
     console.log('');
   }
-  console.log('  Run `dql propose` (without --plan) to write the drafts for this scope.');
+  console.log('  Run `zlens propose` (without --plan) to write the drafts for this scope.');
   console.log('');
 }

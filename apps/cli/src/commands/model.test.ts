@@ -24,7 +24,7 @@ const baseFlags = {
   skipTests: false,
 };
 
-describe('dql model discovery commands (AGT-002, API-001)', () => {
+describe('zlens model discovery commands (AGT-002, API-001)', () => {
   let projectRoot: string;
   let log: ReturnType<typeof vi.spyOn>;
   let error: ReturnType<typeof vi.spyOn>;

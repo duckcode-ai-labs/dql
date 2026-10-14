@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { LineageGraph } from '@duckcodeailabs/dql-core';
+import { LineageGraph } from '@zlens/core';
 
 import { lineageImpact } from '../lineage-impact.js';
 import { makeCtx } from './_helpers.js';

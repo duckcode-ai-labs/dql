@@ -20,7 +20,7 @@ import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { join, basename, dirname, relative, isAbsolute, resolve } from 'node:path';
 import * as yaml from 'js-yaml';
-import { loadDomainPackageRegistry } from '@duckcodeailabs/dql-core';
+import { loadDomainPackageRegistry } from '@zlens/core';
 
 export interface Skill {
   id: string;
@@ -211,9 +211,9 @@ export function skillsDir(projectRoot: string): string {
 /**
  * Repository-relative Skills folder configured by `layout.skillsPath`.
  *
- * The setting has existed in generated DQL projects since the OSS dbt layout
+ * The setting has existed in generated ZLens projects since the OSS dbt layout
  * was introduced. Keep `skills` as the fallback so older projects continue to
- * work, while allowing a DQL workspace nested inside a dbt repo to point at an
+ * work, while allowing a ZLens workspace nested inside a dbt repo to point at an
  * existing sibling folder such as `../skills` without copying files.
  */
 export function configuredSkillsPath(projectRoot: string): string {

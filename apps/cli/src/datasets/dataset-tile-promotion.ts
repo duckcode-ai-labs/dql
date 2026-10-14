@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 
-import type { DatasetTileProvenanceV1, TileQuery } from '@duckcodeailabs/dql-core';
+import type { DatasetTileProvenanceV1, TileQuery } from '@zlens/core';
 
 export type DatasetTilePromotionRefusalCode =
   | 'comparison_not_representable_as_single_block'
@@ -93,7 +93,7 @@ export function planDatasetTilePromotion(input: DatasetTilePromotionInput): Data
   const sql = input.sql.trim();
   if (!sql) return refusal('dataset_tile_sql_unavailable', 'This Dataset execution did not return one reusable physical SQL statement.');
   if (!isOneSqlStatement(sql)) {
-    return refusal('dataset_tile_not_single_statement', 'This Dataset execution requires more than one SQL statement or unsupported dynamic SQL, so DQL will not save it as a reusable block.');
+    return refusal('dataset_tile_not_single_statement', 'This Dataset execution requires more than one SQL statement or unsupported dynamic SQL, so ZLens will not save it as a reusable block.');
   }
   if (sql.includes('"""')) {
     return refusal('dataset_tile_sql_unavailable', 'The executed SQL cannot be represented safely in a DQL block body.');

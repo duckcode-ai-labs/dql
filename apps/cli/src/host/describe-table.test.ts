@@ -3,10 +3,11 @@ import type { Server } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
-import { DuckDBConnector, QueryExecutor, type ConnectionConfig } from '@duckcodeailabs/dql-connectors';
+import { DuckDBConnector, QueryExecutor, type ConnectionConfig } from '@zlens/connectors';
 import { startLocalServer } from '../local-runtime.js';
 import type { DqlHostHooks, DqlPrincipal, DqlStatementEvent } from './request-context.js';
 import type { DqlQueryContext } from './row-policy.js';
+import { readEnv } from '@zlens/core';
 
 /**
  * RFC 0010 HH-3 / HH-6: describing a table is a statement like any other. With a host, the connector's catalog
@@ -14,7 +15,7 @@ import type { DqlQueryContext } from './row-policy.js';
  * it), and a name holding a quote, a backslash or a control character is not looked up. Without a host the lookup
  * binds the name, so such a name changes nothing either.
  */
-const connectorRoot = process.env.DQL_APP_DATASETS_DUCKDB_CONNECTOR_ROOT?.trim();
+const connectorRoot = readEnv('ZLENS_APP_DATASETS_DUCKDB_CONNECTOR_ROOT')?.trim();
 const withDuckDb = connectorRoot ? describe : describe.skip;
 
 withDuckDb('describing a table (real DuckDB)', () => {

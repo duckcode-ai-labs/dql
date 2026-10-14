@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { Certifier } from '@duckcodeailabs/dql-governance';
-import type { BlockRecord, BlockStatus } from '@duckcodeailabs/dql-project';
+import { Certifier } from '@zlens/governance';
+import type { BlockRecord, BlockStatus } from '@zlens/project';
 import type { DQLContext } from '../context.js';
 import { zodInputShapeForTool } from '../tool-schema.js';
 

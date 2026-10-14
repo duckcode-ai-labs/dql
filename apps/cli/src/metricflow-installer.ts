@@ -2,6 +2,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { managedMetricFlowBin, managedMetricFlowRuntimeRoot } from './metricflow.js';
+import { readEnv } from '@zlens/core';
 
 export type MetricFlowWarehouseAdapter = 'duckdb' | 'snowflake' | 'bigquery' | 'databricks' | 'redshift' | 'postgres' | 'trino';
 export type MetricFlowInstallState = 'idle' | 'queued' | 'running' | 'completed' | 'failed';
@@ -243,7 +244,7 @@ export function metricFlowPythonCandidates(explicit?: string): string[] {
 }
 
 function detectPythonExecutable(): { bin: string; version: string } {
-  const candidates = metricFlowPythonCandidates(process.env.DQL_PYTHON_BIN);
+  const candidates = metricFlowPythonCandidates(readEnv('ZLENS_PYTHON_BIN'));
   for (const bin of candidates) {
     const result = spawnSync(bin, ['--version'], { encoding: 'utf-8', timeout: 3000, env: process.env });
     if (result.error || result.status !== 0) continue;
@@ -254,7 +255,7 @@ function detectPythonExecutable(): { bin: string; version: string } {
     const minor = Number(parsed[2]);
     if (major === 3 && minor >= 10 && minor < 14) return { bin, version };
   }
-  throw new Error('Compatible Python 3.10–3.13 was not found. Install an approved version, or set DQL_PYTHON_BIN to that executable.');
+  throw new Error('Compatible Python 3.10–3.13 was not found. Install an approved version, or set ZLENS_PYTHON_BIN to that executable.');
 }
 
 function runCommand(

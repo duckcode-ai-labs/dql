@@ -4,14 +4,14 @@ import { dirname, join } from 'node:path';
 export type NativeMcpProvider = 'openai' | 'anthropic';
 
 /**
- * What DQL uses a server for. `chat` (the default): the chat cell hands it to
+ * What ZLens uses a server for. `chat` (the default): the chat cell hands it to
  * the provider's hosted MCP connector (Anthropic/OpenAI only). `knowledge`:
  * DQL's own MCP client reads it as a document source for Ask and Research
  * answers, with every provider (RFC 0010 HH-15). Knowledge use is read-only.
  */
 export type McpServerUse = 'chat' | 'knowledge';
 
-/** How DQL reads a knowledge server: its search and page tools. */
+/** How ZLens reads a knowledge server: its search and page tools. */
 export interface KnowledgeToolMapping {
   searchTool?: string;
   searchArg?: string;

@@ -1,5 +1,5 @@
-import { canonicalizeNotebook } from "@duckcodeailabs/dql-core/format";
-import { normalizeProductDomainContext, type ProductDomainContext } from "@duckcodeailabs/dql-core";
+import { canonicalizeNotebook } from "@zlens/core/format";
+import { normalizeProductDomainContext, type ProductDomainContext } from "@zlens/core";
 
 export type NotebookCellType =
   | "markdown"
@@ -185,7 +185,7 @@ export function createWelcomeNotebook(template: string, projectTitle: string, dr
   const showTablesQuery = listTablesSQL(driver);
 
   if (normalized === 'dbt') {
-    return createNotebookDocument(`${projectTitle} - DQL Workbench`, [
+    return createNotebookDocument(`${projectTitle} - ZLens Workbench`, [
       {
         id: 'intro',
         type: 'markdown',
@@ -214,13 +214,13 @@ export function createWelcomeNotebook(template: string, projectTitle: string, dr
         id: 'next-steps',
         type: 'markdown',
         title: 'Next Steps',
-        source: `## Next steps\n\n1. Query a dbt model and save the useful logic as a DQL block.\n2. Add business terms under \`terms/\` for the vocabulary stakeholders use.\n3. Compose blocks into \`business_view\` files under \`business-views/\`.\n4. Run \`dql compile .\` to refresh \`dql-manifest.json\`.\n5. Open Lineage to trace source -> model -> block -> business view -> consumption.`,
+        source: `## Next steps\n\n1. Query a dbt model and save the useful logic as a DQL block.\n2. Add business terms under \`terms/\` for the vocabulary stakeholders use.\n3. Compose blocks into \`business_view\` files under \`business-views/\`.\n4. Run \`zlens compile .\` to refresh \`dql-manifest.json\`.\n5. Open Lineage to trace source -> model -> block -> business view -> consumption.`,
       },
     ], { description: 'DQL workbench for turning a dbt project into business lineage.', template: 'dbt' });
   }
 
   // Default notebook for non-dbt projects
-  return createNotebookDocument(`${projectTitle} - DQL Workbench`, [
+  return createNotebookDocument(`${projectTitle} - ZLens Workbench`, [
     {
       id: 'intro',
       type: 'markdown',
@@ -249,7 +249,7 @@ export function createWelcomeNotebook(template: string, projectTitle: string, dr
       id: 'next-steps',
       type: 'markdown',
       title: 'Next Steps',
-      source: `## Next steps\n\n1. Add data by connecting a warehouse or adding a local DuckDB/file source.\n2. Save repeated SQL as DQL blocks under \`blocks/\`.\n3. Add business terms under \`terms/\` for shared vocabulary.\n4. Compose blocks into \`business_view\` files under \`business-views/\`.\n5. Run \`dql compile .\` and open Lineage to inspect the business and technical path.`,
+      source: `## Next steps\n\n1. Add data by connecting a warehouse or adding a local DuckDB/file source.\n2. Save repeated SQL as DQL blocks under \`blocks/\`.\n3. Add business terms under \`terms/\` for shared vocabulary.\n4. Compose blocks into \`business_view\` files under \`business-views/\`.\n5. Run \`zlens compile .\` and open Lineage to inspect the business and technical path.`,
     },
   ], { description: 'DQL workbench for building a domain-first analytics project.', template: 'default' });
 }

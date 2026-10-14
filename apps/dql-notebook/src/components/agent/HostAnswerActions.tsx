@@ -9,7 +9,7 @@ export function answerNeedsReview(run: Pick<AgentRun, 'status' | 'trustState'>):
   return run.status === 'needs_review' || run.trustState === 'review_required';
 }
 
-/** Which of the host's answer actions fit this answer: review ones, and those for questions DQL could not answer. */
+/** Which of the host's answer actions fit this answer: review ones, and those for questions ZLens could not answer. */
 export function actionsForAnswer(run: Pick<AgentRun, 'status' | 'trustState'>, actions: HostAnswerAction[]): { kind: 'review' | 'unanswered' | 'answered'; actions: HostAnswerAction[] } | null {
   const answered = run.status === 'completed' && (run.trustState === 'certified' || run.trustState === 'governed' || run.trustState === 'grounded');
   const kind = answerNeedsReview(run) ? 'review' : run.status === 'blocked' ? 'unanswered' : answered ? 'answered' : null;
@@ -120,7 +120,7 @@ function HostAnswerActionButtons({ run, kind, actions, onSent, t }: {
   const [message, setMessage] = useState<{ text: string; failed: boolean } | null>(null);
   return (
     <div style={{ display: 'grid', gap: 6, padding: '8px 10px', border: `1px solid ${t.cellBorder}`, borderRadius: 8, background: t.cellBg }} data-testid="host-answer-actions">
-      <span style={{ fontSize: 11.5, color: t.textSecondary }}>{kind === 'review' ? 'No certified source answers this yet.' : 'DQL could not answer this from your certified and governed sources.'}</span>
+      <span style={{ fontSize: 11.5, color: t.textSecondary }}>{kind === 'review' ? 'No certified source answers this yet.' : 'ZLens could not answer this from your certified and governed sources.'}</span>
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
         {actions.map((action, index) => (
           <button

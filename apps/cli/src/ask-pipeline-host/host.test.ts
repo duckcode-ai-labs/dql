@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { QueryExecutor } from '@duckcodeailabs/dql-connectors';
-import type { AgentMessage, AgentProvider, AgentRunRequest } from '@duckcodeailabs/dql-agent';
-import type { ConnectionConfig } from '@duckcodeailabs/dql-connectors';
-import { buildVocabularyIndex, classifyWarehouseError, createAgentRunBudget, parseIntent, physicalRelationBinding, type AnalyticalIntentV1 } from '@duckcodeailabs/dql-agent';
-import { SemanticLayer } from '@duckcodeailabs/dql-core';
+import type { QueryExecutor } from '@zlens/connectors';
+import type { AgentMessage, AgentProvider, AgentRunRequest } from '@zlens/agent';
+import type { ConnectionConfig } from '@zlens/connectors';
+import { buildVocabularyIndex, classifyWarehouseError, createAgentRunBudget, parseIntent, physicalRelationBinding, type AnalyticalIntentV1 } from '@zlens/agent';
+import { SemanticLayer } from '@zlens/core';
 import { preferredJoinHints, preferredJoinLine, skillsForDraft, mentionsName, joinHintUsed, hintsForQuestion, joinsAnyRelation, sharedKeyPair, relationsFromCatalogHits, missingFieldWords, relationsWithColumnWords, columnProbeBudgetMs, columnsForPhysicalEntry, connectionKey, physicalRelationName, relationColumnsProbeSql, relationDatabases, relationsFromProbeRows, relevantRelationsForQuestion, snowflakeShowColumnsRows, underAskedNames, coverageEvaluations, governedCoverageDoubt, createAskPipelineRouteExecutor, explainOutOfScope, explainOutOfScopeWords, gapPresentation, groundIntentLiterals, knownMissingRelation, memberCandidatesSql, normalizeExecutedRow, prepareBlockForAsk, recordRelationEvidence, resetRelationEvidence, runtimeSchemaForVocabulary, tracedProbes, vocabularyViewKey } from './host.js';
 
 function scripted(replies: string[]): AgentProvider & { calls: AgentMessage[][] } {
@@ -197,8 +197,8 @@ describe('the column probe is bounded', () => {
   });
   it('has a default budget and an override', () => {
     expect(columnProbeBudgetMs({})).toBe(12_000);
-    expect(columnProbeBudgetMs({ DQL_ASK_COLUMN_PROBE_MS: '3000' })).toBe(3_000);
-    expect(columnProbeBudgetMs({ DQL_ASK_COLUMN_PROBE_MS: 'nope' })).toBe(12_000);
+    expect(columnProbeBudgetMs({ ZLENS_ASK_COLUMN_PROBE_MS: '3000' })).toBe(3_000);
+    expect(columnProbeBudgetMs({ ZLENS_ASK_COLUMN_PROBE_MS: 'nope' })).toBe(12_000);
   });
 });
 

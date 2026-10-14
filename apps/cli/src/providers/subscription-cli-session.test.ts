@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ClaudeCodeCliProvider } from './subscription-cli.js';
-import type { AgentMessage } from '@duckcodeailabs/dql-agent';
+import type { AgentMessage } from '@zlens/agent';
 
 const result = (text: string) => JSON.stringify({ is_error: false, result: text });
 
@@ -34,8 +34,8 @@ describe('Claude Code CLI session reuse', () => {
   });
 
   it('opens a session once and then sends only what is new', async () => {
-    const previous = process.env.DQL_SUBSCRIPTION_CLI_SESSION;
-    process.env.DQL_SUBSCRIPTION_CLI_SESSION = 'on';
+    const previous = process.env.ZLENS_SUBSCRIPTION_CLI_SESSION;
+    process.env.ZLENS_SUBSCRIPTION_CLI_SESSION = 'on';
     try {
       const calls: Array<{ args: string[]; input: string }> = [];
       const provider = new ClaudeCodeCliProvider({ runProcess: recordingRunner(calls) as never });
@@ -48,14 +48,14 @@ describe('Claude Code CLI session reuse', () => {
       expect(calls[1]!.input).toContain('observation 1');
       expect(calls[1]!.input).not.toContain('observation 0');
     } finally {
-      if (previous === undefined) delete process.env.DQL_SUBSCRIPTION_CLI_SESSION;
-      else process.env.DQL_SUBSCRIPTION_CLI_SESSION = previous;
+      if (previous === undefined) delete process.env.ZLENS_SUBSCRIPTION_CLI_SESSION;
+      else process.env.ZLENS_SUBSCRIPTION_CLI_SESSION = previous;
     }
   });
 
   it('says the whole thing again when a resume fails, rather than losing the turn', async () => {
-    const previous = process.env.DQL_SUBSCRIPTION_CLI_SESSION;
-    process.env.DQL_SUBSCRIPTION_CLI_SESSION = 'on';
+    const previous = process.env.ZLENS_SUBSCRIPTION_CLI_SESSION;
+    process.env.ZLENS_SUBSCRIPTION_CLI_SESSION = 'on';
     try {
       const calls: Array<{ args: string[]; input: string }> = [];
       // The second call is the resume; make only that one fail.
@@ -70,14 +70,14 @@ describe('Claude Code CLI session reuse', () => {
       expect(calls[2]!.input).toContain('observation 0');
       expect(calls[2]!.input).toContain('observation 1');
     } finally {
-      if (previous === undefined) delete process.env.DQL_SUBSCRIPTION_CLI_SESSION;
-      else process.env.DQL_SUBSCRIPTION_CLI_SESSION = previous;
+      if (previous === undefined) delete process.env.ZLENS_SUBSCRIPTION_CLI_SESSION;
+      else process.env.ZLENS_SUBSCRIPTION_CLI_SESSION = previous;
     }
   });
 
   it('does not retry a resumed turn when Claude reports a structured 401 with neutral text', async () => {
-    const previous = process.env.DQL_SUBSCRIPTION_CLI_SESSION;
-    process.env.DQL_SUBSCRIPTION_CLI_SESSION = 'on';
+    const previous = process.env.ZLENS_SUBSCRIPTION_CLI_SESSION;
+    process.env.ZLENS_SUBSCRIPTION_CLI_SESSION = 'on';
     try {
       const calls: Array<{ args: string[]; input: string }> = [];
       const provider = new ClaudeCodeCliProvider({
@@ -101,8 +101,8 @@ describe('Claude Code CLI session reuse', () => {
       expect(calls).toHaveLength(2);
       expect(calls[1]!.args).toContain('--resume');
     } finally {
-      if (previous === undefined) delete process.env.DQL_SUBSCRIPTION_CLI_SESSION;
-      else process.env.DQL_SUBSCRIPTION_CLI_SESSION = previous;
+      if (previous === undefined) delete process.env.ZLENS_SUBSCRIPTION_CLI_SESSION;
+      else process.env.ZLENS_SUBSCRIPTION_CLI_SESSION = previous;
     }
   });
 });

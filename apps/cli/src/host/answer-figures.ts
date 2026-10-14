@@ -1,9 +1,9 @@
-import type { AgentRun } from '@duckcodeailabs/dql-agent';
+import type { AgentRun } from '@zlens/agent';
 
 /**
  * RFC 0010 HH-14: A HOST CAN KEEP A NEEDS-REVIEW ANSWER'S FIGURES FROM A
  * PERSON (say, a stakeholder) until someone checks it. The run such a person
- * gets — and the one DQL stores for them — is rebuilt from an allowlist: what
+ * gets — and the one ZLens stores for them — is rebuilt from an allowlist: what
  * the answer is, how it was made and what it read, never a value. Answer text,
  * result rows, step details, events, evaluations and receipts (which can quote
  * samples) are all left out.
@@ -164,7 +164,7 @@ export function eventWithoutFigures<T extends StreamedRunEvent>(event: T): T {
 }
 
 /**
- * The host's answer (HH-14) as DQL reads it: only a clear `show` shows needs-review figures. Anything else — an
+ * The host's answer (HH-14) as ZLens reads it: only a clear `show` shows needs-review figures. Anything else — an
  * error, `withhold_review`, or an answer that is not one of the two (undefined, a typo, another type) — withholds.
  */
 export function figuresRuleFrom(answer: unknown): 'show' | 'withhold_review' {

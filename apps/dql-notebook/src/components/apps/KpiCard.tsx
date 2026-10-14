@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { summarizeKpi, type DashboardKpiStyle, type KpiSummary } from '@duckcodeailabs/dql-core/apps/kpi';
-import type { TileQuery } from '@duckcodeailabs/dql-core/apps/tile-query';
-import { escapeHtml } from '@duckcodeailabs/dql-core/apps/canvas-page';
+import { summarizeKpi, type DashboardKpiStyle, type KpiSummary } from '@zlens/core/apps/kpi';
+import type { TileQuery } from '@zlens/core/apps/tile-query';
+import { escapeHtml } from '@zlens/core/apps/canvas-page';
 import type { QueryResult } from '../../store/types';
 import { formatDisplayValue } from '../../utils/value-format';
 

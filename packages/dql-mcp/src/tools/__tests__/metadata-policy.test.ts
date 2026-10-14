@@ -3,7 +3,7 @@ import {
   relationshipValidationProofFingerprint,
   type DQLManifest,
   type ManifestModelRelationship,
-} from '@duckcodeailabs/dql-core';
+} from '@zlens/core';
 import { explainRelationshipProof, resolveAnalyticalPath } from '../metadata.js';
 import { makeCtx } from './_helpers.js';
 

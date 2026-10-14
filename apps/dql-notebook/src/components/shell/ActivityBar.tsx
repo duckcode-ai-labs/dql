@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { Activity, Boxes, ClipboardList, ExternalLink, GitPullRequest, Hammer, Inbox, MessageCircle, Settings, ShieldCheck, Users } from 'lucide-react';
 import { navItemAllowed, useHostPage, useHostUi } from '../../host/host-ui';
-import { Tooltip } from '@duckcodeailabs/dql-ui';
+import { Tooltip } from '@zlens/ui';
 import {
   FileText,
   GitBranch,
@@ -12,7 +12,7 @@ import {
   ChevronsRight,
   BlockIcon,
   LineageNodeIcon,
-} from '@duckcodeailabs/dql-ui/icons';
+} from '@zlens/ui/icons';
 import { useDispatch, useNotebookStore } from '../../store/NotebookStore';
 import { themes } from '../../themes/notebook-theme';
 import type { SidebarPanel } from '../../store/types';

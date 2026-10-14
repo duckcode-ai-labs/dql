@@ -40,7 +40,7 @@ export function withAppPageLink(href: string, link: AppPageLink | null): string 
 /**
  * A full link to a page on one origin. On a server shared over the network
  * the access token rides in the fragment, which browsers never send to a
- * server, exactly like the links `dql notebook` prints.
+ * server, exactly like the links `zlens notebook` prints.
  */
 export function appPageUrl(origin: string, link: AppPageLink, token?: string): string {
   const base = origin.replace(/\/$/, '');

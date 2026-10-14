@@ -3,11 +3,11 @@ import {
   GitBranch, GitCommit, RefreshCw, ArrowUp, ArrowDown,
   FileEdit, FilePlus, FileX, FileQuestion, ArrowRightLeft, FileCheck,
 } from 'lucide-react';
-import { PanelFrame, PanelToolbar, PanelEmpty } from '@duckcodeailabs/dql-ui';
+import { PanelFrame, PanelToolbar, PanelEmpty } from '@zlens/ui';
 import { useNotebook } from '../../store/NotebookStore';
 import { themes, type Theme } from '../../themes/notebook-theme';
 import { api } from '../../api/client';
-import type { DiffReport } from '@duckcodeailabs/dql-core/format';
+import type { DiffReport } from '@zlens/core/format';
 import { GitDiffView } from './GitDiffView';
 
 type Status = Awaited<ReturnType<typeof api.fetchGitStatus>>;

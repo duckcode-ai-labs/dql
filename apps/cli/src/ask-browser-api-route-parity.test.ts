@@ -4,8 +4,8 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { Server } from 'node:http';
-import { createScriptedAnalystProvider } from '@duckcodeailabs/dql-agent';
-import type { QueryExecutor } from '@duckcodeailabs/dql-connectors';
+import { createScriptedAnalystProvider } from '@zlens/agent';
+import type { QueryExecutor } from '@zlens/connectors';
 import { startLocalServer } from './local-runtime.js';
 
 /**

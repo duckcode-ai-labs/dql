@@ -1,5 +1,5 @@
-import { checkCanvasHtml, escapeHtml, fillCanvasHtml } from '@duckcodeailabs/dql-core/apps/canvas-page';
-import { splitStoryText, type StoryBindingCatalog } from '@duckcodeailabs/dql-core/apps/story-bindings';
+import { checkCanvasHtml, escapeHtml, fillCanvasHtml } from '@zlens/core/apps/canvas-page';
+import { splitStoryText, type StoryBindingCatalog } from '@zlens/core/apps/story-bindings';
 import type { DashboardCanvasV1, DashboardDocumentResponse, DashboardNarrativeV1, DashboardRunResponse } from '../../api/client';
 import { drawCanvasTile } from './CanvasPageFrame';
 import { readerTileTrust } from './reader-trust';

@@ -7,16 +7,16 @@
  * The manifest binds the file's bytes to the run the server recorded: run
  * and result fingerprints, the page filters, and every bound figure as the
  * server computed it. Anyone with the file can check it offline with
- * `dql app verify`; nothing is uploaded anywhere.
+ * `zlens app verify`; nothing is uploaded anywhere.
  *
  * The project key is Ed25519, created on first use in `.dql/local/private`
- * (never in git). Its public half is printed by `dql app verify --key` and
+ * (never in git). Its public half is printed by `zlens app verify --key` and
  * travels in every snapshot so a verifier can pin it.
  */
 import { createHash, createPrivateKey, createPublicKey, generateKeyPairSync, sign, verify, type KeyObject } from 'node:crypto';
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import type { StoryBindingCatalog } from '@duckcodeailabs/dql-core';
+import type { StoryBindingCatalog } from '@zlens/core';
 
 export const SNAPSHOT_SIGNATURE_PREFIX = '<!--dql-snapshot-signature:v1:';
 export const MAX_SNAPSHOT_BODY_BYTES = 8 * 1024 * 1024;
@@ -244,8 +244,8 @@ export function buildSnapshotDocument(input: SnapshotInput, key: Pick<SnapshotKe
     '</header>',
     `<div class="snap-body">${input.body}</div>`,
     '<footer class="snap-proof">',
-    `<span>Signed by DQL project key <code>${esc(key.id)}</code>. Every figure below was recorded by the DQL server for run <code>${esc(input.run.id)}</code>; the signature covers this file's bytes and those figures.</span>`,
-    '<span>Check it offline: <code>dql app verify &lt;this file&gt;</code>. Editing the file breaks the signature.</span>',
+    `<span>Signed by ZLens project key <code>${esc(key.id)}</code>. Every figure below was recorded by the ZLens server for run <code>${esc(input.run.id)}</code>; the signature covers this file's bytes and those figures.</span>`,
+    '<span>Check it offline: <code>zlens app verify &lt;this file&gt;</code>. Editing the file breaks the signature.</span>',
     `<span>Result fingerprint <code>${esc(input.run.resultFingerprint)}</code></span>`,
     input.figures.length ? `<details><summary>${input.figures.length} recorded ${input.figures.length === 1 ? 'figure' : 'figures'}</summary><table><thead><tr><th>Figure</th><th>Value</th><th>Binding</th></tr></thead><tbody>${figureRows}</tbody></table></details>` : '',
     '</footer>',

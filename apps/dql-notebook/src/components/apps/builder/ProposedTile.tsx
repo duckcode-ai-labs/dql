@@ -1,6 +1,6 @@
 import type { CSSProperties } from 'react';
 import type { AppStudioBuildDraft } from '../../../api/client';
-import type { DatasetDescriptor } from '@duckcodeailabs/dql-core/datasets/descriptor';
+import type { DatasetDescriptor } from '@zlens/core/datasets/descriptor';
 import type { ThemeMode } from '../../../themes/notebook-theme';
 import { DatasetQueryPreview } from './DraftTile';
 import type { ProposedTileChange } from './proposal-preview';

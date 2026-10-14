@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { BlockRecord, TestResultSummary } from '@duckcodeailabs/dql-project';
+import type { BlockRecord, TestResultSummary } from '@zlens/project';
 import { Certifier, BUILTIN_RULES, ENTERPRISE_RULES } from './certifier.js';
 import type { InvariantResult } from './invariant-evaluator.js';
 

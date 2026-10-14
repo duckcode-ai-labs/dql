@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import type {
   MetricCapabilityContract,
   ResolvedRelationshipProofV1,
-} from '@duckcodeailabs/dql-core';
+} from '@zlens/core';
 import type {
   AgentEvidenceCandidate,
   AgentRelationshipSafetyEvidence,

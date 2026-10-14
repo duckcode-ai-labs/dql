@@ -8,7 +8,7 @@ import { logUnderReference } from './plain-errors.js';
  * they read a plain sentence with a reference of eight letters, and the
  * store's own text goes to the server's log under that reference. An answer
  * of the wrong shape (a list that is not a list, a count that is not a
- * number) is read as nothing, or as a failure where DQL cannot go on without
+ * number) is read as nothing, or as a failure where ZLens cannot go on without
  * it; it never reaches a route as it came.
  */
 export type HostStoreKind = 'runs' | 'conversations' | 'memory';
@@ -23,7 +23,7 @@ export class HostStoreError extends Error {
   readonly code = 'HOST_STORE_UNAVAILABLE';
   readonly reference: string;
   constructor(kind: HostStoreKind, reference: string) {
-    super(`DQL could not reach ${WHAT[kind]} right now. Try again in a minute; if it keeps happening, ask your administrator about reference ${reference}.`);
+    super(`ZLens could not reach ${WHAT[kind]} right now. Try again in a minute; if it keeps happening, ask your administrator about reference ${reference}.`);
     this.name = 'HostStoreError';
     this.reference = reference;
   }
@@ -43,7 +43,7 @@ type Shape = (value: unknown, fail: (why: string) => never) => unknown;
 const records: Shape = (value) => (Array.isArray(value) ? value.filter(isRecord) : []);
 /** One record, or nothing. */
 const recordOrNothing = (nothing: null | undefined): Shape => (value) => (isRecord(value) ? value : nothing);
-/** One record DQL cannot go on without: anything else is the store failing. */
+/** One record ZLens cannot go on without: anything else is the store failing. */
 const record: Shape = (value, fail) => (isRecord(value) ? value : fail('answered without a record'));
 const count: Shape = (value) => (typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : 0);
 const yes: Shape = (value) => value === true;
@@ -82,7 +82,7 @@ const SHAPES: Record<HostStoreKind, Record<string, Shape>> = {
 
 /**
  * The host's store with every call answered plainly: a failure (a throw, a
- * rejection) is a `HostStoreError`; an answer is shaped as DQL reads it.
+ * rejection) is a `HostStoreError`; an answer is shaped as ZLens reads it.
  * `deadline` bounds each call (RFC 0010 rule 1, HH-6) when given.
  */
 export function guardHostStore<T extends object>(kind: HostStoreKind, store: T, deadline?: <R>(work: () => R | Promise<R>, hook?: string) => Promise<R>): T {

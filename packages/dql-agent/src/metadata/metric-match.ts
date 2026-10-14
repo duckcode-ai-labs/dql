@@ -28,7 +28,7 @@
 
 import { defaultEmbeddingProvider, hybridRank, type EmbeddingProvider } from '../embeddings/provider.js';
 import type { KGNode } from '../kg/types.js';
-import type { SemanticLayer } from '@duckcodeailabs/dql-core';
+import type { SemanticLayer } from '@zlens/core';
 
 const TOKEN_RE = /[\p{L}\p{N}_]+/gu;
 
@@ -210,7 +210,7 @@ export interface MatchSemanticMetricOptions {
   /**
    * Executability signal (composable natively OR a full semantic runtime is
    * active). Non-executable metrics are DEMOTED (x0.6) rather than excluded:
-   * an acronym-sibling that DQL can actually run should win a lexical tie, but
+   * an acronym-sibling that ZLens can actually run should win a lexical tie, but
    * a strong direct match on a runtime-only metric still surfaces so the
    * honest "requires a semantic runtime" path can explain itself instead of a
    * lookalike silently answering with the wrong number.
@@ -424,7 +424,7 @@ export async function matchSemanticMetric(
   // Executability is a TIE-BREAKER, never an intent override. When the
   // best-matched metric is runtime-only and an executable sibling scores
   // within ~15%, prefer the executable one (an acronym-tie should pick the
-  // metric DQL can actually run). But when the runtime-only metric is the
+  // metric ZLens can actually run). But when the runtime-only metric is the
   // CLEAR match — "consumption % by customer" wanting a ratio metric — it
   // must win and flow to the honest requires-runtime path; demoting it would
   // silently answer with the WRONG metric, which is worse than any refusal.

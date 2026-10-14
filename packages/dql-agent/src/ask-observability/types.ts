@@ -15,7 +15,7 @@ import type {
   ProviderFailureCauseV1,
   ProviderFailureDiagnosticV1,
 } from '../analytical-orchestration.js';
-import type { ProviderEgressPurpose } from '@duckcodeailabs/dql-core';
+import type { ProviderEgressPurpose } from '@zlens/core';
 
 export type AskTraceIdV1 = string;
 export type AskSpanIdV1 = string;

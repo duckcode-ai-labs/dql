@@ -1,4 +1,4 @@
-import type { NotificationIR } from '@duckcodeailabs/dql-compiler';
+import type { NotificationIR } from '@zlens/dql-compiler';
 import type { Notifier, NotifierPayload } from '../types.js';
 import { createEmailNotifier } from './email.js';
 import { createFileNotifier } from './file.js';

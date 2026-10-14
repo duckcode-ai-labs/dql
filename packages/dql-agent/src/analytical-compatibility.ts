@@ -13,7 +13,7 @@ import {
   type AnalyticalQuestionFrameV2,
   type MetricCapabilityContract,
   type ResolvedRelationshipProofV1,
-} from '@duckcodeailabs/dql-core';
+} from '@zlens/core';
 import type { AgentEvidenceCandidate } from './meaning-resolution.js';
 import { buildResolvedRelationshipProofsV1 } from './relationship-proof.js';
 

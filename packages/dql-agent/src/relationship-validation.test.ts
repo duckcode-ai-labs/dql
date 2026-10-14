@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { DQLManifest } from '@duckcodeailabs/dql-core';
+import type { DQLManifest } from '@zlens/core';
 import { catalogKeyTypes, relationshipEvidenceFromRow, relationshipValidationSql, validateRelationshipOnWarehouse } from './relationship-validation.js';
 
 const quote = (identifier: string) => `"${identifier}"`;

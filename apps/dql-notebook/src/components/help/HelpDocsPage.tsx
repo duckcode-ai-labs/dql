@@ -112,7 +112,7 @@ export function HelpDocsPage() {
           <div>
             <button
               type="button"
-              onClick={() => dispatch({ type: 'OPEN_GLOBAL_AI', autoRun: { text: 'Help me finish setting up DQL — what is left to configure in this workspace?' } })}
+              onClick={() => dispatch({ type: 'OPEN_GLOBAL_AI', autoRun: { text: 'Help me finish setting up ZLens — what is left to configure in this workspace?' } })}
               style={{ marginTop: 7, display: 'inline-flex', alignItems: 'center', gap: 5, height: 26, padding: '0 10px', borderRadius: 6, border: `1px solid ${t.cellBorder}`, background: t.cellBg, color: t.accent, fontSize: 11, fontWeight: 650, cursor: 'pointer', fontFamily: t.font }}
             >
               <MessageCircle size={11} strokeWidth={1.75} /> Ask about setup
@@ -125,25 +125,25 @@ export function HelpDocsPage() {
       <div ref={scrollerRef} onScroll={handleScroll} style={{ flex: 1, minWidth: 0, overflow: 'auto' }}>
         <div style={{ width: 'min(680px, 100% - 56px)', margin: '0 auto', padding: '34px 0 80px', fontSize: 14, lineHeight: 1.7, color: t.textSecondary }}>
           <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: t.accent }}>Guide</div>
-          <h1 style={{ margin: '6px 0 0', fontSize: 28, fontWeight: 700, letterSpacing: '-0.02em', color: t.textPrimary, lineHeight: 1.25 }}>Getting started with DQL</h1>
+          <h1 style={{ margin: '6px 0 0', fontSize: 28, fontWeight: 700, letterSpacing: '-0.02em', color: t.textPrimary, lineHeight: 1.25 }}>Getting started with ZLens</h1>
           <div style={{ marginTop: 8, fontSize: 13.5, color: t.textMuted }}>From install to your first governed answer — about 20 minutes.</div>
 
           <div ref={setSectionRef(0)} style={{ marginTop: 36 }}>
             {h2('01', 'Installation')}
-            <p style={para}>DQL runs locally next to your dbt project. The recommended setup creates a <span style={inlineCode}>dql/</span> workspace and installs the CLI inside it, so every repository keeps the version it was tested with.</p>
-            <pre style={{ ...codeBlock, margin: '14px 0 0' }}>cd my-dbt-project{'\n'}dbt parse{'\n'}npx create-dql-app@latest dql{'\n'}cd dql{'\n'}npm install{'\n'}npm run doctor{'\n'}npm run notebook</pre>
+            <p style={para}>ZLens runs locally next to your dbt project. The recommended setup creates a <span style={inlineCode}>dql/</span> workspace and installs the CLI inside it, so every repository keeps the version it was tested with.</p>
+            <pre style={{ ...codeBlock, margin: '14px 0 0' }}>cd my-dbt-project{'\n'}dbt parse{'\n'}npx create-zlens-app@latest dql{'\n'}cd dql{'\n'}npm install{'\n'}npm run doctor{'\n'}npm run notebook</pre>
             <div style={{ margin: '14px 0 0', display: 'flex', gap: 9, alignItems: 'flex-start', border: '1px solid var(--status-info-border)', background: 'var(--accent-dim)', borderRadius: 10, padding: '11px 13px' }}>
               <Info size={13} color={t.accent} style={{ flexShrink: 0, marginTop: 2 }} />
-              <span style={{ fontSize: 12.5, lineHeight: 1.6, color: t.textSecondary }}><strong>Requirements:</strong> Node 20+, git, and a dbt project (dbt-core 1.6+ or dbt Cloud). DQL can install optional DuckDB and Snowflake drivers into the project when needed; Databricks uses the built-in HTTPS connector.</span>
+              <span style={{ fontSize: 12.5, lineHeight: 1.6, color: t.textSecondary }}><strong>Requirements:</strong> Node 20+, git, and a dbt project (dbt-core 1.6+ or dbt Cloud). ZLens can install optional DuckDB and Snowflake drivers into the project when needed; Databricks uses the built-in HTTPS connector.</span>
             </div>
             {shot('The workbench opens on localhost with your project loaded.', 'Screenshot: terminal after `npm run notebook` opens the workbench')}
           </div>
 
           <div ref={setSectionRef(1)} style={{ marginTop: 44 }}>
             {h2('02', 'Run CLI commands')}
-            <p style={para}>A project-local install puts the executable in <span style={inlineCode}>node_modules/.bin</span>. npm scripts can use it automatically; your normal shell cannot. Use a starter script for daily commands or <span style={inlineCode}>npm exec -- dql</span> for any other command.</p>
-            <pre style={codeBlock}>npm run doctor       <span style={comment}># project setup and readiness</span>{'\n'}npm run notebook     <span style={comment}># local browser UI</span>{'\n'}npm run sync         <span style={comment}># refresh dbt state</span>{'\n'}npm run compile      <span style={comment}># write dql-manifest.json</span>{'\n'}npm exec -- dql model list{'\n'}npm exec -- dql --help</pre>
-            <p style={para}>A bare <span style={inlineCode}>dql ...</span> command requires the optional global install: <span style={inlineCode}>npm install -g @duckcodeailabs/dql-cli</span>. See the <a href={CLI_REFERENCE_URL} target="_blank" rel="noreferrer" style={{ color: t.accent, textDecoration: 'none' }}>complete CLI reference</a> for all commands, subcommands, flags, examples, and exit codes.</p>
+            <p style={para}>A project-local install puts the executable in <span style={inlineCode}>node_modules/.bin</span>. npm scripts can use it automatically; your normal shell cannot. Use a starter script for daily commands or <span style={inlineCode}>npm exec -- zlens</span> for any other command.</p>
+            <pre style={codeBlock}>npm run doctor       <span style={comment}># project setup and readiness</span>{'\n'}npm run notebook     <span style={comment}># local browser UI</span>{'\n'}npm run sync         <span style={comment}># refresh dbt state</span>{'\n'}npm run compile      <span style={comment}># write dql-manifest.json</span>{'\n'}npm exec -- zlens model list{'\n'}npm exec -- zlens --help</pre>
+            <p style={para}>A bare <span style={inlineCode}>zlens ...</span> command requires the optional global install: <span style={inlineCode}>npm install -g @zlens/cli</span>. See the <a href={CLI_REFERENCE_URL} target="_blank" rel="noreferrer" style={{ color: t.accent, textDecoration: 'none' }}>complete CLI reference</a> for all commands, subcommands, flags, examples, and exit codes.</p>
           </div>
 
           <div ref={setSectionRef(2)} style={{ marginTop: 44 }}>
@@ -160,8 +160,8 @@ export function HelpDocsPage() {
 
           <div ref={setSectionRef(3)} style={{ marginTop: 44 }}>
             {h2('04', 'Sync your dbt project')}
-            <p style={para}>DQL reads your dbt manifest and keeps ownership where it belongs: models, columns, tests, and lineage stay in dbt. DQL layers governed context on top — domains, blocks, skills.</p>
-            <pre style={codeBlock}>npm run sync      <span style={comment}># runs dql sync dbt with the local CLI</span></pre>
+            <p style={para}>ZLens reads your dbt manifest and keeps ownership where it belongs: models, columns, tests, and lineage stay in dbt. ZLens layers governed context on top — domains, blocks, skills.</p>
+            <pre style={codeBlock}>npm run sync      <span style={comment}># runs zlens sync dbt with the local CLI</span></pre>
             <p style={para}>After a sync, the <strong>Domains</strong> page shows your models grouped by folder, ready to bind into business entities. Re-run after any dbt change.</p>
           </div>
 
@@ -179,7 +179,7 @@ export function HelpDocsPage() {
 
           <div ref={setSectionRef(5)} style={{ marginTop: 44 }}>
             {h2('06', 'Ask your first question')}
-            <p style={para}>Open <strong>Ask</strong> and type a business question. DQL answers in a strict order — certified blocks first, semantic metrics next, generated SQL last — and labels every answer with how it was produced.</p>
+            <p style={para}>Open <strong>Ask</strong> and type a business question. ZLens answers in a strict order — certified blocks first, semantic metrics next, generated SQL last — and labels every answer with how it was produced.</p>
             <div style={{ margin: '14px 0 0', border: '1px solid var(--border-subtle)', borderRadius: 10, background: t.cellBg, overflow: 'hidden' }}>
               <div style={{ display: 'grid', gridTemplateColumns: '110px 1fr', fontSize: 12.5 }}>
                 <div style={{ padding: '9px 13px', borderBottom: '1px solid var(--border-subtle)', background: 'var(--bg-1)', fontWeight: 650, color: 'var(--status-success)' }}>Certified</div>
@@ -202,8 +202,8 @@ export function HelpDocsPage() {
           <div ref={setSectionRef(7)} style={{ marginTop: 44 }}>
             {h2('08', 'Troubleshooting')}
             <div style={{ margin: '14px 0 0', display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {troubleCard('“dbt manifest not found”', <>Run <span style={inlineCode}>dbt parse</span> in the dbt project, then <span style={inlineCode}>npm run sync</span> from its DQL workspace. DQL needs a compiled manifest to read lineage.</>)}
-              {troubleCard('“dql: command not found”', <>A project-local install uses <span style={inlineCode}>npm run ...</span> or <span style={inlineCode}>npm exec -- dql ...</span>. Install the CLI globally only if you want bare <span style={inlineCode}>dql ...</span> commands.</>)}
+              {troubleCard('“dbt manifest not found”', <>Run <span style={inlineCode}>dbt parse</span> in the dbt project, then <span style={inlineCode}>npm run sync</span> from its ZLens workspace. ZLens needs a compiled manifest to read lineage.</>)}
+              {troubleCard('“zlens: command not found”', <>A project-local install uses <span style={inlineCode}>npm run ...</span> or <span style={inlineCode}>npm exec -- zlens ...</span>. Install the CLI globally only if you want bare <span style={inlineCode}>zlens ...</span> commands.</>)}
               {troubleCard('Connection test fails', <>Check <span style={inlineCode}>npm run doctor</span> and <strong>Settings → Database</strong>. Test candidate credentials before saving them.</>)}
               {troubleCard('AI answers feel wrong', <>Add a skill with your definitions (&quot;revenue = recognized, not bookings&quot;) and certify more blocks. Trust labels tell you which route produced each answer.</>)}
             </div>

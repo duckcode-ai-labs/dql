@@ -21,8 +21,8 @@ afterEach(() => {
   delete process.env.OPENAI_API_KEY;
   delete process.env.OLLAMA_BASE_URL;
   delete process.env.OLLAMA_MODEL;
-  delete process.env.DQL_OPENAI_COMPAT_BASE_URL;
-  delete process.env.DQL_OPENAI_COMPAT_MODEL;
+  delete process.env.ZLENS_OPENAI_COMPAT_BASE_URL;
+  delete process.env.ZLENS_OPENAI_COMPAT_MODEL;
 });
 
 describe('provider configured state', () => {
@@ -73,7 +73,7 @@ describe('provider configured state', () => {
 });
 
 describe('a host\'s own model (RFC 0010 HH-5)', () => {
-  it('has an empty local config instead of failing, for ids DQL does not know (bedrock, vertex)', () => {
+  it('has an empty local config instead of failing, for ids ZLens does not know (bedrock, vertex)', () => {
     expect(getEffectiveProviderConfig(root, 'bedrock' as never)).toEqual({ enabled: true });
     expect(getEffectiveProviderConfig(root, 'vertex' as never).reasoningEffort).toBeUndefined();
   });

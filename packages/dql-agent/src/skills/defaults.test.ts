@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, rmSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { SemanticLayer } from '@duckcodeailabs/dql-core';
+import type { SemanticLayer } from '@zlens/core';
 import { seedDefaultSkills } from './defaults.js';
 import { loadSkills, skillPath } from './loader.js';
 

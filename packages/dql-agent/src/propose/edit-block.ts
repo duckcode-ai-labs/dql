@@ -15,7 +15,7 @@
 
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { isAbsolute, join } from 'node:path';
-import { Parser } from '@duckcodeailabs/dql-core';
+import { Parser } from '@zlens/core';
 
 /** Block metadata + SQL loaded from an existing `.dql` file. */
 export interface LoadedBlock {

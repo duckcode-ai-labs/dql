@@ -5,9 +5,10 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { QueryExecutor, type ConnectionConfig } from '@duckcodeailabs/dql-connectors';
+import { QueryExecutor, type ConnectionConfig } from '@zlens/connectors';
 import { startLocalServer } from '../local-runtime.js';
 import { saveProviderSettings } from '../settings/provider-settings.js';
+import { readEnv } from '@zlens/core';
 
 /**
  * DQL's local-model rule, without any host: result values reach a model only
@@ -21,7 +22,7 @@ import { saveProviderSettings } from '../settings/provider-settings.js';
  * and answered in-process, so nothing leaves the machine and no name is looked up.
  */
 const here = dirname(fileURLToPath(import.meta.url));
-const connectorRoot = process.env.DQL_APP_DATASETS_DUCKDB_CONNECTOR_ROOT?.trim();
+const connectorRoot = readEnv('ZLENS_APP_DATASETS_DUCKDB_CONNECTOR_ROOT')?.trim();
 const duckIt = connectorRoot ? it : it.skip;
 const fixtureRoot = resolve(here, '../../test/fixtures/app-datasets-pilot');
 const seedWarehouse = resolve(here, '../../../../scripts/seed-eval-warehouse.mjs');

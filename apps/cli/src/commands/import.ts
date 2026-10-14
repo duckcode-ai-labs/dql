@@ -13,7 +13,7 @@ export async function runImport(source: string, rest: string[], flags: CLIFlags)
   const inputPath = rest[0] || flags.input;
   if (!inputPath) {
     console.error('\n  ✗ Missing SQL import path.');
-    console.error('    Usage: dql import sql <file-or-folder> [--domain <name>] [--owner <name>]');
+    console.error('    Usage: zlens import sql <file-or-folder> [--domain <name>] [--owner <name>]');
     console.error('');
     process.exit(1);
   }
@@ -43,7 +43,7 @@ export async function runImport(source: string, rest: string[], flags: CLIFlags)
     return;
   }
 
-  console.log('\n  DQL AI Import: SQL');
+  console.log('\n  ZLens AI Import: SQL');
   console.log('  ─────────────────────────────');
   console.log(`  Session:     ${session.id}`);
   console.log(`  Source:      ${session.inputPath}`);

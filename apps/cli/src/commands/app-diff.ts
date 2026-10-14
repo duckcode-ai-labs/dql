@@ -1,5 +1,5 @@
 /**
- * `dql app diff [base] [head]` — review what a change does to every App page
+ * `zlens app diff [base] [head]` — review what a change does to every App page
  * (RFC 0008 step 10).
  *
  * Compares App files between two git revisions, or a revision and the
@@ -10,9 +10,9 @@
  * with the same parser publish uses. Nothing runs against a warehouse, so it
  * works in CI; number changes are flagged for a reviewer to check on a run.
  *
- *   dql app diff                       # HEAD vs working tree
- *   dql app diff origin/main HEAD      # a pull request in CI
- *   dql app diff main --html report.html --markdown comment.md --check
+ *   zlens app diff                       # HEAD vs working tree
+ *   zlens app diff origin/main HEAD      # a pull request in CI
+ *   zlens app diff main --html report.html --markdown comment.md --check
  */
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
@@ -26,7 +26,7 @@ import {
   type AppDocument,
   type DashboardDocument,
   type PageDiff,
-} from '@duckcodeailabs/dql-core';
+} from '@zlens/core';
 import type { CLIFlags } from '../args.js';
 import { findProjectRoot } from '../local-runtime.js';
 
@@ -183,7 +183,7 @@ export function renderAppDiffText(report: AppDiffReport): string {
 }
 
 export function renderAppDiffMarkdown(report: AppDiffReport): string {
-  const lines = [`### DQL App changes: \`${report.base}\` → \`${report.head}\``, ''];
+  const lines = [`### ZLens App changes: \`${report.base}\` → \`${report.head}\``, ''];
   if (!report.apps.length) return `${lines[0]}\n\nNo App changes.`;
   const pages = report.apps.reduce((sum, app) => sum + app.pages.length, 0);
   lines.push(`**${pages} ${pages === 1 ? 'page' : 'pages'} changed · ${report.numberChanges} ${report.numberChanges === 1 ? 'tile' : 'tiles'} can show different numbers**${report.problems ? ` · ❌ ${report.problems} ${report.problems === 1 ? 'problem' : 'problems'}` : ''}`, '');
@@ -237,7 +237,7 @@ figure{margin:0;overflow-x:auto}figure svg{max-width:100%;height:auto}figcaption
 table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:6px 8px;border-bottom:1px solid var(--line);text-align:left}th{color:var(--muted);font-weight:500}tr.removed td:first-child{text-decoration:line-through;color:var(--muted)}td strong{color:var(--amber);font-weight:600}
 .aspects{margin:0;color:var(--muted)}.problem{margin:0;padding:8px 10px;border-left:3px solid var(--red);background:#fbeeee;color:var(--ink)}.deliveries{margin:0;padding-left:18px}
 footer{color:var(--muted);font-size:12px}
-</style></head><body><main><header><h1>App changes</h1><p><code>${esc(report.base)}</code> → <code>${esc(report.head)}</code></p><div class="summary"><span>${pages} ${pages === 1 ? 'page' : 'pages'} changed</span><span class="${report.numberChanges ? 'warn' : ''}">${report.numberChanges} ${report.numberChanges === 1 ? 'tile' : 'tiles'} can show different numbers</span>${report.problems ? `<span class="bad">${report.problems} ${report.problems === 1 ? 'problem' : 'problems'}</span>` : ''}</div></header>${body || '<p>No App changes.</p>'}<footer>Tiles that can show different numbers are new, or have a new query, source, filter or driver. This report runs nothing; check those tiles on a page run before merging. Made by <code>dql app diff</code>.</footer></main></body></html>\n`;
+</style></head><body><main><header><h1>App changes</h1><p><code>${esc(report.base)}</code> → <code>${esc(report.head)}</code></p><div class="summary"><span>${pages} ${pages === 1 ? 'page' : 'pages'} changed</span><span class="${report.numberChanges ? 'warn' : ''}">${report.numberChanges} ${report.numberChanges === 1 ? 'tile' : 'tiles'} can show different numbers</span>${report.problems ? `<span class="bad">${report.problems} ${report.problems === 1 ? 'problem' : 'problems'}</span>` : ''}</div></header>${body || '<p>No App changes.</p>'}<footer>Tiles that can show different numbers are new, or have a new query, source, filter or driver. This report runs nothing; check those tiles on a page run before merging. Made by <code>zlens app diff</code>.</footer></main></body></html>\n`;
 }
 
 export async function runAppDiff(rest: string[], flags: CLIFlags): Promise<void> {
@@ -247,7 +247,7 @@ export async function runAppDiff(rest: string[], flags: CLIFlags): Promise<void>
   try {
     repoRoot = git(projectRoot, ['rev-parse', '--show-toplevel']).trim();
   } catch {
-    throw new Error('dql app diff needs a git repository. Run it inside the project\'s repository.');
+    throw new Error('zlens app diff needs a git repository. Run it inside the project\'s repository.');
   }
   const base = positional[0] ?? 'HEAD';
   const head = positional[1] ?? null;

@@ -23,7 +23,7 @@ if (!root) throw new Error('Usage: run-built-ask.mjs <temporary-fixture-root>');
 
 const workspace = join(root, 'workspace');
 const dbtRoot = join(root, 'dbt');
-const database = process.env.DQL_MANIFEST_ONLY_METRICFLOW_DB ?? join(dbtRoot, 'target', 'manifest_only_metricflow.duckdb');
+const database = (process.env.ZLENS_MANIFEST_ONLY_METRICFLOW_DB ?? process.env.DQL_MANIFEST_ONLY_METRICFLOW_DB) ?? join(dbtRoot, 'target', 'manifest_only_metricflow.duckdb');
 const manifest = JSON.parse(readFileSync(join(workspace, 'dql-manifest.json'), 'utf8'));
 const config = JSON.parse(readFileSync(join(workspace, 'dql.config.json'), 'utf8'));
 
@@ -36,11 +36,11 @@ const semanticLayer = coreModule.resolveSemanticLayer({ provider: 'dbt', project
 if (!semanticLayer) throw new Error('The external dbt semantic layer did not load.');
 
 const connection = { driver: 'duckdb', filepath: database };
-const configuredDbt = process.env.DQL_MANIFEST_ONLY_DBT_BIN;
-const python = process.env.DQL_MANIFEST_ONLY_PYTHON
+const configuredDbt = (process.env.ZLENS_MANIFEST_ONLY_DBT_BIN ?? process.env.DQL_MANIFEST_ONLY_DBT_BIN);
+const python = (process.env.ZLENS_MANIFEST_ONLY_PYTHON ?? process.env.DQL_MANIFEST_ONLY_PYTHON)
   ?? (configuredDbt && configuredDbt.includes('/') ? join(dirname(resolve(configuredDbt)), 'python') : undefined);
 if (!python) {
-  throw new Error('Set DQL_MANIFEST_ONLY_PYTHON, or set DQL_MANIFEST_ONLY_DBT_BIN to the matching dbt virtual-environment executable.');
+  throw new Error('Set ZLENS_MANIFEST_ONLY_PYTHON, or set ZLENS_MANIFEST_ONLY_DBT_BIN to the matching dbt virtual-environment executable.');
 }
 
 // The local fixture runtime supplies DuckDB through the dbt/MetricFlow Python

@@ -8,7 +8,7 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { buildManifest, parse } from '@duckcodeailabs/dql-core';
+import { buildManifest, parse } from '@zlens/core';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { buildProposePreview, propose, proposePlan } from './propose.js';
 
@@ -137,7 +137,7 @@ function writeDbtArtifacts(targetDir: string): string {
   return join(targetDir, 'manifest.json');
 }
 
-describe('dql propose engine', () => {
+describe('zlens propose engine', () => {
   let projectRoot: string;
   let manifestPath: string;
 

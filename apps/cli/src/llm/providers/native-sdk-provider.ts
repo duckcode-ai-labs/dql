@@ -5,8 +5,8 @@ import {
   normalizeAnthropicBaseUrl,
   reindexProject,
   supportsReasoningEffort,
-} from '@duckcodeailabs/dql-agent';
-import { DQLContext } from '@duckcodeailabs/dql-mcp';
+} from '@zlens/agent';
+import { DQLContext } from '@zlens/mcp';
 import { existsSync } from 'node:fs';
 import type { AgentRunRequest, AgentRunner, AgentTurn } from '../types.js';
 import type { AgentTool } from '../tools.js';
@@ -21,7 +21,7 @@ import {
   openAiMcpTools,
 } from '../mcp-config.js';
 import { getEffectiveProviderConfig } from '../../settings/provider-settings.js';
-import { runGatedTool } from '@duckcodeailabs/dql-agent';
+import { runGatedTool } from '@zlens/agent';
 
 const MAX_TOOL_ITERATIONS = 16;
 
@@ -162,7 +162,7 @@ async function runOpenAIResponsesAgent(input: {
       let output: unknown;
       let isError = false;
       if (!tool) {
-        output = { error: `Unknown DQL tool: ${call.name}` };
+        output = { error: `Unknown ZLens tool: ${call.name}` };
         isError = true;
       } else {
         try {
@@ -250,7 +250,7 @@ async function runAnthropicMessagesAgent(input: {
       let output: unknown;
       let isError = false;
       if (!tool) {
-        output = { error: `Unknown DQL tool: ${call.name}` };
+        output = { error: `Unknown ZLens tool: ${call.name}` };
         isError = true;
       } else {
         try {

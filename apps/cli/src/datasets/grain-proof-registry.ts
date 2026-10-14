@@ -1,11 +1,11 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import type { DatasetGrainProofV1 } from '@duckcodeailabs/dql-core';
+import type { DatasetGrainProofV1 } from '@zlens/core';
 import {
   DATASET_PROOF_RELATIVE_PATH,
   LOCAL_DATASET_PROOF_RELATIVE_PATH,
   type DatasetBlockProofMaterial,
-} from '@duckcodeailabs/dql-agent';
+} from '@zlens/agent';
 import type { DatasetGrainRuntimeEvidence } from './grain-proof-execution.js';
 
 /**

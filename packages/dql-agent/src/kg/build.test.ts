@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { SemanticLayer, type DQLManifest } from '@duckcodeailabs/dql-core';
+import { SemanticLayer, type DQLManifest } from '@zlens/core';
 import { buildKGFromManifest, buildKGFromSemanticLayer } from './build.js';
 import { buildResolvedAnalyticalPlan } from '../resolved-analytical-plan.js';
 import type { AgentEvidenceCandidate } from '../meaning-resolution.js';

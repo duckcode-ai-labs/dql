@@ -1,6 +1,6 @@
 export function emitRuntimeJS(): string {
   return `
-// DQL Runtime - Auto-generated
+// ZLens Runtime - Auto-generated
 (function() {
   'use strict';
 

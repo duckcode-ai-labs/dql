@@ -1,4 +1,4 @@
-import type { DqlArtifactReference } from '@duckcodeailabs/dql-core';
+import type { DqlArtifactReference } from '@zlens/core';
 import { renderSemanticDqlArtifact, semanticDqlArtifactName } from '../../semantic-bridge/compose.js';
 import type { SemanticCompileRequest } from './types.js';
 

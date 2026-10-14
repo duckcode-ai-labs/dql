@@ -13,8 +13,8 @@ import type {
   AnalyticalPeriodV2,
   AnalyticalQuestionFrameV2,
   MetricCapabilityContract,
-} from '@duckcodeailabs/dql-core';
-export type { AnalyticalExecutionReceiptV1 } from '@duckcodeailabs/dql-core';
+} from '@zlens/core';
+export type { AnalyticalExecutionReceiptV1 } from '@zlens/core';
 import type { AnalyticalFitClass } from './analytical-compatibility.js';
 import type { ResolvedAnalyticalPlan } from './resolved-analytical-plan.js';
 import { resolvedRelationshipProofMatches } from './relationship-proof.js';

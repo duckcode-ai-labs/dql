@@ -1,5 +1,5 @@
 {
-  "name": "@duckcodeailabs/dql-plugin-api",
+  "name": "@zlens/plugin-api",
   "version": "1.17.3",
   "description": "Stable plugin contracts for DQL \u2014 connectors, chart renderers, governance rule packs. Frozen at v1.0.",
   "license": "Apache-2.0",

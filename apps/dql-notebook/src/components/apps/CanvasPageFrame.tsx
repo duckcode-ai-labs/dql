@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { ShieldCheck } from 'lucide-react';
-import { annotateCanvasHtml, checkCanvasHtml, escapeHtml, fillCanvasHtml } from '@duckcodeailabs/dql-core/apps/canvas-page';
-import type { StoryBindingCatalog } from '@duckcodeailabs/dql-core/apps/story-bindings';
+import { annotateCanvasHtml, checkCanvasHtml, escapeHtml, fillCanvasHtml } from '@zlens/core/apps/canvas-page';
+import type { StoryBindingCatalog } from '@zlens/core/apps/story-bindings';
 import type { DashboardCanvasV1, DashboardDocumentResponse, DashboardRunResponse } from '../../api/client';
 import type { CellChartConfig, QueryResult } from '../../store/types';
 import type { ThemeMode } from '../../themes/notebook-theme';
@@ -13,10 +13,10 @@ import { encodedTileResult, mergeDashboardTileChartConfig, normalizeDashboardCha
 import { formatDriverNumber } from './driver-probe';
 import { readerTileTrust } from './reader-trust';
 import { NumberReceiptPopover, type NumberReceiptInfo } from './NumberReceipt';
-import { CONDITIONAL_TONE_LABELS, conditionalCell, conditionalStats, type ConditionalTone, type DashboardConditionalFormat } from '@duckcodeailabs/dql-core/apps/conditional-format';
+import { CONDITIONAL_TONE_LABELS, conditionalCell, conditionalStats, type ConditionalTone, type DashboardConditionalFormat } from '@zlens/core/apps/conditional-format';
 import { formatDisplayValue } from '../../utils/value-format';
-import { pivotLayout } from '@duckcodeailabs/dql-core/apps/pivot';
-import { encodingFromQuery } from '@duckcodeailabs/dql-core/apps/viz-encoding';
+import { pivotLayout } from '@zlens/core/apps/pivot';
+import { encodingFromQuery } from '@zlens/core/apps/viz-encoding';
 import { pivotHtml } from './PivotTable';
 import { kpiHtml, usesKpiCard } from './KpiCard';
 
@@ -41,7 +41,7 @@ export interface CanvasFrameEditing {
 /**
  * A governed HTML page (RFC 0008 step 9). The page's own markup runs in a
  * sandboxed frame with no scripts and a CSP that allows no network, so it
- * can only lay out what DQL filled in: escaped values for <dql-value> and
+ * can only lay out what ZLens filled in: escaped values for <dql-value> and
  * DQL-drawn tiles for <dql-tile>. The trust frame is drawn here, outside the
  * frame, where the page's markup cannot reach it.
  */

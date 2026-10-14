@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { bindingCaption, type StoryBinding, type StoryBindingCatalog } from '@duckcodeailabs/dql-core/apps/story-bindings';
-import type { ReaderTrust } from '@duckcodeailabs/dql-core/apps/reader-trust';
+import { bindingCaption, type StoryBinding, type StoryBindingCatalog } from '@zlens/core/apps/story-bindings';
+import type { ReaderTrust } from '@zlens/core/apps/reader-trust';
 import type { DashboardDocumentResponse, DashboardRunResponse } from '../../api/client';
 import { readerTileReceipt, readerTileTrust, type ReceiptRow } from './reader-trust';
 

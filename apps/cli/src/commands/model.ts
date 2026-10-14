@@ -11,11 +11,11 @@ import {
   resolveDbtManifestPath,
   type DomainDiscoveryReport,
   type DomainProposal,
-} from '@duckcodeailabs/dql-core';
+} from '@zlens/core';
 import type { CLIFlags } from '../args.js';
 import { startLocalServer } from '../local-runtime.js';
 
-/** `dql model` — inspect/validate v3 and preview evidence-bounded discovery (AGT-002/API-001). */
+/** `zlens model` — inspect/validate v3 and preview evidence-bounded discovery (AGT-002/API-001). */
 export async function runModel(file: string | null, rest: string[], flags: CLIFlags): Promise<void> {
   const subcommand = file ?? 'list';
   if (subcommand === 'discover' || subcommand === 'apply-discovery') {
@@ -35,7 +35,7 @@ export async function runModel(file: string | null, rest: string[], flags: CLIFl
   const projectArg = subcommand === 'explain' ? args[1] : args[0];
   const projectRoot = resolve(projectArg ?? '.');
   if (!existsSync(resolve(projectRoot, 'dql.config.json'))) {
-    console.error(`No DQL project found at ${projectRoot} (missing dql.config.json).`);
+    console.error(`No ZLens project found at ${projectRoot} (missing dql.config.json).`);
     process.exitCode = 1;
     return;
   }
@@ -57,7 +57,7 @@ export async function runModel(file: string | null, rest: string[], flags: CLIFl
     };
     if (flags.format === 'json') console.log(JSON.stringify(result, null, 2));
     else {
-      console.log(`DQL dbt-first modeling: ${result.valid ? 'valid' : 'invalid'}`);
+      console.log(`ZLens dbt-first modeling: ${result.valid ? 'valid' : 'invalid'}`);
       console.log(`  ${result.entities} entities, ${result.relationships} relationships`);
       for (const diagnostic of diagnostics) console.log(`  ${diagnostic.severity === 'error' ? '✗' : '!' } ${diagnostic.message}`);
     }
@@ -67,7 +67,7 @@ export async function runModel(file: string | null, rest: string[], flags: CLIFl
 
   if (subcommand === 'explain') {
     if (!relationshipId) {
-      console.error('Usage: dql model explain <relationship-id> [path]');
+      console.error('Usage: zlens model explain <relationship-id> [path]');
       process.exitCode = 1;
       return;
     }
@@ -95,7 +95,7 @@ export async function runModel(file: string | null, rest: string[], flags: CLIFl
   }
 
   if (subcommand !== 'list') {
-    console.error('Usage: dql model list|validate|discover [path] | dql model explain <relationship-id> [path] | dql model apply-discovery [path] --domain <id> --apply | dql model import <file-or-directory> --domain <id> --area <id> --dry-run|--apply');
+    console.error('Usage: zlens model list|validate|discover [path] | zlens model explain <relationship-id> [path] | zlens model apply-discovery [path] --domain <id> --apply | zlens model import <file-or-directory> --domain <id> --area <id> --dry-run|--apply');
     process.exitCode = 1;
     return;
   }
@@ -117,11 +117,11 @@ async function runModelImport(rest: string[], flags: CLIFlags): Promise<void> {
   const sourcePath = rest.find((value) => !value.startsWith('-'));
   const projectRoot = resolve('.');
   if (!sourcePath || !flags.domain || !flags.area || Boolean(flags.dryRun) === Boolean(flags.apply)) {
-    modelImportError(flags, 'INVALID_REQUEST', 'Usage: dql model import <file-or-directory> --domain <id> --area <id> --dry-run|--apply --format json');
+    modelImportError(flags, 'INVALID_REQUEST', 'Usage: zlens model import <file-or-directory> --domain <id> --area <id> --dry-run|--apply --format json');
     return;
   }
   if (!existsSync(resolve(projectRoot, 'dql.config.json'))) {
-    modelImportError(flags, 'PROJECT_NOT_FOUND', `No DQL project found at ${projectRoot}.`);
+    modelImportError(flags, 'PROJECT_NOT_FOUND', `No ZLens project found at ${projectRoot}.`);
     return;
   }
   let server: Server | undefined;
@@ -194,8 +194,8 @@ function usesWarehouseDiscovery(rest: string[]): boolean {
 }
 
 /**
- * `dql model discover [path] [--validate] [--domain <id>]` previews drafts
- * from the warehouse catalog; `dql model apply-discovery [path] --apply`
+ * `zlens model discover [path] [--validate] [--domain <id>]` previews drafts
+ * from the warehouse catalog; `zlens model apply-discovery [path] --apply`
  * writes them as drafts. `--validate` checks each join and naming-key grain
  * on the warehouse (aggregates only) and proposes the cardinality it saw.
  * `--query-history` (opt-in) also counts the joins recent queries ran.
@@ -207,7 +207,7 @@ async function runWarehouseDiscovery(subcommand: 'discover' | 'apply-discovery',
   // Opt-in: read recent query text in memory and keep only which columns were joined.
   const queryHistory = rest.includes('--query-history');
   const { discoverProjectWarehouseModel, applyProjectWarehouseDiscovery } = await import('../local-runtime.js');
-  const { QueryExecutor } = await import('@duckcodeailabs/dql-connectors');
+  const { QueryExecutor } = await import('@zlens/connectors');
   const executor = validate || queryHistory ? new QueryExecutor() : undefined;
   try {
     const report = await discoverProjectWarehouseModel(projectRoot, {
@@ -224,7 +224,7 @@ async function runWarehouseDiscovery(subcommand: 'discover' | 'apply-discovery',
         printWarehouseDiscovery(report);
         console.log(subcommand === 'apply-discovery'
           ? 'No files written. Re-run with --apply to add these drafts.'
-          : 'Add them as drafts with: dql model apply-discovery --apply' + (validate ? ' --validate' : ''));
+          : 'Add them as drafts with: zlens model apply-discovery --apply' + (validate ? ' --validate' : ''));
       }
       return;
     }
@@ -232,7 +232,7 @@ async function runWarehouseDiscovery(subcommand: 'discover' | 'apply-discovery',
     if (flags.format === 'json') {
       console.log(JSON.stringify({ catalogFingerprint: report.catalogFingerprint, applied }, null, 2));
     } else {
-      console.log('DQL warehouse discovery apply');
+      console.log('ZLens warehouse discovery apply');
       console.log(`  ${applied.changes} draft change(s) written:`);
       for (const path of applied.paths) console.log(`    ${path}`);
       console.log('  Everything is a draft. Review and certify on the Modeling page.');
@@ -247,7 +247,7 @@ async function runWarehouseDiscovery(subcommand: 'discover' | 'apply-discovery',
 
 function printWarehouseDiscovery(report: import('../warehouse-model-discovery.js').WarehouseDiscoveryReport): void {
   const newEntities = report.entities.filter((entity) => !entity.existing);
-  console.log(`DQL warehouse discovery (draft only${report.validated ? ', checked on the warehouse' : ''})`);
+  console.log(`ZLens warehouse discovery (draft only${report.validated ? ', checked on the warehouse' : ''})`);
   console.log(`  catalog ${report.catalogFingerprint.slice(0, 12)} · ${report.relations} relations · ${newEntities.length} new entities · ${report.relationships.length} new relationships${report.existingRelationships ? ` · ${report.existingRelationships} already modeled` : ''}`);
   if (report.queryHistory) {
     console.log('error' in report.queryHistory
@@ -288,7 +288,7 @@ function runDomainDiscovery(
   const pathArg = rest.find((value, index) => !value.startsWith('-') && !consumed.has(index));
   const projectRoot = resolve(pathArg ?? '.');
   if (!existsSync(resolve(projectRoot, 'dql.config.json'))) {
-    discoveryError(flags, 'DBT_PROJECT_NOT_FOUND', `No DQL project found at ${projectRoot} (missing dql.config.json).`);
+    discoveryError(flags, 'DBT_PROJECT_NOT_FOUND', `No ZLens project found at ${projectRoot} (missing dql.config.json).`);
     return;
   }
   const dbtManifestPath = resolveDbtManifestPath(
@@ -337,7 +337,7 @@ function runDomainDiscovery(
   if (flags.format === 'json') {
     console.log(JSON.stringify(output, null, 2));
   } else {
-    console.log('DQL domain discovery apply');
+    console.log('ZLens domain discovery apply');
     for (const result of results) console.log(`  ${result.status === 'created' ? '+' : result.status === 'existing' ? '=' : '!'} ${result.id}: ${result.message}`);
     printRelationshipCandidates(report);
     console.log('Skill candidates remain review-only drafts and were not written or certified.');
@@ -388,7 +388,7 @@ function printDiscoveryReport(report: DomainDiscoveryReport, flags: CLIFlags, ap
     console.log(JSON.stringify(applyPreview ? { mode: 'preview', ...report } : report, null, 2));
     return;
   }
-  console.log(`DQL dbt domain discovery${applyPreview ? ' apply preview' : ''} (deterministic, draft only)`);
+  console.log(`ZLens dbt domain discovery${applyPreview ? ' apply preview' : ''} (deterministic, draft only)`);
   console.log(`  source ${report.sourceFingerprint.slice(0, 12)} · ${report.memberships.length} models · ${report.unassignedModels.length} unassigned`);
   console.log('Domain proposals');
   if (report.proposals.length === 0) console.log('  none');
@@ -412,7 +412,7 @@ function printDiscoveryReport(report: DomainDiscoveryReport, flags: CLIFlags, ap
 /**
  * REL-004: show the relationships dbt already declares, with their exact key
  * pairs, instead of reporting a bare count the author cannot act on. These are
- * draft candidates — `dql model import` binds them, certification stays manual.
+ * draft candidates — `zlens model import` binds them, certification stays manual.
  */
 function printRelationshipCandidates(report: DomainDiscoveryReport): void {
   if (report.relationshipDraftCandidates.length === 0) {
@@ -424,7 +424,7 @@ function printRelationshipCandidates(report: DomainDiscoveryReport): void {
     const keys = candidate.keys.map((key) => `${key.from} = ${key.to}`).join(', ');
     console.log(`  ${candidate.fromDbtUniqueId} -> ${candidate.toDbtUniqueId} on ${keys}`);
   }
-  console.log('  Bind these with: dql model import <schema.yml> --domain <id> --apply');
+  console.log('  Bind these with: zlens model import <schema.yml> --domain <id> --apply');
 }
 
 function discoveryError(flags: CLIFlags, code: string, message: string): void {

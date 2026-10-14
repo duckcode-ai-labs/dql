@@ -1,7 +1,7 @@
 import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { buildManifest, parse } from '@duckcodeailabs/dql-core';
+import { buildManifest, parse } from '@zlens/core';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { AgentMessage, AgentProvider } from '../providers/types.js';
 import type { LocalContextPack } from '../metadata/catalog.js';

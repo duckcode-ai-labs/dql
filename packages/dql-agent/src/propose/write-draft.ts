@@ -1,5 +1,5 @@
 /**
- * Draft-queue writer for `dql propose`.
+ * Draft-queue writer for `zlens propose`.
  *
  * This reuses the exact draft-writing convention the MCP `suggest_block` and the
  * Tier-2 `upsertGeneratedDraft` paths already use:
@@ -17,7 +17,7 @@
 
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { renderSemanticBlockSource } from '@duckcodeailabs/dql-core';
+import { renderSemanticBlockSource } from '@zlens/core';
 
 export interface ProposedDraftRecord {
   slug: string;
@@ -217,7 +217,7 @@ function renderReviewHeader(rec: ProposedDraftRecord, draftPath: string): string
   const lines: string[] = [
     `// Proposed DRAFT from dbt model "${rec.sourceModel}". NOT certified.`,
     `// AI drafts, humans certify — review grain/outputs/invariants/SQL, then:`,
-    `//   dql certify --from-draft ${draftPath} --owner you@example.com`,
+    `//   zlens certify --from-draft ${draftPath} --owner you@example.com`,
     `//`,
     `// Certifier verdict at proposal time: NOT certifiable.`,
   ];

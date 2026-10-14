@@ -325,7 +325,7 @@ export interface BlockDeclNode extends BaseNode {
    * Which semantic metric an output column answers, and under which filter.
    * Ask uses it to serve this block as the certified answer to a question
    * about that metric when the block's SQL is too complex to compare. The
-   * metric must exist in the semantic layer; `dql compile` checks it.
+   * metric must exist in the semantic layer; `zlens compile` checks it.
    */
   metricMappings?: BlockMetricMappingEntry[];
   sourceSystems?: string[];

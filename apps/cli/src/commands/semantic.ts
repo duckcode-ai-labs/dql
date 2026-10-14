@@ -1,11 +1,11 @@
 /**
- * `dql semantic` CLI subcommands:
- *   dql semantic list [path]       — List metrics, dimensions, hierarchies
- *   dql semantic validate [path]   — Validate semantic layer definitions
- *   dql semantic query [path]      — Compose a SQL query from metric/dimension names
- *   dql semantic pull [path]       — Pull/refresh a remote semantic layer repo cache
- *   dql semantic import <provider> [path] — Import provider metadata into local semantic-layer YAML
- *   dql semantic sync [path]       — Re-run the last semantic import from manifest
+ * `zlens semantic` CLI subcommands:
+ *   zlens semantic list [path]       — List metrics, dimensions, hierarchies
+ *   zlens semantic validate [path]   — Validate semantic layer definitions
+ *   zlens semantic query [path]      — Compose a SQL query from metric/dimension names
+ *   zlens semantic pull [path]       — Pull/refresh a remote semantic layer repo cache
+ *   zlens semantic import <provider> [path] — Import provider metadata into local semantic-layer YAML
+ *   zlens semantic sync [path]       — Re-run the last semantic import from manifest
  */
 
 import { resolve, join } from 'node:path';
@@ -13,8 +13,8 @@ import { existsSync } from 'node:fs';
 import {
   resolveSemanticLayerWithDiagnostics,
   pullCachedRepo,
-} from '@duckcodeailabs/dql-core';
-import { QueryExecutor } from '@duckcodeailabs/dql-connectors';
+} from '@zlens/core';
+import { QueryExecutor } from '@zlens/connectors';
 import type { CLIFlags } from '../args.js';
 import { findProjectRoot, loadProjectConfig, normalizeProjectConnection, resolveProjectSemanticConfig } from '../local-runtime.js';
 import { loadSemanticImportManifest, performSemanticImport, syncSemanticImport } from '../semantic-import.js';
@@ -33,7 +33,7 @@ export async function runSemantic(
   const projectRoot = findProjectRoot(baseDir);
 
   if (!existsSync(join(projectRoot, 'dql.config.json'))) {
-    console.error(`No DQL project found at "${baseDir}". Run from a project root or pass a project path.`);
+    console.error(`No ZLens project found at "${baseDir}". Run from a project root or pass a project path.`);
     process.exit(1);
   }
 
@@ -46,7 +46,7 @@ export async function runSemantic(
     case 'validate':
       return semanticValidate(semanticConfig, projectRoot, flags);
     case 'query':
-      // `dql semantic query <metrics> [dims]`: the metrics are the first argument.
+      // `zlens semantic query <metrics> [dims]`: the metrics are the first argument.
       return semanticQuery(semanticConfig, projectRoot, rest, flags);
     case 'pull':
       return semanticPull(semanticConfig, flags);
@@ -56,15 +56,15 @@ export async function runSemantic(
       return semanticSync(projectRoot, flags);
     default:
       console.log(`
-  dql semantic — Semantic layer management
+  zlens semantic — Semantic layer management
 
   Subcommands:
-    dql semantic list [path]                 List all metrics, dimensions, hierarchies
-    dql semantic validate [path]             Validate semantic layer definitions
-    dql semantic query <metrics> [dims]      Compose a SQL query from metric/dimension names
-    dql semantic pull [path]                 Refresh remote semantic layer cache
-    dql semantic import <provider> [path]    Import provider metadata into local semantic-layer YAML
-    dql semantic sync [path]                 Refresh the last semantic import from manifest
+    zlens semantic list [path]                 List all metrics, dimensions, hierarchies
+    zlens semantic validate [path]             Validate semantic layer definitions
+    zlens semantic query <metrics> [dims]      Compose a SQL query from metric/dimension names
+    zlens semantic pull [path]                 Refresh remote semantic layer cache
+    zlens semantic import <provider> [path]    Import provider metadata into local semantic-layer YAML
+    zlens semantic sync [path]                 Refresh the last semantic import from manifest
 
   Options:
     --format json|text    Output format (default: text)
@@ -260,7 +260,7 @@ function semanticQuery(
   flags: CLIFlags,
 ): void {
   if (args.length === 0) {
-    console.error('Usage: dql semantic query <metric1,metric2> [dim1,dim2] [--format json]');
+    console.error('Usage: zlens semantic query <metric1,metric2> [dim1,dim2] [--format json]');
     process.exit(1);
   }
 
@@ -335,7 +335,7 @@ async function semanticImport(
 ): Promise<void> {
   const provider = rest[0] as 'dbt' | 'cubejs' | 'snowflake' | undefined;
   if (!provider || (provider !== 'dbt' && provider !== 'cubejs' && provider !== 'snowflake')) {
-    console.error('Usage: dql semantic import <dbt|cubejs|snowflake> [path] [--input <source-path>]');
+    console.error('Usage: zlens semantic import <dbt|cubejs|snowflake> [path] [--input <source-path>]');
     process.exit(1);
   }
 
@@ -381,7 +381,7 @@ async function semanticSync(
   const config = loadProjectConfig(projectRoot);
   const manifest = loadSemanticImportManifest(projectRoot);
   if (!manifest) {
-    console.error('No semantic import manifest found. Run `dql semantic import <provider>` first.');
+    console.error('No semantic import manifest found. Run `zlens semantic import <provider>` first.');
     process.exit(1);
   }
 

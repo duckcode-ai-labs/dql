@@ -85,7 +85,7 @@ describe('previewDbtMetricPatch', () => {
     expect(model.measures[0]).toEqual({ name: 'claimed_amount', agg: 'sum' });
     expect(after.metrics.find((metric) => metric.name === 'average_claimed_amount')).toEqual({
       name: 'average_claimed_amount', label: 'Average claimed amount', type: 'simple', type_params: { measure: 'average_claimed_amount' },
-      // Marks a metric Add metric wrote, so DQL reads it from the YAML until dbt parses it.
+      // Marks a metric Add metric wrote, so ZLens reads it from the YAML until dbt parses it.
       config: { meta: { dql: { authored: true } } },
     });
     expect(preview.fingerprint).toMatch(/^[a-f0-9]{64}$/);

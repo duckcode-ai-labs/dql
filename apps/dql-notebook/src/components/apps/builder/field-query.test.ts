@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { DatasetDescriptor, DatasetField } from '@duckcodeailabs/dql-core/datasets/descriptor';
+import type { DatasetDescriptor, DatasetField } from '@zlens/core/datasets/descriptor';
 import {
   EMPTY_TILE_QUERY,
   autoTileView,

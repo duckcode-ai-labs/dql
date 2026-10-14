@@ -6,7 +6,7 @@
  * caches grow without GC. Failing soft is right for availability and wrong for
  * diagnosability: "why is the agent dumb today" should be one glance, not a
  * debugging session. This module assembles a cheap, read-only report for
- * `dql doctor` and `/api/health`. It never throws and never blocks.
+ * `zlens doctor` and `/api/health`. It never throws and never blocks.
  */
 import { existsSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
@@ -19,7 +19,7 @@ import {
   readMetadataCatalogHealth,
   type AgentRunStoreHealth,
   type MetadataCatalogHealth,
-} from '@duckcodeailabs/dql-agent';
+} from '@zlens/agent';
 
 export interface DqlRetrievalHealthStatus {
   valueGrounding: {
@@ -82,12 +82,12 @@ export function resolveRetrievalHealthStatus(input: {
     warnings.push('Embeddings are the deterministic hashed fallback: paraphrase matching is lexical-only. Run a local Ollama embedding model or set an OpenAI key for semantic recall.');
     embeddingUpgrade = 'Install an Ollama embedding model (for example `ollama pull nomic-embed-text`) and restart the server:'
       + ' DQL detects it, switches to it, and re-embeds the index automatically. Set ai.embeddings in dql.config.json to choose'
-      + ' explicitly, or DQL_EMBEDDINGS_AUTODETECT=off to stay on the lexical fallback.';
+      + ' explicitly, or ZLENS_EMBEDDINGS_AUTODETECT=off to stay on the lexical fallback.';
   }
 
   const catalog = readMetadataCatalogHealth(defaultMetadataPath(input.projectRoot));
   if (!catalog.exists) {
-    warnings.push('Metadata catalog is missing — run dql compile (or ask once) to build the agent index.');
+    warnings.push('Metadata catalog is missing — run zlens compile (or ask once) to build the agent index.');
   } else if ((catalog.contextPackBytes ?? 0) > 100 * 1024 * 1024) {
     warnings.push(`Cached context packs occupy ${formatBytes(catalog.contextPackBytes ?? 0)} — consider clearing .dql/cache/metadata.sqlite (it rebuilds automatically).`);
   }

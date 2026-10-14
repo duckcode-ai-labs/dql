@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildStoryBindingCatalog } from '@duckcodeailabs/dql-core/apps/story-bindings';
+import { buildStoryBindingCatalog } from '@zlens/core/apps/story-bindings';
 import { buildSnapshotBody } from './snapshot-export';
 
 const item = (i: string, type: string, extra: Record<string, unknown> = {}) => ({ i, x: 0, y: 0, w: 6, h: 4, title: i, viz: { type }, ...extra }) as never;

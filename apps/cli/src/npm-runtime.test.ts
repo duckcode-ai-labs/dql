@@ -57,6 +57,6 @@ describe('resolveNpmInvocation (E2E-005)', () => {
       env: { PATH: '' },
       platform: 'darwin',
       exists: () => false,
-    })).toThrow('DQL_NPM_EXEC_PATH');
+    })).toThrow('ZLENS_NPM_EXEC_PATH');
   });
 });

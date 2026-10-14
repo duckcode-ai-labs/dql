@@ -7,13 +7,14 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { Server } from 'node:http';
 import { describe, expect, it, vi } from 'vitest';
-import { DuckDBConnector, QueryExecutor, type ConnectionConfig } from '@duckcodeailabs/dql-connectors';
-import type { AgentProvider } from '@duckcodeailabs/dql-agent';
-import { LocalAppStorage, defaultLocalAppsDbPath } from '@duckcodeailabs/dql-project';
+import { DuckDBConnector, QueryExecutor, type ConnectionConfig } from '@zlens/connectors';
+import type { AgentProvider } from '@zlens/agent';
+import { LocalAppStorage, defaultLocalAppsDbPath } from '@zlens/project';
 import { startLocalServer } from '../local-runtime.js';
 import { resolveRelativeDateRange } from './dashboard-dataset-filters.js';
+import { readEnv } from '@zlens/core';
 
-const configuredDuckDbConnectorRoot = process.env.DQL_APP_DATASETS_DUCKDB_CONNECTOR_ROOT?.trim();
+const configuredDuckDbConnectorRoot = readEnv('ZLENS_APP_DATASETS_DUCKDB_CONNECTOR_ROOT')?.trim();
 const duckDbIt = configuredDuckDbConnectorRoot ? it : it.skip;
 const fixtureRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../test/fixtures/app-datasets-pilot');
 const seedWarehouse = resolve(dirname(fileURLToPath(import.meta.url)), '../../../../scripts/seed-eval-warehouse.mjs');
@@ -3883,7 +3884,7 @@ async function composeBlockTiles(base: string, name: string, tiles: Array<[strin
 }
 
 function requireConfiguredDuckDbConnectorRoot(): string {
-  if (!configuredDuckDbConnectorRoot) throw new Error('DQL_APP_DATASETS_DUCKDB_CONNECTOR_ROOT is required for this real DuckDB pilot.');
+  if (!configuredDuckDbConnectorRoot) throw new Error('ZLENS_APP_DATASETS_DUCKDB_CONNECTOR_ROOT is required for this real DuckDB pilot.');
   // An explicitly configured root must load DuckDB.  Do not fall back to an
   // ambient package, which would turn an unavailable real-driver test into a
   // false pass.

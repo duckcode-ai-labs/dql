@@ -76,7 +76,7 @@ describe('metric synonyms travel in the same dbt YAML patch', () => {
   it('is read back by DQL as aliases of the metric once the YAML is applied', () => {
     const { root, manifestPath } = project();
     applyDbtMetricPatch(root, manifestPath, add, previewDbtMetricPatch(root, manifestPath, add).fingerprint);
-    // Without a manifest DQL reads the project YAML, the way a project that has not run dbt parse yet is read.
+    // Without a manifest ZLens reads the project YAML, the way a project that has not run dbt parse yet is read.
     rmSync(manifestPath);
     const layer = new DbtProvider().load({ provider: 'dbt' }, root);
     expect(layer.listMetrics().find((metric) => metric.name === 'average_claimed_amount')?.synonyms).toEqual(['avg claim', 'mean claim size']);

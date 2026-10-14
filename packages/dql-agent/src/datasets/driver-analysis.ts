@@ -9,9 +9,9 @@
  * investigation uses. No AI takes part, so every number is a governed query
  * result or plain arithmetic on one.
  */
-import type { DashboardDriverDefinition, DatasetDescriptor, TileQuery, TileQueryComparison } from '@duckcodeailabs/dql-core';
-import { datasetMeasureField, datasetPhysicalField, DRIVER_ALL_DIMENSIONS, MAX_DRIVER_DIMENSIONS } from '@duckcodeailabs/dql-core';
-import type { DatasetPhysicalField } from '@duckcodeailabs/dql-core';
+import type { DashboardDriverDefinition, DatasetDescriptor, TileQuery, TileQueryComparison } from '@zlens/core';
+import { datasetMeasureField, datasetPhysicalField, DRIVER_ALL_DIMENSIONS, MAX_DRIVER_DIMENSIONS } from '@zlens/core';
+import type { DatasetPhysicalField } from '@zlens/core';
 import { calendarComparisonBounds } from '../analytical-period-resolution.js';
 import { absDecimal, compareDecimal, divideDecimal, formatDecimal, parseExactDecimal, percentChange, subtractDecimal, sumDecimals, type ExactDecimal } from '../analytical-execution-graph.js';
 import { contributionTable, memberKey, memberLabel, type ContributionMemberInput } from '../research/investigation/contribution.js';

@@ -6,7 +6,7 @@
  * Certified/Uncertified badge are always present.
  */
 
-import type { AgentAnswer } from '@duckcodeailabs/dql-agent';
+import type { AgentAnswer } from '@zlens/agent';
 
 interface SlackResponse {
   response_type: 'in_channel' | 'ephemeral';

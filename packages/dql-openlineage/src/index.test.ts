@@ -90,12 +90,12 @@ describe('OpenLineage emitter', () => {
     expect(errors).toHaveLength(1);
   });
 
-  it('resolveConfig honors DQL_OPENLINEAGE_DISABLED', () => {
-    const prev = process.env.DQL_OPENLINEAGE_DISABLED;
-    process.env.DQL_OPENLINEAGE_DISABLED = '1';
+  it('resolveConfig honors ZLENS_OPENLINEAGE_DISABLED', () => {
+    const prev = process.env.ZLENS_OPENLINEAGE_DISABLED;
+    process.env.ZLENS_OPENLINEAGE_DISABLED = '1';
     const cfg = resolveConfig({ enabled: true, url: 'http://x' });
     expect(cfg.enabled).toBe(false);
-    if (prev === undefined) delete process.env.DQL_OPENLINEAGE_DISABLED;
-    else process.env.DQL_OPENLINEAGE_DISABLED = prev;
+    if (prev === undefined) delete process.env.ZLENS_OPENLINEAGE_DISABLED;
+    else process.env.ZLENS_OPENLINEAGE_DISABLED = prev;
   });
 });

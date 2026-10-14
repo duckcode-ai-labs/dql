@@ -6,7 +6,7 @@ import type {
   ProviderName,
   ProviderRunOptions,
   ProviderToolLoopOptions,
-} from '@duckcodeailabs/dql-agent';
+} from '@zlens/agent';
 
 /**
  * One unhealthy provider should not end a question when a healthy one is

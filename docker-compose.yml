@@ -1,6 +1,7 @@
-# Convenience compose file for running DQL in a container.
+# Convenience compose file for running ZLens in a container.
 #
-#   export DQL_SERVER_TOKEN="$(openssl rand -hex 24)"   # required, see below
+#   export ZLENS_SERVER_TOKEN="$(openssl rand -hex 24)"   # required, see below
+#   (the old DQL_* names still work as a fallback for every ZLENS_* setting)
 #   docker compose up                 # notebook on http://127.0.0.1:3474
 #   docker compose --profile slack up # also start the Slack bot on :3479
 #   docker compose --profile ollama up# also start an Ollama daemon on :11434
@@ -8,36 +9,39 @@
 # All ports are mapped to 127.0.0.1 on the host, so nothing else on your
 # network can reach the notebook.
 #
-# Inside the container the notebook binds 0.0.0.0, which DQL treats as a
-# non-loopback binding: it refuses to start without DQL_SERVER_TOKEN and
-# DQL_ALLOWED_ORIGINS, and every /api/ request except /api/health needs the
+# Inside the container the notebook binds 0.0.0.0, which ZLens treats as a
+# non-loopback binding: it refuses to start without ZLENS_SERVER_TOKEN and
+# ZLENS_ALLOWED_ORIGINS, and every /api/ request except /api/health needs the
 # token. `docker compose up` prints a link that carries it
 # (http://127.0.0.1:3474/#dql_token=...). Open that link once per browser tab.
 #
-# The `./` mount at /workspace lets this compose file serve either a real DQL
+# The `./` mount at /workspace lets this compose file serve either a real ZLens
 # project (when dql.config.json is present) or this framework repo. In the
 # framework repo case, the container creates an ignored starter project under
 # .dql/docker-starter/dql-starter and opens that project automatically.
 #
-# To try DQL on a sample dbt project, clone
+# To try ZLens on a sample dbt project, clone
 # https://github.com/duckcode-ai/jaffle-shop-duckdb and run docker compose
-# from a DQL project folder inside it.
+# from a ZLens project folder inside it.
 
 services:
   notebook:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: dql-notebook
+    container_name: zlens-notebook
     ports:
       - "127.0.0.1:3474:3474"
     volumes:
       - ./:/workspace
     environment:
-      DQL_HOST: 0.0.0.0
-      DQL_SERVER_TOKEN: ${DQL_SERVER_TOKEN:?set DQL_SERVER_TOKEN to a long random string before docker compose up}
+      ZLENS_HOST: 0.0.0.0
+      # Required: set ZLENS_SERVER_TOKEN (or the old DQL_SERVER_TOKEN) to a long
+      # random string before docker compose up. Compose cannot require one of two
+      # names, so without either the container stops at startup and says so.
+      ZLENS_SERVER_TOKEN: ${ZLENS_SERVER_TOKEN:-${DQL_SERVER_TOKEN:-}}
       # Add the origin you browse from if you map a different host port.
-      DQL_ALLOWED_ORIGINS: ${DQL_ALLOWED_ORIGINS:-http://127.0.0.1:3474,http://localhost:3474}
+      ZLENS_ALLOWED_ORIGINS: ${ZLENS_ALLOWED_ORIGINS:-${DQL_ALLOWED_ORIGINS:-http://127.0.0.1:3474,http://localhost:3474}}
       # Optional credentials. Empty values keep Docker startup smooth; the UI
       # Settings page shows what is configured and provider calls return clear
       # setup errors when a selected provider is missing credentials.
@@ -51,17 +55,17 @@ services:
       # http://ollama:11434 automatically.
       OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
       OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.1}
-      DQL_SLACK_WEBHOOK: ${DQL_SLACK_WEBHOOK:-}
-      DQL_SMTP_URL: ${DQL_SMTP_URL:-}
-      DQL_SMTP_FROM: ${DQL_SMTP_FROM:-}
-    command: ["dql", "notebook", "--host", "0.0.0.0", "--no-open"]
+      ZLENS_SLACK_WEBHOOK: ${ZLENS_SLACK_WEBHOOK:-${DQL_SLACK_WEBHOOK:-}}
+      ZLENS_SMTP_URL: ${ZLENS_SMTP_URL:-${DQL_SMTP_URL:-}}
+      ZLENS_SMTP_FROM: ${ZLENS_SMTP_FROM:-${DQL_SMTP_FROM:-}}
+    command: ["zlens", "notebook", "--host", "0.0.0.0", "--no-open"]
 
   slack:
     profiles: [slack]
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: dql-slack
+    container_name: zlens-slack
     ports:
       - "127.0.0.1:3479:3479"
     volumes:
@@ -76,12 +80,12 @@ services:
       GEMINI_MODEL: ${GEMINI_MODEL:-}
       OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://ollama:11434}
       OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.1}
-    command: ["dql", "slack", "serve", "--port", "3479"]
+    command: ["zlens", "slack", "serve", "--port", "3479"]
 
   ollama:
     profiles: [ollama]
     image: ollama/ollama:latest
-    container_name: dql-ollama
+    container_name: zlens-ollama
     ports:
       - "127.0.0.1:11434:11434"
     volumes:

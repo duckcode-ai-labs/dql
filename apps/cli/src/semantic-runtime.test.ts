@@ -2,8 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createWarehouseTargetIdentity, SemanticLayer } from '@duckcodeailabs/dql-core';
-import { physicalRelationBinding } from '@duckcodeailabs/dql-agent';
+import { createWarehouseTargetIdentity, SemanticLayer } from '@zlens/core';
+import { physicalRelationBinding } from '@zlens/agent';
 import { saveTestedSemanticRuntimeSettings } from './semantic-runtime-settings.js';
 import {
   assertMetricFlowAskTarget,
@@ -22,14 +22,14 @@ let priorMfBin: string | undefined;
 
 beforeEach(() => {
   root = mkdtempSync(join(tmpdir(), 'dql-semantic-runtime-'));
-  priorMfBin = process.env.DQL_METRICFLOW_BIN;
-  process.env.DQL_METRICFLOW_BIN = join(root, 'missing-mf');
+  priorMfBin = process.env.ZLENS_METRICFLOW_BIN;
+  process.env.ZLENS_METRICFLOW_BIN = join(root, 'missing-mf');
 });
 
 afterEach(() => {
   rmSync(root, { recursive: true, force: true });
-  if (priorMfBin === undefined) delete process.env.DQL_METRICFLOW_BIN;
-  else process.env.DQL_METRICFLOW_BIN = priorMfBin;
+  if (priorMfBin === undefined) delete process.env.ZLENS_METRICFLOW_BIN;
+  else process.env.ZLENS_METRICFLOW_BIN = priorMfBin;
 });
 
 function layer(): SemanticLayer {
@@ -274,7 +274,7 @@ describe('shared semantic runtime selector', () => {
       'printf "%s\\n" "SELECT revenue_ratio FROM metricflow_compiled"',
     ].join('\n'));
     chmodSync(bin, 0o755);
-    process.env.DQL_METRICFLOW_BIN = bin;
+    process.env.ZLENS_METRICFLOW_BIN = bin;
 
     const result = await compileSemanticRuntimeQuery({ metrics: ['revenue_ratio'], dimensions: [] }, {
       projectRoot: root,
@@ -297,7 +297,7 @@ describe('shared semantic runtime selector', () => {
       'printf "%s\\n" "SELECT revenue_ratio FROM metricflow_compiled"',
     ].join('\n'));
     chmodSync(bin, 0o755);
-    process.env.DQL_METRICFLOW_BIN = bin;
+    process.env.ZLENS_METRICFLOW_BIN = bin;
 
     // MetricFlow renders the SQL; the selected connection runs it. A profile
     // default target in another database changes nothing in the statement, so
@@ -360,7 +360,7 @@ describe('shared semantic runtime selector', () => {
       'printf "%s\\n" "SELECT customer_name, total_bcm FROM metricflow_compiled"',
     ].join('\n'));
     chmodSync(bin, 0o755);
-    process.env.DQL_METRICFLOW_BIN = bin;
+    process.env.ZLENS_METRICFLOW_BIN = bin;
     const frozenGrouping = 'order_id__customer__customer_name';
     const semanticLayer = new SemanticLayer({
       metrics: [{ name: 'total_bcm', label: 'Total BCM', description: '', domain: 'bcm', sql: 'SUM(bcm_amount)', type: 'sum', table: 'bcm_hdr', cube: 'bcm_hdr' }],
@@ -400,7 +400,7 @@ describe('shared semantic runtime selector', () => {
       'exit 1',
     ].join('\n'));
     chmodSync(bin, 0o755);
-    process.env.DQL_METRICFLOW_BIN = bin;
+    process.env.ZLENS_METRICFLOW_BIN = bin;
 
     await expect(compileSemanticRuntimeQuery({
       metrics: ['eu_gb_months_bcm_qty'],
@@ -428,7 +428,7 @@ describe('shared semantic runtime selector', () => {
       'printf "%s\\n" "SELECT previous_day_revenue FROM metricflow_compiled"',
     ].join('\n'));
     chmodSync(bin, 0o755);
-    process.env.DQL_METRICFLOW_BIN = bin;
+    process.env.ZLENS_METRICFLOW_BIN = bin;
 
     const result = await compileSemanticRuntimeQuery({
       metrics: ['previous_day_revenue'],
@@ -445,7 +445,7 @@ describe('shared semantic runtime selector', () => {
   });
 
   it('activates a managed project-local runtime immediately and forwards the configured profiles directory', async () => {
-    delete process.env.DQL_METRICFLOW_BIN;
+    delete process.env.ZLENS_METRICFLOW_BIN;
     mkdirSync(join(root, 'target'), { recursive: true });
     mkdirSync(join(root, '.dql', 'runtimes', 'metricflow', 'bin'), { recursive: true });
     writeFileSync(join(root, 'target', 'semantic_manifest.json'), '{}');
@@ -511,7 +511,7 @@ describe('describeRuntimeCompatibility (native cascade fallback)', () => {
   }
 
   it('falls back to native and carries the qualified name when no runtime is active', async () => {
-    // The suite's beforeEach points DQL_METRICFLOW_BIN at a missing path and no
+    // The suite's beforeEach points ZLENS_METRICFLOW_BIN at a missing path and no
     // dbt Cloud is configured, so the active adapter resolves to native.
     const { describeRuntimeCompatibility } = await import('./semantic-runtime.js');
     const result = await describeRuntimeCompatibility(root, bcmLayer(), ['total_bcm']);
@@ -711,11 +711,11 @@ describe('saveSemanticRuntimePreference (Phase 4)', () => {
 describe('explainMissingSemanticRuntime (actionable config diagnosis)', () => {
   it('tells the user MetricFlow is not found by the server, with fixes', async () => {
     const { explainMissingSemanticRuntime } = await import('./semantic-runtime.js');
-    // beforeEach points DQL_METRICFLOW_BIN at a missing path → mf unresolvable,
+    // beforeEach points ZLENS_METRICFLOW_BIN at a missing path → mf unresolvable,
     // and no dbt Cloud is configured → the PATH-guidance branch.
     const msg = await explainMissingSemanticRuntime(root);
     expect(msg).toContain('MetricFlow is not on this server’s PATH');
-    expect(msg).toContain('DQL_METRICFLOW_BIN');
+    expect(msg).toContain('ZLENS_METRICFLOW_BIN');
     expect(msg).toContain('restart');
     expect(msg).not.toContain('Configure dbt Cloud Semantic Layer or a compatible local MetricFlow runtime for derived metrics');
   });

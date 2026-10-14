@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { applyAppBuildDraftOperations, createAppBuildDraft, type DashboardDocument } from '@duckcodeailabs/dql-core';
+import { applyAppBuildDraftOperations, createAppBuildDraft, type DashboardDocument } from '@zlens/core';
 import { LocalAppStorage } from './local-app-storage.js';
 
 let dir: string;

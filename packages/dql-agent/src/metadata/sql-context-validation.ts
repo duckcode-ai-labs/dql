@@ -1,4 +1,4 @@
-import { analyzeSqlReferences } from '@duckcodeailabs/dql-core';
+import { analyzeSqlReferences } from '@zlens/core';
 import type {
   LocalContextPack,
   MetadataAgentIntent,
@@ -11,7 +11,7 @@ import { aggregationIntegrityIssuesForSql } from './grain-ledger.js';
 import { internalRelationIdsInSql } from './sql-grounding.js';
 import { buildAggregationSafetyProof } from '../aggregation-safety-proof.js';
 import { parsePhysicalIdentifier, physicalRelationIdentity } from '../ask-pipeline/physical-binding.js';
-import type { AggregationSafetyProofV1 } from '@duckcodeailabs/dql-core';
+import type { AggregationSafetyProofV1 } from '@zlens/core';
 
 export type SqlContextValidationCode =
   | 'unknown_relation'

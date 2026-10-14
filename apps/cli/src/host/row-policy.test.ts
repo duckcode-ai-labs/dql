@@ -5,11 +5,12 @@ import { tmpdir } from 'node:os';
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { QueryExecutor, type ConnectionConfig, type DatabaseConnector, type QueryResult } from '@duckcodeailabs/dql-connectors';
+import { QueryExecutor, type ConnectionConfig, type DatabaseConnector, type QueryResult } from '@zlens/connectors';
 import { startLocalServer } from '../local-runtime.js';
 import { withRequestContext, type DqlHostHooks, type DqlModelProvider, type DqlPrincipal } from './request-context.js';
-import { composeFailedText, statementFailure } from '@duckcodeailabs/dql-agent';
+import { composeFailedText, statementFailure } from '@zlens/agent';
 import { CredentialsRefusedError, RowPolicyRefusedError, WarehouseStatementError, withHostQueryHooks, withRowPolicy, type DqlCredentialsHook, type DqlQueryContext, type DqlRowPolicy } from './row-policy.js';
+import { readEnv } from '@zlens/core';
 
 /**
  * RFC 0010 HH-3: one query path. With a host row policy, every statement the
@@ -132,7 +133,7 @@ describe('the one query path (RFC 0010 HH-3)', () => {
       const executor = withRowPolicy(inner, (() => junk) as unknown as DqlRowPolicy);
       const refusal = await executor.executePositional('SELECT * FROM claims', [], connection).then(() => undefined, (error: unknown) => error);
       expect(refusal, String(junk)).toBeInstanceOf(RowPolicyRefusedError);
-      expect((refusal as Error).message).toBe('DQL could not check what you may see, so it did not run this query.');
+      expect((refusal as Error).message).toBe('ZLens could not check what you may see, so it did not run this query.');
       expect(inner.ran).toEqual([]);
     }
   });
@@ -196,7 +197,7 @@ describe('the one query path (RFC 0010 HH-3)', () => {
       .map((file) => relative(src, file).replaceAll('\\', '/'))
       .sort();
     // One-shot CLI commands own their process; the block scheduler runs only
-    // under `dql notebook` (schedules join the one path in HH-8); `dql agent`
+    // under `zlens notebook` (schedules join the one path in HH-8); `zlens agent`
     // tools run in the CLI, not the server.
     const allowed = new Set([
       'commands/certify.ts', 'commands/doctor.ts', 'commands/model.ts', 'commands/notebook.ts', 'commands/preview.ts',
@@ -206,7 +207,7 @@ describe('the one query path (RFC 0010 HH-3)', () => {
     expect(direct.filter((file) => !allowed.has(file))).toEqual([]);
     for (const pkg of ['dql-agent', 'dql-mcp']) {
       const manifest = JSON.parse(readFileSync(resolve(here, `../../../../packages/${pkg}/package.json`), 'utf-8')) as { dependencies?: Record<string, string> };
-      expect(Object.keys(manifest.dependencies ?? {}), `${pkg} must reach warehouses only through the server`).not.toContain('@duckcodeailabs/dql-connectors');
+      expect(Object.keys(manifest.dependencies ?? {}), `${pkg} must reach warehouses only through the server`).not.toContain('@zlens/connectors');
     }
   });
 });
@@ -261,7 +262,7 @@ describe('whose credentials (RFC 0010 HH-4)', () => {
       const executor = withHostQueryHooks(inner, { credentials: (() => junk) as unknown as DqlCredentialsHook });
       const refusal = await executor.executePositional('SELECT 1', [], service).then(() => undefined, (error: unknown) => error);
       expect(refusal, JSON.stringify(junk)).toBeInstanceOf(CredentialsRefusedError);
-      expect((refusal as Error).message).toBe('DQL could not get your warehouse sign-in. Reconnect and try again.');
+      expect((refusal as Error).message).toBe('ZLens could not get your warehouse sign-in. Reconnect and try again.');
       expect(inner.ran).toEqual([]);
     }
   });
@@ -272,7 +273,7 @@ describe('whose credentials (RFC 0010 HH-4)', () => {
   });
 });
 
-const connectorRoot = process.env.DQL_APP_DATASETS_DUCKDB_CONNECTOR_ROOT?.trim();
+const connectorRoot = readEnv('ZLENS_APP_DATASETS_DUCKDB_CONNECTOR_ROOT')?.trim();
 const duckDbIt = connectorRoot ? it : it.skip;
 const fixtureRoot = resolve(here, '../../test/fixtures/app-datasets-pilot');
 const seedWarehouse = resolve(here, '../../../../scripts/seed-eval-warehouse.mjs');

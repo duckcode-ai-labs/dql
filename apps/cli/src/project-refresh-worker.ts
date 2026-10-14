@@ -2,8 +2,8 @@ import { createHash } from 'node:crypto';
 import { rename, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { parentPort, workerData } from 'node:worker_threads';
-import { buildManifest } from '@duckcodeailabs/dql-core';
-import { defaultKgPath, reindexProject } from '@duckcodeailabs/dql-agent';
+import { buildManifest } from '@zlens/core';
+import { defaultKgPath, reindexProject } from '@zlens/agent';
 
 export interface ProjectRefreshWorkerInput {
   projectRoot: string;

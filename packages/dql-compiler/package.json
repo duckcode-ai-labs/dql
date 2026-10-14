@@ -1,5 +1,5 @@
 {
-  "name": "@duckcodeailabs/dql-compiler",
+  "name": "@zlens/dql-compiler",
   "version": "1.17.3",
   "description": "DQL compiler: IR lowering, Vega-Lite code generation, HTML/CSS emitting",
   "license": "Apache-2.0",
@@ -38,7 +38,7 @@
     "access": "public"
   },
   "dependencies": {
-    "@duckcodeailabs/dql-core": "workspace:*"
+    "@zlens/core": "workspace:*"
   },
   "devDependencies": {
     "vitest": "^3.0.0",

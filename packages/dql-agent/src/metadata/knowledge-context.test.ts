@@ -3,7 +3,7 @@ import { cpSync, existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
-import { buildManifest } from '@duckcodeailabs/dql-core';
+import { buildManifest } from '@zlens/core';
 import { resolveDomainContextEnvelope } from '../domain-context.js';
 import { materializeKnowledgeLensSkills } from '../answer-loop.js';
 import { loadSkills } from '../skills/loader.js';

@@ -43,7 +43,7 @@ import { PageAlertsMenu } from './PageAlertsMenu';
 import { ShareLinkMenu } from './ShareLinkMenu';
 import { buildSnapshotBody, downloadFile, printSnapshot, snapshotToPng } from './snapshot-export';
 import { CanvasPageFrame } from './CanvasPageFrame';
-import { buildStoryBindingCatalog, type StoryBindingCatalog, type StoryBindingTileInput } from '@duckcodeailabs/dql-core/apps/story-bindings';
+import { buildStoryBindingCatalog, type StoryBindingCatalog, type StoryBindingTileInput } from '@zlens/core/apps/story-bindings';
 import { driverProbeFor } from './driver-probe';
 import { drillFilters } from './mark-actions';
 import { useMarkInteractions } from './useMarkInteractions';
@@ -88,9 +88,9 @@ import {
   type DatasetEvidenceRow,
 } from './dataset-tile-evidence';
 import { datasetComparisonSummary } from './app-dataset-comparison';
-import { datasetTileVisualizationCompatibility } from '@duckcodeailabs/dql-core/apps/tile-query';
-import { pivotLayout } from '@duckcodeailabs/dql-core/apps/pivot';
-import { encodingFromQuery } from '@duckcodeailabs/dql-core/apps/viz-encoding';
+import { datasetTileVisualizationCompatibility } from '@zlens/core/apps/tile-query';
+import { pivotLayout } from '@zlens/core/apps/pivot';
+import { encodingFromQuery } from '@zlens/core/apps/viz-encoding';
 import { PivotTable } from './PivotTable';
 import { KpiCard, usesKpiCard } from './KpiCard';
 
@@ -448,7 +448,7 @@ export function DashboardRenderer({
     const proof = `signed by project key ${signed.keyId}, ${signed.figures} ${signed.figures === 1 ? 'figure' : 'figures'} recorded`;
     if (format === 'html') {
       downloadFile(signed.fileName, signed.html);
-      return `Saved ${signed.fileName}: ${proof}. Check it with dql app verify.`;
+      return `Saved ${signed.fileName}: ${proof}. Check it with zlens app verify.`;
     }
     if (format === 'png') {
       const fileName = signed.fileName.replace(/\.signed\.html$/, '.png');
@@ -2573,7 +2573,7 @@ function DatasetsDisabledTileNotice(): JSX.Element {
       >
         {state === 'enabling' ? 'Turning on…' : 'Turn on field-based tiles'}
       </button>
-      {state === 'failed' ? <small>DQL could not update dql.config.json.</small> : null}
+      {state === 'failed' ? <small>ZLens could not update dql.config.json.</small> : null}
     </div>
   );
 }

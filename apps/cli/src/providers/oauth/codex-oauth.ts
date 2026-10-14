@@ -8,7 +8,7 @@ import {
   type AgentProvider,
   type AgentMessage,
   type ProviderRunOptions,
-} from '@duckcodeailabs/dql-agent';
+} from '@zlens/agent';
 import {
   getCodexCredentials,
   setCodexCredentials,

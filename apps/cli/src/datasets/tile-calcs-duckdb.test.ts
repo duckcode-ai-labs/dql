@@ -2,16 +2,17 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { QueryExecutor, type ConnectionConfig } from '@duckcodeailabs/dql-connectors';
-import type { DatasetDescriptor, TileQuery } from '@duckcodeailabs/dql-core';
+import { QueryExecutor, type ConnectionConfig } from '@zlens/connectors';
+import type { DatasetDescriptor, TileQuery } from '@zlens/core';
 import { compileDatasetTileQuery } from './tile-query-compiler.js';
+import { readEnv } from '@zlens/core';
 
 /**
  * RFC 0009 step 3 exit check: every calculation, run on real DuckDB, matches
  * an independent computation from the raw rows. Needs a DuckDB connector root
- * (DQL_APP_DATASETS_DUCKDB_CONNECTOR_ROOT), like the other real-DuckDB tests.
+ * (ZLENS_APP_DATASETS_DUCKDB_CONNECTOR_ROOT), like the other real-DuckDB tests.
  */
-const connectorRoot = process.env.DQL_APP_DATASETS_DUCKDB_CONNECTOR_ROOT?.trim();
+const connectorRoot = readEnv('ZLENS_APP_DATASETS_DUCKDB_CONNECTOR_ROOT')?.trim();
 const duckDbIt = connectorRoot ? it : it.skip;
 
 const descriptor = {

@@ -9,7 +9,7 @@
 #
 # HOW TO RUN (credentialed / scheduled — needs a provider + a live runtime whose
 # warehouse is seeded with the jaffle-supply-chain data):
-#   dql agent eval apps/cli/test/fixtures/jaffle-supply-chain/agent-evals/class-b-semantic.agent-evals.yml \
+#   zlens agent eval apps/cli/test/fixtures/jaffle-supply-chain/agent-evals/class-b-semantic.agent-evals.yml \
 #     --execute --judge --format json \
 #     --min-execution-match 1 --min-judge-pass 1 --max-wrong-certified 0
 #
@@ -24,7 +24,7 @@
 # the grain-safe and the naive (fan-out) query against a real SQL engine and
 # asserts the grain-safe result equals these rows while the naive query inflates.
 # To run the credentialed execution-match gate, seed a warehouse from seed.json
-# (scripts/seed-eval-warehouse.mjs) and point `dql serve` at it. Column aliases
+# (scripts/seed-eval-warehouse.mjs) and point `zlens serve` at it. Column aliases
 # and row order must match the seed-backed rows, so the fixture steers the shape
 # via sqlContains hints; treat rowsEqual as exact.
 #

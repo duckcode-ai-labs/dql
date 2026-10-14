@@ -5,21 +5,22 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { QueryExecutor, type ConnectionConfig } from '@duckcodeailabs/dql-connectors';
+import { QueryExecutor, type ConnectionConfig } from '@zlens/connectors';
 import { startLocalServer } from '../local-runtime.js';
 import { saveProviderSettings } from '../settings/provider-settings.js';
+import { readEnv } from '@zlens/core';
 
 /**
  * The model boundary: no OSS path sends result values to a model without `isInBoundary` or a local-model check
  * that is true. RFC 0010 "Privacy boundary": "The OSS rule stays: result values reach a model only when the model
- * runs on this machine." Without a host, the check DQL makes before a chart question or a story draft carries the
+ * runs on this machine." Without a host, the check ZLens makes before a chart question or a story draft carries the
  * chart's rows is "the provider is Ollama and its configured base URL is loopback".
  *
  * Here the configured Ollama is on loopback but not running. Global fetch is stubbed (nothing leaves this machine)
  * and records any request to `ollama` or `host.docker.internal`. Expected: no prompt or chart value leaves loopback.
  */
 const here = dirname(fileURLToPath(import.meta.url));
-const connectorRoot = process.env.DQL_APP_DATASETS_DUCKDB_CONNECTOR_ROOT?.trim();
+const connectorRoot = readEnv('ZLENS_APP_DATASETS_DUCKDB_CONNECTOR_ROOT')?.trim();
 const duckIt = connectorRoot ? it : it.skip;
 const fixtureRoot = resolve(here, '../../test/fixtures/app-datasets-pilot');
 const seedWarehouse = resolve(here, '../../../../scripts/seed-eval-warehouse.mjs');
@@ -128,8 +129,8 @@ describe('values in prompt text on paths that never ask isInBoundary (source gua
 
 describe('a story draft outside the boundary', () => {
   it('gives a model outside the boundary binding names and labels only: no member of a grouped tile (a result value) is in the prompt', async () => {
-    const { buildStoryBindingCatalog } = await import('@duckcodeailabs/dql-core');
-    const { storyDraftUserPrompt } = await import('@duckcodeailabs/dql-agent');
+    const { buildStoryBindingCatalog } = await import('@zlens/core');
+    const { storyDraftUserPrompt } = await import('@zlens/agent');
     const catalog = buildStoryBindingCatalog([{
       tileId: 'claims-by-member', status: 'ok', title: 'Open claims by member',
       result: { columns: ['member_name', 'open_claims'], rows: [{ member_name: 'CANARY-MEMBER-Jane Roe', open_claims: 3 }, { member_name: 'CANARY-MEMBER-John Doe', open_claims: 2 }] },

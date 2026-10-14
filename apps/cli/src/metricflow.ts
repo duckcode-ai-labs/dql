@@ -1,6 +1,7 @@
 import { existsSync, statSync } from 'node:fs';
 import { join, resolve, dirname } from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
+import { readEnv } from '@zlens/core';
 
 /**
  * Run a MetricFlow command without stopping the world.
@@ -184,7 +185,7 @@ export function managedMetricFlowBin(projectRoot: string): string {
 const metricFlowCliCache = new Map<string, MetricFlowCliResolution>();
 
 export function resolveMetricFlowCli(projectRoot?: string): MetricFlowCliResolution | null {
-  const explicit = process.env.DQL_METRICFLOW_BIN || process.env.METRICFLOW_BIN;
+  const explicit = readEnv('ZLENS_METRICFLOW_BIN') || process.env.METRICFLOW_BIN;
   const candidates: Array<{ bin: string; source: MetricFlowCliSource }> = explicit
     ? [{ bin: explicit, source: 'env' }]
     : [
@@ -258,7 +259,7 @@ export async function listMetricFlowDimensions(
   if (!existsSync(manifestPath) || request.metrics.length === 0) return [];
 
   const resolvedCli = resolveMetricFlowCli(request.projectRoot);
-  const bin = resolvedCli?.bin ?? process.env.DQL_METRICFLOW_BIN ?? process.env.METRICFLOW_BIN ?? 'mf';
+  const bin = resolvedCli?.bin ?? readEnv('ZLENS_METRICFLOW_BIN') ?? process.env.METRICFLOW_BIN ?? 'mf';
   let mtime = '';
   try { mtime = String(statSync(manifestPath).mtimeMs); } catch { /* ignore */ }
   const cacheKey = `${bin}::${mtime}::${[...request.metrics].sort().join(',')}`;
@@ -346,7 +347,7 @@ export function hasDbtSemanticManifest(projectRoot: string, configuredPath?: str
 
 /**
  * Where `dbt parse` writes the semantic manifest for THIS project: beside the
- * dbt manifest, under the dbt project directory — which is the DQL project
+ * dbt manifest, under the dbt project directory — which is the ZLens project
  * root only when the two coincide. A lookup under the DQL root alone said
  * "no MetricFlow manifest" for every project that wraps a dbt repository,
  * and silently compiled derived metrics on the native composer instead.
@@ -400,7 +401,7 @@ export async function compileMetricFlowQuery(request: MetricFlowQueryRequest): P
   }
 
   const resolvedCli = resolveMetricFlowCli(request.projectRoot);
-  const bin = resolvedCli?.bin ?? process.env.DQL_METRICFLOW_BIN ?? process.env.METRICFLOW_BIN ?? 'mf';
+  const bin = resolvedCli?.bin ?? readEnv('ZLENS_METRICFLOW_BIN') ?? process.env.METRICFLOW_BIN ?? 'mf';
   const mode = metricFlowCompileMode(resolvedCli?.version ?? '');
   let manifestMtime = '';
   try { manifestMtime = String(statSync(join(dbtRoot, 'target', 'semantic_manifest.json')).mtimeMs); } catch { /* ignore */ }
@@ -485,7 +486,7 @@ export async function compileMetricFlowQuery(request: MetricFlowQueryRequest): P
   if (result.error) {
     if ((result.error as NodeJS.ErrnoException).code === 'ENOENT') {
       throw new MetricFlowUnavailableError(
-        'MetricFlow CLI was not found. Install dbt Semantic Layer dependencies so `mf` is on PATH, or set DQL_METRICFLOW_BIN to the MetricFlow executable.',
+        'MetricFlow CLI was not found. Install dbt Semantic Layer dependencies so `mf` is on PATH, or set ZLENS_METRICFLOW_BIN to the MetricFlow executable.',
       );
     }
     throw result.error;

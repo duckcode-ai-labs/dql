@@ -86,8 +86,8 @@ test('every publish command carries its explicit npm dist-tag and preserves otp 
     ['publish', '--access', 'public', '--no-git-checks', '--tag', 'latest'],
   );
   assert.equal(
-    exactPackageSpec('@duckcodeailabs/dql-cli', '1.14.3-rc.1'),
-    '@duckcodeailabs/dql-cli@1.14.3-rc.1',
+    exactPackageSpec('@zlens/cli', '1.14.3-rc.1'),
+    '@zlens/cli@1.14.3-rc.1',
   );
 });
 
@@ -106,7 +106,7 @@ test('release package manifests must share one valid SemVer version', () => {
   );
 });
 
-test('the current RC release inventory has exactly the intended public packages and excludes private app versions', () => {
+test('the release inventory has exactly the intended public packages and excludes private app versions', () => {
   const expectedPaths = [
     'packages/dql-telemetry',
     'packages/dql-openlineage',
@@ -132,11 +132,14 @@ test('the current RC release inventory has exactly the intended public packages 
 
   const releaseManifests = readReleasePackageManifests(root);
   assert.equal(releaseManifests.length, 19);
-  assert.equal(assertSynchronizedReleaseVersions(releaseManifests), '1.14.3-rc.1');
+  // Version-agnostic: every release bumps the workspace in lockstep, so the
+  // CLI's own version is the one the whole inventory must share.
+  const releaseVersion = JSON.parse(readFileSync(path.join(root, 'apps/cli/package.json'), 'utf8')).version;
+  assert.equal(assertSynchronizedReleaseVersions(releaseManifests), releaseVersion);
   assert.equal(
     JSON.parse(readFileSync(path.join(root, 'packages/create-dql-app/templates/starter/package.json'), 'utf8'))
-      .devDependencies['@duckcodeailabs/dql-cli'],
-    '^1.14.3-rc.1',
+      .devDependencies['@zlens/cli'],
+    `^${releaseVersion}`,
   );
   assert.deepEqual(
     [

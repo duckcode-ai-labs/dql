@@ -28,7 +28,7 @@ export function appLibraryWords(reader: boolean): {
       filters: ['all', 'drafts', 'private', 'shared', 'fav'],
       label: (filter) => FILTER_LABELS[filter],
       localCounts: true,
-      loadingDetail: 'Reading local app files from this DQL project.',
+      loadingDetail: 'Reading local app files from this ZLens project.',
       emptyDetail: 'Change the filter or start a new App above. New work always begins as a local private draft.',
       appNote: (app) => `${app.name} consumption surface for ${app.domain}.`,
     };

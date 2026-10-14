@@ -2,7 +2,7 @@
 name = "dql-desktop"
 version = "1.0.4"
 edition = "2021"
-description = "Tauri wrapper for the DQL notebook."
+description = "Tauri wrapper for the ZLens notebook."
 license = "Apache-2.0"
 
 [build-dependencies]

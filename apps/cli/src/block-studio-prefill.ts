@@ -1,2 +1,2 @@
-export { prefillCertificationMetadata } from '@duckcodeailabs/dql-core';
-export type { CertificationPrefill, CertificationPrefillHints, CertificationSuggestion } from '@duckcodeailabs/dql-core';
+export { prefillCertificationMetadata } from '@zlens/core';
+export type { CertificationPrefill, CertificationPrefillHints, CertificationSuggestion } from '@zlens/core';

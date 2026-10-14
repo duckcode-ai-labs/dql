@@ -5,21 +5,21 @@ export default defineConfig({
   resolve: {
     alias: [
       {
-        find: "@duckcodeailabs/dql-core/format",
+        find: "@zlens/core/format",
         replacement: resolve(
           __dirname,
           "../../packages/dql-core/src/format/index.ts",
         ),
       },
       {
-        find: "@duckcodeailabs/dql-core/lineage",
+        find: "@zlens/core/lineage",
         replacement: resolve(
           __dirname,
           "../../packages/dql-core/src/lineage/index.ts",
         ),
       },
       {
-        find: "@duckcodeailabs/dql-core/artifacts",
+        find: "@zlens/core/artifacts",
         replacement: resolve(
           __dirname,
           "../../packages/dql-core/src/artifacts/index.ts",
@@ -30,28 +30,28 @@ export default defineConfig({
       // integration tests exercise their TypeScript sources rather than trying
       // to append a path to `src/index.ts`.
       {
-        find: "@duckcodeailabs/dql-core/datasets/aggregate-expression.node",
+        find: "@zlens/core/datasets/aggregate-expression.node",
         replacement: resolve(
           __dirname,
           "../../packages/dql-core/src/datasets/aggregate-expression.node.ts",
         ),
       },
       {
-        find: "@duckcodeailabs/dql-core/datasets/source-authoring.node",
+        find: "@zlens/core/datasets/source-authoring.node",
         replacement: resolve(
           __dirname,
           "../../packages/dql-core/src/datasets/source-authoring.node.ts",
         ),
       },
       {
-        find: "@duckcodeailabs/dql-core/datasets/component-proof.node",
+        find: "@zlens/core/datasets/component-proof.node",
         replacement: resolve(
           __dirname,
           "../../packages/dql-core/src/datasets/component-proof.node.ts",
         ),
       },
       {
-        find: "@duckcodeailabs/dql-core",
+        find: "@zlens/core",
         replacement: resolve(__dirname, "../../packages/dql-core/src/index.ts"),
       },
     ],
@@ -64,7 +64,7 @@ export default defineConfig({
     // connector driver install (a server started on a project whose connection needs one) uses npm's cache only,
     // against a registry on loopback that answers nothing.
     env: {
-      DQL_DISABLE_VERSION_CHECK: '1',
+      ZLENS_DISABLE_VERSION_CHECK: '1',
       npm_config_offline: 'true',
       npm_config_registry: 'http://127.0.0.1:9/',
     },

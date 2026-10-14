@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { dqlToolNamesForSurface, getDqlToolDefinition, type DqlToolName } from '@duckcodeailabs/dql-agent';
+import { dqlToolNamesForSurface, getDqlToolDefinition, type DqlToolName } from '@zlens/agent';
 import { DQL_MCP_INSTRUCTIONS, __test__ } from '../server.js';
 import type { DQLContext } from '../context.js';
 import { approveHintInput, listHintsInput, recordCorrectionInput } from '../tools/hints.js';
@@ -24,7 +24,7 @@ import { listDimensionsInput, listMetricsInput } from '../tools/semantic.js';
 import { suggestBlockInput } from '../tools/suggest-block.js';
 import { askDqlInput, buildDqlAppInput, buildDqlBlockInput, inspectDqlProjectInput } from '../tools/workflows.js';
 
-describe('DQL MCP server instructions', () => {
+describe('ZLens MCP server instructions', () => {
   it('describe exact certified routing and dynamic metadata SQL for custom grains', () => {
     expect(DQL_MCP_INSTRUCTIONS).toContain('exact saved block');
     expect(DQL_MCP_INSTRUCTIONS).toContain('direct KPI');
@@ -216,14 +216,14 @@ describe('DQL MCP server instructions', () => {
   });
 
   it('compacts MCP tool JSON by default to reduce token load', () => {
-    const previous = process.env.DQL_MCP_PRETTY_JSON;
+    const previous = process.env.ZLENS_MCP_PRETTY_JSON;
     try {
-      delete process.env.DQL_MCP_PRETTY_JSON;
+      delete process.env.ZLENS_MCP_PRETTY_JSON;
       const wrapped = __test__.wrap({ answer: 'ok', rows: [{ id: 1 }] });
       expect(wrapped.content[0]?.text).toBe('{"answer":"ok","rows":[{"id":1}]}');
     } finally {
-      if (previous === undefined) delete process.env.DQL_MCP_PRETTY_JSON;
-      else process.env.DQL_MCP_PRETTY_JSON = previous;
+      if (previous === undefined) delete process.env.ZLENS_MCP_PRETTY_JSON;
+      else process.env.ZLENS_MCP_PRETTY_JSON = previous;
     }
   });
 });

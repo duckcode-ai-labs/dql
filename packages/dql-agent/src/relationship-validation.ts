@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { relationshipKeyTypes, relationshipValidationProofFingerprint, type DQLManifest, type ManifestFanoutPolicy, type ManifestRelationshipCardinality, type ManifestRelationshipValidationEvidence } from '@duckcodeailabs/dql-core';
+import { relationshipKeyTypes, relationshipValidationProofFingerprint, type DQLManifest, type ManifestFanoutPolicy, type ManifestRelationshipCardinality, type ManifestRelationshipValidationEvidence } from '@zlens/core';
 
 /**
  * ONE PROOF, TWO ASKERS. Domain Studio's Validate action and Ask's warehouse

@@ -2,9 +2,9 @@ import { cpSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { analyze, buildManifest, parse } from '@duckcodeailabs/dql-core';
-import { Certifier } from '@duckcodeailabs/dql-governance';
-import type { BlockRecord, TestResultSummary } from '@duckcodeailabs/dql-project';
+import { analyze, buildManifest, parse } from '@zlens/core';
+import { Certifier } from '@zlens/governance';
+import type { BlockRecord, TestResultSummary } from '@zlens/project';
 
 const repoRoot = resolve(process.cwd(), '../..');
 const templatesRoot = join(repoRoot, 'packages/create-dql-app/templates');

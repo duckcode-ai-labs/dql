@@ -1,5 +1,5 @@
 import { useCallback, useState, type ReactNode } from 'react';
-import type { TileQuery } from '@duckcodeailabs/dql-core/apps/tile-query';
+import type { TileQuery } from '@zlens/core/apps/tile-query';
 import type { DashboardDocumentResponse, DashboardDriverDefinitionV1, DashboardRunResponse } from '../../api/client';
 import type { ThemeMode } from '../../themes/notebook-theme';
 import type { MarkPointer } from '../output/echarts/EChartsChart';

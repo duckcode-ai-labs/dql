@@ -1,8 +1,8 @@
 {
-  "name": "@duckcodeailabs/desktop",
+  "name": "@zlens/desktop",
   "version": "1.6.1",
   "private": true,
-  "description": "Tauri desktop wrapper for the DQL notebook + CLI sidecar.",
+  "description": "Tauri desktop wrapper for the ZLens notebook + CLI sidecar.",
   "license": "Apache-2.0",
   "scripts": {
     "dev": "tauri dev",
@@ -11,7 +11,7 @@
     "tauri": "tauri"
   },
   "dependencies": {
-    "@duckcodeailabs/dql-notebook-app": "workspace:*"
+    "@zlens/notebook-app": "workspace:*"
   },
   "devDependencies": {
     "@tauri-apps/cli": "2.1.0"

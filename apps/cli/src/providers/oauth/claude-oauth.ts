@@ -12,7 +12,7 @@ import {
   type NativeToolLoopResult,
   type ProviderRunOptions,
   type ProviderToolLoopOptions,
-} from '@duckcodeailabs/dql-agent';
+} from '@zlens/agent';
 import {
   getClaudeCredentials,
   setClaudeCredentials,

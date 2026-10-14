@@ -22,6 +22,7 @@ import type { AnalystTurnPlan } from './turn-plan.js';
 import { runAgenticToolLoopDetailed, type TextToolLoopResult } from './tool-loop.js';
 import { IdentifierLedger } from './identifier-ledger.js';
 import { ANALYST_TOOL_POLICY, adjudicateProposedSql, withLedgerHarvest } from './ledger-tools.js';
+import { readEnv } from '@zlens/core';
 
 /** One observable step, so the wait is legible instead of a spinner. */
 export interface AnalystStep {
@@ -289,7 +290,7 @@ export function createAnalystLaneHandler(deps: {
         terminal: 'tool_loop_error',
       };
     }
-    if (process.env.DQL_ORCHESTRATOR_TRACE) {
+    if (readEnv('ZLENS_ORCHESTRATOR_TRACE')) {
       console.warn(`[dql] analyst loop outcome: stop=${outcome.stop} sql=${outcome.sql ? 'yes' : 'no'} admitted=${outcome.admitted.length} corrections=${outcome.corrections.length}`);
     }
     // The agentic generated lane normally makes its one generation attempt in
@@ -548,16 +549,16 @@ function sqlFromFrozenExploratoryRepair(raw: string): string | undefined {
 
 function analystNonExecutingAnswer(input: AnswerLoopInput, outcome: AnalystOutcome): AgentAnswer {
   const reason = outcome.terminal === 'missing_execution_binding'
-    ? 'DQL established the query identifiers but could not bind this run to its frozen plan and execution target, so it did not run generated SQL.'
+    ? 'ZLens established the query identifiers but could not bind this run to its frozen plan and execution target, so it did not run generated SQL.'
     : outcome.terminal === 'tool_loop_error'
-      ? 'DQL could not complete the bounded evidence check, so it did not run generated SQL.'
+      ? 'ZLens could not complete the bounded evidence check, so it did not run generated SQL.'
       : outcome.terminal === 'tool_budget_exhausted'
-        ? 'DQL reached its bounded tool budget before it received final SQL, so no generated warehouse query was run.'
+        ? 'ZLens reached its bounded tool budget before it received final SQL, so no generated warehouse query was run.'
         : outcome.terminal === 'provider_dispatch_budget_exhausted'
-          ? 'DQL reached its bounded AI dispatch budget before it received final SQL, so no generated warehouse query was run.'
+          ? 'ZLens reached its bounded AI dispatch budget before it received final SQL, so no generated warehouse query was run.'
       : outcome.terminal === 'no_final_sql'
-        ? 'DQL did not receive final SQL from the bounded analyst loop, so no generated warehouse query was run.'
-        : 'DQL could not verify every generated identifier against a tool observation, so no generated warehouse query was run.';
+        ? 'ZLens did not receive final SQL from the bounded analyst loop, so no generated warehouse query was run.'
+        : 'ZLens could not verify every generated identifier against a tool observation, so no generated warehouse query was run.';
   return {
     kind: 'no_answer',
     certification: 'analyst_review_required',

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { relationshipValidationProofFingerprint, type DQLManifest } from '@duckcodeailabs/dql-core';
+import { relationshipValidationProofFingerprint, type DQLManifest } from '@zlens/core';
 import { evaluateDbtFirstGeneratedSql } from './dbt-first-safety.js';
 import { analyticalPolicyUserFacingReason, planAnalyticalPath } from './analytical-policy.js';
 

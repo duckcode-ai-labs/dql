@@ -97,7 +97,7 @@ async function generateNarrative(
 
   if (!llm) {
     // Deterministic fallback. Produces a safe, citation-valid paragraph the
-    // citation gate can pass. Lets `dql build` succeed without an API key.
+    // citation gate can pass. Lets `zlens build` succeed without an API key.
     const bullets = narrative.sources.map((name) => {
       const src = sources.get(name);
       const cite = formatCitation(name, src);

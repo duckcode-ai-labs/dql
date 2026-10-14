@@ -31,7 +31,7 @@ export interface ManifestKnowledgeSkillDescriptor {
   sourcePath: string;
   contentHash: string;
   bodyHash: string;
-  /** Compatibility hook only; DQL does not execute bundled Agent Skill scripts. */
+  /** Compatibility hook only; ZLens does not execute bundled Agent Skill scripts. */
   format: 'dql-knowledge-v1';
 }
 

@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { resolveAskAgentRuntimeMode } from '../local-runtime.js';
 import { networkAccessUrls, resolveNotebookConnection, startProjectRuntime, withAccessToken } from './notebook.js';
+import { readEnv } from '@zlens/core';
 
 describe('network access links', () => {
   const interfaces = {
@@ -85,9 +86,9 @@ describe('resolveNotebookConnection', () => {
     }
   });
 
-  // Needs the DuckDB driver (DQL_APP_DATASETS_DUCKDB_CONNECTOR_ROOT), as the other real-DuckDB tests: without it the
+  // Needs the DuckDB driver (ZLENS_APP_DATASETS_DUCKDB_CONNECTOR_ROOT), as the other real-DuckDB tests: without it the
   // server would install the driver from the npm registry at start, and the suite reaches nothing off this machine.
-  const duckDbRoot = process.env.DQL_APP_DATASETS_DUCKDB_CONNECTOR_ROOT?.trim();
+  const duckDbRoot = readEnv('ZLENS_APP_DATASETS_DUCKDB_CONNECTOR_ROOT')?.trim();
   (duckDbRoot ? it : it.skip)('reads one metadata statement through its own connection, and nothing else', async () => {
     const root = mkdtempSync(join(tmpdir(), 'dql-notebook-metadata-'));
     writeFileSync(join(root, 'dql.config.json'), JSON.stringify({ project: 'metadata-test', connections: { default: { driver: 'duckdb', filepath: ':memory:' } } }));

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { buildDomainReferenceSkills } from './domain-skills.js';
-import type { DQLManifest } from '@duckcodeailabs/dql-core';
+import type { DQLManifest } from '@zlens/core';
 
 function manifest(): DQLManifest {
   return {

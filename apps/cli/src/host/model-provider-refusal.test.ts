@@ -8,7 +8,7 @@ import { HOST_MODEL_UNAVAILABLE, HostModelUnavailableError, setHostModelHooks, t
 
 /**
  * RFC 0010 HH-5: a host's model comes before the project's own provider settings. When the host's `modelProvider`
- * fails (or answers something that is not a model), DQL asks no model at all, in plain words: it never falls back
+ * fails (or answers something that is not a model), ZLens asks no model at all, in plain words: it never falls back
  * to a provider the project configured, which the host did not choose. A hook that answers nothing uses the
  * project's settings, as documented; without a host nothing changes.
  */

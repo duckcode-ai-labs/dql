@@ -5,7 +5,7 @@ import {
   type AppBuildDraftOperation,
   type AppBuildDraftSource,
   type DatasetDescriptor,
-} from '@duckcodeailabs/dql-core';
+} from '@zlens/core';
 import type { AppBlockRecommendation, AppStudioBuildDraft, AppStudioDraftOperation } from '../../api/client';
 import {
   isDatasetSourceRecoveryTask,

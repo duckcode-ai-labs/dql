@@ -4,7 +4,7 @@ import type { Server } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import type { QueryExecutor } from '@duckcodeailabs/dql-connectors';
+import type { QueryExecutor } from '@zlens/connectors';
 import { startLocalServer } from '../local-runtime.js';
 import { dispatchNotifications, setDeliverySink } from '../schedule/notifiers/index.js';
 import { signSnapshotWith, snapshotKeyId, verifySnapshot, type SnapshotInput, type SnapshotSigner } from '../snapshot/app-snapshot.js';
@@ -96,7 +96,7 @@ describe('signing with the host\'s key service (RFC 0010 HH-8)', () => {
     const pair = generateKeyPairSync('ed25519');
     const der = createPublicKey(pair.privateKey).export({ type: 'spki', format: 'der' }) as Buffer;
     const calls: number[] = [];
-    // Stands in for a KMS/HSM: DQL only ever sees the public key and signatures.
+    // Stands in for a KMS/HSM: ZLens only ever sees the public key and signatures.
     const kms: SnapshotSigner = { id: snapshotKeyId(der), publicKeyBase64: der.toString('base64'), sign: async (data) => { calls.push(data.length); return sign(null, data, pair.privateKey); } };
     const input: SnapshotInput & { signedBy: string } = {
       appId: 'claims', appTitle: 'Claims', pageId: 'overview', pageTitle: 'Overview',

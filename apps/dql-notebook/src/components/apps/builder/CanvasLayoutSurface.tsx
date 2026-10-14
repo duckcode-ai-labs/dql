@@ -16,8 +16,8 @@ import {
   type CanvasNode,
   type CanvasPath,
   type CanvasPieceKind,
-} from '@duckcodeailabs/dql-core/apps/canvas-page';
-import { bindingCaption, figureLabel, type StoryBinding, type StoryBindingCatalog } from '@duckcodeailabs/dql-core/apps/story-bindings';
+} from '@zlens/core/apps/canvas-page';
+import { bindingCaption, figureLabel, type StoryBinding, type StoryBindingCatalog } from '@zlens/core/apps/story-bindings';
 import type { CanvasFrameEditing } from '../CanvasPageFrame';
 
 type PageTile = { tileId: string; title: string };

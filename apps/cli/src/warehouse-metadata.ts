@@ -6,8 +6,8 @@ import {
   type RuntimeSchemaScope,
   type RuntimeSchemaSnapshot,
   type RuntimeSchemaTable,
-} from '@duckcodeailabs/dql-agent';
-import type { ConnectionConfig, QueryExecutor } from '@duckcodeailabs/dql-connectors';
+} from '@zlens/agent';
+import type { ConnectionConfig, QueryExecutor } from '@zlens/connectors';
 import { observeWarehouseTargetIdentity } from './semantic-execution/connection-identity.js';
 
 export type ConnectionMetadataScopeMode = 'dbt_relations' | 'selected_scopes' | 'dbt_plus_selected';
@@ -552,7 +552,7 @@ function assertObservedScopeCompatible(
   if (configuredCatalog && observedCatalog && normalizeIdentifierKey(configuredCatalog) !== normalizeIdentifierKey(observedCatalog)) {
     throw new Error(
       `Configured database/catalog "${configuredCatalog}" does not match the active target "${observedCatalog}". `
-      + 'DQL did not synchronize metadata from a different target.',
+      + 'ZLens did not synchronize metadata from a different target.',
     );
   }
   const configuredSchema = cleanIdentifier(connection.schema);
@@ -560,7 +560,7 @@ function assertObservedScopeCompatible(
   if (configuredSchema && observedSchema && normalizeIdentifierKey(configuredSchema) !== normalizeIdentifierKey(observedSchema)) {
     throw new Error(
       `Configured schema "${configuredSchema}" does not match the active target "${observedSchema}". `
-      + 'DQL did not synchronize metadata from a different target.',
+      + 'ZLens did not synchronize metadata from a different target.',
     );
   }
 }

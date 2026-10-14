@@ -7,7 +7,7 @@ import type { AnalyticalIntentV1, IntentPredicate } from './intent.js';
  * AI-drafted SQL carries them as literals. When values may not reach the model
  * (RFC 0010 HH-5), each such value is named by position (`[value 1]`) in what
  * the model reads, and the model's answer has the real values put back before
- * DQL uses it. The model still sees which restrictions exist and where, so a
+ * ZLens uses it. The model still sees which restrictions exist and where, so a
  * follow-up keeps them; it never sees what they hold.
  */
 export interface PriorValueMask {

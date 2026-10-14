@@ -3,8 +3,8 @@ import {
   semanticExecutionFingerprint,
   type WarehouseTargetContextV1,
   type WarehouseTargetIdentityV1,
-} from '@duckcodeailabs/dql-core';
-import type { ConnectionConfig, QueryExecutor } from '@duckcodeailabs/dql-connectors';
+} from '@zlens/core';
+import type { ConnectionConfig, QueryExecutor } from '@zlens/connectors';
 
 export class WarehouseTargetIdentityObservationError extends Error {
   readonly code = 'WAREHOUSE_TARGET_IDENTITY_UNAVAILABLE';
@@ -13,7 +13,7 @@ export class WarehouseTargetIdentityObservationError extends Error {
   constructor(driver: string, cause?: unknown) {
     super(
       `Could not observe the active ${driver} warehouse identity. `
-      + 'DQL did not save or validate a semantic target binding; test the SQL connection and retry.',
+      + 'ZLens did not save or validate a semantic target binding; test the SQL connection and retry.',
       cause === undefined ? undefined : { cause },
     );
     this.name = 'WarehouseTargetIdentityObservationError';
@@ -146,7 +146,7 @@ function rowString(row: Record<string, unknown>, key: string): string | undefine
 }
 
 /**
- * Name the fields on which dbt's default target and the active DQL connection
+ * Name the fields on which dbt's default target and the active ZLens connection
  * disagree.
  *
  * MetricFlow will only be treated as executable when the two identities match,
@@ -168,15 +168,15 @@ export function describeWarehouseTargetIdentityMismatch(
     const right = actual.redactedContext[field];
     if (!left && !right) return [];
     if ((left ?? '').toLowerCase() === (right ?? '').toLowerCase()) return [];
-    return [`${field}: dbt uses ${left ?? '(unset)'}, DQL uses ${right ?? '(unset)'}`];
+    return [`${field}: dbt uses ${left ?? '(unset)'}, ZLens uses ${right ?? '(unset)'}`];
   });
   const where = profile?.profileName && profile?.targetName
     ? `dbt profile "${profile.profileName}" target "${profile.targetName}"`
     : 'the dbt default target';
   if (differences.length === 0) {
-    return `MetricFlow is installed, but ${where} and the active DQL connection resolve to different warehouse identities.`
-      + ' Point the DQL connection at the same target dbt uses, or change dbt\'s default target.';
+    return `MetricFlow is installed, but ${where} and the active ZLens connection resolve to different warehouse identities.`
+      + ' Point the ZLens connection at the same target dbt uses, or change dbt\'s default target.';
   }
-  return `MetricFlow is installed, but ${where} does not match the active DQL connection (${differences.join('; ')}).`
-    + ' A semantic query must compile and execute against the same warehouse, so DQL will not run it until they agree.';
+  return `MetricFlow is installed, but ${where} does not match the active ZLens connection (${differences.join('; ')}).`
+    + ' A semantic query must compile and execute against the same warehouse, so ZLens will not run it until they agree.';
 }

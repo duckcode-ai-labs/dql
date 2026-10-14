@@ -1,4 +1,4 @@
-import { figureLabel, type StoryBindingCatalog } from '@duckcodeailabs/dql-core/apps/story-bindings';
+import { figureLabel, type StoryBindingCatalog } from '@zlens/core/apps/story-bindings';
 import type { AppMonitorConditionV1, AppScheduleDeliveryV1 } from '../../api/client';
 
 /**

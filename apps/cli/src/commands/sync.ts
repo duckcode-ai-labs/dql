@@ -1,12 +1,12 @@
 /**
- * `dql sync dbt` — detect dbt manifest changes and refresh the DQL cache.
- * `dql sync warehouse` — read the warehouse's schemas into DQL (no dbt needed).
+ * `zlens sync dbt` — detect dbt manifest changes and refresh the DQL cache.
+ * `zlens sync warehouse` — read the warehouse's schemas into DQL (no dbt needed).
  *
  * Usage:
- *   dql sync dbt [path]                   Sync dbt manifest for the project at path
- *   dql sync dbt --dbt-manifest <path>    Explicit manifest.json path
- *   dql sync dbt --watch                  Poll for manifest.json changes (1s interval)
- *   dql sync dbt --clear                  Clear the DQL manifest cache
+ *   zlens sync dbt [path]                   Sync dbt manifest for the project at path
+ *   zlens sync dbt --dbt-manifest <path>    Explicit manifest.json path
+ *   zlens sync dbt --watch                  Poll for manifest.json changes (1s interval)
+ *   zlens sync dbt --clear                  Clear the DQL manifest cache
  *
  * What it does:
  *   - Locates target/manifest.json (explicit or auto-detected)
@@ -21,9 +21,9 @@
  */
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { join, resolve, relative } from 'node:path';
-import { collectInputFiles, loadProjectConfig, resolveDbtManifestPath } from '@duckcodeailabs/dql-core';
-import { ManifestCache } from '@duckcodeailabs/dql-project';
-import { defaultKgPath, ensureAgentProjectReady } from '@duckcodeailabs/dql-agent';
+import { collectInputFiles, loadProjectConfig, resolveDbtManifestPath } from '@zlens/core';
+import { ManifestCache } from '@zlens/project';
+import { defaultKgPath, ensureAgentProjectReady } from '@zlens/agent';
 import type { CLIFlags } from '../args.js';
 import { manifestCacheTrackedFiles, readCliDqlVersion } from './compile.js';
 import { runCompile } from './compile.js';
@@ -52,8 +52,8 @@ export async function runSync(
     return;
   }
   if (subcommand !== 'dbt') {
-    console.error('Usage: dql sync dbt [path] [--watch] [--clear] [--dbt-manifest <path>]');
-    console.error('       dql sync warehouse [path] [--connection <name>] [--schemas a,b] [--database <name>]');
+    console.error('Usage: zlens sync dbt [path] [--watch] [--clear] [--dbt-manifest <path>]');
+    console.error('       zlens sync warehouse [path] [--connection <name>] [--schemas a,b] [--database <name>]');
     process.exitCode = 1;
     return;
   }
@@ -81,7 +81,7 @@ export async function runSync(
   const projectRoot = resolve(pathArg ?? '.');
 
   if (!existsSync(join(projectRoot, 'dql.config.json'))) {
-    console.error('No DQL project found (missing dql.config.json). Run from a project root or pass a path.');
+    console.error('No ZLens project found (missing dql.config.json). Run from a project root or pass a path.');
     process.exitCode = 1;
     return;
   }
@@ -181,7 +181,7 @@ export async function runSync(
 }
 
 /**
- * `dql sync warehouse [path] [--connection <name>] [--schemas a,b] [--database <name>]`
+ * `zlens sync warehouse [path] [--connection <name>] [--schemas a,b] [--database <name>]`
  *
  * Reads the selected schemas' tables, columns, comments, declared keys and
  * view definitions — metadata only, never rows. In warehouse-first or hybrid
@@ -198,14 +198,14 @@ async function runSyncWarehouse(rest: string[], flags: CLIFlags): Promise<void> 
   const pathArg = rest.find((arg, index) => !arg.startsWith('-') && !valueFlags.has(rest[index - 1] ?? ''));
   const projectRoot = resolve(pathArg ?? '.');
   if (!existsSync(join(projectRoot, 'dql.config.json'))) {
-    console.error('No DQL project found (missing dql.config.json). Run from a project root or pass a path.');
+    console.error('No ZLens project found (missing dql.config.json). Run from a project root or pass a path.');
     process.exitCode = 1;
     return;
   }
   const schemas = (valueOf('--schemas') ?? '').split(',').map((schema) => schema.trim()).filter(Boolean);
   const connectionId = valueOf('--connection') ?? (flags.connection || undefined);
   const { syncProjectWarehouse } = await import('../local-runtime.js');
-  const { QueryExecutor } = await import('@duckcodeailabs/dql-connectors');
+  const { QueryExecutor } = await import('@zlens/connectors');
   const executor = new QueryExecutor();
   try {
     const result = await syncProjectWarehouse(projectRoot, {
@@ -218,7 +218,7 @@ async function runSyncWarehouse(rest: string[], flags: CLIFlags): Promise<void> 
     if (flags.format === 'json') {
       console.log(JSON.stringify(result, null, 2));
     } else {
-      console.log(`\n  DQL Sync — warehouse (connection "${result.connectionId}")`);
+      console.log(`\n  ZLens Sync — warehouse (connection "${result.connectionId}")`);
       console.log('  ' + '='.repeat(50));
       console.log(`  Schemas: ${scopes}`);
       console.log(`  ✓ Schema metadata for Ask: ${result.metadataRelations} relation(s).`);
@@ -242,10 +242,10 @@ async function runSyncWarehouse(rest: string[], flags: CLIFlags): Promise<void> 
           }
           if (drift.affected.length) {
             console.log(`  Modeled objects to review (${drift.affected.length}): ${drift.affected.slice(0, 8).join(', ')}${drift.affected.length > 8 ? ' …' : ''}`);
-            console.log('  `dql compile` names any join or grain that no longer holds; a certified join whose keys changed stops being automatic until it is validated again.');
+            console.log('  `zlens compile` names any join or grain that no longer holds; a certified join whose keys changed stops being automatic until it is validated again.');
           }
         }
-        console.log('  Next: `dql model discover` drafts entities and relationships from it for review.');
+        console.log('  Next: `zlens model discover` drafts entities and relationships from it for review.');
       }
     }
     if (result.warehouseCatalog?.error) process.exitCode = 1;
@@ -266,13 +266,13 @@ function reportDiff(opts: {
 
   const counts = readDbtCounts(dbtManifestPath);
 
-  console.log(`\n  DQL Sync — dbt`);
+  console.log(`\n  ZLens Sync — dbt`);
   console.log('  ' + '='.repeat(50));
   console.log(`  Manifest: ${relative(projectRoot, dbtManifestPath)}`);
   console.log(`    ${counts.models} model(s), ${counts.sources} source(s), ${counts.metrics} metric(s), ${counts.semanticModels} semantic_model(s)`);
 
   if (!existsSync(cachePath)) {
-    console.log('\n  Cache: (cold) — next `dql compile` will build from scratch.\n');
+    console.log('\n  Cache: (cold) — next `zlens compile` will build from scratch.\n');
     return;
   }
 
@@ -287,12 +287,12 @@ function reportDiff(opts: {
     const lookup = cache.lookup(fp, files);
 
     if (lookup.hit) {
-      console.log('\n  Cache: HIT — next `dql compile` will be served from cache.');
+      console.log('\n  Cache: HIT — next `zlens compile` will be served from cache.');
       console.log(`    built at: ${lookup.builtAt}\n`);
       return;
     }
 
-    console.log('\n  Cache: MISS — next `dql compile` will rebuild.');
+    console.log('\n  Cache: MISS — next `zlens compile` will rebuild.');
     if (changed.length === 0) {
       console.log('    (no prior build for these exact inputs)\n');
       return;

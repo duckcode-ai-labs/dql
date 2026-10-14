@@ -480,7 +480,7 @@ export function SaveAsBlockModal({
           <span style={{ fontSize: 11.5, color: t.textMuted, marginRight: 'auto', alignSelf: 'center' }}>
             {cell.datasetRefs?.length
               ? 'This analysis uses imported or staged data, so it will be saved as a review-required draft. Certification requires project-controlled, contracted, tested, reproducible sources.'
-              : 'DQL will certify this block now when its local checks pass; otherwise it is saved as a draft.'}
+              : 'ZLens will certify this block now when its local checks pass; otherwise it is saved as a draft.'}
           </span>
           <button
             onClick={onClose}

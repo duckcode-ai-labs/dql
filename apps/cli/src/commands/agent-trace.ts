@@ -13,7 +13,7 @@ import {
   replayAskTraceReceiptV1,
   validateAskTraceBundleV1,
   type AskTraceDataV1,
-} from '@duckcodeailabs/dql-agent';
+} from '@zlens/agent';
 import type { CLIFlags } from '../args.js';
 import { findProjectRoot } from '../local-runtime.js';
 
@@ -34,13 +34,13 @@ export async function runAgentTrace(rest: string[], flags: CLIFlags): Promise<vo
       return compareTraces(args[0], args[1], flags);
     default:
       throw new Error(
-        'Usage: dql agent trace <list|show|export|validate|replay|compare>\n' +
-        '  dql agent trace list [--format json]\n' +
-        '  dql agent trace show <trace-id|run-id> [--format json]\n' +
-        '  dql agent trace export <trace-id|run-id> --out <empty-dir> [--profile strict|support --confirm-reviewed-identifiers]\n' +
-        '  dql agent trace validate <bundle-dir>\n' +
-        '  dql agent trace replay <bundle-dir> --mode receipt\n' +
-        '  dql agent trace compare <left-bundle-dir> <right-bundle-dir> --mode compare',
+        'Usage: zlens agent trace <list|show|export|validate|replay|compare>\n' +
+        '  zlens agent trace list [--format json]\n' +
+        '  zlens agent trace show <trace-id|run-id> [--format json]\n' +
+        '  zlens agent trace export <trace-id|run-id> --out <empty-dir> [--profile strict|support --confirm-reviewed-identifiers]\n' +
+        '  zlens agent trace validate <bundle-dir>\n' +
+        '  zlens agent trace replay <bundle-dir> --mode receipt\n' +
+        '  zlens agent trace compare <left-bundle-dir> <right-bundle-dir> --mode compare',
       );
   }
 }
@@ -54,7 +54,7 @@ function openReadOnlyTraceStore(flags: CLIFlags): AskTraceSqliteStoreV1 {
   if (!status.available) {
     store.close();
     throw new Error(status.reason === 'unsupported_schema'
-      ? 'The local Ask trace store uses a newer schema. Open it with a compatible DQL release.'
+      ? 'The local Ask trace store uses a newer schema. Open it with a compatible ZLens release.'
       : 'The local Ask trace store is unavailable.');
   }
   return store;
@@ -112,7 +112,7 @@ function showTrace(id: string | undefined, flags: CLIFlags): void {
 }
 
 function exportTrace(id: string | undefined, flags: CLIFlags): void {
-  if (!flags.outDir) throw new Error('`dql agent trace export` requires --out <empty-directory>.');
+  if (!flags.outDir) throw new Error('`zlens agent trace export` requires --out <empty-directory>.');
   const store = openReadOnlyTraceStore(flags);
   try {
     const trace = resolveTrace(store, id);

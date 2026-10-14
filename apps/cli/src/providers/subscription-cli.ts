@@ -28,7 +28,8 @@ import {
   type AgentProvider,
   type ProviderName,
   type ProviderRunOptions,
-} from '@duckcodeailabs/dql-agent';
+} from '@zlens/agent';
+import { readEnv } from '@zlens/core';
 
 export interface SubscriptionCliRunResult {
   code: number | null;
@@ -131,7 +132,7 @@ export class ProviderTimeoutError extends Error {
   constructor(timeoutMs: number) {
     super(`The AI model did not respond within ${Math.round(timeoutMs / 1_000)} seconds.`);
     this.name = 'ProviderTimeoutError';
-    this.detail = 'Retry, choose a faster model, or increase DQL_SUBSCRIPTION_CLI_TIMEOUT_MS.';
+    this.detail = 'Retry, choose a faster model, or increase ZLENS_SUBSCRIPTION_CLI_TIMEOUT_MS.';
   }
 }
 
@@ -209,7 +210,7 @@ export function sanitizeProviderDetail(text: string): string {
 }
 
 export function resolveSubscriptionCliTimeoutMs(env: NodeJS.ProcessEnv = process.env): number {
-  const configured = Number(env.DQL_SUBSCRIPTION_CLI_TIMEOUT_MS);
+  const configured = Number(readEnv('ZLENS_SUBSCRIPTION_CLI_TIMEOUT_MS', env));
   if (!Number.isFinite(configured) || configured <= 0) return DEFAULT_SUBSCRIPTION_CLI_TIMEOUT_MS;
   return Math.max(5_000, Math.min(300_000, Math.floor(configured)));
 }
@@ -291,7 +292,7 @@ export class ClaudeCodeCliProvider implements AgentProvider {
     // `--no-session-persistence` left none, it stays opt-in until a
     // measurement justifies it. It still saves tokens, which is why the code
     // remains rather than being deleted.
-    if (!conversationId || process.env.DQL_SUBSCRIPTION_CLI_SESSION !== 'on') return undefined;
+    if (!conversationId || readEnv('ZLENS_SUBSCRIPTION_CLI_SESSION') !== 'on') return undefined;
     const existing = this.sessions.get(conversationId);
     const usable = existing && existing.sentMessageCount > 0 && messages.length > existing.sentMessageCount;
     const sessionId = existing?.sessionId ?? randomUUID();
@@ -352,7 +353,7 @@ export class ClaudeCodeCliProvider implements AgentProvider {
     // prompt, 24 opening cards, every prior observation — so a turn's fifth
     // tool follow-up paid for the first four all over again. The CLI can hold
     // a session, so a continued turn sends only what is new. `--session-id`
-    // opens one, `--resume` continues it, and `DQL_SUBSCRIPTION_CLI_SESSION=off`
+    // opens one, `--resume` continues it, and `ZLENS_SUBSCRIPTION_CLI_SESSION=off`
     // returns to re-sending everything if a CLI build ever misbehaves.
     const session = this.resolveSession(options, messages);
     const flattened = session?.resumed
@@ -437,7 +438,7 @@ export class ClaudeCodeCliProvider implements AgentProvider {
       // A mid-flight cancellation SIGTERMed the child; surface the exact abort
       // reason (e.g. the run deadline's TimeoutError), never a parse error.
       throwIfAlreadyCancelled(options.signal);
-      if (process.env.DQL_DEBUG_PROVIDER_CLI) {
+      if (readEnv('ZLENS_DEBUG_PROVIDER_CLI')) {
         console.error('[DQL_DEBUG cli]', JSON.stringify({
           code: res.code,
           timedOut: res.timedOut,

@@ -9,7 +9,7 @@
  * never clobbered on re-seed); it is injected only when retrieval routes to that
  * domain. Distills what the manifest already knows into the shape the agent reads.
  */
-import type { DQLManifest } from '@duckcodeailabs/dql-core';
+import type { DQLManifest } from '@zlens/core';
 import { existsSync } from 'node:fs';
 import { skillPath, writeSkill, type Skill, type WriteSkillInput } from './loader.js';
 

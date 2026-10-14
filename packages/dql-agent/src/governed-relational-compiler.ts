@@ -7,7 +7,7 @@
  */
 
 import { createHash } from 'node:crypto';
-import { getDialect, type DQLManifest, type DqlArtifactReference } from '@duckcodeailabs/dql-core';
+import { getDialect, type DQLManifest, type DqlArtifactReference } from '@zlens/core';
 import type {
   AnalyticalExecutionGraphV1,
   AnalyticalGraphSourceInvocationNode,

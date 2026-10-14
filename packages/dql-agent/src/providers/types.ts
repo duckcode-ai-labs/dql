@@ -105,7 +105,7 @@ export interface ProviderRunOptions {
    * it to an egress receipt and a trace span.  It exists so an immutable
    * exploratory-plan correction cannot be miscounted as a second generation.
    */
-  dispatchPhase?: import('@duckcodeailabs/dql-core').ProviderDispatchPhaseV1;
+  dispatchPhase?: import('@zlens/core').ProviderDispatchPhaseV1;
   /**
    * Server-owned identity for the sequence of sends that make up ONE turn.
    *
@@ -128,7 +128,7 @@ export interface ProviderRunOptions {
    * Ask generation remains content-free; the only normal Ask repair purpose is
    * `repair_sql` and it has no result-row permission.
    */
-  egressPurpose?: import('@duckcodeailabs/dql-core').ProviderEgressPurpose;
+  egressPurpose?: import('@zlens/core').ProviderEgressPurpose;
   /**
    * Server-owned lineage marker for one same-provider transient transport
    * retry. Providers carry it through to the local ledger; callers cannot use
@@ -208,8 +208,8 @@ export interface ProviderCurrentToolPolicy {
 export type ProviderPhysicalDispatchPhaseResolver = (input: {
   operation: ProviderDispatchOperation;
   attemptIndex: number;
-  requestedPhase?: import('@duckcodeailabs/dql-core').ProviderDispatchPhaseV1;
-}) => import('@duckcodeailabs/dql-core').ProviderDispatchPhaseV1 | undefined;
+  requestedPhase?: import('@zlens/core').ProviderDispatchPhaseV1;
+}) => import('@zlens/core').ProviderDispatchPhaseV1 | undefined;
 
 export interface ProviderToolLoopOptions extends ProviderRunOptions {
   /** Hard cap for provider-visible tool calls in this turn. Default 8. */
@@ -220,7 +220,7 @@ export interface ProviderToolLoopOptions extends ProviderRunOptions {
   mayStartToolCall?: () => boolean;
   /** Server-owned result-row egress policy applied recursively to every tool output. */
   providerPayloadGuard?: {
-    purpose: import('@duckcodeailabs/dql-core').ProviderEgressPurpose;
+    purpose: import('@zlens/core').ProviderEgressPurpose;
     allowedResultRowTools?: Record<string, number>;
     resultRowBudgetGroupByTool?: Record<string, string>;
     cumulativeResultRowBudgets?: Record<string, number>;

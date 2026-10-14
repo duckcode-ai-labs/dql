@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import type { AgentToolDefinition } from '@duckcodeailabs/dql-agent';
+import type { AgentToolDefinition } from '@zlens/agent';
 import { ClaudeOAuthProvider } from './claude-oauth.js';
 
 /**

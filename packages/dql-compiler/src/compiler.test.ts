@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { SemanticLayer } from '@duckcodeailabs/dql-core';
+import { SemanticLayer } from '@zlens/core';
 import { compile } from './compiler.js';
 
 describe('compile', () => {

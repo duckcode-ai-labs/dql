@@ -23,7 +23,8 @@ import type {
   AgentToolDefinition,
   ProviderRunOptions,
   ProviderToolLoopOptions,
-} from '@duckcodeailabs/dql-agent';
+} from '@zlens/agent';
+import { readEnv } from '@zlens/core';
 
 export type CassetteMode = 'record' | 'replay' | 'live';
 
@@ -419,7 +420,7 @@ export function withCassette(
       messages: AgentMessage[],
       tools: AgentToolDefinition[],
       options?: ProviderToolLoopOptions,
-    ): Promise<import('@duckcodeailabs/dql-agent').NativeToolLoopResult> => {
+    ): Promise<import('@zlens/agent').NativeToolLoopResult> => {
       const fingerprint = cassetteFingerprint({
         providerName: provider.name,
         operation: 'generate_with_tools',
@@ -481,7 +482,7 @@ export function withCassette(
  * not a surprise bill and a non-deterministic suite.
  */
 export function resolveCassetteModeFromEnv(env: Record<string, string | undefined>): CassetteMode {
-  const raw = env.DQL_EVAL_CASSETTE_MODE;
+  const raw = readEnv('ZLENS_EVAL_CASSETTE_MODE', env);
   return raw === 'record' || raw === 'live' ? raw : 'replay';
 }
 

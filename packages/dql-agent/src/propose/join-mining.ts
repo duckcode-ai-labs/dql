@@ -8,7 +8,7 @@
  * proposing as a saved join (and its keys feed the grain ledger). Reuses the join
  * extraction from `analyzeSqlReferences` (W1.3), so it understands real SQL, not regex.
  */
-import { analyzeSqlReferences } from '@duckcodeailabs/dql-core';
+import { analyzeSqlReferences } from '@zlens/core';
 
 export interface JoinPatternCandidate {
   leftRelation: string;

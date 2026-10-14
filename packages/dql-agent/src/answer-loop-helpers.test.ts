@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parse, type DQLManifest, type MetricCapabilityContract } from "@duckcodeailabs/dql-core";
+import { parse, type DQLManifest, type MetricCapabilityContract } from "@zlens/core";
 import { certifiedBlockProvesRequestedTopN, certifiedBlockDeclaresQualifiers, renderContextValidationRefusalForUser, parseProposal, compactSemanticRuntimeFailure, normalizeWarehouseSqlFailure } from "./answer-loop.js";
 import { analyticalError } from "./analytical-error.js";
 import { buildAnalysisQuestionPlan, type CertifiedBlockApplicability } from "./metadata/analysis-planner.js";

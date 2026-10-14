@@ -1,4 +1,4 @@
-import type { AgentSchemaTable } from '@duckcodeailabs/dql-agent';
+import type { AgentSchemaTable } from '@zlens/agent';
 
 /** Prompt budget for one relation's columns. Never a claim about the table. */
 export const AGENT_SCHEMA_CONTEXT_COLUMN_LIMIT = 80;

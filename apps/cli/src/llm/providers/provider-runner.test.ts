@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest';
 import { __test__, createDqlAgentProviderRunner, createEvalCassetteReplayProvider, resolveEffectiveQuestion } from './provider-runner.js';
 import { CassetteStore, cassetteFingerprint, cassetteKey, evalCassetteCanonicalizationV2 } from '../../commands/agent-eval-cassette.js';
 import type { AgentRunRequest } from '../types.js';
-import type { AgentMessage } from '@duckcodeailabs/dql-agent';
+import type { AgentMessage } from '@zlens/agent';
 
 const providerFixtureRoot = resolve(
   dirname(fileURLToPath(import.meta.url)),
@@ -28,8 +28,8 @@ describe('eval cassette provider bootstrap', () => {
       messages,
       canonicalization: evalCassetteCanonicalizationV2(projectRoot),
     });
-    const oldDir = process.env.DQL_EVAL_CASSETTE_DIR;
-    const oldMode = process.env.DQL_EVAL_CASSETTE_MODE;
+    const oldDir = process.env.ZLENS_EVAL_CASSETTE_DIR;
+    const oldMode = process.env.ZLENS_EVAL_CASSETTE_MODE;
     try {
       new CassetteStore(cassetteDir).put({
         key,
@@ -44,8 +44,8 @@ describe('eval cassette provider bootstrap', () => {
           providerQuality: 'excluded',
         },
       });
-      process.env.DQL_EVAL_CASSETTE_DIR = cassetteDir;
-      delete process.env.DQL_EVAL_CASSETTE_MODE;
+      process.env.ZLENS_EVAL_CASSETTE_DIR = cassetteDir;
+      delete process.env.ZLENS_EVAL_CASSETTE_MODE;
 
       const provider = createEvalCassetteReplayProvider(projectRoot);
       expect(provider).toBeDefined();
@@ -53,10 +53,10 @@ describe('eval cassette provider bootstrap', () => {
       await expect(provider!.available()).resolves.toBe(true);
       await expect(provider!.generate(messages)).resolves.toBe('recorded governed interpretation');
     } finally {
-      if (oldDir === undefined) delete process.env.DQL_EVAL_CASSETTE_DIR;
-      else process.env.DQL_EVAL_CASSETTE_DIR = oldDir;
-      if (oldMode === undefined) delete process.env.DQL_EVAL_CASSETTE_MODE;
-      else process.env.DQL_EVAL_CASSETTE_MODE = oldMode;
+      if (oldDir === undefined) delete process.env.ZLENS_EVAL_CASSETTE_DIR;
+      else process.env.ZLENS_EVAL_CASSETTE_DIR = oldDir;
+      if (oldMode === undefined) delete process.env.ZLENS_EVAL_CASSETTE_MODE;
+      else process.env.ZLENS_EVAL_CASSETTE_MODE = oldMode;
       rmSync(cassetteDir, { recursive: true, force: true });
     }
   });

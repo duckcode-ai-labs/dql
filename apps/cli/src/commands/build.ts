@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { basename, dirname, extname, join, resolve } from 'node:path';
-import { compile, writeBundle } from '@duckcodeailabs/dql-compiler';
-import { DataLexContractRegistry, resolveDataLexManifestPath } from '@duckcodeailabs/dql-core';
+import { compile, writeBundle } from '@zlens/dql-compiler';
+import { DataLexContractRegistry, resolveDataLexManifestPath } from '@zlens/core';
 import type { CLIFlags } from '../args.js';
 import { findProjectRoot, loadProjectConfig } from '../local-runtime.js';
 import { isDigestOutput, runDigestBuild } from '../digest.js';
@@ -80,6 +80,6 @@ export async function runBuild(filePath: string, flags: CLIFlags): Promise<void>
   }
   console.log('');
   console.log('  Next step:');
-  console.log(`    dql serve ${outDir}`);
+  console.log(`    zlens serve ${outDir}`);
   console.log('');
 }

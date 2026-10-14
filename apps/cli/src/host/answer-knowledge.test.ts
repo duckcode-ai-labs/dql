@@ -6,7 +6,7 @@ import {
   type AgentProvider,
   type AgentRouteExecutorResult,
   type KnowledgeSource,
-} from '@duckcodeailabs/dql-agent';
+} from '@zlens/agent';
 import { readingOf, withAnswerKnowledge } from './answer-knowledge.js';
 
 /**

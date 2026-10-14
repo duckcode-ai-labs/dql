@@ -28,7 +28,7 @@ const REGULATED_IDENTIFIER_RE = /\b(?:social\s+security(?:\s+(?:number|no\.?))?|
  * request.  Likewise, a policy attached to a named person is not a system
  * policy question.
  */
-const EXPLICIT_SYSTEM_POLICY_OR_CAPABILITY_QUESTION_RE = /^(?:(?:does|can|will|do)\s+(?:dql|you|this\s+(?:system|assistant|app(?:lication)?|product))\s+(?:support\b[^?.!]*\b(?:mask(?:ing)?|redact(?:ion|ed)?|tokeni[sz](?:e|ation)|protect(?:ion|ed)?|handling|storage|retention|access\s+control(?:s)?|safeguard(?:s)?)\b|handle|protect|mask|redact|store|retain|tokeni[sz]e)\b[^?.!]*|how\s+(?:does|do)\s+(?:dql|you|this\s+(?:system|assistant|app(?:lication)?|product))\s+(?:handle|protect|mask|redact|store|retain|tokeni[sz]e)\b[^?.!]*|(?:what\s+(?:is|are)|describe|explain)\s+(?:dql(?:'s)?|your|this\s+(?:system|assistant|app(?:lication)?|product)(?:'s)?)\s+[^?.!]*\b(?:privacy|security|data\s+retention|masking|redaction|tokenization|access)\s+(?:policy|capabilit(?:y|ies))\b[^?.!]*)[?!.]?$/i;
+const EXPLICIT_SYSTEM_POLICY_OR_CAPABILITY_QUESTION_RE = /^(?:(?:does|can|will|do)\s+(?:zlens|dql|you|this\s+(?:system|assistant|app(?:lication)?|product))\s+(?:support\b[^?.!]*\b(?:mask(?:ing)?|redact(?:ion|ed)?|tokeni[sz](?:e|ation)|protect(?:ion|ed)?|handling|storage|retention|access\s+control(?:s)?|safeguard(?:s)?)\b|handle|protect|mask|redact|store|retain|tokeni[sz]e)\b[^?.!]*|how\s+(?:does|do)\s+(?:zlens|dql|you|this\s+(?:system|assistant|app(?:lication)?|product))\s+(?:handle|protect|mask|redact|store|retain|tokeni[sz]e)\b[^?.!]*|(?:what\s+(?:is|are)|describe|explain)\s+(?:(?:zlens|dql)(?:'s)?|your|this\s+(?:system|assistant|app(?:lication)?|product)(?:'s)?)\s+[^?.!]*\b(?:privacy|security|data\s+retention|masking|redaction|tokenization|access)\s+(?:policy|capabilit(?:y|ies))\b[^?.!]*)[?!.]?$/i;
 const DISCLOSURE_ACTION_RE = /\b(?:show(?:ing)?|give|giving|list(?:ing)?|retrieve|retrieving|get(?:ting)?|reveal(?:ing)?|display(?:ing)?|provide|providing|disclose|disclosing|return(?:ing)?|output(?:ting)?|expose|exposing|fetch(?:ing)?|look\s*up|lookup|tell\s+me|need)\b/i;
 const VALUE_REQUEST_SEMANTICS_RE = /\b(?:actual|full|specific|individual)\s+(?:value|values|number|numbers|record|records|details?|information)|\b(?:value|values|number|numbers|record|records|details?|information)\s+(?:for|of)\b/i;
 
@@ -61,7 +61,7 @@ const INDIVIDUAL_EARNINGS_QUESTION_RE = /\b(?:how\s+much\s+(?:does|did)\s+(?:the
 
 function isExplicitSystemPolicyOrCapabilityQuestion(question: string): boolean {
   // A question may start as a capability request and still smuggle in an
-  // individual disclosure request: "Does DQL support showing Jessica's SSN
+  // individual disclosure request: "Does ZLens support showing Jessica's SSN
   // with masking?". System safeguards describe product behaviour; they never
   // authorize a value, person, or disclosure verb in the same request.
   return EXPLICIT_SYSTEM_POLICY_OR_CAPABILITY_QUESTION_RE.test(question)
@@ -120,7 +120,7 @@ export function evaluateAnalyticalRequestPolicy(question: string, options: Analy
     return {
       allowed: false,
       code: 'REGULATED_IDENTIFIER_REQUEST',
-      message: 'DQL cannot retrieve or disclose regulated personal identifiers such as government IDs or dates of birth.',
+      message: 'ZLens cannot retrieve or disclose regulated personal identifiers such as government IDs or dates of birth.',
       nextActions: ['ask_for_an_approved_aggregate', 'inspect_data_policy'],
     };
   }
@@ -131,7 +131,7 @@ export function evaluateAnalyticalRequestPolicy(question: string, options: Analy
     return {
       allowed: false,
       code: 'SENSITIVE_PERSONAL_DATA_REQUEST',
-      message: 'DQL cannot retrieve or disclose direct payment, health, contact, or protected-attribute data about an individual.',
+      message: 'ZLens cannot retrieve or disclose direct payment, health, contact, or protected-attribute data about an individual.',
       nextActions: ['ask_for_an_approved_aggregate', 'inspect_data_policy'],
     };
   }
@@ -143,7 +143,7 @@ export function evaluateAnalyticalRequestPolicy(question: string, options: Analy
     return {
       allowed: false,
       code: 'INDIVIDUAL_COMPENSATION_REQUEST',
-      message: 'DQL does not provide individual compensation. Ask for an approved aggregate if one is modeled.',
+      message: 'ZLens does not provide individual compensation. Ask for an approved aggregate if one is modeled.',
       nextActions: ['ask_for_an_approved_aggregate', 'inspect_data_policy'],
     };
   }

@@ -14,7 +14,7 @@
  * gracefully (a clear hint) when no dbt manifest is present.
  */
 
-import { resolveDbtManifestPath } from '@duckcodeailabs/dql-core';
+import { resolveDbtManifestPath } from '@zlens/core';
 import {
   buildSchemaGrounding,
   loadDbtArtifacts,
@@ -26,7 +26,7 @@ import {
   assessAnalyticalRelationship,
   resolveDomainContextEnvelope,
   type DbtArtifacts,
-} from '@duckcodeailabs/dql-agent';
+} from '@zlens/agent';
 import type { DQLContext } from '../context.js';
 import { zodInputShapeForTool } from '../tool-schema.js';
 
@@ -42,7 +42,7 @@ function loadArtifacts(ctx: DQLContext): DbtArtifacts | undefined {
 }
 
 const NO_MANIFEST_HINT =
-  'No dbt manifest was found. Run `dbt compile`/`dbt build` (or `dql sync dbt`) so target/manifest.json exists.';
+  'No dbt manifest was found. Run `dbt compile`/`dbt build` (or `zlens sync dbt`) so target/manifest.json exists.';
 
 // ─── search_metadata ──────────────────────────────────────────────────────────
 

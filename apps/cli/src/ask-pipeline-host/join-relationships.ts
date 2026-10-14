@@ -1,5 +1,5 @@
-import { assessAnalyticalRelationship } from '@duckcodeailabs/dql-agent';
-import type { DQLManifest } from '@duckcodeailabs/dql-core';
+import { assessAnalyticalRelationship } from '@zlens/agent';
+import type { DQLManifest } from '@zlens/core';
 import { normalizeRelationName } from './vocabulary-source.js';
 
 /**

@@ -1,5 +1,5 @@
 /**
- * Public surface for `@duckcodeailabs/dql-agent`.
+ * Public surface for `@zlens/agent`.
  *
  * Consumers (CLI, MCP server, notebook UI) typically import:
  *   - `reindexProject(root)` to rebuild the KG
@@ -11,13 +11,13 @@
 import { join, resolve } from "node:path";
 import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, statSync, writeFileSync, type Dirent } from "node:fs";
 import { createHash } from "node:crypto";
-import type { DQLManifest } from "@duckcodeailabs/dql-core";
+import type { DQLManifest } from "@zlens/core";
 import {
   buildManifest,
   loadProjectConfig,
   resolveDbtManifestPath,
   resolveSemanticLayerWithDiagnostics,
-} from "@duckcodeailabs/dql-core";
+} from "@zlens/core";
 import { KGStore } from "./kg/sqlite-fts.js";
 import { buildKGFromManifest, buildKGFromSemanticLayer, declaredDomainIds } from "./kg/build.js";
 import { loadSkills, skillsDir } from "./skills/loader.js";

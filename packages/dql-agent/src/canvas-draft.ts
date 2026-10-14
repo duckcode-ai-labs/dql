@@ -7,8 +7,8 @@
  * or tiles, and literal numbers are refused; one retry gets the reasons, and
  * a plain template built from the bindings is the fallback.
  */
-import type { DashboardCanvas, StoryBindingCatalog } from '@duckcodeailabs/dql-core';
-import { checkCanvasHtml } from '@duckcodeailabs/dql-core';
+import type { DashboardCanvas, StoryBindingCatalog } from '@zlens/core';
+import { checkCanvasHtml } from '@zlens/core';
 import { promptBindings, type StoryDraftComplete, type StoryDraftInput } from './story-draft.js';
 
 export type CanvasDraftInput = StoryDraftInput;

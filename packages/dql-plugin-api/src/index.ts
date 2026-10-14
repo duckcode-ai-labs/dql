@@ -2,7 +2,7 @@
 //
 // These types are the contract between DQL core and third-party extensions.
 // Breaking changes require a major bump and a 6-month deprecation window.
-// Don't import from anywhere else in @duckcodeailabs/* — those internals
+// Don't import from anywhere else in @zlens/* — those internals
 // can change between minor versions.
 
 export * from './connector.js';

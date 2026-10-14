@@ -2,9 +2,9 @@ import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { QueryExecutor } from '@duckcodeailabs/dql-connectors';
-import { buildManifest, collectInputFiles, resolveDbtManifestPath, resolveSemanticLayerWithDiagnostics } from '@duckcodeailabs/dql-core';
-import { buildLocalContextPack, defaultKgPath, defaultMetadataPath, openMetadataCatalog } from '@duckcodeailabs/dql-agent';
+import { QueryExecutor } from '@zlens/connectors';
+import { buildManifest, collectInputFiles, resolveDbtManifestPath, resolveSemanticLayerWithDiagnostics } from '@zlens/core';
+import { buildLocalContextPack, defaultKgPath, defaultMetadataPath, openMetadataCatalog } from '@zlens/agent';
 import type { CLIFlags } from '../args.js';
 import {
   assertLocalQueryRuntimeReady,
@@ -75,7 +75,7 @@ export async function runDoctor(targetPath: string | null, flags: CLIFlags, rest
       detail: existsSync(join(projectRoot, 'dql.config.json')) ? 'found' : 'missing',
     },
     {
-      // Layout v2 projects (the create-dql-app starter) keep blocks under
+      // Layout v2 projects (the create-zlens-app starter) keep blocks under
       // domains/<domain>/blocks; older projects use a top-level blocks/.
       name: 'blocks/',
       ok: existsSync(join(projectRoot, 'blocks')) || existsSync(join(projectRoot, 'domains')),
@@ -138,7 +138,7 @@ export async function runDoctor(targetPath: string | null, flags: CLIFlags, rest
     return;
   }
 
-  console.log(`\n  DQL Doctor`);
+  console.log(`\n  ZLens Doctor`);
   console.log(`    Project: ${projectRoot}`);
   console.log('');
   for (const check of checks) {
@@ -227,7 +227,7 @@ function runDoctorGitHygiene(targetPath: string | null, flags: CLIFlags): void {
     return;
   }
 
-  console.log('\n  DQL Git Hygiene');
+  console.log('\n  ZLens Git Hygiene');
   console.log(`    Project: ${projectRoot}`);
   console.log(`    Tracked files checked: ${tracked.length}`);
   console.log('');
@@ -435,7 +435,7 @@ async function runDoctorScale(targetPath: string | null, flags: CLIFlags): Promi
         catalog.close();
       }
       const pack = await buildLocalContextPack(projectRoot, {
-        question: 'DQL doctor scale retrieval check for enterprise metadata coverage',
+        question: 'ZLens doctor scale retrieval check for enterprise metadata coverage',
         mode: 'debug',
         surface: 'doctor',
         limit: 16,
@@ -447,14 +447,14 @@ async function runDoctorScale(targetPath: string | null, flags: CLIFlags): Promi
         issues.push({
           severity: 'warning',
           code: 'source_fingerprints_missing',
-          message: 'metadata.sqlite has no source fingerprints. Run dql compile or dql agent reindex with the current CLI to refresh the scale index.',
+          message: 'metadata.sqlite has no source fingerprints. Run zlens compile or zlens agent reindex with the current CLI to refresh the scale index.',
         });
       }
       if (domainShards === 0) {
         issues.push({
           severity: 'warning',
           code: 'domain_shards_missing',
-          message: 'metadata.sqlite has no domain shard stats. Run dql compile or dql agent reindex with the current CLI to refresh the scale index.',
+          message: 'metadata.sqlite has no domain shard stats. Run zlens compile or zlens agent reindex with the current CLI to refresh the scale index.',
         });
       }
     } catch (error) {
@@ -468,7 +468,7 @@ async function runDoctorScale(targetPath: string | null, flags: CLIFlags): Promi
     issues.push({
       severity: 'warning',
       code: 'metadata_catalog_missing',
-      message: 'metadata.sqlite is missing. Run dql compile or dql agent reindex before AI import and Ask AI workflows.',
+      message: 'metadata.sqlite is missing. Run zlens compile or zlens agent reindex before AI import and Ask AI workflows.',
     });
   }
 
@@ -476,7 +476,7 @@ async function runDoctorScale(targetPath: string | null, flags: CLIFlags): Promi
     issues.push({
       severity: 'warning',
       code: 'agent_kg_missing',
-      message: 'agent-kg.sqlite is missing. Run dql agent reindex for scalable agent retrieval.',
+      message: 'agent-kg.sqlite is missing. Run zlens agent reindex for scalable agent retrieval.',
     });
   }
   if (!manifestFresh) {
@@ -560,7 +560,7 @@ async function runDoctorScale(targetPath: string | null, flags: CLIFlags): Promi
     return;
   }
 
-  console.log('\n  DQL Doctor Scale');
+  console.log('\n  ZLens Doctor Scale');
   console.log(`    Project: ${projectRoot}`);
   console.log(`    Checked in ${Date.now() - started}ms`);
   console.log('');
@@ -699,9 +699,9 @@ function buildDoctorNextSteps(projectRoot: string): string[] {
 
   const command = (script: string, args: string) => scripts[script]
     ? `npm run ${script}`
-    : `npx dql ${args}`;
+    : `npx zlens ${args}`;
   return [
-    `${command('notebook', 'notebook')}    # open the local DQL workspace`,
+    `${command('notebook', 'notebook')}    # open the local ZLens workspace`,
     `${command('validate', 'validate')}    # check DQL files and semantic references`,
     `${command('compile', 'compile')}     # write dql-manifest.json`,
     `${command('lineage', 'lineage')}     # inspect source -> block -> dashboard -> App lineage`,
@@ -729,42 +729,53 @@ function checkProjectCliVersion(projectRoot: string): Check {
   const packageJsonPath = join(projectRoot, 'package.json');
   if (!existsSync(packageJsonPath)) {
     return {
-      name: 'Project-local DQL CLI',
+      name: 'Project-local ZLens CLI',
       ok: true,
       detail: 'no project package.json; skipping local CLI check',
     };
   }
 
   let declared: string | undefined;
+  let legacyDeclared: string | undefined;
   try {
     const pkg = JSON.parse(readFileSync(packageJsonPath, 'utf-8')) as {
       dependencies?: Record<string, string>;
       devDependencies?: Record<string, string>;
     };
-    declared = pkg.devDependencies?.['@duckcodeailabs/dql-cli'] ?? pkg.dependencies?.['@duckcodeailabs/dql-cli'];
+    declared = pkg.devDependencies?.['@zlens/cli'] ?? pkg.dependencies?.['@zlens/cli'];
+    // The CLI's name before ZLens; projects scaffolded earlier still declare it.
+    legacyDeclared = pkg.devDependencies?.['@duckcodeailabs/dql-cli'] ?? pkg.dependencies?.['@duckcodeailabs/dql-cli'];
   } catch {
     return {
-      name: 'Project-local DQL CLI',
+      name: 'Project-local ZLens CLI',
       ok: false,
       detail: 'failed to parse package.json',
     };
   }
 
+  if (!declared && legacyDeclared) {
+    return {
+      name: 'Project-local ZLens CLI',
+      ok: false,
+      detail: `package.json declares @duckcodeailabs/dql-cli ${legacyDeclared}, the CLI's old name. Replace it with @zlens/cli, then run npm install.`,
+    };
+  }
+
   if (!declared) {
     return {
-      name: 'Project-local DQL CLI',
+      name: 'Project-local ZLens CLI',
       ok: true,
       detail: 'not declared in package.json (optional for non-scaffolded projects)',
     };
   }
 
   const runningVersion = readRunningCliVersion();
-  const installedPackage = join(projectRoot, 'node_modules', '@duckcodeailabs', 'dql-cli', 'package.json');
+  const installedPackage = join(projectRoot, 'node_modules', '@zlens', 'cli', 'package.json');
   if (!existsSync(installedPackage)) {
     return {
-      name: 'Project-local DQL CLI',
+      name: 'Project-local ZLens CLI',
       ok: false,
-      detail: `package.json declares @duckcodeailabs/dql-cli ${declared}, but node_modules is missing. Run npm install, then npm run notebook or npx dql.`,
+      detail: `package.json declares @zlens/cli ${declared}, but node_modules is missing. Run npm install, then npm run notebook or npx zlens.`,
     };
   }
 
@@ -772,21 +783,21 @@ function checkProjectCliVersion(projectRoot: string): Check {
     const installed = JSON.parse(readFileSync(installedPackage, 'utf-8')) as { version?: string };
     if (installed.version && runningVersion !== 'unknown' && installed.version !== runningVersion) {
       return {
-        name: 'Project-local DQL CLI',
+        name: 'Project-local ZLens CLI',
         ok: false,
-        detail: `running dql ${runningVersion}, but project-local @duckcodeailabs/dql-cli is ${installed.version}. Use npm run notebook, npm run compile, or ./node_modules/.bin/dql.`,
+        detail: `running zlens ${runningVersion}, but project-local zlens is ${installed.version}. Use npm run notebook, npm run compile, or ./node_modules/.bin/zlens.`,
       };
     }
     return {
-      name: 'Project-local DQL CLI',
+      name: 'Project-local ZLens CLI',
       ok: true,
       detail: `declared=${declared}, installed=${installed.version ?? 'unknown'}, running=${runningVersion}`,
     };
   } catch {
     return {
-      name: 'Project-local DQL CLI',
+      name: 'Project-local ZLens CLI',
       ok: false,
-      detail: 'failed to parse project-local @duckcodeailabs/dql-cli/package.json',
+      detail: 'failed to parse project-local @zlens/cli/package.json',
     };
   }
 }
@@ -863,7 +874,7 @@ function checkSemanticLayer(semanticConfig: unknown, projectRoot: string): Check
 /**
  * Surface output-contract drift: a parent block `ref()`s a child and
  * references a column the child no longer outputs. These are always warnings —
- * DQL keeps composition freeform and never fails the build on drift — so the
+ * ZLens keeps composition freeform and never fails the build on drift — so the
  * check stays `ok` while still listing each drift so reviewers see it.
  */
 function checkOutputContractDrift(projectRoot: string): Check {
@@ -908,7 +919,7 @@ function checkNotebookAssets(): Check {
     ok: hasReact || hasLegacy,
     detail: hasReact || hasLegacy
       ? 'found'
-      : 'missing — try reinstalling: npm i -g @duckcodeailabs/dql-cli',
+      : 'missing — try reinstalling: npm i -g @zlens/cli',
   };
 }
 
@@ -962,7 +973,7 @@ function checkAiRuntime(projectRoot: string): Check[] {
     {
       name: 'Provider fallback',
       ok: true,
-      detail: 'DQL uses the selected provider and reports errors instead of silently falling back to another model.',
+      detail: 'ZLens uses the selected provider and reports errors instead of silently falling back to another model.',
     },
     {
       name: 'MCP servers and connectors',
@@ -978,14 +989,14 @@ function checkAiRuntime(projectRoot: string): Check[] {
       ok: existsSync(metadataPath),
       detail: existsSync(metadataPath)
         ? metadataPath
-        : 'missing; run dql compile or dql agent reindex before deep ask/build flows',
+        : 'missing; run zlens compile or zlens agent reindex before deep ask/build flows',
     },
     {
       name: 'Agent knowledge index',
       ok: existsSync(kgPath),
       detail: existsSync(kgPath)
         ? kgPath
-        : 'missing; run dql agent reindex before Claude Code/Codex ask flows',
+        : 'missing; run zlens agent reindex before Claude Code/Codex ask flows',
     },
   ];
 }
@@ -1005,10 +1016,10 @@ async function checkDqlVersionDrift(projectRoot: string): Promise<Check> {
     status.latestKnownVersion ? `latest=${status.latestKnownVersion}` : 'latest=unknown (offline or check disabled)',
   ].filter(Boolean).join(', ');
   if (status.drift.length === 0) {
-    return { name: 'DQL version drift', ok: true, detail: identity };
+    return { name: 'ZLens version drift', ok: true, detail: identity };
   }
   return {
-    name: 'DQL version drift',
+    name: 'ZLens version drift',
     ok: false,
     detail: `${identity}. ${status.drift.join(' ')}${status.upgradeCommand ? ` Upgrade: ${status.upgradeCommand}` : ''}`,
   };
@@ -1070,7 +1081,7 @@ async function checkSemanticExecutionRuntime(projectRoot: string, semanticConfig
     const runtimeOnly = metrics.length - composable;
     // The two causes that make a metric fail with no visible reason: `mf` not
     // resolving on the SERVER's PATH (a shell alias does not count), and a dbt
-    // profiles target whose fingerprint differs from the active DQL connection
+    // profiles target whose fingerprint differs from the active ZLens connection
     // — a different role or warehouse silently yields "semantic engine
     // unavailable" and nothing in the product said so.
     const adapterDetail = runtime.adapters
@@ -1110,9 +1121,9 @@ async function checkSemanticExecutionRuntime(projectRoot: string, semanticConfig
 }
 
 /**
- * dbt artifact freshness: DQL reads target/manifest.json and
+ * dbt artifact freshness: ZLens reads target/manifest.json and
  * target/semantic_manifest.json AS-IS with no staleness gate — regenerating
- * dbt without re-running `dql compile` (or running `dbt run` mid-session)
+ * dbt without re-running `zlens compile` (or running `dbt run` mid-session)
  * silently degrades metric selection and MetricFlow execution. Surface it.
  */
 function checkDbtArtifactFreshness(projectRoot: string): Check {
@@ -1137,10 +1148,10 @@ function checkDbtArtifactFreshness(projectRoot: string): Check {
     problems.push('target/semantic_manifest.json is MISSING — MetricFlow metrics cannot load or execute; run `dbt parse`.');
   }
   if (compiledM !== undefined && manifestM !== undefined && manifestM > compiledM) {
-    problems.push('dbt manifest is NEWER than the last dql compile — metric/dimension changes are invisible to the agent; run `dql compile`.');
+    problems.push('dbt manifest is NEWER than the last zlens compile — metric/dimension changes are invisible to the agent; run `zlens compile`.');
   }
   if (compiledM !== undefined && semanticM !== undefined && semanticM > compiledM) {
-    problems.push('semantic_manifest.json is NEWER than the last dql compile; run `dql compile`.');
+    problems.push('semantic_manifest.json is NEWER than the last zlens compile; run `zlens compile`.');
   }
   const summary = `manifest=${manifestM ? new Date(manifestM).toISOString() : 'missing'}, semantic_manifest=${semanticM ? new Date(semanticM).toISOString() : 'MISSING'}, dql-compile=${compiledM ? new Date(compiledM).toISOString() : 'never'}`;
   if (problems.length === 0) {

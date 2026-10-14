@@ -2,7 +2,7 @@ import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import type { QueryExecutor } from "@duckcodeailabs/dql-connectors";
+import type { QueryExecutor } from "@zlens/connectors";
 import { NotebookDatasetWorkspace } from "./notebook-datasets.js";
 
 class FakeExecutor {

@@ -4,12 +4,12 @@ import { guardHostStore, HostStoreError, openHostStore } from './host-stores.js'
 /**
  * RFC 0010 HH-6: a host's store that fails reads plainly, with a reference;
  * its own words go only to the server's log. Answers of the wrong shape are
- * read as nothing (or as a failure where DQL cannot go on without them).
+ * read as nothing (or as a failure where ZLens cannot go on without them).
  */
 const REFERENCE = /reference ([bcdfghjkmnpqrstvwxz]{8})\./;
 afterEach(() => vi.restoreAllMocks());
 
-describe('a host store, as DQL calls it', () => {
+describe('a host store, as ZLens calls it', () => {
   it('turns a throw or a rejection into a plain message with a reference, the store\'s words only in the log', async () => {
     const logged: string[] = [];
     vi.spyOn(console, 'warn').mockImplementation((...args: unknown[]) => { logged.push(args.map(String).join(' ')); });
@@ -21,7 +21,7 @@ describe('a host store, as DQL calls it', () => {
       const failure = await Promise.resolve().then(call).then(() => undefined, (error: unknown) => error);
       expect(failure).toBeInstanceOf(HostStoreError);
       const message = (failure as Error).message;
-      expect(message).toMatch(/^DQL could not reach its saved answers right now\./);
+      expect(message).toMatch(/^ZLens could not reach its saved answers right now\./);
       expect(message).not.toMatch(/db-internal|10\.0\.3\.7|ws_role/);
       const reference = REFERENCE.exec(message)?.[1];
       expect(reference).toBeTruthy();
@@ -29,7 +29,7 @@ describe('a host store, as DQL calls it', () => {
     }
   });
 
-  it('reads answers of the wrong shape as nothing, and as a failure where DQL needs a record', async () => {
+  it('reads answers of the wrong shape as nothing, and as a failure where ZLens needs a record', async () => {
     vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     const runs = guardHostStore('runs', { list: async () => 'not a list', get: async () => 'r-1', count: async () => 'many', claimRequest: async () => 7 });
     expect(await runs.list()).toEqual([]);

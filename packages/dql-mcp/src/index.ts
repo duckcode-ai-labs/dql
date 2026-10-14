@@ -1,5 +1,5 @@
 /**
- * @duckcodeailabs/dql-mcp — MCP server exposing DQL blocks, semantic layer,
+ * @zlens/mcp — MCP server exposing DQL blocks, semantic layer,
  * lineage, and governance to LLM agents.
  */
 

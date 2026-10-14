@@ -1,4 +1,4 @@
-import type { AnswerLoopInput } from '@duckcodeailabs/dql-agent';
+import type { AnswerLoopInput } from '@zlens/agent';
 import { describe, expect, it } from 'vitest';
 import { buildAnalystLoopTools } from './analyst-loop-tools.js';
 

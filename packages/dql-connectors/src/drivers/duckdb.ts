@@ -4,6 +4,7 @@ import { basename, dirname, join, resolve as resolvePath } from 'node:path';
 import type { DatabaseConnector, ConnectionConfig, TableInfo, ColumnInfo } from '../connector.js';
 import type { QueryExecutionOptions, QueryResult, ColumnMeta, ColumnType, Row } from '../result-types.js';
 import { importConnectorDependency } from '../optional-dependency.js';
+import { readEnv } from '../env.js';
 
 /**
  * A dedicated connection from the already-open DuckDB database. Dataset
@@ -47,7 +48,7 @@ export class DuckDBConnector implements DatabaseConnector {
       const setup = database.connect();
       try {
         await executeDuckDBConnection(setup, database, 'PRAGMA disable_checkpoint_on_shutdown');
-        // A host that must not download code at run time (DQL_DUCKDB_AUTOINSTALL=off): DuckDB uses only the
+        // A host that must not download code at run time (ZLENS_DUCKDB_AUTOINSTALL=off): DuckDB uses only the
         // extensions already installed, and a statement that needs another one fails instead of fetching it.
         if (duckDBAutoinstallOff()) await executeDuckDBConnection(setup, database, 'SET autoinstall_known_extensions = false');
       } catch (error) {
@@ -403,12 +404,12 @@ const sharedDuckDBDatabases = new Map<string, SharedDuckDBDatabase>();
 const closingDuckDBDatabases = new Map<string, Promise<void>>();
 
 /**
- * DQL_DUCKDB_AUTOINSTALL=off (or false, 0): DuckDB never downloads an
+ * ZLENS_DUCKDB_AUTOINSTALL=off (or false, 0): DuckDB never downloads an
  * extension on first use (by default it fetches a known extension, such as
  * httpfs for a URL, from its extension repository). Unset: DuckDB's default.
  */
 export function duckDBAutoinstallOff(env: NodeJS.ProcessEnv = process.env): boolean {
-  return /^(off|false|0|no)$/i.test(env.DQL_DUCKDB_AUTOINSTALL?.trim() ?? '');
+  return /^(off|false|0|no)$/i.test(readEnv('ZLENS_DUCKDB_AUTOINSTALL', env)?.trim() ?? '');
 }
 
 async function acquireDuckDBDatabase(

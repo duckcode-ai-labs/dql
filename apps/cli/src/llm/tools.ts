@@ -17,13 +17,13 @@ import {
   validateSql,
   resolveAnalyticalPath,
   explainRelationshipProof,
-} from '@duckcodeailabs/dql-mcp';
+} from '@zlens/mcp';
 import {
   dqlToolDefinitionsForSurface,
   getDqlToolDefinition,
   openMetadataCatalog,
   type DqlToolName,
-} from '@duckcodeailabs/dql-agent';
+} from '@zlens/agent';
 
 export interface AgentTool {
   /** Callable when named, never declared to a model (see AgentToolDefinition.hidden). */
@@ -40,7 +40,7 @@ export function buildAgentTools(ctx: DQLContext): AgentTool[] {
   const handlers = nativeToolHandlers(ctx);
   return dqlToolDefinitionsForSurface('native').map((definition) => {
     const handler = handlers[definition.name];
-    if (!handler) throw new Error(`Native DQL tool handler is missing for ${definition.name}`);
+    if (!handler) throw new Error(`Native ZLens tool handler is missing for ${definition.name}`);
     return registryTool(definition.name, handler);
   });
 }

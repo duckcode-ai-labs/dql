@@ -7,7 +7,7 @@
  * repository fixture.  It has three independent proofs:
  *   1. dbt builds the external project and the generated manifest has >50k
  *      columns (the generator refuses a missing opportunity model);
- *   2. the built DQL CLI compiles that manifest without a DQL domain/block;
+ *   2. the built ZLens CLI compiles that manifest without a DQL domain/block;
  *   3. the configured local MetricFlow runtime executes the authored metric
  *      twice, returns one scalar `total_bcm` value of 700, and records cold /
  *      warm wall times.
@@ -26,9 +26,9 @@ import { fileURLToPath } from 'node:url';
 
 const fixtureRoot = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(fixtureRoot, '../../../../..');
-const cli = process.env.DQL_MANIFEST_ONLY_CLI ?? join(repoRoot, 'apps/cli/dist/index.js');
-const mf = process.env.DQL_METRICFLOW_BIN ?? process.env.METRICFLOW_BIN ?? 'mf';
-const dbtBin = process.env.DQL_MANIFEST_ONLY_DBT_BIN ?? 'dbt';
+const cli = (process.env.ZLENS_MANIFEST_ONLY_CLI ?? process.env.DQL_MANIFEST_ONLY_CLI) ?? join(repoRoot, 'apps/cli/dist/index.js');
+const mf = (process.env.ZLENS_METRICFLOW_BIN ?? process.env.DQL_METRICFLOW_BIN) ?? process.env.METRICFLOW_BIN ?? 'mf';
+const dbtBin = (process.env.ZLENS_MANIFEST_ONLY_DBT_BIN ?? process.env.DQL_MANIFEST_ONLY_DBT_BIN) ?? 'dbt';
 
 function run(command, args, options = {}) {
   const start = performance.now();
@@ -66,7 +66,7 @@ function scalar(path, metric, expected) {
 }
 
 if (!existsSync(cli)) {
-  throw new Error(`Built DQL CLI not found at ${cli}. Run \`pnpm --filter @duckcodeailabs/dql-cli build\` first, or set DQL_MANIFEST_ONLY_CLI.`);
+  throw new Error(`Built ZLens CLI not found at ${cli}. Run \`pnpm --filter @zlens/cli build\` first, or set ZLENS_MANIFEST_ONLY_CLI.`);
 }
 
 const root = mkdtempSync(join(tmpdir(), 'dql-manifest-only-metricflow-'));
@@ -78,7 +78,7 @@ try {
   const database = join(dbtRoot, 'target', 'manifest_only_metricflow.duckdb');
   const manifest = join(dbtRoot, 'target', 'manifest.json');
   const enterpriseManifest = join(dbtRoot, 'target', 'manifest.enterprise.json');
-  const dbtEnv = { DQL_MANIFEST_ONLY_METRICFLOW_DB: database };
+  const dbtEnv = { ZLENS_MANIFEST_ONLY_METRICFLOW_DB: database };
 
   const dbtBuild = run(dbtBin, ['build', '--project-dir', dbtRoot, '--profiles-dir', dbtRoot], { env: dbtEnv });
   run(process.execPath, [join(fixtureRoot, 'generate-enterprise-manifest.mjs'), manifest, enterpriseManifest]);

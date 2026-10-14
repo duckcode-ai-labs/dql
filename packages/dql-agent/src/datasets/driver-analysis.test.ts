@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { DashboardDriverDefinition, DatasetDescriptor } from '@duckcodeailabs/dql-core';
+import type { DashboardDriverDefinition, DatasetDescriptor } from '@zlens/core';
 import { buildDatasetComparisonPlan } from './period-comparison.js';
 import { foldDriverAnalysis, planDriverQueries } from './driver-analysis.js';
 import { calendarComparisonBounds } from '../analytical-period-resolution.js';

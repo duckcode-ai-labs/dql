@@ -3,7 +3,7 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { load } from 'js-yaml';
 import { describe, expect, it } from 'vitest';
-import type { MetricCapabilityContract } from '@duckcodeailabs/dql-core';
+import type { MetricCapabilityContract } from '@zlens/core';
 import {
   AgentRunEngine,
   buildAnalyticalTurnPlan,

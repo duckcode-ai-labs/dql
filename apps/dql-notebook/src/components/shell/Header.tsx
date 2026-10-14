@@ -95,9 +95,9 @@ function DQLLogo({ t }: { t: Theme }) {
 }
 
 export function Header() {
-  // A hosted reader is not using a workbench: the product is just DQL to them (RFC 0010 HH-9 `audience`).
+  // A hosted reader is not using a workbench: the product is just ZLens to them (RFC 0010 HH-9 `audience`).
   const hostUi = useHostUi();
-  const productName = hostReader(hostUi) ? 'DQL' : 'DQL Workbench';
+  const productName = hostReader(hostUi) ? 'ZLens' : 'ZLens Workbench';
   const state = useNotebookStore(useShallow((store) => ({
     activeBlockPath: store.activeBlockPath,
     activeFile: store.activeFile,

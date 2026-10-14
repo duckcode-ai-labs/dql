@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildStoryBindingCatalog } from '@duckcodeailabs/dql-core/apps/story-bindings';
+import { buildStoryBindingCatalog } from '@zlens/core/apps/story-bindings';
 import { drawCanvasTile } from './CanvasPageFrame';
 
 const item = (i: string, type: string, title = 'Tile') => ({ i, x: 0, y: 0, w: 6, h: 4, title, viz: { type } }) as never;

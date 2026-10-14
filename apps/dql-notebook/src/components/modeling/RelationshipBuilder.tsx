@@ -9,8 +9,8 @@
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeftRight, Loader2, Plus, RefreshCw, ShieldCheck, Sparkles, XCircle } from 'lucide-react';
-import { DEFAULT_MODEL_AREA_ID } from '@duckcodeailabs/dql-core/modeling-ids';
-import type { DbtNodeAuthoringDetail, ManifestModelArea, ManifestModelRelationship, RelationshipAuthoringInput } from '@duckcodeailabs/dql-core';
+import { DEFAULT_MODEL_AREA_ID } from '@zlens/core/modeling-ids';
+import type { DbtNodeAuthoringDetail, ManifestModelArea, ManifestModelRelationship, RelationshipAuthoringInput } from '@zlens/core';
 import { api, type ContextAuthoringProposalV1, type DbtFirstModelingResponse, type RelationshipKeySuggestion } from '../../api/client';
 import type { themes } from '../../themes/notebook-theme';
 import { Modal, SearchPicker, iconButtonStyle, inputStyle, linkButton } from './modeling-controls';

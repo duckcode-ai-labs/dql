@@ -1,5 +1,6 @@
 import { existsSync } from 'node:fs';
 import { posix, win32 } from 'node:path';
+import { readEnv } from '@zlens/core';
 
 export interface NpmInvocation {
   command: string;
@@ -30,10 +31,10 @@ export function resolveNpmInvocation(options: ResolveNpmInvocationOptions = {}):
   const exists = options.exists ?? existsSync;
   const pathApi = platform === 'win32' ? win32 : posix;
 
-  const override = env.DQL_NPM_EXEC_PATH?.trim();
+  const override = readEnv('ZLENS_NPM_EXEC_PATH', env)?.trim();
   if (override) {
     if (!exists(override)) {
-      throw new Error(`DQL_NPM_EXEC_PATH points to a missing file: ${override}`);
+      throw new Error(`ZLENS_NPM_EXEC_PATH points to a missing file: ${override}`);
     }
     return invocationFor(override, execPath, 'override');
   }
@@ -66,8 +67,8 @@ export function resolveNpmInvocation(options: ResolveNpmInvocationOptions = {}):
 
   throw new Error(
     'npm executable was not found. Install Node.js with npm, add npm to PATH, '
-      + 'or set DQL_NPM_EXEC_PATH to the absolute npm executable. '
-      + 'DQL only invokes npm to install optional project-local connector drivers.',
+      + 'or set ZLENS_NPM_EXEC_PATH to the absolute npm executable. '
+      + 'ZLens only invokes npm to install optional project-local connector drivers.',
   );
 }
 

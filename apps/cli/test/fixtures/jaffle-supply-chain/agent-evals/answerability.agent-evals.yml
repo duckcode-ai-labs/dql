@@ -19,7 +19,7 @@
 #
 # HOW TO RUN (needs a provider; no warehouse required — these assert routing and
 # answerability, not values):
-#   dql agent eval apps/cli/test/fixtures/jaffle-supply-chain/agent-evals/answerability.agent-evals.yml \
+#   zlens agent eval apps/cli/test/fixtures/jaffle-supply-chain/agent-evals/answerability.agent-evals.yml \
 #     --format json --max-false-refusal 0.05 --min-refusal-recall 1
 #
 # Set the ceiling from a MEASURED baseline, then tighten it in the same PR that

@@ -23,8 +23,8 @@ import type {
   SemanticLayer,
   SemanticModelDefinition,
   TimeDimensionDefinition,
-} from "@duckcodeailabs/dql-core";
-import { trustLabelIdForStatus } from "@duckcodeailabs/dql-core";
+} from "@zlens/core";
+import { trustLabelIdForStatus } from "@zlens/core";
 import type { KGNode, KGEdge, KGNodeKind, KGCertification } from "./types.js";
 import {
   buildBlockBusinessFingerprint,

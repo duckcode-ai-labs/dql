@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { defaultPersonaRegistry } from '@duckcodeailabs/dql-project';
+import { defaultPersonaRegistry } from '@zlens/project';
 import { activePersonaPolicyFingerprint, assertAppAccess, DQLAccessDeniedError, runtimeVariables } from './governance-runtime.js';
 import { installHostPersonaSlots, PERSONA_SLOT_LIMIT, personaSlotCount, withRequestContext, type DqlPrincipal } from './host/request-context.js';
 

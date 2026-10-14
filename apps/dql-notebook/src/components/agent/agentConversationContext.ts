@@ -1,5 +1,5 @@
 import type { AgentAnswerCascade, AgentConversationDqlArtifact } from '../../llm/types';
-import { normalizeDqlArtifactReference } from '@duckcodeailabs/dql-core/artifacts';
+import { normalizeDqlArtifactReference } from '@zlens/core/artifacts';
 
 export type ConversationThreadItem =
   | { kind: 'user'; id: string; text: string }

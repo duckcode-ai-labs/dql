@@ -6,7 +6,7 @@ import {
   type DatasetMeasureField,
   type DatasetPhysicalField,
   type TileQuery,
-} from '@duckcodeailabs/dql-core';
+} from '@zlens/core';
 
 /**
  * App Autopilot may receive a compact, server-derived analytical fact set for

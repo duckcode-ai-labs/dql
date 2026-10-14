@@ -1,5 +1,5 @@
-import { modelAreaLocalId } from '@duckcodeailabs/dql-core/modeling-ids';
-import type { ManifestDbtFirstModeling, ManifestModelArea, ManifestModelEntity, ModelingAuthoringChange } from '@duckcodeailabs/dql-core';
+import { modelAreaLocalId } from '@zlens/core/modeling-ids';
+import type { ManifestDbtFirstModeling, ManifestModelArea, ManifestModelEntity, ModelingAuthoringChange } from '@zlens/core';
 
 /**
  * The Modeling page's tabs (`05-domain-studio-ui.md`).

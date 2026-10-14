@@ -11,11 +11,11 @@ import {
   type TileQuery,
   type TileQueryFilter,
   type TileQueryValidation,
-} from '@duckcodeailabs/dql-core';
+} from '@zlens/core';
 import {
   solveAnalyticalCompatibility,
   type AnalyticalCompatibilityResult,
-} from '@duckcodeailabs/dql-agent';
+} from '@zlens/agent';
 import type { SemanticRuntimeQueryRequest } from '../semantic-runtime.js';
 
 export class SemanticDatasetTileQueryError extends Error {

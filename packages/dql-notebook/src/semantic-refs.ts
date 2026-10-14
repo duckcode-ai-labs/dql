@@ -10,7 +10,7 @@
  *   Output: SELECT segment_tier AS segment, SUM(amount) AS total_revenue FROM fct_revenue GROUP BY segment_tier
  */
 
-import type { DimensionDefinition, MetricDefinition, SemanticLayer } from '@duckcodeailabs/dql-core';
+import type { DimensionDefinition, MetricDefinition, SemanticLayer } from '@zlens/core';
 
 /** Pattern to match @metric(name) or @dim(name) references. */
 const SEMANTIC_REF_PATTERN = /@(metric|dim|dimension)\(\s*([a-zA-Z_][a-zA-Z0-9_.]*)\s*\)/g;

@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { verifyAskNarration, type InvestigationReportV1 } from '@duckcodeailabs/dql-agent';
+import { verifyAskNarration, type InvestigationReportV1 } from '@zlens/agent';
 import { startLocalServer } from '../local-runtime.js';
 import { createSeededSqliteExecutor, type GoldenSeed, type SeededSqliteExecutor } from '../testkit/seeded-sqlite-executor.js';
 
@@ -39,8 +39,8 @@ beforeAll(async () => {
   cpSync(fixtureDir, root, { recursive: true });
   rmSync(join(root, '.dql'), { recursive: true, force: true });
   rmSync(join(root, 'test-cassettes'), { recursive: true, force: true });
-  process.env.DQL_EVAL_CASSETTE_DIR = join(fixtureDir, 'test-cassettes', 'golden');
-  process.env.DQL_EVAL_CASSETTE_MODE = 'replay';
+  process.env.ZLENS_EVAL_CASSETTE_DIR = join(fixtureDir, 'test-cassettes', 'golden');
+  process.env.ZLENS_EVAL_CASSETTE_MODE = 'replay';
   executor = createSeededSqliteExecutor(seed);
   const port = await startLocalServer({
     rootDir: root, projectRoot: root, executor, connection: { driver: 'sqlite', filepath: ':memory:' }, preferredPort: 0,

@@ -4,8 +4,8 @@ import {
   tileQueryOutputAliases,
   type DatasetHierarchyDrillResult,
   type TileQuery,
-} from '@duckcodeailabs/dql-core/apps/tile-query';
-import type { DatasetDescriptor, DatasetPhysicalField } from '@duckcodeailabs/dql-core/datasets/descriptor';
+} from '@zlens/core/apps/tile-query';
+import type { DatasetDescriptor, DatasetPhysicalField } from '@zlens/core/datasets/descriptor';
 import type {
   DashboardDatasetCrossFilter,
   DashboardDatasetHierarchyDrill,

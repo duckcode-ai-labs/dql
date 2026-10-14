@@ -9,11 +9,11 @@
  *   last minute does not reload itself again; it reads the mark as it starts and takes it out of the address bar;
  * - session storage, when the browser allows it, keeps the same minute across pages too;
  * - when neither the address nor storage can be marked, the page does not reload itself at all.
- * Instead of a second reload the page says, in plain words, "DQL could not load part of the page. Reload the page."
+ * Instead of a second reload the page says, in plain words, "ZLens could not load part of the page. Reload the page."
  */
 export const CHUNK_RELOAD_KEY = 'dql-chunk-reload-at';
 export const CHUNK_RELOAD_MARK = 'dql-reloaded';
-export const CHUNK_RELOAD_MESSAGE = 'DQL could not load part of the page. Reload the page.';
+export const CHUNK_RELOAD_MESSAGE = 'ZLens could not load part of the page. Reload the page.';
 const CHUNK_FAILURE = /Failed to fetch dynamically imported module|error loading dynamically imported module|Importing a module script failed|Unable to preload CSS/i;
 const ONCE_WITHIN_MS = 60_000;
 

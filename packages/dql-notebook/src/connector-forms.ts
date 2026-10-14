@@ -1,4 +1,4 @@
-import type { ConnectionConfig } from '@duckcodeailabs/dql-connectors';
+import type { ConnectionConfig } from '@zlens/connectors';
 
 export interface ConnectorFieldSchema {
   key: keyof ConnectionConfig | 'name';

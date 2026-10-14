@@ -1,9 +1,9 @@
 import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
-import { compile, writeBundle } from '@duckcodeailabs/dql-compiler';
-import { QueryExecutor } from '@duckcodeailabs/dql-connectors';
-import { DataLexContractRegistry, resolveDataLexManifestPath } from '@duckcodeailabs/dql-core';
+import { compile, writeBundle } from '@zlens/dql-compiler';
+import { QueryExecutor } from '@zlens/connectors';
+import { DataLexContractRegistry, resolveDataLexManifestPath } from '@zlens/core';
 import type { CLIFlags } from '../args.js';
 import { assertLocalQueryRuntimeReady, findProjectRoot, loadProjectConfig, normalizeProjectConnection, startLocalServer } from '../local-runtime.js';
 import { maybeOpenBrowser } from '../open-browser.js';

@@ -1,7 +1,7 @@
 {
-  "name": "@duckcodeailabs/dql-connectors",
+  "name": "@zlens/connectors",
   "version": "1.17.3",
-  "description": "DQL database connectors for local files, SQL warehouses, and lakehouse engines",
+  "description": "ZLens database connectors for local files, SQL warehouses, and lakehouse engines",
   "license": "Apache-2.0",
   "type": "module",
   "main": "./dist/index.js",

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parse, SemanticLayer } from '@duckcodeailabs/dql-core';
+import { parse, SemanticLayer } from '@zlens/core';
 import { lowerProgram } from './lowering.js';
 
 describe('lowerProgram', () => {

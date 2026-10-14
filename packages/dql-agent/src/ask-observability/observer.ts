@@ -21,6 +21,7 @@ import type { AnalyticalCascadeTierV1 } from '../analytical-orchestration.js';
 import { ASK_TRACE_SCHEMA_VERSION } from './types.js';
 import { AskTraceSqliteStoreV1, type AskTraceStoreWriteResult } from './store.js';
 import { durationMs, fingerprint, isoNow, mintHexId } from './utils.js';
+import { readEnv } from '@zlens/core';
 
 export const ASK_TRACE_OBSERVER_V1 = Symbol('dql.askTraceObserver.v1');
 
@@ -595,7 +596,7 @@ function storeAlreadyRecordedDrop(dropped: AskTraceStoreWriteResult['dropped']):
 }
 
 export function createAskTraceObserverV1(input: CreateAskTraceObserverInputV1): AskTraceObserverV1 {
-  if (!input.store || !input.store.status().recordingEnabled || process.env.DQL_ASK_OBSERVABILITY === 'off') {
+  if (!input.store || !input.store.status().recordingEnabled || readEnv('ZLENS_ASK_OBSERVABILITY') === 'off') {
     return noOpAskTraceObserverV1;
   }
   try {

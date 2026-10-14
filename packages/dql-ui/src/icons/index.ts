@@ -1,6 +1,6 @@
 // v1.3 Track 3 — single icon entry point.
 //
-// Consumers should import from '@duckcodeailabs/dql-ui/icons' so Lucide
+// Consumers should import from '@zlens/ui/icons' so Lucide
 // glyphs and DQL-specific glyphs share one import site. Centralising the
 // surface lets Track 6/7 swap implementations without touching every
 // consumer.

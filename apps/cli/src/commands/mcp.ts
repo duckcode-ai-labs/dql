@@ -1,13 +1,14 @@
-import { DQLContext, runStdio, runLoopbackHTTP } from '@duckcodeailabs/dql-mcp';
+import { DQLContext, runStdio, runLoopbackHTTP } from '@zlens/mcp';
 import {
   defaultKgPath,
   ensureMetadataCatalogFresh,
   reindexProject,
-} from '@duckcodeailabs/dql-agent';
+} from '@zlens/agent';
 import { existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import type { CLIFlags } from '../args.js';
 import { findProjectRoot } from '../local-runtime.js';
+import { readEnv } from '@zlens/core';
 
 interface McpFlags extends CLIFlags {
   http?: boolean;
@@ -41,7 +42,7 @@ async function runMcpTest(targetPath: string | null, flags: CLIFlags): Promise<v
   const checks: Array<{ name: string; ok: boolean; detail: string; optional?: boolean }> = [];
 
   checks.push({
-    name: 'DQL project',
+    name: 'ZLens project',
     ok: existsSync(join(projectRoot, 'dql.config.json')),
     detail: existsSync(join(projectRoot, 'dql.config.json')) ? projectRoot : 'dql.config.json not found',
   });
@@ -98,11 +99,11 @@ async function runMcpTest(targetPath: string | null, flags: CLIFlags): Promise<v
     detail: 'ask_dql, answer_question, typed App Dataset tools, query_via_metadata, build_block_from_prompt, build_dql_app, inspect_dql_project, certify, lineage, and metadata tools are available',
   });
 
-  // Advisory: is the DQL runtime up? Governed answer/build + bounded execution
+  // Advisory: is the ZLens runtime up? Governed answer/build + bounded execution
   // proxy to it. stdio routing/BYOSQL planning works without it.
-  const runtimeBase = (process.env.DQL_RUNTIME_URL ?? 'http://127.0.0.1:3474').replace(/\/$/, '');
+  const runtimeBase = (readEnv('ZLENS_RUNTIME_URL') ?? 'http://127.0.0.1:3474').replace(/\/$/, '');
   let runtimeOk = false;
-  let runtimeDetail = `not reachable at ${runtimeBase} — start it with \`dql serve\` for answer_question / build_block_from_prompt / query execution`;
+  let runtimeDetail = `not reachable at ${runtimeBase} — start it with \`zlens serve\` for answer_question / build_block_from_prompt / query execution`;
   try {
     const resp = await fetch(`${runtimeBase}/api/schema`, { signal: AbortSignal.timeout(1500) });
     // Any HTTP response (even 404) means the runtime is up.
@@ -112,7 +113,7 @@ async function runMcpTest(targetPath: string | null, flags: CLIFlags): Promise<v
     // not reachable — leave runtimeOk false with the actionable detail
   }
   checks.push({
-    name: 'DQL runtime (governed generation + execution)',
+    name: 'ZLens runtime (governed generation + execution)',
     ok: runtimeOk,
     detail: runtimeDetail,
     optional: true,
@@ -122,7 +123,7 @@ async function runMcpTest(targetPath: string | null, flags: CLIFlags): Promise<v
   // merely any process speaking HTTP on the configured runtime port. The
   // endpoint itself owns current catalog, source, proof and target validation.
   let datasetRuntimeOk = false;
-  let datasetRuntimeDetail = `not reachable at ${runtimeBase}/api/app-datasets — start \`dql serve\` for typed Dataset MCP execution`;
+  let datasetRuntimeDetail = `not reachable at ${runtimeBase}/api/app-datasets — start \`zlens serve\` for typed Dataset MCP execution`;
   try {
     const response = await fetch(`${runtimeBase}/api/app-datasets`, { signal: AbortSignal.timeout(1500) });
     datasetRuntimeOk = response.status >= 200 && response.status < 300;
@@ -144,7 +145,7 @@ async function runMcpTest(targetPath: string | null, flags: CLIFlags): Promise<v
     return;
   }
 
-  console.log('\n  DQL MCP Test');
+  console.log('\n  ZLens MCP Test');
   console.log(`    Project: ${projectRoot}`);
   console.log('');
   for (const check of checks) {
@@ -153,7 +154,7 @@ async function runMcpTest(targetPath: string | null, flags: CLIFlags): Promise<v
   }
   console.log('');
   console.log(ok
-    ? '  Ready: point Claude Code, Codex, Cursor, or Claude Desktop at this project with `dql connect`.'
-    : '  Not ready: fix the failed checks above, then rerun `dql mcp test`.');
+    ? '  Ready: point Claude Code, Codex, Cursor, or Claude Desktop at this project with `zlens connect`.'
+    : '  Not ready: fix the failed checks above, then rerun `zlens mcp test`.');
   console.log('');
 }

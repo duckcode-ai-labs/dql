@@ -1,5 +1,5 @@
 import type { ContextAuthoringOperation } from './context-authoring.js';
-import type { DQLManifest } from '@duckcodeailabs/dql-core';
+import type { DQLManifest } from '@zlens/core';
 
 /**
  * DEMAND-DRIVEN CONCEPT DRAFTS (A-005). A concept is never bulk-generated: a

@@ -1,5 +1,5 @@
 /**
- * Manifest Builder — scans a DQL project and produces a DQLManifest.
+ * Manifest Builder — scans a ZLens project and produces a DQLManifest.
  *
  * This is the core compilation step: discovers all blocks, notebooks,
  * semantic layer definitions, extracts dependencies, builds lineage,
@@ -77,12 +77,12 @@ import { loadManifestKnowledgeSkills, manifestKnowledgeSkillInputFiles } from '.
 
 /**
  * Filters applied to dbt manifest import to keep only the subgraph relevant
- * to this DQL project. Each entry is either a plain model name, `tag:<name>`,
+ * to this ZLens project. Each entry is either a plain model name, `tag:<name>`,
  * or `path:<prefix>` (matched against the node's `path` / `original_file_path`).
  *
  * Semantics
  * - `anchors` extend the DQL-referenced tables set — upstream BFS will follow
- *   from these as if DQL had queried them directly.
+ *   from these as if ZLens had queried them directly.
  * - `include` (if non-empty) narrows the considered set to models matching at
  *   least one entry; upstream deps of those are still walked.
  * - `exclude` removes matching models from the final import even if they are
@@ -97,7 +97,7 @@ export interface DbtImportFilters {
 export interface ManifestBuildOptions {
   /** Project root directory (must contain dql.config.json) */
   projectRoot: string;
-  /** DQL CLI version string */
+  /** ZLens CLI version string */
   dqlVersion?: string;
   /** Path to dbt manifest.json for import */
   dbtManifestPath?: string;
@@ -549,13 +549,13 @@ interface ProjectConfig {
     branch?: string;
     subPath?: string;
   };
-  /** Optional interop path to a DataLex compiler manifest. DQL itself does not require DataLex. */
+  /** Optional interop path to a DataLex compiler manifest. ZLens itself does not require DataLex. */
   datalex?: {
     /** Path to datalex-manifest.json, absolute or relative to projectRoot */
     manifestPath?: string;
   };
   /**
-   * Optional `dql propose` conventions. Refines the convention-agnostic
+   * Optional `zlens propose` conventions. Refines the convention-agnostic
    * classifier + bounded selection. All fields are optional; defaults apply.
    */
   propose?: {
@@ -954,7 +954,7 @@ function scanBlocks(
         }
       } catch (err) {
         // Surface parse failures as diagnostics instead of silently dropping
-        // the file. Users see a concrete error + path; `dql doctor` picks it up.
+        // the file. Users see a concrete error + path; `zlens doctor` picks it up.
         const msg = err instanceof Error ? err.message : String(err);
         diagnostics?.push({
           kind: 'parse',

@@ -1,11 +1,12 @@
 {
-  "name": "@duckcodeailabs/dql-cli",
+  "name": "@zlens/cli",
   "version": "1.17.3",
-  "description": "Public CLI for parsing, formatting, testing, and certifying DQL blocks",
+  "description": "Public CLI for ZLens: parsing, formatting, testing, and certifying DQL blocks",
   "license": "Apache-2.0",
   "type": "module",
   "bin": {
-    "dql": "./dist/index.js"
+    "zlens": "./dist/index.js",
+    "dql": "./dist/dql-alias.js"
   },
   "exports": {
     "./host": {
@@ -16,7 +17,7 @@
     "./dist/*": "./dist/*"
   },
   "scripts": {
-    "build": "pnpm --filter @duckcodeailabs/dql-notebook-app build && rm -rf dist tsconfig.tsbuildinfo && tsc -b && node ./scripts/copy-runtime-assets.mjs",
+    "build": "pnpm --filter @zlens/notebook-app build && rm -rf dist tsconfig.tsbuildinfo && tsc -b && node ./scripts/copy-runtime-assets.mjs",
     "dev": "tsx src/index.ts",
     "test": "vitest run --passWithNoTests",
     "test:offline": "node scripts/test-offline.mjs",
@@ -44,15 +45,15 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.104.2",
-    "@duckcodeailabs/dql-agent": "workspace:*",
-    "@duckcodeailabs/dql-compiler": "workspace:*",
-    "@duckcodeailabs/dql-connectors": "workspace:*",
-    "@duckcodeailabs/dql-core": "workspace:*",
-    "@duckcodeailabs/dql-governance": "workspace:*",
-    "@duckcodeailabs/dql-mcp": "workspace:*",
-    "@duckcodeailabs/dql-notebook": "workspace:*",
-    "@duckcodeailabs/dql-project": "workspace:*",
-    "@duckcodeailabs/dql-slack": "workspace:*",
+    "@zlens/agent": "workspace:*",
+    "@zlens/dql-compiler": "workspace:*",
+    "@zlens/connectors": "workspace:*",
+    "@zlens/core": "workspace:*",
+    "@zlens/governance": "workspace:*",
+    "@zlens/mcp": "workspace:*",
+    "@zlens/notebook": "workspace:*",
+    "@zlens/project": "workspace:*",
+    "@zlens/slack": "workspace:*",
     "better-sqlite3": "^12.11.1",
     "isomorphic-git": "^1.27.0",
     "js-yaml": "^4.1.0",
@@ -61,7 +62,7 @@
     "openai": "^6.44.0"
   },
   "devDependencies": {
-    "@duckcodeailabs/dql-notebook-app": "workspace:*",
+    "@zlens/notebook-app": "workspace:*",
     "@types/better-sqlite3": "^7.6.13",
     "@types/js-yaml": "^4.0.9",
     "@types/node-cron": "^3.0.11",

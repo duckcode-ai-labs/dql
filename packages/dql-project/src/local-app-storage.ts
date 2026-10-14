@@ -2,7 +2,7 @@ import { createRequire } from 'node:module';
 import { dirname } from 'node:path';
 import { mkdirSync } from 'node:fs';
 import type Database from 'better-sqlite3';
-import type { AppBuildDraft, AppBuildDraftOperation } from '@duckcodeailabs/dql-core';
+import type { AppBuildDraft, AppBuildDraftOperation } from '@zlens/core';
 
 const require = createRequire(import.meta.url);
 let databaseCtor: typeof Database | null = null;

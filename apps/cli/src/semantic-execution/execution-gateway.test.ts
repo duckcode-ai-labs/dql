@@ -2,10 +2,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { ConnectorQueryError, type ConnectionConfig, type QueryExecutor, type QueryResult } from '@duckcodeailabs/dql-connectors';
+import { ConnectorQueryError, type ConnectionConfig, type QueryExecutor, type QueryResult } from '@zlens/connectors';
 import type { SemanticRuntimeCompileResult } from '../semantic-runtime.js';
 import { saveTestedSemanticRuntimeSettings } from '../semantic-runtime-settings.js';
-import { createWarehouseTargetIdentity } from '@duckcodeailabs/dql-core';
+import { createWarehouseTargetIdentity } from '@zlens/core';
 import { executeTargetBoundSemanticQuery } from './execution-gateway.js';
 
 let root: string;

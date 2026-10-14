@@ -4,8 +4,8 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { execFileSync } from 'node:child_process';
 import type { Server } from 'node:http';
-import type { QueryExecutor } from '@duckcodeailabs/dql-connectors';
-import { loadSkills } from '@duckcodeailabs/dql-agent';
+import type { QueryExecutor } from '@zlens/connectors';
+import { loadSkills } from '@zlens/agent';
 import { startLocalServer } from './local-runtime.js';
 
 const tempDirs: string[] = [];

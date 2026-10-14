@@ -4,8 +4,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import type { AgentRunExecutors } from '@duckcodeailabs/dql-agent';
-import type { QueryExecutor } from '@duckcodeailabs/dql-connectors';
+import type { AgentRunExecutors } from '@zlens/agent';
+import type { QueryExecutor } from '@zlens/connectors';
 import { hostedProjectFile, startLocalServer } from '../local-runtime.js';
 import type { DqlPrincipal } from './request-context.js';
 

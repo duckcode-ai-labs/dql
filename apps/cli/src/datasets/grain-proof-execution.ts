@@ -3,8 +3,8 @@ import {
   datasetProofFingerprint,
   getDialect,
   type DatasetDescriptor,
-} from '@duckcodeailabs/dql-core';
-import type { ConnectionConfig, SQLParamSpec } from '@duckcodeailabs/dql-connectors';
+} from '@zlens/core';
+import type { ConnectionConfig, SQLParamSpec } from '@zlens/connectors';
 
 /**
  * Runtime evidence complements the Git-owned declaration proof. It is made

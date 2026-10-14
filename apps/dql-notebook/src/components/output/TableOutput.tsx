@@ -11,7 +11,7 @@ import {
   conditionalStats,
   type ConditionalTone,
   type DashboardConditionalFormat,
-} from '@duckcodeailabs/dql-core/apps/conditional-format';
+} from '@zlens/core/apps/conditional-format';
 
 interface TableOutputProps {
   result: QueryResult;

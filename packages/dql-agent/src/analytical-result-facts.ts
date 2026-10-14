@@ -7,11 +7,12 @@
  */
 
 import { createHash } from 'node:crypto';
-import type { AnalyticalQuestionFrameV2 } from '@duckcodeailabs/dql-core';
+import type { AnalyticalQuestionFrameV2 } from '@zlens/core';
 import type {
   AnalyticalExecutionGraphV1,
   AnalyticalExecutionReceiptV1,
 } from './analytical-execution-graph.js';
+import { readEnv } from '@zlens/core';
 
 export type AnalyticalResultFactKind =
   | 'scope'
@@ -533,7 +534,7 @@ export async function composeVerifiedAnalyticalNarrative(input: {
     }
     const claims = parseAnalyticalNarrativeClaims(raw);
     if (!claims) {
-      if (process.env.DQL_ORCHESTRATOR_TRACE) {
+      if (readEnv('ZLENS_ORCHESTRATOR_TRACE')) {
         console.warn(`[dql] narration unparseable (attempt ${attempt}) len=${raw.length} tail="${raw.slice(-220).replace(/\n/g, '\\n')}"`);
       }
       correction = 'The response was not the required JSON claims object.';

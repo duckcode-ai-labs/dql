@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
-import { Parser } from '@duckcodeailabs/dql-core';
-import { CostEstimator } from '@duckcodeailabs/dql-governance';
+import { Parser } from '@zlens/core';
+import { CostEstimator } from '@zlens/governance';
 import type { CLIFlags } from '../args.js';
 
 export async function runInfo(filePath: string, flags: CLIFlags): Promise<void> {

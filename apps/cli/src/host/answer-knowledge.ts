@@ -16,7 +16,7 @@ import {
   type AskStoryStepV1,
   type KnowledgeSession,
   type ProviderRunOptions,
-} from '@duckcodeailabs/dql-agent';
+} from '@zlens/agent';
 
 type DispatchOptions = (purpose: 'knowledge', request: never) => { options: ProviderRunOptions; settle(outcome: 'ok' | 'error' | 'cancelled', error?: unknown): void };
 
@@ -122,7 +122,7 @@ export function withKnowledgeWithheld(result: AgentRouteExecutorResult, labels: 
     version: 1,
     phase: 'search',
     title: 'Team documents not read',
-    detail: `${names}: your model runs off this machine, so DQL did not send it these pages. To allow it, set "knowledge": { "hostedModels": true } for ${labels.length === 1 ? 'that server' : 'each server'} in .dql/mcp-servers.json.`,
+    detail: `${names}: your model runs off this machine, so ZLens did not send it these pages. To allow it, set "knowledge": { "hostedModels": true } for ${labels.length === 1 ? 'that server' : 'each server'} in .dql/mcp-servers.json.`,
     state: 'done',
     ms: 0,
     at: Date.now(),

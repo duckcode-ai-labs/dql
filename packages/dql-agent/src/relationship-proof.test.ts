@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { MetricCapabilityContract } from '@duckcodeailabs/dql-core';
+import type { MetricCapabilityContract } from '@zlens/core';
 import {
   buildResolvedRelationshipProofsV1,
   governedCapabilityDimensionHasFreshAutomaticRelationshipProofV1,

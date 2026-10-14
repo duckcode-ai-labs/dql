@@ -1,4 +1,4 @@
-// Thin isomorphic-git wrapper used by `dql diff <path>` to resolve the
+// Thin isomorphic-git wrapper used by `zlens diff <path>` to resolve the
 // HEAD blob for a file inside a git repo.
 
 import { statSync } from 'node:fs';

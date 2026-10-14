@@ -14,7 +14,7 @@ import {
   type AnalyticalQuestionFrameV2,
   type MetricCapabilityContract,
   type ResolvedRelationshipProofV1,
-} from "@duckcodeailabs/dql-core";
+} from "@zlens/core";
 import type { KnowledgeLens } from "./domain-context.js";
 import type {
   AgentEvidenceCandidate,
@@ -126,7 +126,7 @@ export interface ResolvedAnalyticalPlan {
     /**
      * Host-owned explicit projection. These are not grouping dimensions: each
      * item is a qualified output binding that the frozen exploratory SQL and
-     * returned result must retain before DQL can display it.
+     * returned result must retain before ZLens can display it.
      */
     /** Absent only on persisted pre-V4 plans; newly built plans always set it. */
     requiredOutputs?: ResolvedPlanMemberBinding[];
@@ -570,7 +570,7 @@ export function buildResolvedAnalyticalPlan(
   // `filters: []`, so the run returned all 200 customers and the narration
   // truthfully reported that his value was not present.
   //
-  // DQL had already found him. `evidence.parsedIntent.filters` are GROUNDED
+  // ZLens had already found him. `evidence.parsedIntent.filters` are GROUNDED
   // member bindings — matched against the retrieved context, not guessed — so
   // falling back to them adds no unproven predicate. The provider's own filters
   // still win whenever it supplies any.

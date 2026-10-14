@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react';
 import { Blocks, X } from 'lucide-react';
 import type { AppStudioBuildDraft } from '../../../api/client';
-import { datasetMeasureField, datasetPhysicalField, type DatasetDescriptor, type DatasetPhysicalField } from '@duckcodeailabs/dql-core/datasets/descriptor';
+import { datasetMeasureField, datasetPhysicalField, type DatasetDescriptor, type DatasetPhysicalField } from '@zlens/core/datasets/descriptor';
 import { toggleFieldInQuery } from './field-query';
-import { datasetTileVisualizationCompatibility, tileQueryOutputAliases, tileQueryValidationRuns, validateTileQuery, type TileQuery } from '@duckcodeailabs/dql-core/apps/tile-query';
+import { datasetTileVisualizationCompatibility, tileQueryOutputAliases, tileQueryValidationRuns, validateTileQuery, type TileQuery } from '@zlens/core/apps/tile-query';
 import { TileQueryEditor } from '../builder/TileQueryEditor';
 import { ShelfEditor, type ShelfChange } from './ShelfEditor';
-import type { DashboardVizEncoding } from '@duckcodeailabs/dql-core/apps/viz-encoding';
+import type { DashboardVizEncoding } from '@zlens/core/apps/viz-encoding';
 import type { QueryResult } from '../../../store/types';
 import { humanize } from './studio-ui';
 

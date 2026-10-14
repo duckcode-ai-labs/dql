@@ -5,8 +5,9 @@ import { setFlagsFromString } from 'node:v8';
 import { runInNewContext } from 'node:vm';
 import { describe, expect, it } from 'vitest';
 import { DuckDBConnector } from './duckdb.js';
+import { readEnv } from '../env.js';
 
-const configuredDuckDbConnectorRoot = process.env.DQL_APP_DATASETS_DUCKDB_CONNECTOR_ROOT?.trim();
+const configuredDuckDbConnectorRoot = readEnv('ZLENS_APP_DATASETS_DUCKDB_CONNECTOR_ROOT')?.trim();
 // /proc/self/fd exists only on Linux; the driver is only loadable where the root is configured.
 const linuxIt = process.platform === 'linux' && configuredDuckDbConnectorRoot ? it : it.skip;
 

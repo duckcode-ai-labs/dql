@@ -2,8 +2,8 @@
  * Live connector checks against real servers. Skipped unless the server is
  * named in the environment, e.g.
  *
- *   DQL_LIVE_MODULES=/path/with/node_modules \
- *   DQL_LIVE_POSTGRES='{"host":"localhost","port":55432,"username":"dql","password":"dql","database":"dql"}' \
+ *   ZLENS_LIVE_MODULES=/path/with/node_modules \
+ *   ZLENS_LIVE_POSTGRES='{"host":"localhost","port":55432,"username":"dql","password":"dql","database":"dql"}' \
  *   pnpm vitest run src/drivers/live.test.ts
  *
  * Each engine proves the same contract: typed values come back as the
@@ -15,6 +15,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { ConnectionConfig, DatabaseConnector } from '../connector.js';
 import { ConnectionPoolManager } from '../connection-pool.js';
 import { QueryExecutor } from '../query-executor.js';
+import { readEnv } from '../env.js';
 
 interface Engine {
   env: string;
@@ -31,7 +32,7 @@ interface Engine {
 
 const ENGINES: Engine[] = [
   {
-    env: 'DQL_LIVE_POSTGRES',
+    env: 'ZLENS_LIVE_POSTGRES',
     driver: 'postgresql',
     seed: [
       'DROP SCHEMA IF EXISTS dql_live CASCADE',
@@ -47,7 +48,7 @@ const ENGINES: Engine[] = [
   // Redshift speaks the PostgreSQL protocol; a PostgreSQL server stands in
   // for its wire behaviour (cursor, cancel, types) when no cluster is at hand.
   {
-    env: 'DQL_LIVE_REDSHIFT',
+    env: 'ZLENS_LIVE_REDSHIFT',
     driver: 'redshift',
     seed: [
       'DROP SCHEMA IF EXISTS dql_live CASCADE',
@@ -61,7 +62,7 @@ const ENGINES: Engine[] = [
     param: 'SELECT count(*) AS n FROM dql_live.orders WHERE status = $1',
   },
   {
-    env: 'DQL_LIVE_MYSQL',
+    env: 'ZLENS_LIVE_MYSQL',
     driver: 'mysql',
     seed: [
       'DROP TABLE IF EXISTS orders',
@@ -75,7 +76,7 @@ const ENGINES: Engine[] = [
     param: 'SELECT count(*) AS n FROM orders WHERE status = $1',
   },
   {
-    env: 'DQL_LIVE_MSSQL',
+    env: 'ZLENS_LIVE_MSSQL',
     driver: 'mssql',
     seed: [
       "IF OBJECT_ID('dbo.orders') IS NOT NULL DROP TABLE dbo.orders",
@@ -89,7 +90,7 @@ const ENGINES: Engine[] = [
     param: 'SELECT count(*) AS n FROM dbo.orders WHERE status = $1',
   },
   {
-    env: 'DQL_LIVE_CLICKHOUSE',
+    env: 'ZLENS_LIVE_CLICKHOUSE',
     driver: 'clickhouse',
     seed: [
       'DROP TABLE IF EXISTS orders',
@@ -102,7 +103,7 @@ const ENGINES: Engine[] = [
     param: 'SELECT count() AS n FROM orders WHERE status = $1',
   },
   {
-    env: 'DQL_LIVE_TRINO',
+    env: 'ZLENS_LIVE_TRINO',
     driver: 'trino',
     seed: [
       'DROP TABLE IF EXISTS memory.dql_live.orders',
@@ -117,7 +118,7 @@ const ENGINES: Engine[] = [
   },
 ];
 
-const modules = process.env.DQL_LIVE_MODULES ? [process.env.DQL_LIVE_MODULES] : undefined;
+const modules = readEnv('ZLENS_LIVE_MODULES') ? [readEnv('ZLENS_LIVE_MODULES')] : undefined;
 
 for (const engine of ENGINES) {
   const raw = process.env[engine.env];

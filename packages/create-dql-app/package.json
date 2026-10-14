@@ -1,7 +1,7 @@
 {
-  "name": "create-dql-app",
+  "name": "create-zlens-app",
   "version": "1.17.3",
-  "description": "Scaffold a new DQL project. Run with: npx create-dql-app <name>",
+  "description": "Scaffold a new ZLens project. Run with: npx create-zlens-app <name>",
   "license": "Apache-2.0",
   "author": "DuckCode AI Labs",
   "homepage": "https://github.com/duckcode-ai-labs/dql",
@@ -14,6 +14,7 @@
     "directory": "packages/create-dql-app"
   },
   "keywords": [
+    "zlens",
     "dql",
     "dbt",
     "analytics",
@@ -22,7 +23,7 @@
     "lineage"
   ],
   "bin": {
-    "create-dql-app": "./bin/create-dql-app.mjs"
+    "create-zlens-app": "./bin/create-zlens-app.mjs"
   },
   "files": [
     "bin",

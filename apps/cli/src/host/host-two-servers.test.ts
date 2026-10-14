@@ -3,7 +3,7 @@ import type { Server } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import type { ConnectionConfig, QueryExecutor } from '@duckcodeailabs/dql-connectors';
+import type { ConnectionConfig, QueryExecutor } from '@zlens/connectors';
 import { dispatchNotifications } from '../schedule/notifiers/index.js';
 import { startLocalServer } from '../local-runtime.js';
 import { currentHostGitHooks, hostModelProvider, resultValuesMayReachModel, withRequestContext, type DqlHostHooks, type DqlModelProvider, type DqlPrincipal } from './request-context.js';
@@ -103,7 +103,7 @@ describe('two hosted servers in one process (a Production and a preview)', () =>
 
     // The process-wide values belong to the preview (started last); Production's requests still get Production's.
     seen.length = 0;
-    const { runGatedTool } = await import('@duckcodeailabs/dql-agent');
+    const { runGatedTool } = await import('@zlens/agent');
     await withRequestContext({ principal: priya, requestId: 'r1', hooks: productionHooks }, async () => {
       await runGatedTool({ name: 'search_catalog', run: async () => 'ok' }, {});
       hostModelProvider();
@@ -137,7 +137,7 @@ describe('a hosted server and a server without a host in one process', () => {
     };
     await serve('hosted', hostedHooks);
     await serve('plain');
-    const { runGatedTool } = await import('@duckcodeailabs/dql-agent');
+    const { runGatedTool } = await import('@zlens/agent');
     let outcome: string;
     outcome = await withRequestContext({ principal: priya, requestId: 'r', hooks: hostedHooks }, async () => {
       try {
@@ -155,7 +155,7 @@ describe('a hosted server and a server without a host in one process', () => {
     const seen: string[] = [];
     await serve('hosted-later', recordingHost('hosted', seen));
     // Work of the server without a host runs with no request context (it names no one): the fallback is all it sees.
-    const { runGatedTool } = await import('@duckcodeailabs/dql-agent');
+    const { runGatedTool } = await import('@zlens/agent');
     const sawModel = hostModelProvider();
     const mayReach = resultValuesMayReachModel({ id: 'openai', name: 'gpt' }, () => false);
     await dispatchNotifications([{ type: 'webhook', recipients: ['http://127.0.0.1:9/hook'] } as never], PAYLOAD, tmpdir()).catch(() => undefined);

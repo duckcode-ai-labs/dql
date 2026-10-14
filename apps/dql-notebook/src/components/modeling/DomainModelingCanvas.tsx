@@ -3,7 +3,7 @@ import { Background, Controls, Handle, MarkerType, MiniMap, NodeResizeControl, P
 import '@xyflow/react/dist/style.css';
 import Dagre from '@dagrejs/dagre';
 import { Link2, Maximize2, Plus } from 'lucide-react';
-import type { DbtNodeAuthoringDetail, ManifestDbtFirstModeling, ManifestModelEntity } from '@duckcodeailabs/dql-core';
+import type { DbtNodeAuthoringDetail, ManifestDbtFirstModeling, ManifestModelEntity } from '@zlens/core';
 import { themes } from '../../themes/notebook-theme';
 import { entityKindColor, entityRecords, resolveEntityRecordKey } from './domain-studio-model';
 import { relationshipStatusView } from './relationship-builder-model';

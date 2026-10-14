@@ -28,7 +28,7 @@ export async function runConnect(targetArg: string | null, rest: string[], flags
   const target = normalizeTarget(targetArg);
   if (!target) {
     throw new Error(
-      'Usage: dql connect <codex|claude-code|claude-desktop|cursor|all> [project-path] [--format json]',
+      'Usage: zlens connect <codex|claude-code|claude-desktop|cursor|all> [project-path] [--format json]',
     );
   }
 
@@ -43,7 +43,7 @@ export async function runConnect(targetArg: string | null, rest: string[], flags
     return;
   }
 
-  console.log('\n  DQL agent connection setup');
+  console.log('\n  ZLens agent connection setup');
   console.log(`    Project: ${projectRoot}`);
   console.log('');
   for (const result of results) {
@@ -56,7 +56,7 @@ export async function runConnect(targetArg: string | null, rest: string[], flags
     console.log(`    Next: ${result.nextStep}`);
   }
   console.log('');
-  console.log('  Verify before asking an agent: dql mcp test');
+  console.log('  Verify before asking an agent: zlens mcp test');
   console.log('');
 }
 
@@ -92,8 +92,8 @@ function connectCodex(projectRoot: string): ConnectResult {
     target: 'codex',
     path,
     changed: before !== after || guideChanged,
-    message: 'Project Codex config and AGENTS.md now point at this DQL project.',
-    nextStep: 'Open this trusted project in Codex, then run dql mcp test before asking analytics questions.',
+    message: 'Project Codex config and AGENTS.md now point at this ZLens project.',
+    nextStep: 'Open this trusted project in Codex, then run zlens mcp test before asking analytics questions.',
     extraPaths: [guidePath],
   };
 }
@@ -112,7 +112,7 @@ function connectClaudeCode(projectRoot: string): ConnectResult {
     target: 'claude-code',
     path,
     changed: before !== after || guideChanged,
-    message: 'Project .mcp.json and CLAUDE.md now point Claude Code at DQL.',
+    message: 'Project .mcp.json and CLAUDE.md now point Claude Code at ZLens.',
     nextStep: 'Open Claude Code from this project and run /mcp to confirm the dql server is loaded.',
     extraPaths: [guidePath],
   };
@@ -127,7 +127,7 @@ function connectClaudeDesktop(projectRoot: string): ConnectResult {
     target: 'claude-desktop',
     path,
     changed: before !== after,
-    message: 'Claude Desktop config includes this DQL MCP server.',
+    message: 'Claude Desktop config includes this ZLens MCP server.',
     nextStep: 'Restart Claude Desktop and enable the dql tool.',
   };
 }
@@ -141,7 +141,7 @@ function connectCursor(projectRoot: string): ConnectResult {
     target: 'cursor',
     path,
     changed: before !== after,
-    message: 'Project Cursor MCP config includes this DQL server.',
+    message: 'Project Cursor MCP config includes this ZLens server.',
     nextStep: 'Open Cursor settings, enable MCP, and reload the project if needed.',
   };
 }
@@ -154,7 +154,7 @@ function mcpServerConfig(projectRoot: string): McpServerConfig {
 }
 
 function mcpServerArgs(projectRoot: string): string[] {
-  return ['-y', '@duckcodeailabs/dql-cli', 'mcp', projectRoot];
+  return ['-y', '--package=@zlens/cli', 'zlens', 'mcp', projectRoot];
 }
 
 function normalizeTarget(value: string | null): ConnectTarget | null {
@@ -225,9 +225,9 @@ function upsertAgentGuide(path: string, clientName: string): boolean {
 function agentGuideBlock(clientName: string): string {
   return [
     '<!-- BEGIN DQL AGENT GUIDE -->',
-    '## DQL Agent Guide',
+    '## ZLens Agent Guide',
     '',
-    `When using ${clientName} with this project, use the DQL MCP server for analytics work.`,
+    `When using ${clientName} with this project, use the ZLens MCP server for analytics work.`,
     '',
     '- Start each session with `inspect_dql_project` so the agent sees the current manifest, metadata catalog, and agent index.',
     '- Route every analytics question through `ask_dql` before writing SQL.',

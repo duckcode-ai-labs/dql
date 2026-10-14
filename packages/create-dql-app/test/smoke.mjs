@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Smoke test: scaffold the starter template into a tmp dir, assert the
 // expected files exist and placeholder substitution ran. Keeps us honest
-// about the 5-minute demo gate — if this test fails, create-dql-app is
+// about the 5-minute demo gate — if this test fails, create-zlens-app is
 // broken.
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync } from 'node:fs';
@@ -10,10 +10,10 @@ import { join, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const BIN = resolve(__dirname, '..', 'bin', 'create-dql-app.mjs');
+const BIN = resolve(__dirname, '..', 'bin', 'create-zlens-app.mjs');
 
 function scaffold(template, name) {
-  const base = mkdtempSync(join(tmpdir(), 'create-dql-app-test-'));
+  const base = mkdtempSync(join(tmpdir(), 'create-zlens-app-test-'));
   const target = join(base, name);
   const result = spawnSync('node', [BIN, target, '--template', template], {
     encoding: 'utf-8',
@@ -53,10 +53,10 @@ function collectFiles(dir, predicate, out = []) {
 function assertGeneratedPackage(target) {
   const pkg = JSON.parse(readFileSync(join(target, 'package.json'), 'utf-8'));
   assert(
-    pkg.devDependencies?.['@duckcodeailabs/dql-cli'] === EXPECTED_CLI_RANGE,
-    `package.json uses @duckcodeailabs/dql-cli ${EXPECTED_CLI_RANGE}`,
+    pkg.devDependencies?.['@zlens/cli'] === EXPECTED_CLI_RANGE,
+    `package.json uses @zlens/cli ${EXPECTED_CLI_RANGE}`,
   );
-  assert(!Object.values(pkg.scripts ?? {}).includes('dql test'), 'package.json does not use deprecated dql test');
+  assert(!Object.values(pkg.scripts ?? {}).includes('zlens test'), 'package.json does not use deprecated zlens test');
 }
 
 function assertTemplateDqlSyntax(target) {
@@ -114,7 +114,7 @@ runTest('starter', 'smoke-starter', [
 // The default template (no --template flag) must be the starter.
 console.log('\n▸ default template');
 {
-  const base = mkdtempSync(join(tmpdir(), 'create-dql-app-test-'));
+  const base = mkdtempSync(join(tmpdir(), 'create-zlens-app-test-'));
   const target = join(base, 'smoke-default');
   const result = spawnSync('node', [BIN, target], { encoding: 'utf-8', env: { ...process.env, CI: '1' } });
   try {

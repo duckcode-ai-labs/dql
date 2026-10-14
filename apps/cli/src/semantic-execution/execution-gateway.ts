@@ -6,14 +6,14 @@ import {
   type SemanticRuntimeMemberBindingV1,
   type SemanticTargetBindingV1,
   type WarehouseTargetIdentityV1,
-} from '@duckcodeailabs/dql-core';
+} from '@zlens/core';
 import {
   ConnectorQueryError,
   type ConnectionConfig,
   type QueryExecutionOptions,
   type QueryExecutor,
   type QueryResult,
-} from '@duckcodeailabs/dql-connectors';
+} from '@zlens/connectors';
 import type {
   SemanticRuntimeCompileResult,
   SemanticRuntimeTrace,

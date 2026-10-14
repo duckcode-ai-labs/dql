@@ -28,9 +28,9 @@
 import { existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { createRequire } from 'node:module';
-import { Certifier } from '@duckcodeailabs/dql-governance';
-import { buildManifest, type ManifestModelArea, type ManifestModelEntity } from '@duckcodeailabs/dql-core';
-import type { BlockRecord, BlockStatus } from '@duckcodeailabs/dql-project';
+import { Certifier } from '@zlens/governance';
+import { buildManifest, type ManifestModelArea, type ManifestModelEntity } from '@zlens/core';
+import type { BlockRecord, BlockStatus } from '@zlens/project';
 import {
   reflectAndReviseBlock,
   type ExecutionProbe,

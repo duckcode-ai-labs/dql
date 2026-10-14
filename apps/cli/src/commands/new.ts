@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs';
 import { basename, join, resolve } from 'node:path';
-import { renderSemanticBlockSource, buildTermTemplate } from '@duckcodeailabs/dql-core';
+import { renderSemanticBlockSource, buildTermTemplate } from '@zlens/core';
 import type { CLIFlags } from '../args.js';
 import { findProjectRoot, loadProjectConfig } from '../local-runtime.js';
 
@@ -96,7 +96,7 @@ export async function runNew(subject: string | null, rest: string[], flags: CLIF
 
 function resolveNewTarget(subject: string | null, rest: string[]): { kind: ScaffoldKind; rawName: string } {
   if (!subject) {
-    throw new Error('Usage: dql new <domain|block|dashboard|workbook|semantic-block|notebook|view|business-view|term> <name>');
+    throw new Error('Usage: zlens new <domain|block|dashboard|workbook|semantic-block|notebook|view|business-view|term> <name>');
   }
 
   if (subject === 'business_view' || subject === 'view') {
@@ -106,7 +106,7 @@ function resolveNewTarget(subject: string | null, rest: string[]): { kind: Scaff
   if (subject === 'domain' || subject === 'block' || subject === 'dashboard' || subject === 'workbook' || subject === 'semantic-block' || subject === 'notebook' || subject === 'business-view' || subject === 'term') {
     const rawName = rest.join(' ').trim();
     if (!rawName) {
-      throw new Error(`Missing ${subject} name. Usage: dql new ${subject} <name>`);
+      throw new Error(`Missing ${subject} name. Usage: zlens new ${subject} <name>`);
     }
     return { kind: subject, rawName };
   }
@@ -598,15 +598,15 @@ function dashboardChartFor(chart: string, source: string, usingStarterData: bool
 function nextStepsFor(kind: ScaffoldKind, relativePath: string, usingStarterData: boolean, queryOnly: boolean): string[] {
   if (kind === 'semantic-block') {
     return [
-      `dql parse ${relativePath}`,
-      `dql info ${relativePath}`,
+      `zlens parse ${relativePath}`,
+      `zlens info ${relativePath}`,
     ];
   }
 
   if (kind === 'business-view') {
     return [
       `Edit ${relativePath} to point includes at existing blocks or business views`,
-      `dql compile`,
+      `zlens compile`,
     ];
   }
 
@@ -614,7 +614,7 @@ function nextStepsFor(kind: ScaffoldKind, relativePath: string, usingStarterData
     return [
       `Edit ${relativePath} to capture the business definition, identifiers, and rules`,
       `Reference it from blocks or business views with terms = ["${toTitle(basename(relativePath, '.dql'))}"]`,
-      `dql compile`,
+      `zlens compile`,
     ];
   }
 
@@ -622,23 +622,23 @@ function nextStepsFor(kind: ScaffoldKind, relativePath: string, usingStarterData
     const domainSlug = basename(resolve(relativePath, '..'));
     return [
       `Edit ${relativePath} to capture the domain owner, boundary, source systems, and primary terms`,
-      `dql new block --domain ${domainSlug} --pattern entity_profile "Customer Profile"`,
-      `dql compile`,
+      `zlens new block --domain ${domainSlug} --pattern entity_profile "Customer Profile"`,
+      `zlens compile`,
     ];
   }
 
   if (!usingStarterData) {
     return [
       `Edit ${relativePath} to replace the placeholder SQL`,
-      `dql parse ${relativePath}`,
+      `zlens parse ${relativePath}`,
     ];
   }
 
-  const steps = [`dql parse ${relativePath}`];
+  const steps = [`zlens parse ${relativePath}`];
   if (kind === 'block') {
-    steps.push(queryOnly ? `dql info ${relativePath}` : `dql preview ${relativePath}`);
+    steps.push(queryOnly ? `zlens info ${relativePath}` : `zlens preview ${relativePath}`);
   } else {
-    steps.push(`dql preview ${relativePath}`);
+    steps.push(`zlens preview ${relativePath}`);
   }
   return steps;
 }
@@ -773,11 +773,11 @@ async function runNewNotebook(opts: {
     return;
   }
 
-  console.log(`\n  ✓ Created DQL notebook: ${title}`);
+  console.log(`\n  ✓ Created ZLens notebook: ${title}`);
   console.log(`    Path: ${filePath}`);
   console.log('');
   console.log('  Next steps:');
-  console.log(`    1. dql notebook  (opens the interactive notebook UI)`);
+  console.log(`    1. zlens notebook  (opens the interactive notebook UI)`);
   console.log(`    2. Open "${relativePath}" from the Files panel`);
   console.log('');
 }

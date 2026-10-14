@@ -1,9 +1,9 @@
 import { readFileSync } from 'node:fs';
 import { isAbsolute, join } from 'node:path';
-import { compile } from '@duckcodeailabs/dql-compiler';
-import type { NotificationIR } from '@duckcodeailabs/dql-compiler';
-import type { QueryExecutor, ConnectionConfig } from '@duckcodeailabs/dql-connectors';
-import { buildManifest, buildStoryBindingCatalog, loadDashboardDocument, type StoryBindingTileInput } from '@duckcodeailabs/dql-core';
+import { compile } from '@zlens/dql-compiler';
+import type { NotificationIR } from '@zlens/dql-compiler';
+import type { QueryExecutor, ConnectionConfig } from '@zlens/connectors';
+import { buildManifest, buildStoryBindingCatalog, loadDashboardDocument, type StoryBindingTileInput } from '@zlens/core';
 import { findProjectRoot, loadProjectConfig, prepareLocalExecution } from '../local-runtime.js';
 import { runtimeVariables } from '../governance-runtime.js';
 import { isDigestOutput, runDigestBuild } from '../digest.js';

@@ -7,7 +7,7 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
-import { storyBindingKeys, type DashboardNarrative, type StoryBindingCatalog } from '@duckcodeailabs/dql-core';
+import { storyBindingKeys, type DashboardNarrative, type StoryBindingCatalog } from '@zlens/core';
 
 export interface StoryEdition {
   runId: string;

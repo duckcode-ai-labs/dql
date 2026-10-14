@@ -19,7 +19,7 @@
  * Adding a GROUP-BY dimension (re-graining the inner query) is intentionally NOT
  * attempted in v1 — it cannot be done as a safe output wrapper.
  */
-import { analyzeSqlReferences } from '@duckcodeailabs/dql-core';
+import { analyzeSqlReferences } from '@zlens/core';
 import type { CertifiedBlockFit } from './block-fit.js';
 
 export interface CertifiedAdaptation {

@@ -62,7 +62,7 @@ jobs:
           node -e "const fs=require('fs');const f=process.env.PROJ+'/jaffle.duckdb';if(!fs.existsSync(f)||fs.statSync(f).size<1000){console.error('Seeded warehouse missing or empty: '+f);process.exit(1);}console.log('seeded warehouse OK:',fs.statSync(f).size,'bytes');"
         env:
           PROJ: ${{ runner.temp }}/classb-proj
-      - name: dql agent eval --execute (class-B, min-execution-match 1)
+      - name: zlens agent eval --execute (class-B, min-execution-match 1)
         if: steps.guard.outputs.run == 'true'
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}

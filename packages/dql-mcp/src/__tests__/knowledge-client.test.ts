@@ -19,7 +19,7 @@ beforeAll(async () => {
 afterEach(async () => { await closeKnowledgeConnections(); });
 afterAll(async () => { await server.close(); });
 
-describe('DQL MCP knowledge client', () => {
+describe('ZLens MCP knowledge client', () => {
   it('searches and reads a page over streamable HTTP with the person\'s own token', async () => {
     const source = createMcpKnowledgeSource({ id: 'confluence', label: 'Confluence', url: server.url, headers: { Authorization: 'Bearer priya-token' } });
     const hits = await source.search('paid claim');

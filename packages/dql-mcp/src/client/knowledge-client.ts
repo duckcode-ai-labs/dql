@@ -1,12 +1,12 @@
 /**
  * DQL'S OWN MCP CLIENT for knowledge sources (RFC 0010, HH-15).
  *
- * DQL calls a document server itself — over streamable HTTP, or stdio for a
+ * ZLens calls a document server itself — over streamable HTTP, or stdio for a
  * local server — instead of handing the server to a model provider's hosted
  * MCP connector. That is what lets knowledge work with every provider,
  * Bedrock, Vertex and local models included.
  *
- * Read-only by construction: DQL calls exactly two tools on a server, its
+ * Read-only by construction: ZLens calls exactly two tools on a server, its
  * search and its fetch, both of which must be on the server's allowlist, and
  * refuses a server that describes either as one that writes
  * (`readOnlyHint: false` or `destructiveHint: true`).
@@ -15,7 +15,7 @@ import { createHash } from 'node:crypto';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
-import type { KnowledgeDocument, KnowledgeHit, KnowledgeSource } from '@duckcodeailabs/dql-agent';
+import type { KnowledgeDocument, KnowledgeHit, KnowledgeSource } from '@zlens/agent';
 
 /** One knowledge server, as the project file or a host describes it. */
 export interface KnowledgeServerConfig {
@@ -41,7 +41,7 @@ export interface KnowledgeServerConfig {
   /** Fixed arguments sent with every search / fetch (e.g. a site id). */
   searchArgs?: Record<string, unknown>;
   fetchArgs?: Record<string, unknown>;
-  /** Tools DQL may call; defaults to the search and fetch tools. */
+  /** Tools ZLens may call; defaults to the search and fetch tools. */
   allowedTools?: string[];
   /** Per-call deadline. */
   timeoutMs?: number;
@@ -139,7 +139,7 @@ async function connect(server: KnowledgeServerConfig, searchTool: string, fetchT
   if (!pending) {
     if (connections.size >= MAX_CONNECTIONS) await dropOldest();
     pending = (async () => {
-      const client = new Client({ name: 'dql-knowledge', version: '1' });
+      const client = new Client({ name: 'zlens-knowledge', version: '1' });
       const transport = server.url
         // Every request goes to the server's own URL: a redirect elsewhere (outside the hosts the server was allowed on) is an error, not followed.
         ? new StreamableHTTPClientTransport(new URL(server.url), { requestInit: { headers: { ...(server.headers ?? {}) }, redirect: 'error' }, fetch: noRedirects })

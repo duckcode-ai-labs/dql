@@ -16,12 +16,12 @@ describe('telemetry', () => {
     delete process.env.DO_NOT_TRACK;
   });
 
-  it('respects DQL_TELEMETRY_DISABLED', async () => {
-    process.env.DQL_TELEMETRY_DISABLED = '1';
+  it('respects ZLENS_TELEMETRY_DISABLED', async () => {
+    process.env.ZLENS_TELEMETRY_DISABLED = '1';
     const fetchSpy = vi.fn();
     await track({ name: 'cli.command' }, { fetch: fetchSpy as unknown as typeof fetch, enabled: true, endpoint: 'http://x' });
     expect(fetchSpy).not.toHaveBeenCalled();
-    delete process.env.DQL_TELEMETRY_DISABLED;
+    delete process.env.ZLENS_TELEMETRY_DISABLED;
   });
 
   it('posts payload with event name, version, and props when enabled', async () => {

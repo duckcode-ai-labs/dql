@@ -9,7 +9,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { Server } from 'node:http';
 import Database from 'better-sqlite3';
-import { QueryExecutor } from '@duckcodeailabs/dql-connectors';
+import { QueryExecutor } from '@zlens/connectors';
 import { startLocalServer } from './local-runtime.js';
 
 describe('warehouse-first modeling in the local runtime', () => {
@@ -57,7 +57,7 @@ describe('warehouse-first modeling in the local runtime', () => {
     const before = await json('/api/modeling/dbt-first');
     expect(before.status).toBe(200);
     expect(before.body.modeling.mode).toBe('warehouse-first');
-    expect(before.body.diagnostics.map((item: { message: string }) => item.message).join('\n')).toMatch(/dql sync warehouse/);
+    expect(before.body.diagnostics.map((item: { message: string }) => item.message).join('\n')).toMatch(/zlens sync warehouse/);
 
     // Settings → Sync schema reads the catalog as well as Ask's schema metadata.
     const discovery = await json('/api/connections/default/metadata-scope/discovery', { method: 'POST' });

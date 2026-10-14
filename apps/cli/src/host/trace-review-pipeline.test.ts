@@ -5,11 +5,12 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { canonicalResultBindingValue, canonicalResultRowFingerprint, memberOptionId } from '@duckcodeailabs/dql-agent';
+import { canonicalResultBindingValue, canonicalResultRowFingerprint, memberOptionId } from '@zlens/agent';
 import { startLocalServer } from '../local-runtime.js';
 import { createSeededSqliteExecutor, type GoldenSeed } from '../testkit/seeded-sqlite-executor.js';
 import type { DqlModelProvider, DqlPrincipal } from './request-context.js';
 import { RECEIPT_V9_FIELDS, rowCountBucket } from './trace-review.js';
+import { readEnv } from '@zlens/core';
 
 /**
  * A STEWARD READING SOMEONE ELSE'S ASK TRACE, ON THE REAL ASK PIPELINE (RFC 0010). The jaffle-golden fixture on its
@@ -172,7 +173,7 @@ async function startServer(driver: 'sqlite' | 'duckdb'): Promise<string> {
 }
 
 beforeAll(async () => {
-  if (!process.env.DQL_METRICFLOW_BIN) process.env.DQL_METRICFLOW_BIN = join(tmpdir(), 'dql-trace-review-no-metricflow', 'mf');
+  if (!readEnv('ZLENS_METRICFLOW_BIN')) process.env.ZLENS_METRICFLOW_BIN = join(tmpdir(), 'dql-trace-review-no-metricflow', 'mf');
   base = await startServer('sqlite');
 }, 120_000);
 

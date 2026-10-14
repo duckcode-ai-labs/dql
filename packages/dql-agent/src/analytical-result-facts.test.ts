@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { AnalyticalQuestionFrameV2 } from '@duckcodeailabs/dql-core';
+import type { AnalyticalQuestionFrameV2 } from '@zlens/core';
 import type { AnalyticalExecutionGraphV1, AnalyticalExecutionReceiptV1 } from './analytical-execution-graph.js';
 import {
   buildAnalyticalResultFacts,

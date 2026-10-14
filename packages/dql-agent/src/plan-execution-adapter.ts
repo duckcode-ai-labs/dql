@@ -10,7 +10,7 @@ import {
   normalizeMetricCapabilityContract,
   type MetricCapabilityContract,
   type SemanticLayer,
-} from '@duckcodeailabs/dql-core';
+} from '@zlens/core';
 import type { KGNode } from './kg/types.js';
 import type { MetadataObject } from './metadata/catalog.js';
 import type { SemanticMemberSelection } from './semantic-bridge/compose.js';
