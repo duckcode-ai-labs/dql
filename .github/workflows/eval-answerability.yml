@@ -26,11 +26,27 @@ name: Answerability (false-refusal gate)
 # clarification rate here is an artifact — the report says so itself. Recording
 # cassettes (ZLENS_EVAL_CASSETTE_DIR) is what makes that number meaningful, and
 # what will let this job gate on it.
+#
+# SKIPS CLEANLY until real provider cassettes exist. Replay never calls a live
+# model, so the suite can only pass once somebody has recorded it against a real
+# provider (DQL_EVAL_CASSETTE_MODE=record, which needs provider credentials) and committed the
+# result. Until then every current prompt is a cassette miss and the job would
+# be red on every PR for a reason unrelated to the change. The first step
+# classifies the committed cassettes (scripts/eval-cassette-readiness.mjs); with
+# no entry recorded from a real provider, the job succeeds with a notice and a
+# summary line saying it was skipped. With recorded entries present, every step
+# below runs exactly as before, with the same thresholds. A manual run can force
+# the suite anyway to see the current misses.
 on:
   pull_request:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      run_without_recorded_cassettes:
+        description: Run the suite even when no cassette was recorded from a real provider
+        type: boolean
+        default: false
 
 jobs:
   answerability:
@@ -38,15 +54,45 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Check for provider-recorded cassettes
+        id: cassettes
+        env:
+          FORCE_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.run_without_recorded_cassettes }}
+        run: |
+          node --test scripts/eval-cassette-readiness.test.mjs
+          result="$(node scripts/eval-cassette-readiness.mjs apps/cli/test/fixtures/jaffle-supply-chain/test-cassettes/answerability)"
+          echo "$result"
+          ready="$(node -p 'JSON.parse(process.argv[1]).ready' "$result")"
+          reason="$(node -p 'JSON.parse(process.argv[1]).reason' "$result")"
+          if [ "$ready" != "true" ] && [ "$FORCE_RUN" = "true" ]; then
+            ready=true
+            echo "::warning title=Answerability forced::running without provider-recorded cassettes ($reason); expect cassette misses"
+          elif [ "$ready" != "true" ]; then
+            message="skipped: no provider credentials configured — $reason. Record the suite against a real provider (runtime started with DQL_EVAL_CASSETTE_DIR and DQL_EVAL_CASSETTE_MODE=record) and commit the cassettes to enable this gate."
+            echo "::notice title=Answerability gate skipped::$message"
+            {
+              echo "## Answerability (runtime-driven)"
+              echo
+              echo "$message"
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+          echo "ready=$ready" >> "$GITHUB_OUTPUT"
+
       - uses: pnpm/action-setup@v4
+        if: ${{ steps.cassettes.outputs.ready == 'true' }}
       - uses: actions/setup-node@v4
+        if: ${{ steps.cassettes.outputs.ready == 'true' }}
         with:
           node-version: 20
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+        if: ${{ steps.cassettes.outputs.ready == 'true' }}
       - run: pnpm build
+        if: ${{ steps.cassettes.outputs.ready == 'true' }}
 
       - name: Seed the eval warehouse
+        if: ${{ steps.cassettes.outputs.ready == 'true' }}
         run: |
           # The fixture's checked-in connection is `:memory:`, which is EMPTY on
           # every connect. This suite was therefore scoring questions against a
@@ -82,6 +128,7 @@ jobs:
           PROJ: ${{ runner.temp }}/answerability-proj
 
       - name: Start the runtime against the fixture
+        if: ${{ steps.cassettes.outputs.ready == 'true' }}
         id: runtime
         run: |
           # The project path is REQUIRED: `zlens notebook` resolves a project from
@@ -108,6 +155,7 @@ jobs:
           PROJ: ${{ runner.temp }}/answerability-proj
 
       - name: Answerability suite
+        if: ${{ steps.cassettes.outputs.ready == 'true' }}
         working-directory: ${{ runner.temp }}/answerability-proj
         env:
           # The runtime owns replay; the eval process receives this only to
@@ -178,7 +226,7 @@ jobs:
           tail -n 200 runtime.log || true
 
       - name: Summarise the headline numbers
-        if: always()
+        if: ${{ always() && steps.cassettes.outputs.ready == 'true' }}
         run: |
           node -e "
             const fs = require('fs');
@@ -205,11 +253,11 @@ jobs:
           cat "$GITHUB_STEP_SUMMARY"
 
       - name: Stop the runtime
-        if: always()
+        if: ${{ always() && steps.cassettes.outputs.ready == 'true' }}
         run: kill "$(cat runtime.pid)" 2>/dev/null || true
 
       - name: Upload reports
-        if: always()
+        if: ${{ always() && steps.cassettes.outputs.ready == 'true' }}
         uses: actions/upload-artifact@v4
         with:
           name: answerability-reports
