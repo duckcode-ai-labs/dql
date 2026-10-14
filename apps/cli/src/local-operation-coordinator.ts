@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import Database from 'better-sqlite3';
+import { claimRuntimeOwner, releaseRuntimeOwner, runtimeOwnerAlive } from '@zlens/agent';
 
 export type LocalOperationStatus =
   | 'queued'
@@ -76,6 +77,8 @@ export class LocalOperationCoordinator {
   private readonly controllers = new Map<string, AbortController>();
   private closed = false;
   private readonly ownerOf: () => string | undefined;
+  /** This coordinator's runtime owner token, stamped on the operations it runs. */
+  private readonly runtimeOwner = claimRuntimeOwner();
 
   constructor(dbPath: string, options: { ownerOf?: () => string | undefined } = {}) {
     this.ownerOf = options.ownerOf ?? (() => undefined);
@@ -105,19 +108,30 @@ export class LocalOperationCoordinator {
     // Operations recorded before owners were kept have none.
     const columns = this.db.prepare('PRAGMA table_info(local_operations)').all() as Array<{ name: string }>;
     if (!columns.some((column) => column.name === 'owner_id')) this.db.exec('ALTER TABLE local_operations ADD COLUMN owner_id TEXT');
+    if (!columns.some((column) => column.name === 'runtime_owner')) this.db.exec('ALTER TABLE local_operations ADD COLUMN runtime_owner TEXT');
 
+    // Only work whose runtime is gone is interrupted: another ZLens process
+    // opening this project (a second notebook, `zlens agent ask`) must not
+    // close the operations the running notebook server is still doing.
     const now = new Date().toISOString();
     const interrupted: LocalOperationError = {
       code: 'RUNTIME_RESTARTED',
-      message: 'The local runtime restarted before this operation completed.',
+      message: 'The ZLens runtime running this operation stopped before it completed.',
       retryable: true,
     };
-    this.db.prepare(`
+    const orphaned = (this.db.prepare(
+      "SELECT id, runtime_owner, updated_at FROM local_operations WHERE status IN ('queued', 'running')",
+    ).all() as Array<{ id: string; runtime_owner: string | null; updated_at: string | null }>)
+      .filter((row) => !runtimeOwnerAlive(row.runtime_owner, row.updated_at));
+    const close = this.db.prepare(`
       UPDATE local_operations
       SET status = 'interrupted', phase = 'interrupted', cancellable = 0,
           error_json = ?, updated_at = ?
-      WHERE status IN ('queued', 'running')
-    `).run(JSON.stringify(interrupted), now);
+      WHERE id = ? AND status IN ('queued', 'running')
+    `);
+    this.db.transaction(() => {
+      for (const row of orphaned) close.run(JSON.stringify(interrupted), now, row.id);
+    })();
     this.prune();
   }
 
@@ -271,6 +285,7 @@ export class LocalOperationCoordinator {
     for (const controller of this.controllers.values()) controller.abort();
     this.controllers.clear();
     this.listeners.clear();
+    releaseRuntimeOwner(this.runtimeOwner);
     this.db.close();
   }
 
@@ -293,8 +308,8 @@ export class LocalOperationCoordinator {
     this.db.prepare(`
       INSERT INTO local_operations (
         id, type, scope, resource_revision, status, phase, progress, message,
-        cancellable, result_json, error_json, created_at, updated_at, owner_id
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        cancellable, result_json, error_json, created_at, updated_at, owner_id, runtime_owner
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET
         resource_revision = excluded.resource_revision,
         status = excluded.status,
@@ -304,7 +319,8 @@ export class LocalOperationCoordinator {
         cancellable = excluded.cancellable,
         result_json = excluded.result_json,
         error_json = excluded.error_json,
-        updated_at = excluded.updated_at
+        updated_at = excluded.updated_at,
+        runtime_owner = excluded.runtime_owner
     `).run(
       operation.id,
       operation.type,
@@ -320,6 +336,7 @@ export class LocalOperationCoordinator {
       operation.createdAt,
       operation.updatedAt,
       operation.ownerId ?? null,
+      this.runtimeOwner,
     );
   }
 

@@ -28,6 +28,15 @@ function errorDetails(error: StructuredApiError): Record<string, unknown> | unde
 export function domainStudioUnavailableState(error: unknown): DomainStudioUnavailableState {
   const apiError = structuredApiError(error);
   if (apiError?.code === 'DBT_FIRST_NOT_ENABLED') {
+    // A project that already imports dbt is never offered "without dbt":
+    // switching it to warehouse-first replaces its dbt models.
+    if (errorDetails(apiError)?.dbtDetected === true) {
+      return {
+        title: 'Set up modeling',
+        detail: 'This project already reads a dbt project. Open Settings → Project & dbt and apply it to model its dbt models here.',
+        status: 'Modeling mode · Not enabled',
+      };
+    }
     return {
       title: 'Set up modeling',
       detail: 'Model a dbt project: open Settings → Project & dbt to connect and apply it. No dbt? Model your warehouse\'s own tables instead — ZLens reads their columns, keys and comments, and drafts the joins for you to review.',

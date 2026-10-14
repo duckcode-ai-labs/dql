@@ -1949,7 +1949,23 @@ export function createAskPipelineHost(deps: AskPipelineHostDeps): AskPipelineHos
           }
         } catch { /* the relations named so far stand */ }
       }
-      if (relations.length === 0) return { error: 'no table in this project matches the question' };
+      if (relations.length === 0) {
+        // NO TABLES AT ALL is a setup problem, said as one: "nothing matches"
+        // would read as an answer about the data (ZLens 0.1.0 e2e, F3).
+        const readable = (view.source ?? (await baseSourceFor(connection).catch(() => undefined))?.source)?.relations?.length ?? 0;
+        if (readable === 0) {
+          const builtManifest = deps.getManifest().manifest;
+          const modelingMode = builtManifest?.modeling?.mode;
+          const warehouseModeling = modelingMode === 'warehouse-first' || modelingMode === 'hybrid' || Boolean(builtManifest?.dbtProvenance?.warehouseCatalogPath);
+          return {
+            unavailable: true,
+            error: warehouseModeling
+              ? 'this project lists no tables Ask may read: warehouse modeling is on (modeling.mode in dql.config.json) and no warehouse catalog has been synced yet. Sync the schema from Settings, run `zlens sync warehouse`, or apply the dbt project from Settings → Project & dbt'
+              : 'this project lists no tables Ask may read for this request. Check that the dbt manifest is readable (target/manifest.json) or sync the warehouse schema from Settings',
+          };
+        }
+        return { error: 'no table in this project matches the question' };
+      }
       // THE TABLES BETWEEN: when the team modeled how the chosen tables
       // connect, the tables on that route are drafted over too, and each hop
       // is shown as a preferred join. Only relations this request admits are added.
@@ -2005,7 +2021,7 @@ export function createAskPipelineHost(deps: AskPipelineHostDeps): AskPipelineHos
       }
       // Only tables whose columns are known can be drafted over.
       relations = relations.filter((relation) => current.entries.some((item) => item.kind === 'column' && (() => { const physical = entryPhysicalRelation(item); return physical !== undefined && physicalRelationIdentity(physical) === physicalRelationIdentity(relation); })()));
-      if (relations.length === 0) return { error: 'the tables that match the question could not be described on this connection' };
+      if (relations.length === 0) return { unavailable: true, error: 'the tables that match the question could not be described on this connection' };
       hostStep({ phase: 'schema', title: `Chose ${relations.length === 1 ? 'the table' : 'the tables'} ${relations.join(', ')}`, state: 'done', detail: `picked from ${refs.length ? 'the fields the reading named' : 'the words of the question'}${catalogPicked.length ? `; found by the catalog search: ${catalogPicked.join(', ')}` : ''}${bridged.length ? `; added to connect them over modeled relationships: ${bridged.join(', ')}` : ''}${needsColumns.length ? `; columns of ${needsColumns.slice(0, 4).join(', ')} read from the warehouse` : ''}` });
       // THE CONTEXT THE DRAFT READS: what the user said, the previous reading,
       // and what the project says about this data (domain notes, business

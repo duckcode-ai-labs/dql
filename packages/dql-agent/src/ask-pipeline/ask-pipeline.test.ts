@@ -1311,6 +1311,36 @@ describe('a compiler refusal reaches the reader as one line', () => {
   });
 });
 
+describe('a governed semantic route that fails at runtime falls back to review-required SQL', () => {
+  // F3/F4 (ZLens 0.1.0 e2e): the semantic engine failing for a runtime reason
+  // (no compatible dimensions from a runtime that cannot read the metric) is
+  // not an answer about the data. With AI-written SQL allowed, the question is
+  // answered from the tables, review-required, and says why the metric did not run.
+  const vocabulary = buildVocabularyIndex(jaffle);
+  it('drafts from the schema after the semantic engine fails, and names the engine failure', async () => {
+    const reply = JSON.stringify({
+      version: 1, kind: 'analytics', reading: 'Revenue by customer name', measures: [{ ref: 'metric:order_item.revenue' }], groupBy: [{ ref: 'dimension:customers.customer_name', role: 'categorical' }], display: [], filters: [],
+      expectedShape: 'grouped', unresolved: [], provenance: { 'metric:order_item.revenue': 'q:revenue', 'dimension:customers.customer_name': 'q:customer name' },
+    });
+    const drafted: string[] = [];
+    const outcome = await runAskPipeline({
+      question: 'revenue by customer name', vocabulary, provider: { name: 'ollama', available: async () => true, generate: async () => reply }, clauseCoverage: false, explorationAuto: true,
+      prepareDeps: {
+        compileSemantic: async () => { throw Object.assign(new Error('Local MetricFlow returned no compatible dimensions for the selected metrics.'), { code: 'SEMANTIC_RUNTIME_REQUIRED' }); },
+        draftSql: async (draft) => { drafted.push(draft.reason ?? ''); return { sql: 'SELECT customer_name, SUM(order_total) AS revenue FROM dev.orders GROUP BY customer_name', relations: ['dev.orders'], proof: [] }; },
+      },
+      executeDeps: { run: async () => ({ columns: ['customer_name', 'revenue'], rows: [{ customer_name: 'Ann', revenue: 10 }], rowCount: 1, executionTimeMs: 1 }) },
+    });
+    expect(drafted).toHaveLength(1);
+    expect(outcome.kind).toBe('answered');
+    if (outcome.kind !== 'answered') return;
+    expect(outcome.candidate.tier).toBe('exploratory');
+    expect(outcome.candidate.trust).toBe('review_required');
+    expect(outcome.receipt.refusals.some((refusal) => refusal.tier === 'semantic')).toBe(true);
+    expect(outcome.text).toContain('review the SQL before relying on the numbers');
+  });
+});
+
 describe('a year the question names is never served as an all-time total', () => {
   const vocabulary = buildVocabularyIndex(jaffle);
   const bare = JSON.stringify({ version: 1, kind: 'analytics', reading: 'Total revenue for 2024', measures: [{ ref: 'metric:order_item.revenue' }], groupBy: [], display: [], filters: [], expectedShape: 'scalar', unresolved: [], provenance: { 'metric:order_item.revenue': 'q:revenue' } });
@@ -2610,6 +2640,36 @@ describe('the schema lane: no certified or governed evidence, the AI writes SQL 
     expect(executed).toBe(0);
     expect(outcome.kind).toBe('gap');
     if (outcome.kind === 'gap') expect(outcome.message).toContain('nothing records churn or region');
+  });
+
+  // F3 (ZLens 0.1.0 e2e): with no tables in the project's catalog the drafter
+  // could not run, and the answer claimed the project's data "does not
+  // describe" a question the same project answers once its tables are back.
+  it('when no tables can be read at all, the answer says the data was not checked instead of claiming it does not hold it', async () => {
+    const metricsOnly = buildVocabularyIndex({ metrics: [{ name: 'team_wins', model: 'team_season_facts', label: 'Team wins', aggregation: 'sum' }] });
+    const reply = JSON.stringify({ version: 1, kind: 'analytics', reading: 'Which team had the most wins in the 2017 season?', measures: [{ ref: 'metric:team_season_facts.team_wins', aggregation: 'sum' }], groupBy: [], display: [], filters: [], unresolved: [{ clause: 'which team had the most wins in season 2017', options: [], material: true }], provenance: { 'metric:team_season_facts.team_wins': 'q:most wins' }, expectedShape: 'scalar' });
+    let executed = 0;
+    const outcome = await runAskPipeline({
+      question: 'Which team had the most wins in season 2017?', vocabulary: metricsOnly, provider: say(reply), clauseCoverage: false, explorationAuto: true,
+      prepareDeps: { dialect, draftSql: async () => ({ unavailable: true, error: 'this project lists no tables Ask may read: warehouse modeling is on and no warehouse catalog has been synced yet' }) },
+      executeDeps: { run: async () => { executed += 1; return rows; } },
+    });
+    expect(executed).toBe(0);
+    expect(outcome.kind).toBe('failed');
+    expect(outcome.text).toContain('no warehouse catalog has been synced');
+    expect(outcome.text).toContain('was not checked');
+    expect(outcome.text).not.toContain("governed data describes");
+    expect(outcome.receipt.refusals.map((refusal) => refusal.code)).toContain('exploration_tables_unavailable');
+  });
+
+  it('a draft that finds no matching table among readable ones is still the honest "not modeled" gap', async () => {
+    const reply = JSON.stringify({ version: 1, kind: 'analytics', reading: 'Churn rate by region.', measures: [], groupBy: [], display: [], filters: [], unresolved: [{ clause: 'churn rate by region', options: [], material: true }], provenance: {}, expectedShape: 'grouped' });
+    const outcome = await runAskPipeline({
+      question: 'churn rate by region', vocabulary, provider: say(reply), clauseCoverage: false, explorationAuto: true,
+      prepareDeps: { dialect, draftSql: async () => ({ error: 'no table in this project matches the question' }) },
+      executeDeps: { run: async () => rows },
+    });
+    expect(outcome.kind).toBe('gap');
   });
 
   it('the model itself failing is not a reason to draft: nothing is asked of it again', async () => {

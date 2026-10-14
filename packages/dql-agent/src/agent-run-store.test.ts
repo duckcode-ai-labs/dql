@@ -2,6 +2,7 @@ import { describe, expect, it, afterEach } from 'vitest';
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import Database from 'better-sqlite3';
 import { SqliteAgentRunStore } from './agent-run-store.js';
 import type { AgentRun, AgentRunProgressV1 } from './agent-run-engine.js';
 
@@ -114,6 +115,62 @@ describe('SqliteAgentRunStore', () => {
       diagnosticReceipt: { failure: { code: 'RUN_INTERRUPTED' } },
     });
     reopened.close();
+  });
+
+  // F10 (ZLens 0.1.0 e2e): a second ZLens process opening the project (another
+  // notebook, the runtime `zlens agent ask` starts) closed the run the notebook
+  // was still answering, and the page read "the runtime restarted".
+  it('leaves a run that another live runtime is still answering alone', () => {
+    const path = join(tmp(), 'runs.sqlite');
+    const live = new SqliteAgentRunStore({ path });
+    const fresh = progress('in-flight');
+    fresh.lifecycle.updatedAt = new Date().toISOString();
+    live.saveProgress(fresh);
+    const other = new SqliteAgentRunStore({ path });
+    expect(other.getProgress('in-flight')?.lifecycle.state).toBe('running');
+    expect(other.get('in-flight')).toBeUndefined();
+    live.save(run('in-flight', fresh.lifecycle.startedAt));
+    expect(other.get('in-flight')?.status).toBe('completed');
+    other.close();
+    live.close();
+  });
+
+  it('leaves a run owned by another process on this machine alone while that process lives', () => {
+    const path = join(tmp(), 'runs.sqlite');
+    const writer = new SqliteAgentRunStore({ path });
+    const fresh = progress('other-process');
+    fresh.lifecycle.updatedAt = new Date().toISOString();
+    writer.saveProgress(fresh);
+    writer.close();
+    const db = new Database(path);
+    const owner = db.prepare('SELECT runtime_owner FROM agent_runs WHERE id = ?').get('other-process') as { runtime_owner: string };
+    const [host] = owner.runtime_owner.split('#');
+    // The parent of this test process is alive; a pid far above any real one is not.
+    db.prepare('UPDATE agent_runs SET runtime_owner = ? WHERE id = ?').run(`${host}#${process.ppid}#elsewhere`, 'other-process');
+    db.close();
+    const reopened = new SqliteAgentRunStore({ path });
+    expect(reopened.getProgress('other-process')?.lifecycle.state).toBe('running');
+    reopened.close();
+    const db2 = new Database(path);
+    db2.prepare('UPDATE agent_runs SET runtime_owner = ? WHERE id = ?').run(`${host}#2147483646#gone`, 'other-process');
+    db2.close();
+    const afterExit = new SqliteAgentRunStore({ path });
+    const closed = afterExit.get('other-process');
+    expect(closed?.diagnosticReceipt?.failure?.code).toBe('RUN_INTERRUPTED');
+    // It says what is known: the runtime answering it stopped. Never that it
+    // "restarted" when this process cannot know that.
+    expect(closed?.diagnosticReceipt?.failure?.message).not.toMatch(/restarted/);
+    afterExit.close();
+  });
+
+  it('closes a run whose owner looks alive but has been silent longer than any run may take', () => {
+    const path = join(tmp(), 'runs.sqlite');
+    const live = new SqliteAgentRunStore({ path });
+    live.saveProgress(progress('stale'));
+    const other = new SqliteAgentRunStore({ path });
+    expect(other.get('stale')?.diagnosticReceipt?.failure?.code).toBe('RUN_INTERRUPTED');
+    other.close();
+    live.close();
   });
 
   it('preserves typed Ask continuation but writes only a content-free V5 receipt on restart', () => {

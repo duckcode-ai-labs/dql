@@ -791,6 +791,16 @@ export async function runAskPipeline(input: RunAskPipelineInput): Promise<Pipeli
       if (!candidate) {
         const refused = drafted.refusals[0];
         step('schema', 'Could not draft SQL from the schema', 'failed', { ...(refused ? { detail: refused.message } : {}), ms: draftMs });
+        // NO TABLES COULD BE READ AT ALL: a setup problem, not an answer about
+        // the data. Saying "the project's data does not describe it" here sent
+        // people away from a question the same project answers once its
+        // tables are back (ZLens 0.1.0 e2e, F3).
+        if (refused?.code === 'exploration_tables_unavailable' && options.onDecline !== 'fallthrough') {
+          const message = refused.message.replace(/[.\s]+$/, '');
+          receipt.intent = reading; receipt.reading = reading.reading;
+          receipt.failure = { stage: 'prepare', reason: 'exploration_tables_unavailable', message };
+          return { kind: 'failed', stage: 'prepare', message, text: `${composeFailedText('prepare', message)}. Whether the data holds "${reading.reading.replace(/[.\s]+$/, '')}" was not checked.`, receipt, intent: reading };
+        }
         break;
       }
       step('schema', `${attempt === 1 ? 'Drafted' : 'Redrafted'} SQL over ${(candidate.relations ?? []).join(', ') || 'the described tables'}`, 'done', { detail: candidate.sql, ms: draftMs });

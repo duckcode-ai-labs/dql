@@ -494,6 +494,7 @@ export {
   agentRunProgressFromStorage,
   type SqliteAgentRunStoreOptions,
 } from "./agent-run-store.js";
+export { claimRuntimeOwner, releaseRuntimeOwner, runtimeOwnerAlive, RUNTIME_OWNER_STALE_MS } from "./runtime-owner.js";
 export type { Awaitable, AwaitableMethods, PromisedMethods } from "./store-types.js";
 export { ftsTokens } from "./memory/fts-query.js";
 export type {
