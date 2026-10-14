@@ -36,7 +36,10 @@ services:
       - ./:/workspace
     environment:
       ZLENS_HOST: 0.0.0.0
-      ZLENS_SERVER_TOKEN: ${ZLENS_SERVER_TOKEN:-${DQL_SERVER_TOKEN:?set ZLENS_SERVER_TOKEN to a long random string before docker compose up}}
+      # Required: set ZLENS_SERVER_TOKEN (or the old DQL_SERVER_TOKEN) to a long
+      # random string before docker compose up. Compose cannot require one of two
+      # names, so without either the container stops at startup and says so.
+      ZLENS_SERVER_TOKEN: ${ZLENS_SERVER_TOKEN:-${DQL_SERVER_TOKEN:-}}
       # Add the origin you browse from if you map a different host port.
       ZLENS_ALLOWED_ORIGINS: ${ZLENS_ALLOWED_ORIGINS:-${DQL_ALLOWED_ORIGINS:-http://127.0.0.1:3474,http://localhost:3474}}
       # Optional credentials. Empty values keep Docker startup smooth; the UI
