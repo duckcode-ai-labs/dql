@@ -433,8 +433,8 @@ function McpConnectionsEditor({
         />
         <McpCompatibilityCard
           title="JSON import"
-          detail="Paste DQL JSON, OpenAI Responses tools, or Claude mcp_servers. DQL saves the normalized project config."
-          badge="DQL normalized"
+          detail="Paste DQL JSON, OpenAI Responses tools, or Claude mcp_servers. ZLens saves the normalized project config."
+          badge="ZLens normalized"
           t={t}
         />
       </div>
@@ -1707,7 +1707,7 @@ function HintReviewQueue({ t, onStatus }: { t: Theme; onStatus: (message: string
       </div>
       {pending.length === 0 ? (
         <div style={{ fontSize: 11.5, color: t.textMuted, lineHeight: 1.5 }}>
-          Nothing pending. A candidate appears only after you explicitly choose Teach DQL on an AI draft that you changed and ran successfully.
+          Nothing pending. A candidate appears only after you explicitly choose Teach ZLens on an AI draft that you changed and ran successfully.
         </div>
       ) : (
         <div style={{ display: 'grid', gap: 8 }}>

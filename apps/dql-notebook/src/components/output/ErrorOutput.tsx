@@ -2,6 +2,15 @@ import React from 'react';
 import { themes, type Theme, type ThemeMode } from '../../themes/notebook-theme';
 import { parseQueryError } from '../../utils/parse-error';
 import type { SchemaTable } from '../../store/types';
+import { useDispatch } from '../../store/NotebookStore';
+
+/**
+ * The runtime's "no connection yet" refusal (a fresh project, F11). Repairing the
+ * SQL cannot help; the next step is connecting DuckDB or a warehouse.
+ */
+export function isMissingConnectionError(message: string): boolean {
+  return /No database connection is configured yet/i.test(message);
+}
 
 interface ErrorOutputProps {
   message: string;
@@ -53,7 +62,13 @@ export function ErrorOutput({
   schemaTables,
 }: ErrorOutputProps) {
   const t = themes[themeMode];
+  const dispatch = useDispatch();
   const parsed = parseQueryError(message);
+  const missingConnection = isMissingConnectionError(message);
+  const openDatabaseSettings = () => {
+    dispatch({ type: 'SET_SETTINGS_TAB', tab: 'database' });
+    dispatch({ type: 'SET_MAIN_VIEW', view: 'settings' });
+  };
 
   // Build schema-aware suggestions
   let schemaSuggestion: string | null = null;
@@ -195,7 +210,18 @@ export function ErrorOutput({
         </div>
       )}
 
-      {(showFormatFix || onBackgroundRepair) && (
+      {missingConnection && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: 2 }}>
+          <ErrorActionButton t={t} onClick={openDatabaseSettings}>
+            Connect a database
+          </ErrorActionButton>
+          <span style={{ fontSize: 11, color: t.textMuted, fontFamily: t.font }}>
+            Add local DuckDB (a .duckdb file) or your warehouse in Settings → Database, then run this cell again.
+          </span>
+        </div>
+      )}
+
+      {!missingConnection && (showFormatFix || onBackgroundRepair) && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: 2 }}>
           {showFormatFix && (
             <ErrorActionButton t={t} onClick={onFix}>

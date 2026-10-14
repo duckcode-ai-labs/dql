@@ -87,7 +87,7 @@ export async function runApp(
           '  zlens app generate "<prompt>" [--domain <domain>] [--owner <user>] [--ai-layout]\n' +
           "  zlens app ls [path]\n" +
           "  zlens app show <id> [path]\n" +
-          "  zlens app build [path]\n" +
+          "  zlens app build [path]        builds every App in the project (path defaults to .)\n" +
           "  zlens app reindex [path]\n" +
           "  zlens app verify <snapshot.html> [--trust-key <public.pem>] [--format json]\n" +
           "  zlens app key\n" +
@@ -275,6 +275,15 @@ async function runAppShow(rest: string[], flags: CLIFlags): Promise<void> {
 // ---- build ----
 
 async function runAppBuild(targetPath: string | null, flags: CLIFlags): Promise<void> {
+  // `zlens app build` builds every App in a project; its argument is a project
+  // path, not an App id. An App id used to fall through to the enclosing
+  // project silently, so say what the argument means instead.
+  if (targetPath && !existsSync(resolve(targetPath))) {
+    throw new Error(
+      `"${targetPath}" is not a project folder. zlens app build [path] builds every App in the project at path ` +
+        `(default: the current folder), e.g. zlens app build . — to look at one App use zlens app show ${targetPath}.`,
+    );
+  }
   const projectRoot = resolveAppProjectRoot(targetPath);
   // Build the manifest with dbt import resolved the same way `zlens compile`
   // does, so `zlens app build` produces an identical on-disk artifact.

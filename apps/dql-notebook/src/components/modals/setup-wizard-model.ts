@@ -89,7 +89,7 @@ export function onboardingErrorView(
         command: `cd ${JSON.stringify(location)} && dbt parse`,
         nextActions: fields.nextActions.length > 0
           ? fields.nextActions
-          : ['Run the command locally, or ask DQL to build artifacts when dbt is available.', 'Retry inspection.'],
+          : ['Run the command locally, or ask ZLens to build artifacts when dbt is available.', 'Retry inspection.'],
         optional: false,
       };
     case 'DBT_ARTIFACT_INVALID':

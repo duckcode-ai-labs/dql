@@ -295,7 +295,7 @@ export function keyQuestionFingerprints<T>(trace: T, key: string): T {
 export function traceQuestionKey(projectRoot: string, hostSalt?: unknown): string {
   if (typeof hostSalt === 'string' && hostSalt.trim()) return hostSalt;
   // A host's key that is not a text is not used (and never written anywhere); DQL keys with its own instead.
-  if (hostSalt !== undefined) console.warn('[dql] The host\'s traceSalt is not a non-empty text; question fingerprints are keyed with this project\'s own key.');
+  if (hostSalt !== undefined) console.warn('[zlens] The host\'s traceSalt is not a non-empty text; question fingerprints are keyed with this project\'s own key.');
   const folder = join(projectRoot, '.dql', 'local', 'private');
   const file = join(folder, 'trace-salt');
   if (existsSync(file)) {

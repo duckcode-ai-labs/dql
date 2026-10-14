@@ -1108,7 +1108,7 @@ export function ConnectionPanel({
       <div>
         <div style={{ fontSize: 14, fontWeight: 700, color: t.textPrimary, fontFamily: t.font }}>Metadata scope</div>
         <div style={{ fontSize: 11.5, color: t.textMuted, marginTop: 3, lineHeight: 1.5, fontFamily: t.font }}>
-          DQL synchronizes this authorized scope into local SQLite. Warm Ask, Notebook, and Block Studio searches use that index instead of scanning the warehouse.
+          ZLens synchronizes this authorized scope into local SQLite. Warm Ask, Notebook, and Block Studio searches use that index instead of scanning the warehouse.
         </div>
       </div>
       <div style={{ border: `1px solid ${t.cellBorder}`, borderRadius: 9, padding: '11px 12px', background: t.editorBg, display: 'flex', flexDirection: 'column', gap: 9 }}>

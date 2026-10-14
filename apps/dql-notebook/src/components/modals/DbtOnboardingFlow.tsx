@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ZLensMark } from '../shell/ZLensMark';
 import type { Theme } from '../../themes/notebook-theme';
 import {
   api,
@@ -331,9 +332,7 @@ export function DbtOnboardingFlow({
         @keyframes dql-setup-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
       `}</style>
       <div style={{ height: 52, flexShrink: 0, background: t.cellBg, borderBottom: `1px solid ${t.cellBorder}`, display: 'flex', alignItems: 'center', padding: '0 18px', gap: 10, userSelect: 'none' }}>
-        <div style={{ width: 28, height: 28, borderRadius: 6, background: '#0b7a75', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-          <span style={{ color: '#fff', fontSize: 10, fontWeight: 700, fontFamily: t.fontMono, letterSpacing: '-0.5px' }}>DQL</span>
-        </div>
+        <span style={{ display: 'inline-flex', color: t.textPrimary, flexShrink: 0 }}><ZLensMark size={26} /></span>
         <h2 id="dbt-onboarding-title" style={{ margin: 0, fontSize: 13.5, fontWeight: 650, color: t.textPrimary, fontFamily: t.font, whiteSpace: 'nowrap' }}>Set up your workspace</h2>
         <div style={{ flex: 1 }} />
         <div aria-label="dbt onboarding progress" style={{ display: 'flex', alignItems: 'center', gap: 4, overflowX: 'auto' }}>
@@ -364,7 +363,7 @@ export function DbtOnboardingFlow({
         {statusLoading && <Notice t={t} title="Checking existing setup…" body="You can resume from the first incomplete step." />}
 
         {stage === 'connect' && !statusLoading && (
-          <Section title="1. Connect the dbt project" description="Point DQL at the existing dbt project and artifact. ZLens reads these files in place; it does not create a second semantic copy." t={t}>
+          <Section title="1. Connect the dbt project" description="Point ZLens at the existing dbt project and artifact. ZLens reads these files in place; it does not create a second semantic copy." t={t}>
             <div style={{ display: 'flex', gap: 8 }}>
               <button type="button" onClick={() => setSourceMode('local')} style={sourceMode === 'local' ? primaryButton(t) : secondaryButton(t)}>Local path</button>
               <button type="button" onClick={() => setSourceMode('repo')} style={sourceMode === 'repo' ? primaryButton(t) : secondaryButton(t)}>Git repository</button>
@@ -600,7 +599,7 @@ function WelcomeStory({ t }: { t: Theme }) {
       <div style={{ display: 'grid', gridTemplateColumns: '1.1fr 0.9fr', gap: 28, alignItems: 'center' }}>
         <div>
           <div style={{ display: 'inline-flex', alignItems: 'center', gap: 7, border: '1px solid var(--status-info-border)', background: 'var(--accent-dim)', borderRadius: 999, padding: '4px 13px', fontSize: 11, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', color: t.accent }}>
-            Welcome to DQL
+            Welcome to ZLens
           </div>
           <h1 style={{ margin: '12px 0 0', fontSize: 27, fontWeight: 700, letterSpacing: '-0.02em', color: t.textPrimary, lineHeight: 1.25 }}>Analytics your AI<br />can&apos;t hallucinate</h1>
           <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 9 }}>

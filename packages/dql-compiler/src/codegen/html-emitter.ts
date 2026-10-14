@@ -1077,7 +1077,7 @@ export function emitWorkbookHTML(
           var n2 = parseInt(m[1], 10);
           if (!isNaN(n2)) return n2;
         }
-      } catch (e) { console.warn('[dql] dqlGetInitialPage URL/hash parse failed', e); }
+      } catch (e) { console.warn('[zlens] dqlGetInitialPage URL/hash parse failed', e); }
       return 0;
     }
 
@@ -1132,7 +1132,7 @@ export function emitWorkbookHTML(
         var u = new URL(window.location.href);
         u.searchParams.set('page', String(pageIndex));
         history.replaceState(null, '', u.toString());
-      } catch (e) { console.warn('[dql] page URL sync failed', e); }
+      } catch (e) { console.warn('[zlens] page URL sync failed', e); }
 
       // Re-initialize charts for the new page
       if (typeof initDashboard === 'function') initDashboard();

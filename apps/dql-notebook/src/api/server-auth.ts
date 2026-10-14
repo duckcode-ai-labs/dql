@@ -1,17 +1,25 @@
+/**
+ * The access-link fragment key. Links keep using `#dql_token=` so links already
+ * shared (and older servers) keep working; `#zlens_token=` is accepted too.
+ */
 const SERVER_TOKEN_FRAGMENT_KEY = 'dql_token';
+const SERVER_TOKEN_FRAGMENT_KEYS = [SERVER_TOKEN_FRAGMENT_KEY, 'zlens_token'] as const;
 const SERVER_TOKEN_SESSION_KEY = 'dql.server-token.v1';
 
 /** Read the one-time LAN bearer token without putting it in an HTTP request. */
 export function serverTokenFromHash(hash: string): string | undefined {
   const params = new URLSearchParams(hash.replace(/^#/, ''));
-  const token = params.get(SERVER_TOKEN_FRAGMENT_KEY)?.trim();
-  return token || undefined;
+  for (const key of SERVER_TOKEN_FRAGMENT_KEYS) {
+    const token = params.get(key)?.trim();
+    if (token) return token;
+  }
+  return undefined;
 }
 
-/** Remove only DQL's token while preserving any unrelated fragment state. */
+/** Remove only the access token while preserving any unrelated fragment state. */
 export function hashWithoutServerToken(hash: string): string {
   const params = new URLSearchParams(hash.replace(/^#/, ''));
-  params.delete(SERVER_TOKEN_FRAGMENT_KEY);
+  for (const key of SERVER_TOKEN_FRAGMENT_KEYS) params.delete(key);
   const remaining = params.toString();
   return remaining ? `#${remaining}` : '';
 }
@@ -101,8 +109,10 @@ export function hasServerToken(): boolean {
  */
 export function serverTokenFromAccessInput(input: string): string | undefined {
   const text = input.trim();
-  const tokenAt = text.indexOf(`${SERVER_TOKEN_FRAGMENT_KEY}=`);
-  if (tokenAt >= 0) return serverTokenFromHash(text.slice(tokenAt));
+  for (const key of SERVER_TOKEN_FRAGMENT_KEYS) {
+    const tokenAt = text.indexOf(`${key}=`);
+    if (tokenAt >= 0) return serverTokenFromHash(text.slice(tokenAt));
+  }
   return /^[\w.~-]{8,}$/.test(text) ? text : undefined;
 }
 

@@ -21,6 +21,7 @@ import { api } from '../../api/client';
 import { useShallow } from 'zustand/react/shallow';
 import { useDispatch, useNotebookStore } from '../../store/NotebookStore';
 import { themes, type Theme } from '../../themes/notebook-theme';
+import { PROJECT_REFRESHED_EVENT } from '../../operations/OperationsProvider';
 import {
   NODE_TYPE_COLORS,
   TYPE_TITLES,
@@ -203,6 +204,19 @@ export function LineageDAG() {
 
   useEffect(() => {
     loadFullGraph();
+  }, [loadFullGraph]);
+
+  // A block saved, certified or deleted elsewhere changes the project graph.
+  // Reload when the server finishes its project refresh (or the block library
+  // is invalidated) rather than waiting for a remount or the file watcher.
+  useEffect(() => {
+    const reload = () => { void loadFullGraph(); };
+    window.addEventListener(PROJECT_REFRESHED_EVENT, reload);
+    window.addEventListener('dql:block-library-invalidated', reload);
+    return () => {
+      window.removeEventListener(PROJECT_REFRESHED_EVENT, reload);
+      window.removeEventListener('dql:block-library-invalidated', reload);
+    };
   }, [loadFullGraph]);
 
   // Blocks, apps, and notebooks the user can trace lineage from.

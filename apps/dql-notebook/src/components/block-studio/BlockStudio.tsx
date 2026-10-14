@@ -112,6 +112,7 @@ import {
 import { getTypeColor } from '../../utils/type-colors';
 import { BlockParameterControls } from '../parameters/BlockParameterControls';
 import type { BlockEntry } from '../blocks/block-types';
+import { buildCatalogFooter } from '../panels/build-footer';
 
 type ExplorerTab = 'blocks' | 'semantic' | 'database';
 type ResultTab = 'results' | 'parameters' | 'lineage' | 'save' | 'history';
@@ -1554,7 +1555,12 @@ export function BlockStudio() {
             onCollapse={() => setLeftPaneCollapsed(true)}
             footer={state.semanticLayer.loading
               ? `Loading ${(state.blockStudioDbtStatus?.counts.metrics ?? 0).toLocaleString()} semantic metrics…`
-              : `${state.semanticLayer.provider ? `${state.semanticLayer.provider} synced` : 'dbt synced'} · ${databaseStats.tables} table${databaseStats.tables === 1 ? '' : 's'} · ${state.semanticLayer.metrics.length.toLocaleString()} metric${state.semanticLayer.metrics.length === 1 ? '' : 's'}`}
+              : buildCatalogFooter({
+                provider: state.semanticLayer.provider,
+                dbtModels: state.blockStudioDbtStatus?.counts.models,
+                warehouseTables: Math.max(databaseStats.tables, state.schemaTables.length),
+                metrics: state.semanticLayer.metrics.length,
+              })}
             footerStatus={state.semanticLayer.loading ? 'loading' : 'ready'}
           />
         </div>

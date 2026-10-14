@@ -132,7 +132,7 @@ async function waitForHealth(baseUrl: string, server: ChildProcess, logPath: str
 
 export default async function globalSetup(): Promise<() => Promise<void>> {
   if (process.env.E2E_SKIP_BUILD !== '1') {
-    run('pnpm', ['exec', 'turbo', 'run', 'build', '--filter=zlens...']);
+    run('pnpm', ['exec', 'turbo', 'run', 'build', '--filter=@zlens/cli...']);
   }
   if (!existsSync(cliEntry)) throw new Error(`Built CLI not found at ${cliEntry}; build it first.`);
 

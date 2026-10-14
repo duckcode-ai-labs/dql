@@ -17,6 +17,13 @@ import {
 
 const OPERATIONS_QUERY_KEY = ['local-operations'] as const;
 
+/**
+ * Fired on `window` when a project refresh (manifest + lineage rebuild) finishes,
+ * e.g. after a block save. Views that cache project-wide data (Lineage) reload on it
+ * instead of depending on the server's file watcher.
+ */
+export const PROJECT_REFRESHED_EVENT = 'dql:project-refreshed';
+
 interface OperationsContextValue {
   operations: LocalOperation[];
   activeCount: number;
@@ -135,6 +142,25 @@ export function OperationsProvider({ children }: { children: React.ReactNode }) 
       }));
     }
   }, [dispatch, operations]);
+
+  // Announce project refreshes that complete while this tab is open. The ids
+  // already finished when the list first loads are history, not news.
+  const seenProjectRefreshes = useRef<Set<string> | null>(null);
+  useEffect(() => {
+    if (!query.data) return;
+    const completed = operations.filter((operation) => operation.type === 'project_refresh' && operation.status === 'succeeded');
+    if (!seenProjectRefreshes.current) {
+      seenProjectRefreshes.current = new Set(completed.map((operation) => operation.id));
+      return;
+    }
+    const seen = seenProjectRefreshes.current;
+    const fresh = completed.filter((operation) => !seen.has(operation.id));
+    if (fresh.length === 0) return;
+    for (const operation of fresh) seen.add(operation.id);
+    window.dispatchEvent(new CustomEvent(PROJECT_REFRESHED_EVENT, {
+      detail: { operationIds: fresh.map((operation) => operation.id) },
+    }));
+  }, [operations, query.data]);
 
   const value = useMemo<OperationsContextValue>(() => ({
     operations,
