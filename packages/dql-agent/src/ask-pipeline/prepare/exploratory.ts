@@ -73,6 +73,9 @@ export async function prepareExploratory(
   if (drafted && 'refused' in drafted) {
     return { candidates: [], refusals: [{ tier: 'exploratory', code: 'exploration_check_failed', message: drafted.refused, repairable: false }] };
   }
+  if (drafted && 'error' in drafted && drafted.unavailable) {
+    return { candidates: [], refusals: [{ tier: 'exploratory', code: 'exploration_tables_unavailable', message: drafted.error, repairable: false }] };
+  }
   if (!drafted || 'error' in drafted) {
     return { candidates: [], refusals: [{ tier: 'exploratory', code: 'exploration_failed', message: drafted?.error ?? 'the provider returned no SQL', repairable: false }] };
   }

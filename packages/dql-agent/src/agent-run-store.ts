@@ -35,6 +35,7 @@ import type {
   EvidenceRoleCoverageStateV1,
 } from './analytical-orchestration.js';
 import { readEnv } from '@zlens/core';
+import { claimRuntimeOwner, releaseRuntimeOwner, runtimeOwnerAlive } from './runtime-owner.js';
 
 export interface SqliteAgentRunStoreOptions {
   /** Path of the .sqlite file (created on first use). */
@@ -161,6 +162,8 @@ export class SqliteAgentRunStore implements AgentRunStore {
   private readonly db: Database.Database;
   private readonly maxRuns: number;
   private readonly fullPayloadRuns: number;
+  /** This instance's runtime owner token: stamped on the unfinished runs it writes. */
+  private readonly runtimeOwner = claimRuntimeOwner();
 
   constructor(options: SqliteAgentRunStoreOptions) {
     mkdirSync(dirname(options.path), { recursive: true });
@@ -200,6 +203,9 @@ export class SqliteAgentRunStore implements AgentRunStore {
       );
       CREATE INDEX IF NOT EXISTS idx_agent_run_requests_run ON agent_run_requests(run_id);
     `);
+    // Runs recorded before owners were kept have none.
+    const columns = this.db.prepare('PRAGMA table_info(agent_runs)').all() as Array<{ name: string }>;
+    if (!columns.some((column) => column.name === 'runtime_owner')) this.db.exec('ALTER TABLE agent_runs ADD COLUMN runtime_owner TEXT');
     this.finalizeInterruptedRuns();
     if (options.legacyJsonPath) this.migrateLegacyJson(options.legacyJsonPath);
     this.slimOversizedRuns();
@@ -400,8 +406,8 @@ export class SqliteAgentRunStore implements AgentRunStore {
     const persistedProgress = sanitizeProgressRoleCoverage(progress);
     const updatedAt = persistedProgress.lifecycle.updatedAt;
     this.db.prepare(`
-      INSERT INTO agent_runs (id, question, route, status, started_at, completed_at, compacted, payload_json, updated_at)
-      VALUES (?, ?, ?, NULL, ?, NULL, 0, ?, ?)
+      INSERT INTO agent_runs (id, question, route, status, started_at, completed_at, compacted, payload_json, updated_at, runtime_owner)
+      VALUES (?, ?, ?, NULL, ?, NULL, 0, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET
         question = excluded.question,
         route = excluded.route,
@@ -410,7 +416,8 @@ export class SqliteAgentRunStore implements AgentRunStore {
         completed_at = NULL,
         compacted = 0,
         payload_json = excluded.payload_json,
-        updated_at = excluded.updated_at
+        updated_at = excluded.updated_at,
+        runtime_owner = excluded.runtime_owner
       WHERE agent_runs.completed_at IS NULL
     `).run(
       persistedProgress.id,
@@ -419,6 +426,7 @@ export class SqliteAgentRunStore implements AgentRunStore {
       persistedProgress.lifecycle.startedAt,
       JSON.stringify(this.externalizeArtifacts(persistedProgress.id, persistedProgress)),
       updatedAt,
+      this.runtimeOwner,
     );
   }
 
@@ -481,6 +489,7 @@ export class SqliteAgentRunStore implements AgentRunStore {
   }
 
   close(): void {
+    releaseRuntimeOwner(this.runtimeOwner);
     this.db.close();
   }
 
@@ -489,12 +498,18 @@ export class SqliteAgentRunStore implements AgentRunStore {
    * Close orphaned rows with one inspectable, retryable terminal receipt instead
    * of leaving the UI in a permanent running state.
    *
+   * ONLY ORPHANS. Another ZLens process opening this project (a second
+   * notebook, the runtime `zlens agent ask` starts) must not close a run the
+   * notebook server is still answering: a row whose owning runtime is alive is
+   * left to that runtime.
+   *
    * Acceptance: API-008, API-007.
    */
   private finalizeInterruptedRuns(): void {
-    const rows = this.db.prepare(
-      'SELECT id, payload_json FROM agent_runs WHERE completed_at IS NULL',
-    ).all() as Array<{ id: string; payload_json: string }>;
+    const rows = (this.db.prepare(
+      'SELECT id, payload_json, runtime_owner, updated_at FROM agent_runs WHERE completed_at IS NULL',
+    ).all() as Array<{ id: string; payload_json: string; runtime_owner: string | null; updated_at: string | null }>)
+      .filter((row) => !runtimeOwnerAlive(row.runtime_owner, row.updated_at));
     if (rows.length === 0) return;
     const update = this.db.prepare(`
       UPDATE agent_runs
@@ -634,7 +649,7 @@ function interruptedRuntimeReceiptV5(
       : 'The Ask runtime was interrupted before its final result was accepted.',
     why: cancelled
       ? 'The local run was cancelled before finalization.'
-      : 'The local ZLens runtime restarted before finalization.',
+      : 'The ZLens runtime that was answering this stopped before finalization.',
     impact: 'No executable data answer was accepted for this run.',
     nextAction: cancelled ? 'none' as const : 'retry_same_plan' as const,
     ...(state.resolvedPlan?.compiler ? { selectedCompiler: state.resolvedPlan.compiler } : {}),
@@ -843,8 +858,8 @@ export function interruptedAgentRun(progress: AgentRunProgressV1, completedAt: s
     message: userCancelled
       ? 'Stopped by user.'
       : retainedIndependentResult
-        ? 'The local ZLens runtime restarted before this agent run completed. Completed independent task results remain available for inspection.'
-        : 'The local ZLens runtime restarted before this agent run completed. No result was accepted.',
+        ? 'The ZLens runtime that was answering this stopped before the run completed. Completed independent task results remain available for inspection.'
+        : 'The ZLens runtime that was answering this stopped before the run completed. No result was accepted.',
     recoverable: !userCancelled,
     safeActions: userCancelled ? [] : ['retry_same_request'],
   };

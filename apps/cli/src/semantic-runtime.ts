@@ -1,6 +1,7 @@
 import {
   compareWarehouseTargets,
   getDialect,
+  loadProjectConfig,
   semanticDimensionReference,
   type ComposeQueryResult,
   type MetricDefinition,
@@ -16,7 +17,8 @@ import {
   testDbtCloudSemanticConnection,
   type DbtCloudSemanticTestResult,
 } from './dbt-cloud-semantic.js';
-import { compileMetricFlowQuery, hasDbtSemanticManifest, hasMetricFlowCli, listMetricFlowDimensions, managedMetricFlowBin, MetricFlowUnavailableError, resolveMetricFlowCli } from './metricflow.js';
+import { compileMetricFlowQuery, hasDbtSemanticManifest, hasMetricFlowCli, listMetricFlowDimensions, managedMetricFlowBin, MetricFlowUnavailableError, resolveMetricFlowCli, resolveSemanticManifestPath } from './metricflow.js';
+import { readFileSync, statSync } from 'node:fs';
 import {
   getEffectiveDbtCloudSemanticSettings,
   getSemanticRuntimeSettings,
@@ -668,9 +670,66 @@ function resolveMetricDefinition(
       || normalized.endsWith(`.${metric.name.toLowerCase()}`));
 }
 
+const semanticManifestCache = new Map<string, { key: string; defines: boolean }>();
+
+/** Does a dbt semantic manifest define at least one semantic model or metric? dbt writes an empty one on every parse. */
+function semanticManifestDefinesSemantics(path: string): boolean {
+  let key: string;
+  try {
+    const stat = statSync(path);
+    key = `${stat.mtimeMs}|${stat.size}`;
+  } catch {
+    return false;
+  }
+  const cached = semanticManifestCache.get(path);
+  if (cached?.key === key) return cached.defines;
+  let defines = false;
+  try {
+    const parsed = JSON.parse(readFileSync(path, 'utf8')) as Record<string, unknown>;
+    const entries = (value: unknown): number => Array.isArray(value) ? value.length : value && typeof value === 'object' ? Object.keys(value).length : 0;
+    defines = entries(parsed.semantic_models) > 0 || entries(parsed.metrics) > 0;
+  } catch {
+    defines = false;
+  }
+  semanticManifestCache.set(path, { key, defines });
+  return defines;
+}
+
+/**
+ * IS THIS PROJECT'S SEMANTIC LAYER ONE MetricFlow CAN READ?
+ *
+ * Local MetricFlow and dbt Cloud serve dbt semantic models and metrics. A
+ * project whose metrics are DQL semantic-layer YAML (`semanticLayer.provider:
+ * "dql"`, the default) has nothing for them to read: an `mf` executable that
+ * happens to be on PATH used to become the active runtime anyway, and every
+ * metric in the picker failed with "Local MetricFlow returned no compatible
+ * dimensions" while Ask fell back to AI-written SQL (ZLens 0.1.0 e2e, F4).
+ * Same rule as the semantic layer loader: an explicit dbt provider, or a dbt
+ * semantic manifest that actually defines semantic models or metrics.
+ */
+export function projectHasDbtSemantics(projectRoot: string): boolean {
+  const config = loadProjectConfig(projectRoot) as { semanticLayer?: { provider?: string; projectPath?: string }; dbt?: { projectDir?: string; manifestPath?: string } };
+  const provider = config.semanticLayer?.provider;
+  if (provider === 'dbt') return true;
+  if (provider && provider !== 'dql') return false;
+  const dbtProjectDir = config.dbt?.projectDir;
+  return semanticManifestDefinesSemantics(resolveSemanticManifestPath(projectRoot, {
+    ...(dbtProjectDir ? { dbtProjectDir } : {}),
+    ...(config.dbt?.manifestPath ? { dbtManifestPath: config.dbt.manifestPath } : {}),
+  }));
+}
+
 export async function getSemanticRuntimeStatus(
   projectRoot: string,
-  options: { probeConfiguredCloud?: boolean } = {},
+  options: {
+    probeConfiguredCloud?: boolean;
+    /**
+     * The semantic layer's resolved provider when the caller already knows it
+     * (`dbt` when dbt semantic models are loaded). Without it the project's
+     * own config and dbt artifacts decide.
+     */
+    semanticProvider?: string | null;
+  } = {},
 ): Promise<SemanticRuntimeStatus> {
   const redacted = getSemanticRuntimeSettings(projectRoot);
   const cloud = getEffectiveDbtCloudSemanticSettings(projectRoot);
@@ -696,7 +755,11 @@ export async function getSemanticRuntimeStatus(
   // user reapplies them against an active warehouse connection.
   const cloudReady = Boolean(cloudTest?.ok && cloud.executionTargetFingerprint);
   const preference = redacted.preference;
-  const active = selectActiveAdapter(preference, cloudReady, cliReady);
+  // A detected `mf` is chosen automatically only for a semantic layer it can read.
+  const dbtSemantics = cliReady && preference === 'auto'
+    ? options.semanticProvider ? options.semanticProvider === 'dbt' : projectHasDbtSemantics(projectRoot)
+    : true;
+  const active = selectActiveAdapter(preference, cloudReady, cliReady && dbtSemantics);
   const adapters: SemanticRuntimeAdapterStatus[] = [
     {
       id: 'native',
@@ -719,7 +782,7 @@ export async function getSemanticRuntimeStatus(
       source: cliReady ? 'local' : 'none',
       capabilities: { having: false },
       detail: cliReady
-        ? `Detected ${metricFlowCli?.source === 'managed' ? 'the project-local managed runtime' : 'a compatible `mf` executable'}${metricFlowCli?.version ? ` · ${metricFlowCli.version}` : ''}.`
+        ? `Detected ${metricFlowCli?.source === 'managed' ? 'the project-local managed runtime' : 'a compatible `mf` executable'}${metricFlowCli?.version ? ` · ${metricFlowCli.version}` : ''}.${dbtSemantics ? '' : ' Not used automatically: this project\'s metrics are defined in the DQL semantic layer, which MetricFlow does not read, so the DQL native compiler serves them.'}`
         : 'The DQL adapter is bundled; install a project-local MetricFlow Python runtime or use an existing `mf` executable.',
     },
     {
@@ -1265,7 +1328,10 @@ export async function compileSemanticRuntimeQuery(
   context: SemanticRuntimeCompileContext,
 ): Promise<SemanticRuntimeCompileResult | null> {
   const effectiveRequest = normalizeSemanticRuntimeQueryRequest(request, context.semanticLayer);
-  const status = await getSemanticRuntimeStatus(context.projectRoot, { probeConfiguredCloud: true });
+  const status = await getSemanticRuntimeStatus(context.projectRoot, {
+    probeConfiguredCloud: true,
+    ...(context.detectedProvider ? { semanticProvider: context.detectedProvider } : {}),
+  });
   const explicit = effectiveRequest.engine;
   const fullRuntimeRequested = explicit === 'metricflow' || explicit === 'metricflow-cli' || explicit === 'dbt-cloud';
   const candidates = selectSemanticRuntimeAdapters(explicit, status.active);
@@ -1637,7 +1703,9 @@ export async function describeRuntimeCompatibility(
       });
       return { engine: 'metricflow-cli', dimensions, incompatible: [] };
     }
-    throw new SemanticRuntimeRequiredError('Local MetricFlow returned no compatible dimensions for the selected metrics.');
+    throw new SemanticRuntimeRequiredError(projectHasDbtSemantics(projectRoot)
+      ? `Local MetricFlow returned no dimensions for ${metrics.join(', ') || 'the selected metrics'}. Run \`dbt parse\` so target/semantic_manifest.json is current, or set the semantic runtime to DQL native in Settings → Semantic runtime.`
+      : `Local MetricFlow is selected as the semantic runtime, but ${metrics.join(', ') || 'these metrics'} ${metrics.length === 1 ? 'is' : 'are'} defined in the DQL semantic layer, which MetricFlow does not read. Set the semantic runtime to Auto or DQL native in Settings → Semantic runtime.`);
   }
 
   return nativeExplain();

@@ -16,6 +16,14 @@ describe('Domain Studio readiness copy (CFG-003, UI-007, E2E-003)', () => {
     expect(state.action).toBe('enable_warehouse');
   });
 
+  it('never offers warehouse-only modeling to a project that already reads dbt', () => {
+    const state = domainStudioUnavailableState(apiError('DBT_FIRST_NOT_ENABLED', 'dbt-first modeling is not enabled.', { dbtDetected: true }));
+
+    expect(state.title).toBe('Set up modeling');
+    expect(state.detail).toContain('Settings → Project & dbt');
+    expect(state.action).toBeUndefined();
+  });
+
   it('explains how to create a missing configured dbt manifest', () => {
     const state = domainStudioUnavailableState(apiError(
       'DBT_MANIFEST_NOT_FOUND',

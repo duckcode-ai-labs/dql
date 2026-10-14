@@ -68,6 +68,21 @@ describe('LocalOperationCoordinator', () => {
     second.close();
   });
 
+  it('leaves operations a live runtime is still running to that runtime', () => {
+    const root = mkdtempSync(join(tmpdir(), 'dql-operations-live-'));
+    roots.push(root);
+    const dbPath = join(root, 'operations.sqlite');
+    const live = new LocalOperationCoordinator(dbPath);
+    const operation = live.create({ type: 'project_refresh', scope: 'project' });
+    const other = new LocalOperationCoordinator(dbPath);
+    expect(other.get(operation.id)).toMatchObject({ status: 'queued' });
+    other.close();
+    live.close();
+    const afterExit = new LocalOperationCoordinator(dbPath);
+    expect(afterExit.get(operation.id)).toMatchObject({ status: 'interrupted', error: { code: 'RUNTIME_RESTARTED', retryable: true } });
+    afterExit.close();
+  });
+
   it('lists every active operation alongside only the bounded recent terminal history', async () => {
     const coordinator = createCoordinator();
     const olderActive = coordinator.create({
