@@ -667,6 +667,7 @@ interface AgentThreadRun {
     traceId?: string;
     recordingStatus?: string;
   };
+  reviewDraft?: { path: string; askedTimes: number; created: boolean };
 }
 
 function printCanonicalCliAskRun(run: AgentThreadRun, threadId?: string): void {
@@ -680,6 +681,12 @@ function printCanonicalCliAskRun(run: AgentThreadRun, threadId?: string): void {
           ? '✕ Blocked'
           : '· Reply';
   console.log(`${badge}\n\n${(run.answer ?? run.summary ?? '').trim()}`);
+  if (run.reviewDraft?.path) {
+    // Tier 2: the review-required answer was saved as a draft (never certified).
+    const again = run.reviewDraft.created ? '' : ` (asked ${run.reviewDraft.askedTimes} times; existing draft reused)`;
+    console.log(`\nReview draft saved: ${run.reviewDraft.path}${again}`);
+    console.log(`  Not certified. Review it, then certify with: zlens certify --from-draft ${run.reviewDraft.path} --owner <you>`);
+  }
   if (threadId) console.log(`\nThread: ${threadId}`);
   const trace = run.traceReference;
   if (trace?.traceId) {

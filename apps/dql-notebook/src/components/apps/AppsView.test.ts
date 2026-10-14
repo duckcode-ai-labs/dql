@@ -11,7 +11,7 @@ import {
   removeDashboardFilterFromDocument,
 } from './dashboard-filters';
 import { semanticApprovalState } from './app-semantic-approval';
-import { appCertificationRollup } from './app-certification';
+import { appCertificationRollup, appLifecycleLabel } from './app-certification';
 
 type RuntimeFilter = NonNullable<DashboardDocumentResponse['dashboard']['filters']>[number] & {
   sourceBlockId?: string;
@@ -509,43 +509,46 @@ describe('Coverage for a filter the author never declared', () => {
   });
 });
 
-describe('the app header badge is a rollup of the tiles, not a count of blocks', () => {
+describe('the app header badge is the one aggregate page trust, from the current run', () => {
   type Tile = DashboardDocumentResponse['dashboard']['layout']['items'][number];
+  type Run = DashboardRunResponse['tiles'][number];
   const tile = (i: string, extra: Partial<Tile>): Tile => ({ i, x: 0, y: 0, w: 4, h: 4, viz: { type: 'table' }, ...extra } as Tile);
-  it('one review-required, saved-insight or draft tile is enough for the app not to be all certified', () => {
-    const certified = [tile('a', { block: { blockId: 'b1' } }), tile('b', { block: { blockId: 'b2' }, sourceClass: 'certified_block' })];
-    expect(appCertificationRollup(certified)).toEqual({ certified: 2, total: 2, allCertified: true });
-    // Prose carries no evidence and is counted neither way.
-    expect(appCertificationRollup([...certified, tile('c', { text: { markdown: 'Summary' } })]).allCertified).toBe(true);
-    const withReview = [...certified, tile('d', { block: { blockId: 'b3' }, review: { status: 'required' } })];
-    expect(appCertificationRollup(withReview)).toEqual({ certified: 2, total: 3, allCertified: false });
-    const withPin = [...certified, tile('e', { aiPin: { id: 'pin-1' } })];
-    expect(appCertificationRollup(withPin)).toMatchObject({ certified: 2, total: 3, allCertified: false });
-    const withSemantic = [...certified, tile('f', { semantic: { id: 's1' } as never })];
-    expect(appCertificationRollup(withSemantic).allCertified).toBe(false);
-    const withTrust = [...certified, tile('g', { block: { blockId: 'b4' }, trustState: 'review_required' })];
-    expect(appCertificationRollup(withTrust).allCertified).toBe(false);
-    const certifiedDatasetTiles = [
-      tile('dataset-block', {
-        sourceId: 'source.order-lines', sourceRevision: 'sha256:block-source',
-        query: { dimensions: [], measures: [{ measure: 'revenue' }] } as never,
-        sourceClass: 'certified_block', trustState: 'certified', reviewStatus: 'certified',
-      }),
-      tile('dataset-semantic', {
-        sourceId: 'semantic.commerce', sourceRevision: 'sha256:semantic-source',
-        query: { dimensions: [], measures: [{ measure: 'revenue' }] } as never,
-        sourceClass: 'governed_semantic', trustState: 'certified', reviewStatus: 'certified',
-      }),
-    ];
-    // The document's saved trust and source class are the only Dataset input
-    // to this rollup; execution success never participates.
-    expect(appCertificationRollup(certifiedDatasetTiles)).toEqual({ certified: 2, total: 2, allCertified: true });
-    expect(appCertificationRollup([
-      { ...certifiedDatasetTiles[0], trustState: 'review_required', reviewStatus: 'review_required' },
-    ])).toEqual({ certified: 0, total: 1, allCertified: false });
-    // A pending draft in the app is a review state of its own.
-    expect(appCertificationRollup(certified, 1).allCertified).toBe(false);
+  const ran = (tileId: string, extra: Partial<Run> = {}): Run => ({ tileId, status: 'ok', ...extra } as Run);
+
+  it('never says certified from the saved document alone: before a run, trust is not checked yet', () => {
+    const items = [tile('a', { block: { blockId: 'b1' } }), tile('b', { block: { blockId: 'b2' }, sourceClass: 'certified_block', trustState: 'certified' })];
+    expect(appCertificationRollup(items)).toMatchObject({ state: 'pending', allCertified: false, label: 'Trust not checked yet' });
     // An empty dashboard certifies nothing.
-    expect(appCertificationRollup([])).toEqual({ certified: 0, total: 0, allCertified: false });
+    expect(appCertificationRollup([], 0, [])).toMatchObject({ certified: 0, total: 0, allCertified: false });
+  });
+
+  it('F2: a draft block tile that ran as Needs review makes the header say 0 of 1, never All certified', () => {
+    // The fixture App: one bare block reference to a `_drafts` block.
+    const items = [tile('top-5', { block: { ref: 'blocks/_drafts/top_5_players_points_2016_2017.dql' } as never })];
+    const run = [ran('top-5', { certificationStatus: null, trustState: 'review_required', artifact: { trustState: 'review_required', sourceKind: 'review_block' } } as never)];
+    const rollup = appCertificationRollup(items, 0, run);
+    expect(rollup).toMatchObject({ certified: 0, total: 1, allCertified: false, state: 'review', label: '0 of 1 tile certified' });
+  });
+
+  it('says All data certified only when every data tile ran from a certified source and no App draft is pending', () => {
+    const items = [tile('a', { block: { blockId: 'b1' } }), tile('b', { block: { blockId: 'b2' } }), tile('c', { text: { markdown: 'Summary' } })];
+    const certifiedRun = [ran('a', { certificationStatus: 'certified' }), ran('b', { trustState: 'certified' } as never)];
+    expect(appCertificationRollup(items, 0, certifiedRun)).toMatchObject({ certified: 2, total: 2, allCertified: true, label: 'All data certified' });
+    // A pending App draft is a review state of its own.
+    expect(appCertificationRollup(items, 1, certifiedRun)).toMatchObject({ allCertified: false, label: 'All 2 tiles certified · 1 draft pending' });
+    // One tile that is not certified is enough.
+    const mixed = [ran('a', { certificationStatus: 'certified' }), ran('b', { trustState: 'review_required' } as never)];
+    expect(appCertificationRollup(items, 0, mixed)).toMatchObject({ certified: 1, total: 2, allCertified: false, state: 'partial', label: '1 of 2 tiles certified' });
+    // A tile with no run evidence is not certified.
+    expect(appCertificationRollup(items, 0, [ran('a', { certificationStatus: 'certified' })]).allCertified).toBe(false);
+    // An AI pin is certified only when a person certified it.
+    const pinned = [tile('p', { aiPin: { id: 'pin-1' } as never })];
+    expect(appCertificationRollup(pinned, 0, [ran('p', { aiPin: { certification: 'review_required' } } as never)]).allCertified).toBe(false);
+  });
+
+  it('labels the library card as App lifecycle, not data trust', () => {
+    expect(appLifecycleLabel('draft', false, 0)).toBe('App draft');
+    expect(appLifecycleLabel('review', false, 2)).toBe('App in review · 2 changes pending');
+    expect(appLifecycleLabel(undefined, true, 0)).toBe('App certified');
   });
 });

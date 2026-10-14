@@ -211,6 +211,8 @@ export async function driveViaRuntime(options: RuntimeDriverOptions): Promise<Ag
       body: JSON.stringify({
         question: options.question,
         requestedMode: options.requestedMode ?? 'ask',
+        // Scoring a suite must not write review drafts into the project.
+        reviewDraftCapture: 'off',
         ...(options.threadId ? { threadId: options.threadId } : {}),
         ...(options.workspaceContext && Object.keys(options.workspaceContext).length ? { workspaceContext: options.workspaceContext } : {}),
       }),

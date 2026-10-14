@@ -1862,6 +1862,11 @@ export interface AgentRun {
   traceReference?: AgentRunTraceReferenceV1;
   /** A run rebuilt from a thread turn: the saved run it came from, so its record can still be read. */
   agentRunId?: string;
+  /**
+   * Graduated trust, Tier 2: the draft block a review-required answer left for
+   * review (never certified). The executed DQL artifact itself stays transient.
+   */
+  reviewDraft?: { version: 1; path: string; status: 'draft'; askedTimes: number; created: boolean; fingerprint: string };
   repairCapability?: AnalyticalRepairCapabilityV1;
   providerEgressReceipts?: ProviderEgressReceiptV1[];
   derivation?: {

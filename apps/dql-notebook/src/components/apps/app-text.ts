@@ -27,6 +27,9 @@ export function formatBusinessLabel(value?: string | null): string {
 
 export function cleanStakeholderCopy(value: string): string {
   return value
+    // Older generated Apps described themselves as certified in static text;
+    // whether a page is certified is shown from its tiles' current trust.
+    .replace(/\bCertified app surface for ([^.]+)\./gi, 'App for $1. Each tile shows whether its source is certified.')
     .replace(/\bDraft gaps stay in Research until reviewed\.?/gi, 'Follow-up analysis stays out of the stakeholder view until reviewed.')
     .replace(/\bresearch path\b/gi, 'analysis path')
     .replace(/\bresearch suggestions\b/gi, 'analysis suggestions')

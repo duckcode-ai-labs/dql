@@ -22,6 +22,9 @@ describe('dashboard business story', () => {
     });
     expect(new Set(result.facts.map((fact) => fact.tileId))).toEqual(new Set(['customers', 'segments']));
     expect(result.story.trustState).toBe('review_required');
+    // "Verified" wording is reserved for stories whose every source is certified.
+    expect(result.story.implication).not.toMatch(/verified/i);
+    expect(result.story.implication).toMatch(/need review/);
     expect(result.story.paragraphs.join(' ')).toContain('Alice');
     expect(result.story.paragraphs.join(' ')).toContain('Coffee');
     expect(validateDashboardStoryBrief(result.story, result.facts)).toEqual({ ok: true, errors: [] });

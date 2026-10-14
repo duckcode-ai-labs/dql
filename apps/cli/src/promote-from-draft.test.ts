@@ -3,8 +3,12 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { promoteFromDraft } from './promote-from-draft.js';
+import { promoteFromDraft, type PromotionGate } from './promote-from-draft.js';
 import type { CLIFlags } from './args.js';
+
+
+const passGate: PromotionGate = async () => ({ ok: true, blockers: [], checks: ['metadata', 'run', 'tests'], warnings: [] });
+const promote = (root: string, flags: CLIFlags) => promoteFromDraft(root, flags, { gate: passGate, certifiedBy: 'reviewer@example.com' });
 
 function baseFlags(overrides: Partial<CLIFlags> = {}): CLIFlags {
   return {
@@ -92,22 +96,22 @@ describe('promoteFromDraft (zlens certify --from-draft)', () => {
     rmSync(tmp, { recursive: true, force: true });
   });
 
-  it('returns ok=false when the draft path does not exist', () => {
-    const out = promoteFromDraft(tmp, baseFlags({ fromDraft: 'blocks/_drafts/nope.dql' }));
+  it('returns ok=false when the draft path does not exist', async () => {
+    const out = await promote(tmp, baseFlags({ fromDraft: 'blocks/_drafts/nope.dql' }));
     expect(out.ok).toBe(false);
     expect(out.message).toMatch(/not found/i);
   });
 
-  it('refuses to promote a file whose status is not draft', () => {
+  it('refuses to promote a file whose status is not draft', async () => {
     writeDraft(tmp, 'mau', { status: 'certified' });
-    const out = promoteFromDraft(tmp, baseFlags({ fromDraft: 'blocks/_drafts/mau.dql' }));
+    const out = await promote(tmp, baseFlags({ fromDraft: 'blocks/_drafts/mau.dql' }));
     expect(out.ok).toBe(false);
     expect(out.message).toMatch(/status="draft"/);
   });
 
-  it('promotes a draft to blocks/<domain>/<slug>.dql, flips status, sets contract, drops _proposed', () => {
+  it('promotes a draft to blocks/<domain>/<slug>.dql, flips status, sets contract, drops _proposed', async () => {
     writeDraft(tmp, 'mau');
-    const out = promoteFromDraft(
+    const out = await promote(
       tmp,
       baseFlags({
         fromDraft: 'blocks/_drafts/mau.dql',
@@ -129,7 +133,7 @@ describe('promoteFromDraft (zlens certify --from-draft)', () => {
     expect(existsSync(join(tmp, 'blocks/_drafts/mau.dql'))).toBe(false);
   });
 
-  it('preserves Dataset tile review-draft provenance as derived_from on later certification', () => {
+  it('preserves Dataset tile review-draft provenance as derived_from on later certification', async () => {
     const provenance = JSON.stringify({
       version: 1,
       kind: 'dataset_tile_provenance',
@@ -151,7 +155,7 @@ describe('promoteFromDraft (zlens certify --from-draft)', () => {
   query = """SELECT SUM(net_amount) AS revenue FROM order_lines"""
 }\n`);
 
-    const out = promoteFromDraft(tmp, baseFlags({ fromDraft: 'blocks/_drafts/revenue.dql', domain: 'commerce' }));
+    const out = await promote(tmp, baseFlags({ fromDraft: 'blocks/_drafts/revenue.dql', domain: 'commerce' }));
 
     expect(out.ok).toBe(true);
     const certified = readFileSync(join(tmp, 'blocks', 'commerce', 'revenue.dql'), 'utf-8');
@@ -159,9 +163,9 @@ describe('promoteFromDraft (zlens certify --from-draft)', () => {
     expect(certified).not.toContain('dataset_tile_provenance = ');
   });
 
-  it('promotes a domain-first draft into domains/<domain>/blocks/<slug>.dql', () => {
+  it('promotes a domain-first draft into domains/<domain>/blocks/<slug>.dql', async () => {
     writeDomainDraft(tmp, 'customer', 'mau');
-    const out = promoteFromDraft(
+    const out = await promote(
       tmp,
       baseFlags({
         fromDraft: 'domains/customer/blocks/_drafts/mau.dql',
@@ -177,10 +181,10 @@ describe('promoteFromDraft (zlens certify --from-draft)', () => {
     expect(existsSync(join(tmp, 'blocks/customer/mau.dql'))).toBe(false);
   });
 
-  it('promotes a legacy draft into the domain-first folder when the domain exists', () => {
+  it('promotes a legacy draft into the domain-first folder when the domain exists', async () => {
     mkdirSync(join(tmp, 'domains', 'customer'), { recursive: true });
     writeDraft(tmp, 'mau');
-    const out = promoteFromDraft(
+    const out = await promote(
       tmp,
       baseFlags({
         fromDraft: 'blocks/_drafts/mau.dql',
@@ -194,11 +198,11 @@ describe('promoteFromDraft (zlens certify --from-draft)', () => {
     expect(readFileSync(join(tmp, 'domains/customer/blocks/mau.dql'), 'utf-8')).toContain('datalex_contract = "commerce.Customer.monthly_active_customers@1"');
   });
 
-  it('falls back to the proposed contract id with @1 when --contract is omitted', () => {
+  it('falls back to the proposed contract id with @1 when --contract is omitted', async () => {
     writeDraft(tmp, 'mau', {
       proposedContractId: 'commerce.Customer.monthly_active_customers',
     });
-    const out = promoteFromDraft(
+    const out = await promote(
       tmp,
       baseFlags({ fromDraft: 'blocks/_drafts/mau.dql', domain: 'customer' }),
     );
@@ -207,9 +211,9 @@ describe('promoteFromDraft (zlens certify --from-draft)', () => {
     expect(certified).toContain('datalex_contract = "commerce.Customer.monthly_active_customers@1"');
   });
 
-  it('promotes an OSS draft without requiring a DataLex contract', () => {
+  it('promotes an OSS draft without requiring a DataLex contract', async () => {
     writeDraft(tmp, 'mau', { proposedContractId: '' });
-    const out = promoteFromDraft(tmp, baseFlags({ fromDraft: 'blocks/_drafts/mau.dql', domain: 'customer' }));
+    const out = await promote(tmp, baseFlags({ fromDraft: 'blocks/_drafts/mau.dql', domain: 'customer' }));
     expect(out.ok).toBe(true);
     expect(out.certifiedPath).toBe('blocks/customer/mau.dql');
     expect(out.datalexManifestDiff).toBeUndefined();
@@ -219,12 +223,12 @@ describe('promoteFromDraft (zlens certify --from-draft)', () => {
     expect(certified).not.toContain('datalex_contract = ""');
   });
 
-  it('refuses to overwrite an existing certified file unless --force', () => {
+  it('refuses to overwrite an existing certified file unless --force', async () => {
     writeDraft(tmp, 'mau');
     mkdirSync(join(tmp, 'blocks', 'customer'), { recursive: true });
     writeFileSync(join(tmp, 'blocks', 'customer', 'mau.dql'), 'already here');
 
-    const out = promoteFromDraft(
+    const out = await promote(
       tmp,
       baseFlags({
         fromDraft: 'blocks/_drafts/mau.dql',
@@ -236,12 +240,12 @@ describe('promoteFromDraft (zlens certify --from-draft)', () => {
     expect(out.message).toMatch(/already exists/);
   });
 
-  it('overwrites with --force', () => {
+  it('overwrites with --force', async () => {
     writeDraft(tmp, 'mau');
     mkdirSync(join(tmp, 'blocks', 'customer'), { recursive: true });
     writeFileSync(join(tmp, 'blocks', 'customer', 'mau.dql'), 'old content');
 
-    const out = promoteFromDraft(
+    const out = await promote(
       tmp,
       baseFlags({
         fromDraft: 'blocks/_drafts/mau.dql',
@@ -256,9 +260,9 @@ describe('promoteFromDraft (zlens certify --from-draft)', () => {
     expect(content).toContain('status = "certified"');
   });
 
-  it('surfaces a datalex-manifest.json patch with the contract entry to add', () => {
+  it('surfaces a datalex-manifest.json patch with the contract entry to add', async () => {
     writeDraft(tmp, 'mau');
-    const out = promoteFromDraft(
+    const out = await promote(
       tmp,
       baseFlags({
         fromDraft: 'blocks/_drafts/mau.dql',
@@ -271,5 +275,47 @@ describe('promoteFromDraft (zlens certify --from-draft)', () => {
     expect(out.datalexManifestDiff!).toContain('"version": 1');
     expect(out.datalexManifestDiff!).toContain('domains[name=commerce]');
     expect(out.datalexManifestDiff!).toContain('entities[name=Customer]');
+  });
+
+  it('certifies only when the certification rules pass: a failing gate writes nothing and keeps the draft', async () => {
+    writeDraft(tmp, 'mau');
+    const seen: string[] = [];
+    const out = await promoteFromDraft(tmp, baseFlags({ fromDraft: 'blocks/_drafts/mau.dql', domain: 'customer', owner: 'growth@example.com' }), {
+      gate: async ({ source }) => { seen.push(source); return { ok: false, blockers: ['All tests pass: 1 test(s) failed'] }; },
+      certifiedBy: 'reviewer@example.com',
+    });
+    expect(out.ok).toBe(false);
+    expect(out.blockers).toEqual(['All tests pass: 1 test(s) failed']);
+    expect(out.message).toMatch(/not certified/);
+    // The rules saw exactly the source that would have been certified.
+    expect(seen).toHaveLength(1);
+    expect(seen[0]).toContain('status = "certified"');
+    expect(seen[0]).toContain('owner = "growth@example.com"');
+    expect(existsSync(join(tmp, 'blocks/customer/mau.dql'))).toBe(false);
+    expect(readFileSync(join(tmp, 'blocks/_drafts/mau.dql'), 'utf-8')).toContain('status = "draft"');
+  });
+
+  it('writes a certification receipt next to reviewStatus: certified in the companion YAML', async () => {
+    writeDraft(tmp, 'mau');
+    mkdirSync(join(tmp, 'semantic-layer', 'blocks', '_drafts'), { recursive: true });
+    writeFileSync(join(tmp, 'semantic-layer', 'blocks', '_drafts', 'mau.yaml'), 'name: mau\nblock: mau\ndomain: _drafts\ntags:\n  - churn\nreviewStatus: draft\n');
+    const out = await promoteFromDraft(tmp, baseFlags({ fromDraft: 'blocks/_drafts/mau.dql', domain: 'customer', owner: 'growth@example.com' }), {
+      gate: passGate,
+      certifiedBy: 'reviewer@example.com',
+      now: new Date('2026-10-14T12:00:00.000Z'),
+    });
+    expect(out.ok).toBe(true);
+    expect(out.companionPath).toBe('semantic-layer/blocks/customer/mau.yaml');
+    const companion = readFileSync(join(tmp, out.companionPath!), 'utf-8');
+    expect(companion).toContain('reviewStatus: certified');
+    expect(companion).toContain('certifiedBy: reviewer@example.com');
+    expect(companion).toContain("certifiedAt: '2026-10-14T12:00:00.000Z'");
+    expect(companion).toContain('via: cli');
+    expect(companion).toContain('rules: oss');
+    expect(companion).toMatch(/sourceSha256: [0-9a-f]{64}/);
+    expect(companion).toContain('  - churn');
+    expect(companion).toContain('domain: customer');
+    expect(companion.match(/reviewStatus:/g)).toHaveLength(1);
+    expect(existsSync(join(tmp, 'semantic-layer', 'blocks', '_drafts', 'mau.yaml'))).toBe(false);
   });
 });

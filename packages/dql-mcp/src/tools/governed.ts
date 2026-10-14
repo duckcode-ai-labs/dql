@@ -62,6 +62,8 @@ interface AgentRunLike {
   nextActions?: unknown[];
   /** The Ask pipeline receipt; its context ledger says what the answer was read against. */
   diagnosticReceiptV9?: { context?: unknown };
+  /** The draft a review-required answer left for review (graduated trust, Tier 2). */
+  reviewDraft?: { path: string; status: 'draft'; askedTimes: number; created: boolean };
 }
 
 /** Reshape a runtime AgentRun into a compact, agent-friendly governed result. */
@@ -122,8 +124,8 @@ function mapRun(run: AgentRunLike) {
           result: p.result,
           rowCount: p.result?.rowCount,
           dqlArtifact: p.dqlArtifact,
-          draftBlockPath: p.draftBlockId ?? p.draftBlock?.path,
-          promote: p.promoteCommand,
+          draftBlockPath: run.reviewDraft?.path ?? p.draftBlockId ?? p.draftBlock?.path,
+          promote: p.promoteCommand ?? (run.reviewDraft?.path ? `zlens certify --from-draft ${run.reviewDraft.path} --owner <you>` : undefined),
           citations: p.citations,
           validationWarnings: p.validationWarnings,
           executionError: p.executionError,
@@ -135,6 +137,7 @@ function mapRun(run: AgentRunLike) {
     // selected, enforced and used — ids and counts, never rows.
     ...(run.diagnosticReceiptV9?.context ? { context: run.diagnosticReceiptV9.context } : {}),
     ...(investigation ? { investigation } : {}),
+    ...(run.reviewDraft ? { reviewDraft: run.reviewDraft } : {}),
     trustNote:
       'Report trustState verbatim and never upgrade it. A review-required answer is generated/semantic-layer backed and must be reviewed before it is trusted as certified.',
   };

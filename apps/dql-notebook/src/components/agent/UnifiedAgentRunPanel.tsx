@@ -3290,6 +3290,32 @@ function AskRunCard(props: AskRunCardProps) {
       {/* RFC 0010 HH-9/HH-10: the host's review of this answer, or its actions for getting one. */}
       <HostAnswerActions run={run} t={t} />
 
+      {/* Tier 2: a review-required answer leaves a draft block for review. */}
+      {run.reviewDraft?.path ? (
+        <div data-testid="ask-review-draft" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', fontSize: 12, color: t.textMuted, marginTop: -2, marginBottom: 4 }}>
+          <span>
+            Saved for review as a draft block (not certified): <code style={{ fontFamily: t.fontMono, fontSize: 11 }}>{run.reviewDraft.path}</code>
+            {run.reviewDraft.created ? '' : ` · asked ${run.reviewDraft.askedTimes} times`}
+          </span>
+          <button
+            type="button"
+            className="dql-ask-ghost"
+            onClick={() => {
+              const path = run.reviewDraft!.path;
+              if (onOpenBlock) {
+                onOpenBlock(path);
+                return;
+              }
+              const file = { name: path.split('/').pop() ?? path, path, type: 'block' as const, folder: 'blocks' };
+              void api.openBlockStudio(path).then((payload) => dispatch({ type: 'OPEN_BLOCK_STUDIO', file, payload })).catch(() => undefined);
+            }}
+            style={askGhostBtnStyle(t)}
+          >
+            <Blocks size={12} /> Open draft to review
+          </button>
+        </div>
+      ) : null}
+
       {/* Quiet action row */}
       {(presentationAnswer || failureMessage || insertionPayload || pinnable || canSaveBlock || showResearchDeeper || primaryArtifact) ? (
         <div style={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap', marginTop: -2 }}>

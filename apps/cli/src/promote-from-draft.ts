@@ -1,7 +1,13 @@
-import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 
 import type { CLIFlags } from './args.js';
+import {
+  applyCompanionCertification,
+  buildCertificationReceipt,
+  sourceSha256,
+  type CertificationReceipt,
+} from './certification-receipt.js';
 
 export interface PromoteResult {
   ok: boolean;
@@ -10,6 +16,33 @@ export interface PromoteResult {
   certifiedPath?: string;
   /** The patch the human still needs to apply to datalex-manifest.json. */
   datalexManifestDiff?: string;
+  /** What kept the draft from being certified, when the rules did not pass. */
+  blockers?: string[];
+  /** Companion YAML that now holds the certification receipt. */
+  companionPath?: string;
+  /** The receipt written for this certification. */
+  certification?: CertificationReceipt;
+}
+
+/**
+ * The certification rules a draft must pass before it is promoted. The CLI
+ * runs the same rules Block Studio's Certify runs (the local runtime's
+ * certification check: owner, a successful compile and run, passing tests).
+ */
+export type PromotionGate = (input: { source: string; path: string }) => Promise<{
+  ok: boolean;
+  blockers: string[];
+  checks?: string[];
+  warnings?: string[];
+  enterprise?: boolean;
+}>;
+
+export interface PromoteOptions {
+  /** Required: nothing is certified without the certification rules passing. */
+  gate: PromotionGate;
+  /** Who is certifying (the local git/OS owner by default, set by the caller). */
+  certifiedBy?: string;
+  now?: Date;
 }
 
 /**
@@ -21,31 +54,34 @@ export interface PromoteResult {
  * Companion to the dql-mcp `query_via_metadata` tool. Together they close
  * the graduated-trust promotion loop:
  *
- *   ask  ->  no Tier-1 hit  ->  query_via_metadata writes a draft
+ *   ask  ->  no Tier-1 hit  ->  a review draft is saved
  *        ->  human reviews / refines
  *        ->  zlens certify --from-draft <path>
  *        ->  next ask hits Tier-1 forever
  *
  * Behavior:
  *   1. Validates the draft exists and has status=draft.
- *   2. Moves the file to domains/<domain>/blocks/<slug>.dql when that domain
- *      layout exists, otherwise blocks/<domain>/<slug>.dql.
- *   3. Flips `status = "draft"` to `status = "certified"`.
- *   4. Optionally sets `datalex_contract = "<contract>"` (provided via
- *      --contract or taken from `proposed_contract_id` with `@1` appended).
- *   5. Sets `owner = "<owner>"` from --owner if provided.
- *   6. Drops Tier-2 proposal metadata fields (their job is done).
- *   7. Computes the optional patch the human still needs to apply to
+ *   2. Renders the promoted block: `status = "certified"`, optional
+ *      `datalex_contract`, `owner` from --owner, Tier-2 proposal metadata
+ *      dropped.
+ *   3. Runs the certification rules (`options.gate`) against exactly that
+ *      source. If they do not pass, nothing is written and the draft stays.
+ *   4. Writes the block to domains/<domain>/blocks/<slug>.dql when that domain
+ *      layout exists, otherwise blocks/<domain>/<slug>.dql, removes the draft,
+ *      and writes the certification receipt (who, when, rules, source hash)
+ *      into the block's companion YAML next to `reviewStatus: certified`.
+ *   5. Computes the optional patch the human still needs to apply to
  *      datalex-manifest.json when a contract is present.
  *
  * Does NOT auto-modify datalex-manifest.json. That file is hand-curated
  * until the DataLex compiler ships its v1 emitter; this command shows
  * the user the exact diff to apply.
  */
-export function promoteFromDraft(
+export async function promoteFromDraft(
   projectRoot: string,
   flags: CLIFlags,
-): PromoteResult {
+  options: PromoteOptions,
+): Promise<PromoteResult> {
   const draftPathInput = flags.fromDraft!;
   const draftAbs = resolve(projectRoot, draftPathInput);
 
@@ -92,11 +128,41 @@ export function promoteFromDraft(
     owner: flags.owner || pickField(content, 'owner') || '',
   });
 
+  // Certification is never a plain status flip: the promoted source must pass
+  // the same certification rules Block Studio's Certify runs.
+  const verdict = await options.gate({ source: promoted, path: destRel });
+  if (!verdict.ok) {
+    const blockers = verdict.blockers.length > 0 ? verdict.blockers : ['Certification rules did not pass.'];
+    return {
+      ok: false,
+      message: `${shortPath(projectRoot, draftAbs)} was not certified: ${blockers.join(' ')} The draft is unchanged.`,
+      blockers,
+    };
+  }
+
   mkdirSync(dirname(destAbs), { recursive: true });
   writeFileSync(destAbs, promoted);
   // The draft and the certified copy must not coexist. Drop the draft now
   // that the certified file is on disk.
   unlinkSync(draftAbs);
+
+  const receipt = buildCertificationReceipt({
+    source: promoted,
+    certifiedBy: options.certifiedBy || pickField(promoted, 'owner'),
+    via: 'cli',
+    enterprise: verdict.enterprise === true,
+    checks: verdict.checks,
+    warnings: verdict.warnings,
+    now: options.now,
+  });
+  const companionPath = writePromotedCompanion(projectRoot, {
+    draftPath: draftPathInput,
+    blockPath: destRel,
+    slug,
+    domain,
+    source: promoted,
+    receipt,
+  });
 
   const datalexManifestDiff = contract
     ? renderDataLexManifestDiff({
@@ -112,7 +178,61 @@ export function promoteFromDraft(
     message: `Promoted ${shortPath(projectRoot, draftAbs)} -> ${shortPath(projectRoot, destAbs)}.`,
     certifiedPath: shortPath(projectRoot, destAbs),
     datalexManifestDiff,
+    companionPath,
+    certification: receipt,
   };
+}
+
+/** `semantic-layer/blocks/...` companion path for the block layouts promotion uses. */
+function companionPathFor(blockPath: string): string | null {
+  const normalized = blockPath.replaceAll('\\', '/').replace(/^\/+/, '');
+  const domainFirst = normalized.match(/^domains\/([^/]+)\/blocks\/(.+)\.dql$/);
+  if (domainFirst) {
+    const rest = domainFirst[2];
+    return rest.startsWith('_drafts/')
+      ? `semantic-layer/blocks/_drafts/${domainFirst[1]}/${rest.slice('_drafts/'.length)}.yaml`
+      : `semantic-layer/blocks/${domainFirst[1]}/${rest}.yaml`;
+  }
+  const legacy = normalized.match(/^blocks\/(.+)\.dql$/);
+  return legacy ? `semantic-layer/blocks/${legacy[1]}.yaml` : null;
+}
+
+/**
+ * Write the promoted block's companion YAML with `reviewStatus: certified`
+ * and the certification receipt. The draft's companion (if any) carries its
+ * description, tags and lineage over and is removed with the draft.
+ */
+function writePromotedCompanion(
+  projectRoot: string,
+  input: { draftPath: string; blockPath: string; slug: string; domain: string; source: string; receipt: CertificationReceipt },
+): string | undefined {
+  const target = companionPathFor(input.blockPath);
+  if (!target) return undefined;
+  const draftCompanion = companionPathFor(input.draftPath);
+  const draftCompanionAbs = draftCompanion ? join(projectRoot, draftCompanion) : null;
+  let base: string;
+  if (draftCompanionAbs && existsSync(draftCompanionAbs)) {
+    base = readFileSync(draftCompanionAbs, 'utf-8').replace(/^domain:.*$/m, `domain: ${input.domain}`);
+  } else {
+    const owner = pickField(input.source, 'owner');
+    const description = pickField(input.source, 'description');
+    base = [
+      `name: ${input.slug}`,
+      `block: ${input.slug}`,
+      `domain: ${input.domain}`,
+      ...(description ? [`description: ${JSON.stringify(description)}`] : []),
+      ...(owner ? [`owner: ${JSON.stringify(owner)}`] : []),
+      'source:',
+      '  provider: dql',
+      '  objectType: block',
+      `  objectId: ${input.slug}`,
+    ].join('\n');
+  }
+  const absTarget = join(projectRoot, target);
+  mkdirSync(dirname(absTarget), { recursive: true });
+  writeFileSync(absTarget, applyCompanionCertification(base, 'certified', { ...input.receipt, sourceSha256: sourceSha256(input.source) }));
+  if (draftCompanionAbs && draftCompanionAbs !== absTarget && existsSync(draftCompanionAbs)) rmSync(draftCompanionAbs, { force: true });
+  return target;
 }
 
 // -- helpers ---------------------------------------------------------------
@@ -202,7 +322,7 @@ function renderPromoted(
   // Drop Tier-2 provenance metadata. Its job is done; the certified block is
   // the new source of truth and should not carry capture metadata.
   out = out.replace(/\n\s*_proposed\s*\{[^}]*\}\s*\n/, '\n');
-  out = out.replace(/\n\s*(asked_times|first_asked|last_asked|proposed_contract_id|proposed_domain|proposed_entity|upstream_refs)\s*=\s*(?:"[^"]*"|"""[\s\S]*?"""|\d+|\[[^\]]*\])\s*/g, '\n');
+  out = out.replace(/\n\s*(asked_times|first_asked|last_asked|proposed_contract_id|proposed_domain|proposed_entity|upstream_refs|answer_fingerprint|source_run_id|draft_path)\s*=\s*(?:"[^"]*"|"""[\s\S]*?"""|\d+|\[[^\]]*\])\s*/g, '\n');
 
   return out;
 }

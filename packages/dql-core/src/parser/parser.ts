@@ -61,6 +61,10 @@ const DRAFT_STRING_METADATA_FIELDS = new Set([
   'followup_kind',
   'context_pack_id',
   'route_intent',
+  // Review-draft provenance for Tier-2 Ask answers: the de-duplication
+  // fingerprint of the answer SQL and the run that produced it.
+  'answer_fingerprint',
+  'source_run_id',
   'time_dimension',
   'granularity',
   'draft_path',

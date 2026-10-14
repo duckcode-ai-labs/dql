@@ -197,7 +197,12 @@ export function buildDeterministicDashboardStory(input: DashboardStoryBuildInput
     story: {
       headline,
       paragraphs: [firstParagraph, secondParagraph],
-      implication: scopedFacts.length ? 'Use this view to focus the next decision on the strongest verified signal, then open the supporting evidence before acting.' : undefined,
+      // "Verified" only when every fact comes from a certified source.
+      implication: !scopedFacts.length
+        ? undefined
+        : trustState === 'certified'
+          ? 'Use this view to focus the next decision on the strongest verified signal, then open the supporting evidence before acting.'
+          : 'Use this view to focus the next question on the strongest signal, but its sources still need review: open the supporting evidence and confirm them before acting.',
       caveat: [
         driverFacts.length === 0 && scopedFacts.length > 0 ? 'This view does not contain validated causal evidence.' : undefined,
         hasScopeExclusions ? 'Some visible tiles are outside the current filter scope and are not included in this summary.' : undefined,

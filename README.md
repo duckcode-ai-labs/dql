@@ -269,8 +269,9 @@ Microsoft C++ Build Tools.
    Keep the block small and tied to one trusted business question.
 
 5. Run and certify.
-   Run the block, review results, add validation/tests where needed, then mark
-   it ready for review or certification.
+   Run the block, review results, add validation/tests where needed, then click
+   **Certify**. Saving never certifies: saved work is a draft until a person
+   certifies it, and certification records who did it.
 
 6. Use notebooks.
    Search blocks, add cells, edit SQL/DQL, run research from source cells, and
@@ -300,8 +301,9 @@ npm run lineage    # inspect lineage from the CLI
 
 ZLens includes an MCP server for Claude Code, Codex, Cursor, Claude Desktop, and
 other MCP clients. The server routes questions through certified blocks first,
-uses project metadata for safe generated SQL previews, and saves uncertified
-drafts for review.
+uses project metadata for safe generated SQL previews, and saves each
+review-required answer as a draft block for review (the same as Ask in the UI
+and `zlens agent ask`; repeats reuse the same draft).
 
 ```bash
 npm exec -- zlens mcp test

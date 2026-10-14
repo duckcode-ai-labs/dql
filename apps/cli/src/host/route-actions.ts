@@ -113,12 +113,13 @@ function actionFor(method: string, path: string): DqlAction {
 
   // Trust decisions. Every route that can leave something certified is a
   // certification: the Block Studio job route, the older synchronous route,
-  // saving a notebook cell (which certifies what it saves), creating a
-  // Dataset from a table, and approving a semantic tile on an App page.
+  // the explicit "Certify and use this data" Dataset-from-a-table action, and
+  // approving a semantic tile on an App page. Saving (a notebook cell, an
+  // Ask answer, an imported candidate) only ever writes a draft, so it is
+  // authoring, not certification.
   if (!read && (
     /\/certify(\/|$)/.test(path)
     || /^\/api\/block-studio\/certifications(\/|$)/.test(path)
-    || path === '/api/blocks/save-from-cell'
     || path === '/api/app-datasets/tables/create'
     || /^\/api\/apps\/[^/]+\/dashboards\/[^/]+\/approve-semantic$/.test(path)
   )) return 'dataset.certify';

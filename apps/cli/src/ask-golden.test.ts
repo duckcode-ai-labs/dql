@@ -228,7 +228,9 @@ async function ask(question: string, threadId?: string) {
   const response = await fetch(`${harness!.base}/api/agent-runs`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ question, requestedMode: 'ask', ...(threadId ? { threadId } : {}) }),
+    // A scored harness never writes review drafts into its fixture project:
+    // a draft from one question would change what the next question reads.
+    body: JSON.stringify({ question, requestedMode: 'ask', reviewDraftCapture: 'off', ...(threadId ? { threadId } : {}) }),
   });
   const payload = await response.json() as { run: any; error?: unknown };
   return { status: response.status, run: payload.run, raw: payload };

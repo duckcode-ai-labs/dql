@@ -25,6 +25,9 @@ describe('driver tiles in the reader (RFC 0008 step 7)', () => {
     } as never;
     expect(dashboardFilterCoverage(dashboard, 'region').applied).toEqual(['why']);
     expect((await notices())({ item: driverTile, activeVariables: { region: 'US' } }).unfilteredNotice).toBeNull();
-    expect(appCertificationRollup([driverTile])).toEqual({ certified: 1, total: 1, allCertified: true });
+    // Certified when its run says the Dataset is certified; the saved document alone never is.
+    expect(appCertificationRollup([driverTile]).allCertified).toBe(false);
+    expect(appCertificationRollup([driverTile], 0, [{ tileId: 'why', status: 'ok', dataset: { trust: 'certified', validation: { outcome: 'exact' } } } as never]))
+      .toMatchObject({ certified: 1, total: 1, allCertified: true });
   });
 });
