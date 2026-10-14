@@ -62,7 +62,7 @@ counts in real projects, etc.
 1. Copy this template to `docs/rfcs/<NNNN>-<short-slug>.md` and PR it as
    **status: Draft**. The PR is for the doc only — implementation follows
    in a separate PR.
-2. Open a [GitHub Discussion](https://github.com/duckcode-ai-labs/dql/discussions/categories/rfcs)
+2. Open a [GitHub Discussion](https://github.com/duckcode-ai-labs/zlens/discussions/categories/rfcs)
    for community input. Link it in the table at the top.
 3. Discussion stays open ≥ 14 days for non-trivial proposals.
 4. Maintainers move status to **Accepted** or **Rejected** with a brief

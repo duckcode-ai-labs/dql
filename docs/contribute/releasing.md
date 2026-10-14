@@ -1,9 +1,12 @@
 # Release process
 
-ZLens uses one version across OSS publishable packages. The current version is
-`1.17.3` (see `apps/cli/package.json`); the last git tag is `v1.14.3-rc.1`,
-because `1.13.5` to `1.17.3` were published by hand. The repository is
-`duckcode-ai-labs/dql`.
+ZLens uses one version across its publishable packages. The current version is
+`0.1.0` (see `apps/cli/package.json`), the first release under the ZLens
+package names. The packages it replaces (`@duckcodeailabs/*`,
+`create-dql-app`) ended at `1.17.2`; their last git tag is `v1.14.3-rc.1`,
+because `1.13.5` to `1.17.2` were published by hand. The repository is
+`duckcode-ai-labs/zlens` (renamed from `duckcode-ai-labs/dql`; GitHub
+redirects the old URL).
 
 The authoritative npm publication path is the `vX.Y.Z` or
 `vX.Y.Z-prerelease` tag workflow in
@@ -16,11 +19,11 @@ restores the repo manifests afterward. The workflow runs only for the
 `id-token: write`). On GitHub Actions the script stops before building if
 `NODE_AUTH_TOKEN` is missing. Provenance only works when the package's `repository.url` matches the
 GitHub repository, so keep every manifest pointing at
-`https://github.com/duckcode-ai-labs/dql`.
+`https://github.com/duckcode-ai-labs/zlens`.
 
 The OpenLineage producer URI emitted in lineage events
 (`packages/dql-openlineage/src`) also points at
-`https://github.com/duckcode-ai-labs/dql`.
+`https://github.com/duckcode-ai-labs/zlens`.
 
 The 19 release packages include the VS Code extension's language support
 package, which is published to npm as `dql-language-support` with the rest.
@@ -74,19 +77,19 @@ git push origin v1.7.0
 7. After a release candidate, point `next` at it and check `latest` did not
    move. The tag workflow already publishes an rc with `--tag next`, so run
    this only if `next` is wrong. Each command needs an npm login with publish
-   rights on the `@duckcodeailabs` scope:
+   rights on the `@zlens` scope:
 
 ```bash
-npm dist-tag add zlens@1.7.0-rc.1 next
-npm dist-tag ls zlens
+npm dist-tag add @zlens/cli@1.7.0-rc.1 next
+npm dist-tag ls @zlens/cli
 ```
 
    Repeat for each of the 19 packages (`npm dist-tag ls` shows the tags).
 8. Smoke the published packages:
 
 ```bash
-npx zlens@1.7.0 --version
-npx zlens@1.7.0 --help
+npx -p @zlens/cli@1.7.0 zlens --version
+npx -p @zlens/cli@1.7.0 zlens --help
 npx create-zlens-app@1.7.0 --help
 ```
 
@@ -99,10 +102,10 @@ For a release candidate (shown here with `1.14.3-rc.1`), record both
 independent facts:
 
 ```bash
-npx zlens@1.14.3-rc.1 --version
-npx zlens@1.14.3-rc.1 --help
+npx -p @zlens/cli@1.14.3-rc.1 zlens --version
+npx -p @zlens/cli@1.14.3-rc.1 zlens --help
 npx create-zlens-app@1.14.3-rc.1 --help
-npm view zlens dist-tags.next
+npm view @zlens/cli dist-tags.next
 npm view create-zlens-app dist-tags.next
 ```
 
@@ -128,7 +131,7 @@ pnpm release:publish -- --tag latest --expected-version 1.7.0
 ```
 
 The fallback publishes with your own npm login: run `npm login` first (an
-account with publish rights on the `@duckcodeailabs` scope) and approve the
+account with publish rights on the `@zlens` scope and `create-zlens-app`) and approve the
 OTP or web prompt when `pnpm publish` asks. It does not need `NODE_AUTH_TOKEN`;
 that variable is only read on GitHub Actions. Check with `npm whoami`.
 
@@ -157,10 +160,10 @@ fallback does not make VS Code Marketplace publication automatic.
 
 | Artifact | Where |
 | --- | --- |
-| npm packages (19, with provenance) | `npmjs.com/org/zlens`, plus `zlens`, `create-zlens-app` and `dql-language-support` |
+| npm packages (19, with provenance) | `npmjs.com/org/zlens` (17 `@zlens/*` packages), plus `create-zlens-app` and `dql-language-support` |
 | `create-zlens-app` templates | npm tarball |
 | Notebook app assets | bundled inside `zlens` |
 | VS Code extension | Marketplace |
-| Docs | `docs/` in this repo |
+| Docs | `docs/` in this repo, published to <https://duckcode-ai-labs.github.io/zlens/> by `.github/workflows/docs.yml` on every push to `main` |
 
 Homebrew tap and desktop/Tauri binaries are not part of the OSS release path.

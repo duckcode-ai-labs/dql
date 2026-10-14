@@ -72,4 +72,4 @@ permissions-aware team retrieval. See [Compatibility](../reference/compatibility
 
 ## Where do I report bugs or request features?
 
-[github.com/duckcode-ai-labs/dql/issues](https://github.com/duckcode-ai-labs/dql/issues).
+[github.com/duckcode-ai-labs/zlens/issues](https://github.com/duckcode-ai-labs/zlens/issues).

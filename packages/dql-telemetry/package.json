@@ -1,17 +1,17 @@
 {
   "name": "@zlens/telemetry",
-  "version": "1.17.3",
+  "version": "0.1.0",
   "description": "Opt-in, privacy-first usage telemetry for ZLens.",
   "license": "Apache-2.0",
   "type": "module",
   "repository": {
     "type": "git",
-    "url": "https://github.com/duckcode-ai-labs/dql.git",
+    "url": "https://github.com/duckcode-ai-labs/zlens.git",
     "directory": "packages/dql-telemetry"
   },
-  "homepage": "https://github.com/duckcode-ai-labs/dql",
+  "homepage": "https://github.com/duckcode-ai-labs/zlens",
   "bugs": {
-    "url": "https://github.com/duckcode-ai-labs/dql/issues"
+    "url": "https://github.com/duckcode-ai-labs/zlens/issues"
   },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",

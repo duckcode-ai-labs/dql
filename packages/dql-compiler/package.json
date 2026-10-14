@@ -1,6 +1,6 @@
 {
   "name": "@zlens/dql-compiler",
-  "version": "1.17.3",
+  "version": "0.1.0",
   "description": "DQL compiler: IR lowering, Vega-Lite code generation, HTML/CSS emitting",
   "license": "Apache-2.0",
   "type": "module",
@@ -27,12 +27,12 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/duckcode-ai-labs/dql.git",
+    "url": "https://github.com/duckcode-ai-labs/zlens.git",
     "directory": "packages/dql-compiler"
   },
-  "homepage": "https://github.com/duckcode-ai-labs/dql",
+  "homepage": "https://github.com/duckcode-ai-labs/zlens",
   "bugs": {
-    "url": "https://github.com/duckcode-ai-labs/dql/issues"
+    "url": "https://github.com/duckcode-ai-labs/zlens/issues"
   },
   "publishConfig": {
     "access": "public"

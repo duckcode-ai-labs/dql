@@ -7,7 +7,7 @@ Two paths. Pick whichever matches your toolchain.
 The fastest way. No Node, no pnpm, no native build deps.
 
 ```bash
-git clone https://github.com/duckcode-ai-labs/dql.git
+git clone https://github.com/duckcode-ai-labs/zlens.git
 cd dql
 export ZLENS_SERVER_TOKEN="$(openssl rand -hex 24)"   # any long random string
 docker compose up
@@ -74,7 +74,7 @@ The notebook Connections page can also install DuckDB or Snowflake into
 For an existing ZLens project, install only the CLI:
 
 ```bash
-npm i -D zlens
+npm i -D @zlens/cli
 npm exec -- zlens doctor
 npm exec -- zlens notebook
 ```
@@ -117,7 +117,7 @@ Equivalent project-local manual path:
 
 ```bash
 cd my-dbt-repo
-npm i -D zlens
+npm i -D @zlens/cli
 npx zlens init ./dql
 ```
 
@@ -151,7 +151,7 @@ Use the sibling layout instead when you want dbt and ZLens in separate folders:
 Global install is optional, but project-local scripts avoid stale global CLIs:
 
 ```bash
-npm i -g zlens
+npm i -g @zlens/cli
 zlens --version
 ```
 
@@ -186,14 +186,14 @@ latest version — no separate updater.
 **Global CLI:**
 
 ```bash
-npm i -g zlens@latest
+npm i -g @zlens/cli@latest
 zlens --version        # should print the new version
 ```
 
 **Project-local CLI** (the recommended install — avoids stale global CLIs):
 
 ```bash
-npm i -D zlens@latest
+npm i -D @zlens/cli@latest
 npm exec -- zlens --version
 ```
 
@@ -204,8 +204,8 @@ upgrading, see the two bullets below.
 
 ZLens was previously published as `@duckcodeailabs/dql-cli`, with the
 `create-dql-app` starter and the `dql` command. Those packages, and the other
-`@duckcodeailabs/dql-*` packages, are deprecated in favour of `zlens`,
-`create-zlens-app` and `@zlens/*`. Install `zlens` as shown above. For now the
+`@duckcodeailabs/dql-*` packages, are replaced by `@zlens/cli`,
+`create-zlens-app` and `@zlens/*`. Install `@zlens/cli` as shown above. For now the
 `dql` command still works as an alias for `zlens`, so existing scripts keep
 running. Your `.dql` files, `dql.config.json` and `dql.app.json` keep their
 names: DQL is still the name of the query language.
@@ -215,15 +215,15 @@ names: DQL is still the name of the query language.
 - **`command not found: zlens` (or `zlens --version` shows an old version)** — the
   quickest fix works with no PATH setup at all:
   ```bash
-  npx zlens@latest notebook   # always runs the latest, ignores PATH
+  npx -p @zlens/cli@latest zlens notebook   # always runs the latest, ignores PATH
   ```
   To fix a global install so plain `zlens` works, walk these in order:
   ```bash
   which -a zlens               # any stale copy (Homebrew, a venv, an old global) shadowing it?
   hash -r                      # clear the shell's cached command path (or open a new terminal)
-  npm ls -g zlens   # is it actually installed globally?
+  npm ls -g @zlens/cli   # is it actually installed globally?
   npm prefix -g                # your global prefix; ensure "<prefix>/bin" is on $PATH
-  npm i -g zlens@latest   # reinstall if a prior install had failed
+  npm i -g @zlens/cli@latest   # reinstall if a prior install had failed
   ```
   A failed `npm i -g` never links the `zlens` binary, which shows up as
   `command not found` — reinstalling `@latest` fixes it.

@@ -20,15 +20,15 @@ npx zlens certify blocks/revenue_by_month.dql
 If `npx zlens` still fails, re-run `npm install` — the dependency link
 probably broke.
 
-**With a global install** (`npm i -g zlens`), a bare `zlens`
+**With a global install** (`npm i -g @zlens/cli`), a bare `zlens`
 that reports "command not found" almost always means one of three things:
 
 ```bash
-npx zlens@latest --version   # escape hatch: no PATH needed at all
+npx -p @zlens/cli@latest zlens --version   # escape hatch: no PATH needed at all
 which -a zlens          # a stale Homebrew / venv / old global copy shadowing it?
 hash -r                 # clear the shell's cached path, or just open a new terminal
 npm prefix -g           # ensure "<that path>/bin" is on your $PATH
-npm i -g zlens@latest   # a failed earlier install never links the bin
+npm i -g @zlens/cli@latest   # a failed earlier install never links the bin
 ```
 
 The last one is the usual culprit for existing users: before **1.6.30**, a
@@ -43,10 +43,10 @@ ZLens is plain npm packages — upgrading is just installing the latest version.
 
 ```bash
 # Global CLI
-npm i -g zlens@latest && zlens --version
+npm i -g @zlens/cli@latest && zlens --version
 
 # Project-local CLI (recommended)
-npm i -D zlens@latest && npx zlens --version
+npm i -D @zlens/cli@latest && npx zlens --version
 ```
 
 You do **not** need a working `zlens` to upgrade, and you do **not** need to
@@ -239,7 +239,7 @@ node -e "
 ### Every certified block answer cites the same block, even when wrong
 
 The FTS5 retrieval threshold is too loose for your domain. Tune in
-[`packages/dql-agent/src/answer-loop.ts`](https://github.com/duckcode-ai-labs/dql/blob/main/packages/dql-agent/src/answer-loop.ts):
+[`packages/dql-agent/src/answer-loop.ts`](https://github.com/duckcode-ai-labs/zlens/blob/main/packages/dql-agent/src/answer-loop.ts):
 
 ```ts
 const CERTIFIED_HIT_THRESHOLD = 0.18;   // raise to 0.30 for stricter matching
@@ -352,16 +352,16 @@ is non-deterministic. Either:
 
 The architecture is small and readable. Bookmark these:
 
-- Block lifecycle and certification: [`packages/dql-governance/src/certifier.ts`](https://github.com/duckcode-ai-labs/dql/blob/main/packages/dql-governance/src/certifier.ts)
-- Apps + dashboards parsing: [`packages/dql-core/src/apps/`](https://github.com/duckcode-ai-labs/dql/tree/main/packages/dql-core/src/apps)
-- Persona registry: [`packages/dql-project/src/persona.ts`](https://github.com/duckcode-ai-labs/dql/blob/main/packages/dql-project/src/persona.ts)
-- RLS lowering: [`packages/dql-compiler/src/ir/lowering.ts:440`](https://github.com/duckcode-ai-labs/dql/blob/main/packages/dql-compiler/src/ir/lowering.ts) (`applyRLSDecorators`)
-- Agent answer loop: [`packages/dql-agent/src/answer-loop.ts`](https://github.com/duckcode-ai-labs/dql/blob/main/packages/dql-agent/src/answer-loop.ts)
-- Slack server: [`packages/dql-slack/src/server.ts`](https://github.com/duckcode-ai-labs/dql/blob/main/packages/dql-slack/src/server.ts)
+- Block lifecycle and certification: [`packages/dql-governance/src/certifier.ts`](https://github.com/duckcode-ai-labs/zlens/blob/main/packages/dql-governance/src/certifier.ts)
+- Apps + dashboards parsing: [`packages/dql-core/src/apps/`](https://github.com/duckcode-ai-labs/zlens/tree/main/packages/dql-core/src/apps)
+- Persona registry: [`packages/dql-project/src/persona.ts`](https://github.com/duckcode-ai-labs/zlens/blob/main/packages/dql-project/src/persona.ts)
+- RLS lowering: [`packages/dql-compiler/src/ir/lowering.ts:440`](https://github.com/duckcode-ai-labs/zlens/blob/main/packages/dql-compiler/src/ir/lowering.ts) (`applyRLSDecorators`)
+- Agent answer loop: [`packages/dql-agent/src/answer-loop.ts`](https://github.com/duckcode-ai-labs/zlens/blob/main/packages/dql-agent/src/answer-loop.ts)
+- Slack server: [`packages/dql-slack/src/server.ts`](https://github.com/duckcode-ai-labs/zlens/blob/main/packages/dql-slack/src/server.ts)
 
 If you find a bug or rough edge in any of these:
 
-1. File an issue at <https://github.com/duckcode-ai-labs/dql/issues>.
+1. File an issue at <https://github.com/duckcode-ai-labs/zlens/issues>.
 2. PRs welcome — every package has tests in `*.test.ts` next to the
    source it covers.
 
@@ -370,4 +370,4 @@ If you find a bug or rough edge in any of these:
 ## Need more?
 
 - The end-to-end story: [tutorials](../tutorials/README.md).
-- The roadmap: [ROADMAP.md](https://github.com/duckcode-ai-labs/dql/blob/main/ROADMAP.md).
+- The roadmap: [ROADMAP.md](https://github.com/duckcode-ai-labs/zlens/blob/main/ROADMAP.md).

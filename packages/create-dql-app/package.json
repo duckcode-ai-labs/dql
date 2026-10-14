@@ -1,16 +1,16 @@
 {
   "name": "create-zlens-app",
-  "version": "1.17.3",
+  "version": "0.1.0",
   "description": "Scaffold a new ZLens project. Run with: npx create-zlens-app <name>",
   "license": "Apache-2.0",
   "author": "DuckCode AI Labs",
-  "homepage": "https://github.com/duckcode-ai-labs/dql",
+  "homepage": "https://github.com/duckcode-ai-labs/zlens",
   "bugs": {
-    "url": "https://github.com/duckcode-ai-labs/dql/issues"
+    "url": "https://github.com/duckcode-ai-labs/zlens/issues"
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/duckcode-ai-labs/dql.git",
+    "url": "https://github.com/duckcode-ai-labs/zlens.git",
     "directory": "packages/create-dql-app"
   },
   "keywords": [

@@ -45,7 +45,7 @@ Choose one database path before running queries:
 The notebook Connections page can also install DuckDB or Snowflake into
 `.dql/connectors/`. For local files, add a DuckDB/file connection and query CSV
 or Parquet data with functions such as `read_csv_auto('./file.csv')`.
-See the [connector reference](https://github.com/duckcode-ai-labs/dql/blob/main/docs/reference/connectors.md).
+See the [connector reference](https://github.com/duckcode-ai-labs/zlens/blob/main/docs/reference/connectors.md).
 
 ## Start the notebook
 

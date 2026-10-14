@@ -7,13 +7,14 @@ and inspect lineage from source data to dashboard pages.
 
 For completed changes, see [CHANGELOG.md](./CHANGELOG.md).
 
-## Current State (v1.17.3 in the manifests)
+## Current State (v0.1.0 in the manifests)
 
-The release manifests and the starter CLI range read `1.17.3`. Versions
-`1.13.5` through `1.17.2` were published to npm by hand; the last git tag is
-`v1.14.3-rc.1`, and the tag-driven release workflow has not published since.
-Check the registry (`npm view zlens dist-tags`) before stating
-what is published. See
+The release manifests and the starter CLI range read `0.1.0`, the first
+release under the ZLens package names (`@zlens/*`, `create-zlens-app`). The
+`@duckcodeailabs/*` packages it replaces ended at `1.17.2`; versions `1.13.5`
+through `1.17.2` were published to npm by hand, and the last git tag is
+`v1.14.3-rc.1`. Check the registry (`npm view @zlens/cli dist-tags`) before
+stating what is published. See
 [docs/contribute/current-dql-truth.md](./docs/contribute/current-dql-truth.md)
 for the dated snapshot.
 

@@ -1,6 +1,6 @@
 # ZLens
 
-[![CI](https://github.com/duckcode-ai-labs/dql/actions/workflows/ci.yml/badge.svg)](https://github.com/duckcode-ai-labs/dql/actions/workflows/ci.yml)
+[![CI](https://github.com/duckcode-ai-labs/zlens/actions/workflows/ci.yml/badge.svg)](https://github.com/duckcode-ai-labs/zlens/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/npm/v/zlens?label=zlens)](https://www.npmjs.com/package/zlens)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](./LICENSE)
 [![Node](https://img.shields.io/badge/node-20%20%7C%2022%20%7C%2024%20LTS-green)](https://nodejs.org)
@@ -138,15 +138,15 @@ ZLens is plain npm packages. Most users install the CLI project-locally (via
 `create-zlens-app`, above), but you can also install it globally:
 
 ```bash
-npm i -g zlens        # install
+npm i -g @zlens/cli        # install
 zlens --version
 ```
 
 Upgrading is just re-installing the latest — there is no separate updater:
 
 ```bash
-npm i -g zlens@latest # global
-npm i -D zlens@latest # project-local (then: npx zlens --version)
+npm i -g @zlens/cli@latest # global
+npm i -D @zlens/cli@latest # project-local (then: npx zlens --version)
 ```
 
 Coming from `@duckcodeailabs/dql-cli` and the `dql` command? See
@@ -198,7 +198,7 @@ flags, examples, and exit codes.
 > **Stuck on `zlens: command not found` after installing?** A failed
 > `npm i -g` never links the `zlens` binary. Reinstall `@latest` on any Node 20 or
 > newer. The escape hatch that needs no PATH setup at all is
-> `npx zlens@latest notebook`.
+> `npx -p @zlens/cli@latest zlens notebook`.
 > More in the [install guide](docs/03-install.md#upgrade) and
 > [troubleshooting](docs/guides/troubleshooting.md#zlens-says-command-not-found).
 
@@ -368,7 +368,7 @@ The unused `@duckcodeailabs/dql-telemetry` package is deprecated (see its
 
 See [CONTRIBUTING.md](./CONTRIBUTING.md) and
 [docs/contribute/repo-layout.md](./docs/contribute/repo-layout.md). Bugs and
-feature requests: [open an issue](https://github.com/duckcode-ai-labs/dql/issues).
+feature requests: [open an issue](https://github.com/duckcode-ai-labs/zlens/issues).
 
 ## License
 

@@ -11,7 +11,7 @@ import { fileURLToPath } from 'node:url';
 import { RELEASE_PACKAGE_PATHS, licenseFileFor } from './release-packages.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const REPO = 'https://github.com/duckcode-ai-labs/dql';
+const REPO = 'https://github.com/duckcode-ai-labs/zlens';
 // sha256 of https://www.apache.org/licenses/LICENSE-2.0.txt
 const APACHE_2_SHA256 = 'cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30';
 
