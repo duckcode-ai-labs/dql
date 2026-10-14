@@ -3,7 +3,9 @@ name: Release
 on:
   push:
     tags:
-      - 'v*.*.*'
+      # ZLens tags are zlens-vX.Y.Z. Plain vX.Y.Z tags belong to the DQL line
+      # (v0.1.0 to v1.14.3-rc.1) and must not publish the ZLens packages.
+      - 'zlens-v*.*.*'
   workflow_dispatch:
     inputs:
       publish_extension:
@@ -21,7 +23,7 @@ jobs:
     # `secrets` context isn't allowed in job-level `if:` expressions, so we
     # gate on the repository owner only. Forks re-using the workflow will hit
     # an auth error at the publish step, which is the right behavior.
-    if: github.repository_owner == 'duckcode-ai-labs' && github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    if: github.repository_owner == 'duckcode-ai-labs' && github.event_name == 'push' && startsWith(github.ref, 'refs/tags/zlens-v')
     runs-on: ubuntu-latest
     # id-token: write lets npm sign a provenance statement for each package
     # (`pnpm publish --provenance`); it grants no repository write access.
@@ -47,13 +49,13 @@ jobs:
         id: npm_dist_tag
         shell: bash
         run: |
-          release_version="${GITHUB_REF_NAME#v}"
+          release_version="${GITHUB_REF_NAME#zlens-v}"
           if [[ "$release_version" == *-* ]]; then
             echo "tag=next" >> "$GITHUB_OUTPUT"
           else
             echo "tag=latest" >> "$GITHUB_OUTPUT"
           fi
-      - run: node scripts/release-packages.mjs --publish --tag "${{ steps.npm_dist_tag.outputs.tag }}" --expected-version "${GITHUB_REF_NAME#v}"
+      - run: node scripts/release-packages.mjs --publish --tag "${{ steps.npm_dist_tag.outputs.tag }}" --expected-version "${GITHUB_REF_NAME#zlens-v}"
 
   package-extension:
     if: github.repository_owner == 'duckcode-ai-labs' && github.event_name == 'workflow_dispatch' && inputs.publish_extension == true

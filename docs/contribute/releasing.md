@@ -8,8 +8,11 @@ because `1.13.5` to `1.17.2` were published by hand. The repository is
 `duckcode-ai-labs/zlens` (renamed from `duckcode-ai-labs/dql`; GitHub
 redirects the old URL).
 
-The authoritative npm publication path is the `vX.Y.Z` or
-`vX.Y.Z-prerelease` tag workflow in
+ZLens release tags are `zlens-vX.Y.Z` (plain `vX.Y.Z` tags are the DQL line's
+history, `v0.1.0` to `v1.14.3-rc.1`, and no longer publish anything).
+
+The authoritative npm publication path is the `zlens-vX.Y.Z` or
+`zlens-vX.Y.Z-prerelease` tag workflow in
 [`.github/workflows/release.yml`](../../.github/workflows/release.yml). It runs
 `scripts/release-packages.mjs`, which builds the workspace, rewrites
 `workspace:*` dependencies to concrete versions for packing/publishing, and
@@ -41,8 +44,8 @@ the pushed `v...` Git tag.
 
 | Release version | Required npm dist-tag | Example Git tag |
 | --- | --- | --- |
-| Stable | `latest` | `v1.14.3` |
-| Prerelease / RC | `next` | `v1.14.3-rc.1` |
+| Stable | `latest` | `zlens-v0.1.0` |
+| Prerelease / RC | `next` | `zlens-v0.2.0-rc.1` |
 
 ## Cut a Release
 
@@ -68,8 +71,8 @@ pnpm release:dry-run -- --tag next --expected-version 1.7.0-rc.1
 5. Create an annotated tag at that exact release commit and push it:
 
 ```bash
-git tag -a v1.7.0 -m "v1.7.0"
-git push origin v1.7.0
+git tag -a zlens-v0.2.0 -m "ZLens 0.2.0"
+git push origin zlens-v0.2.0
 ```
 
 6. Monitor the tag workflow. It is the authoritative npm publication path.
@@ -127,7 +130,7 @@ registry target version agree, then run:
 ```bash
 git diff --check
 git rev-parse HEAD
-git rev-parse v1.7.0^{}
+git rev-parse zlens-v0.2.0^{}
 pnpm release:publish -- --tag latest --expected-version 1.7.0
 ```
 
