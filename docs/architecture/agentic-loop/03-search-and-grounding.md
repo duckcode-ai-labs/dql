@@ -3,13 +3,13 @@
 > `packages/dql-agent/src/kg/*` · `metadata/sql-grounding.ts` · `metadata/sql-retrieval.ts` ·
 > `metadata/metric-match.ts` · `embeddings/provider.ts`
 
-An LLM writing SQL from a raw schema hallucinates. DQL avoids that by **grounding** every generated
+An LLM writing SQL from a raw schema hallucinates. ZLens avoids that by **grounding** every generated
 answer in a knowledge graph built from dbt + DQL, and by **schema-linking** only the relevant tables
 into the prompt. Accuracy comes from *context*, not a bigger model.
 
 ## The knowledge graph
 
-On `dql compile`, DQL builds a knowledge graph into `.dql/cache/agent-kg.sqlite` (SQLite + FTS5).
+On `zlens compile`, ZLens builds a knowledge graph into `.dql/cache/agent-kg.sqlite` (SQLite + FTS5).
 
 ```mermaid
 flowchart LR
@@ -91,7 +91,7 @@ These are the substrate for the `traverse_domain_graph` tool (see [Tools](./04-t
 
 ## Accuracy levers (grounded in research)
 
-| Lever | Status in DQL |
+| Lever | Status in ZLens |
 |---|---|
 | Schema linking (retrieve relevant tables) | ✅ two-tier FTS + grounding |
 | Certified-first routing | ✅ |

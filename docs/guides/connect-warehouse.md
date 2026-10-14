@@ -1,8 +1,8 @@
 # Connect a Warehouse
 
-> ~3 minutes · ends with `dql doctor` confirming the configured connection
+> ~3 minutes · ends with `zlens doctor` confirming the configured connection
 
-DQL keeps the CLI install small. Databricks SQL is built in. DuckDB,
+ZLens keeps the CLI install small. Databricks SQL is built in. DuckDB,
 local files, and Snowflake are enabled by installing the project-local driver
 from the notebook connection panel.
 
@@ -82,7 +82,7 @@ export SNOWFLAKE_PRIVATE_KEY_PATH="$HOME/.ssh/snowflake_key.p8"
 ## 4. Verify
 
 ```bash
-dql doctor
+zlens doctor
 ```
 
 If that passes, the notebook and CLI resolve table references against this
@@ -121,7 +121,7 @@ REFERENCE_DATA: SHARED
 **Apply and synchronize** validates the observed target and builds the local
 `.dql/cache/metadata.sqlite` generation. A failed, empty, or truncated refresh
 does not replace the previous valid generation. Normal warm Ask and schema UI
-reads use this local generation; DQL does not enumerate every database in the
+reads use this local generation; ZLens does not enumerate every database in the
 account.
 
 ## Multiple connections
@@ -146,11 +146,11 @@ select count(*) from analytics.orders
 Ask AI shows the active database connection beside the Thinking control. Pick a
 named connection there when reporting runs outside the default dbt target. One
 Ask run uses that same connection for metadata grounding, semantic compilation,
-certified/generated execution, and bounded validation; DQL does not silently
+certified/generated execution, and bounded validation; ZLens does not silently
 switch connections during a run.
 
 If a cached Snowflake or Databricks session is terminated while the Notebook is
-open, DQL evicts that session and reconnects once for a single read-only
+open, ZLens evicts that session and reconnects once for a single read-only
 `SELECT`/`WITH` statement. Mutating SQL and multi-statement scripts are never
 replayed automatically. A second connection failure remains visible and can be
 retried explicitly after the connection is checked.
@@ -160,14 +160,14 @@ retried explicitly after the connection is checked.
 - **`driver package is not installed`** — open the notebook connection panel
   and install the project-local driver for DuckDB or Snowflake.
 - **`connection refused`** — firewall, VPN, wrong host, or wrong port. Run
-  `dql doctor` after checking the resolved environment variables.
-- **`terminated connection`** — DQL retries one read-only query with a fresh
+  `zlens doctor` after checking the resolved environment variables.
+- **`terminated connection`** — ZLens retries one read-only query with a fresh
   session. If it still fails, test the selected Ask/Notebook connection and
   check the warehouse session, VPN, and authentication lifetime.
-- **`role does not have USAGE on schema`** — warehouse permissions. DQL needs
+- **`role does not have USAGE on schema`** — warehouse permissions. ZLens needs
   `USAGE` on the schema and `SELECT` on queried objects.
 - **Snowflake key-pair auth** — set `authMethod` to `key_pair` and provide
   `privateKeyPath` or `privateKey`. The public key belongs on the Snowflake
-  user, not in DQL config.
+  user, not in ZLens config.
 - **Databricks HTTP path** — paste the dbt/JDBC path
   `/sql/1.0/warehouses/<id>` or the raw warehouse ID.

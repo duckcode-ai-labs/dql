@@ -2,7 +2,7 @@
 
 > `packages/dql-agent/src/agent-run-engine.ts` (`AgentRunEngine.run()`)
 
-DQL's loop is a **plan-and-execute controller with failure-driven replanning** — the pattern the
+ZLens's loop is a **plan-and-execute controller with failure-driven replanning** — the pattern the
 2025–2026 literature calls a *Reflexion-style outer supervisor*. It is deliberately **not** a flat
 ReAct loop: the supervisor (plan, gate, repair, escalate, budgets, audience constraints) is the
 governance layer that a flat loop would throw away.

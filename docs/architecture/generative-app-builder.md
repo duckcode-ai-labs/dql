@@ -1,6 +1,6 @@
 # App AI architecture
 
-DQL has two distinct AI entry points for Apps. **Build with AI** is a dedicated
+ZLens has two distinct AI entry points for Apps. **Build with AI** is a dedicated
 App Builder orchestrator because it produces a versioned, stateful, multi-source
 App. It does **not** reuse Ask AI's end-to-end answer state machine. **App
 Autopilot** is the right-side assistant for an already saved App draft; it uses

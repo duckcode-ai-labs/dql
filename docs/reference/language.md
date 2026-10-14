@@ -104,7 +104,7 @@ Canonical block fields:
 | `allowedFilters` | Filters considered safe and meaningful for reuse |
 | `parameterPolicy` | Review intent for parameters: `dynamic`, `static`, `business`, `derived`, `optional`, or `ambiguous_review_required` |
 | `filterBindings` | Mapping from app/business filters to physical columns or expressions used by the block |
-| `metricMappings` | Which semantic metric an output column answers, and the rows it is read over: `open_claims { metric = "claim_count"  filter = "status = 'open'" }`. Ask reads a simple block's SQL and serves it as the certified answer when it computes the same thing as the question's metric; declare a mapping when the SQL is too complex to compare. `dql compile` fails when the metric is not in the semantic layer, the column is not an output, or the filter is not plain `column = value` conditions |
+| `metricMappings` | Which semantic metric an output column answers, and the rows it is read over: `open_claims { metric = "claim_count"  filter = "status = 'open'" }`. Ask reads a simple block's SQL and serves it as the certified answer when it computes the same thing as the question's metric; declare a mapping when the SQL is too complex to compare. `zlens compile` fails when the metric is not in the semantic layer, the column is not an output, or the filter is not plain `column = value` conditions |
 | `sourceSystems` | Business source-system hints used in lineage and AI context |
 | `replacementFor` | Prior blocks or business questions this block replaces |
 | `replacedBy` | Deprecated blocks only: the block that replaces this one, by name or project-relative `.dql` path |
@@ -122,7 +122,7 @@ monitoring dashboard. Enterprise certification prioritizes the business/data
 contract: domain, owner, grain, outputs, filters, lineage, tests, and review
 metadata. Blocks may be query-only when that contract is complete.
 
-`dql certify --enterprise` treats the reusable contract as certification
+`zlens certify --enterprise` treats the reusable contract as certification
 criteria. Runtime parameters may be scalar values, date/year ranges represented
 by paired parameters, or selected sets represented by array params such as
 `team_set = ["LAL", "BOS"]`. Execution expands selected-set arrays into safe
@@ -183,7 +183,7 @@ block "Claims Summary" {
 ```
 
 - `replacedBy` and `deprecatedOn` only apply when `status = "deprecated"`;
-  `dql validate` warns when they are set on any other status.
+  `zlens validate` warns when they are set on any other status.
 - The replacement must be a block in the project (an error otherwise). If it
   is itself deprecated, DQL warns and follows the chain to the first active
   block; a chain that loops is an error.
@@ -198,7 +198,7 @@ block "Claims Summary" {
   publish refuses the tile until it is rebound.
 - Lineage draws a dashed **replaced by** edge from the old block to the new
   one. It is not a data-flow edge: impact analysis does not follow it.
-- `dql validate` warns about blocks (`ref("...")`) and App pages that still
+- `zlens validate` warns about blocks (`ref("...")`) and App pages that still
   use a deprecated block.
 
 `replacementFor` is the other direction — the new block naming what it
@@ -235,7 +235,7 @@ query by one or more semantic dimensions.
 Imported dbt dimensions keep their model-scoped authoring identity, for example
 `sm_consumption_daily_metrics_detail.report_as_of_dt`. If MetricFlow reports
 that the same member is reachable through multiple governed entity paths, the
-Semantic composer requires a preview and asks the analyst to select one. DQL
+Semantic composer requires a preview and asks the analyst to select one. ZLens
 persists that choice without replacing the authoring identity:
 
 ```dql
@@ -359,7 +359,7 @@ business-view trust belongs in `status`.
 Run:
 
 ```bash
-dql compile
+zlens compile
 ```
 
 to generate `dql-manifest.json`, the dbt-like compiled artifact that records

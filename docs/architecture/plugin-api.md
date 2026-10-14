@@ -2,12 +2,12 @@
 
 > Status: **stable in v1.0**
 
-DQL exposes three stable extension points. Each is a plain npm package that
+ZLens exposes three stable extension points. Each is a plain npm package that
 exports a well-typed entry. No build step hooks, no runtime monkey-patching.
 
 ## Custom connectors
 
-Implement `Connector` from `@duckcodeailabs/dql-connectors`:
+Implement `Connector` from `@zlens/connectors`:
 
 ```ts
 export const myConnector: Connector = {
@@ -31,7 +31,7 @@ Register via `dql.config.json`:
 
 ## Custom chart types
 
-Implement `ChartRenderer` from `@duckcodeailabs/dql-charts`:
+Implement `ChartRenderer` from `@zlens/charts`:
 
 ```ts
 export const sankey: ChartRenderer = {
@@ -43,7 +43,7 @@ export const sankey: ChartRenderer = {
 
 ## Governance rule packs
 
-Implement `RulePack` from `@duckcodeailabs/dql-governance`:
+Implement `RulePack` from `@zlens/governance`:
 
 ```ts
 export const hipaaPack: RulePack = {

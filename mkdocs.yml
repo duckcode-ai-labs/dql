@@ -1,4 +1,4 @@
-site_name: DQL
+site_name: ZLens
 site_description: Governed analytics for the agentic era — certified blocks, Apps, end-to-end lineage, and AI answers that cite their sources, on top of dbt.
 site_url: https://dql.duckcode.ai
 repo_url: https://github.com/duckcode-ai-labs/dql
@@ -78,10 +78,10 @@ nav:
   - Home: index.md
   - Getting started:
       - Quickstart: 01-quickstart.md
-      - DQL in 5 concepts: 04-dql-in-5-concepts.md
+      - ZLens in 5 concepts: 04-dql-in-5-concepts.md
       - Install: 03-install.md
       - Concepts: 02-concepts.md
-      - The DataLex + DQL stack: datalex-and-dql.md
+      - The DataLex + ZLens stack: datalex-and-dql.md
   - Tutorials:
       - tutorials/README.md
       - 01 Getting started: tutorials/01-getting-started.md

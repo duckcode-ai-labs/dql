@@ -1,6 +1,6 @@
 # Connectors
 
-DQL uses a flat install. The CLI installs quickly and does not bundle
+ZLens uses a flat install. The CLI installs quickly and does not bundle
 every database driver. Configure connections in `dql.config.json` or through
 the notebook connection panel.
 
@@ -25,7 +25,7 @@ the notebook connection panel.
 
 Every connector honours the same execution contract:
 
-- the caller's deadline and cancel stop the statement on the server, not only in DQL;
+- the caller's deadline and cancel stop the statement on the server, not only in ZLens;
 - results are capped at the requested row and byte limits, and a cut is reported as `truncated`;
 - calendar dates come back as the `YYYY-MM-DD` the warehouse holds, never shifted by the machine's time zone;
 - exact integers and decimals come back as numbers;
@@ -34,7 +34,7 @@ Every connector honours the same execution contract:
 ## Project-local driver install
 
 Open the notebook connection panel and use **Install connector**; saving a
-connection also installs what it needs. DQL installs driver packages into:
+connection also installs what it needs. ZLens installs driver packages into:
 
 ```text
 .dql/connectors/
@@ -77,7 +77,7 @@ in an older config keeps working and moves to the private file the next time
 the connection is saved from the page. `${ENV_VAR}` references keep working as
 before and are the right choice for CI and servers.
 
-Use a read-only database role for DQL. Ask only runs single read-only
+Use a read-only database role for ZLens. Ask only runs single read-only
 statements, but the database is the place that enforces it.
 
 ## Encryption in transit
@@ -101,7 +101,7 @@ for HTTPS; Trino only accepts a password over HTTPS.
 ## SSH tunnels
 
 PostgreSQL, Redshift, MySQL and SQL Server can be reached through an SSH
-bastion. DQL opens the tunnel when it connects and closes it when the
+bastion. ZLens opens the tunnel when it connects and closes it when the
 connection closes; TLS still checks the database's real host name.
 
 ```json
@@ -138,7 +138,7 @@ runtime, so secrets stay out of git.
 
 ## Databricks SQL
 
-Use either a warehouse ID or the dbt/JDBC HTTP path. DQL extracts the warehouse
+Use either a warehouse ID or the dbt/JDBC HTTP path. ZLens extracts the warehouse
 ID from paths like `/sql/1.0/warehouses/<id>`.
 
 ```json
@@ -184,20 +184,20 @@ select * from read_csv_auto('./data/orders.csv')
 
 By default DuckDB installs a known extension the first time a statement needs
 it (for example `httpfs` to read a URL), downloading it from DuckDB's
-extension repository. Set `DQL_DUCKDB_AUTOINSTALL=off` to have DuckDB use only
+extension repository. Set `ZLENS_DUCKDB_AUTOINSTALL=off` to have DuckDB use only
 the extensions already installed: a statement that needs another one then
 fails with "Missing Extension" instead of downloading it. Hosts that must not
 fetch code at run time set this.
 
-### When DQL serves people through a host
+### When ZLens serves people through a host
 
-When DQL runs inside a host (RFC 0010), a
+When ZLens runs inside a host (RFC 0010), a
 statement reaches the connection's tables and views and nothing else the
 engine could reach. DuckDB and `file` connections open with external access
 off and their settings locked, after the database itself is open: no file
 outside the database is read or written (file readers, `FROM 'file.csv'`,
 `COPY`, `ATTACH`, `EXPORT DATABASE`), no extension is installed or loaded,
-and no `SET` or `PRAGMA` changes a setting. DQL also refuses those statements
+and no `SET` or `PRAGMA` changes a setting. ZLens also refuses those statements
 (and their counterparts on other engines) before they run.
 
 A folder of data files a connection should still read, for example one
@@ -215,10 +215,10 @@ folders are inside the project):
 A file reader whose path is a plain string inside one of these folders then
 runs. DuckDB 1.2 and later enforce the folders in the engine; DuckDB 1.1 has
 no such setting, so a connection that names folders keeps external access on
-in the engine (extensions stay out) and DQL's statement check enforces them.
-The driver DQL pins today is 1.1.3, so the folders rest on that check until
+in the engine (extensions stay out) and ZLens's statement check enforces them.
+The driver ZLens pins today is 1.1.3, so the folders rest on that check until
 the driver is 1.2 or later; none are listed by default, and then the engine
-itself is closed. Without a host nothing changes: `dql notebook` reads files
+itself is closed. Without a host nothing changes: `zlens notebook` reads files
 as before.
 
 With a host the statement check is deliberately broad on every connection: a
@@ -232,7 +232,7 @@ it cannot read that way.
 With a host, a statement a person or a model writes only reads, on every
 connection: one `SELECT` (or `WITH`, `VALUES`, `TABLE`, `SHOW`, `DESCRIBE` or
 `EXPLAIN` of one). A change to data, tables, settings or the session, or
-several statements at once, is refused. DQL's own statements (its views of
+several statements at once, is refused. ZLens's own statements (its views of
 the project's data files, uploaded datasets) keep their shapes. Give
 the warehouse account behind a hosted connection read-only grants all the
 same: the check is a second layer, not a substitute for them. Without a host
@@ -260,7 +260,7 @@ A name is matched however it is written (any case, quoted or not, qualified
 or not); the same name as another schema's table, or as a column, is not
 (`ops.pg_locks`, `t.stl_weight`). There is no setting to allow these: the
 warehouse role's grants are the first control, so give it no grant on them.
-DQL's own statements are not affected; with a host, warehouse discovery does
+ZLens's own statements are not affected; with a host, warehouse discovery does
 not read query history.
 
 Catalog lookups (a table's columns, the schema search) send schema and table
@@ -274,7 +274,7 @@ statement API's named parameters.
 { "driver": "sqlite", "filepath": "./data/app.sqlite" }
 ```
 
-The file is opened read-only; DQL never changes it.
+The file is opened read-only; ZLens never changes it.
 
 ## Snowflake
 
@@ -312,7 +312,7 @@ Key-pair auth:
 ```
 
 Use either `privateKeyPath` or `privateKey`. The public key is configured on
-the Snowflake user; DQL only needs the private key material or file path.
+the Snowflake user; ZLens only needs the private key material or file path.
 
 Enterprise auth fields are passed through to the Snowflake Node driver:
 
@@ -337,7 +337,7 @@ Supported `authMethod` values include `password`, `mfa`, `key_pair`,
 `oauth_client_credentials`, `programmatic_access_token`, and
 `workload_identity`.
 
-For dbt `profiles.yml`, DQL imports Snowflake `private_key_path`,
+For dbt `profiles.yml`, ZLens imports Snowflake `private_key_path`,
 `private_key`, `private_key_passphrase`, `authenticator`, `token`, proxy
 fields, OAuth fields, workload identity fields, and query tags where present.
 
@@ -357,7 +357,7 @@ fields, OAuth fields, workload identity fields, and query tags where present.
 ```
 
 RDS and Aurora IAM sign-in: set `"authMethod": "aws_default"` (or
-`aws_profile` with `profile`, or `aws_access_key`) and `region`; DQL mints a
+`aws_profile` with `profile`, or `aws_access_key`) and `region`; ZLens mints a
 fresh token for each new connection. Row caps are applied with a cursor
 inside a read-only transaction, so the server stops after the rows the
 caller can take.

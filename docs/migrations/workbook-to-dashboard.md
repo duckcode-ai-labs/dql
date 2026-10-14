@@ -5,7 +5,7 @@
 `workbook` has always been a tabbed-dashboard variant — the compiler has
 lowered both constructs through the same IR and HTML emitter path for several
 releases. v1.2 keeps the feature working but emits a deprecation warning at
-compile time and on `dql fmt --check`. Migrate before v1.3.
+compile time and on `zlens fmt --check`. Migrate before v1.3.
 
 ## One-sentence rewrite
 
@@ -75,7 +75,7 @@ dashboard "Q4 Finance" {
 ## Detecting workbook files
 
 ```bash
-dql fmt --check '**/*.dql'
+zlens fmt --check '**/*.dql'
 ```
 
 Files that still use `workbook { }` report:

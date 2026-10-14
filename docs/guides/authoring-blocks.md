@@ -4,7 +4,7 @@
 
 A **block** is a named, versioned analytics artifact with SQL or semantic
 intent, a chart spec, tests, lineage, and governance metadata. Blocks are the
-unit of reuse in DQL and the thing reviewers actually review.
+unit of reuse in ZLens and the thing reviewers actually review.
 
 ## 1. Open Block Studio
 
@@ -19,8 +19,8 @@ with four paths:
 Use the CLI when you want a file scaffold:
 
 ```bash
-dql new block revenue_by_segment --domain finance
-dql new business-view customer_360 --domain customer
+zlens new block revenue_by_segment --domain finance
+zlens new business-view customer_360 --domain customer
 ```
 
 Block Studio keeps SQL blocks and semantic blocks separate so metric references
@@ -46,7 +46,7 @@ order by revenue desc
 ```
 
 `@table("orders")` resolves via the semantic layer (dbt or DQL-local). The
-editor shows lint warnings from `dql-governance` as you type.
+editor shows lint warnings from `@zlens/governance` as you type.
 
 For a semantic block, pick a metric and dimensions instead of editing a raw
 `SELECT` statement.
@@ -65,7 +65,7 @@ left join @block("Customer Orders Rollup") o
   on c.customer_id = o.customer_id
 ```
 
-DQL records this as block-to-block lineage.
+ZLens records this as block-to-block lineage.
 
 ## 4. Fill in governance
 
@@ -85,7 +85,7 @@ for categorical-x/numeric-y. Override in the visualization panel.
 ## 6. Certify
 
 Click **Run Certification** and then **Certify** after the checklist passes.
-DQL:
+ZLens:
 
 - runs tests (`tests:` block)
 - validates required metadata
@@ -109,7 +109,7 @@ deprecatedOn = "2026-09-30"
 
 The old block's badge then reads **Replaced by Claims Dataset**, opening it
 offers **Open the replacement**, Ask answers its questions from the
-replacement, and `dql validate` lists every block and App page still using
+replacement, and `zlens validate` lists every block and App page still using
 it. See [Retired Block](../reference/language.md#retired-block).
 
 ## 7. Use it in a notebook
@@ -119,7 +119,7 @@ it. See [Retired Block](../reference/language.md#retired-block).
 @block("revenue_by_segment")
 ```
 
-DQL inlines the compiled SQL, runs it, and renders the block's chart spec.
+ZLens inlines the compiled SQL, runs it, and renders the block's chart spec.
 
 ## 8. Add business terms
 
@@ -175,7 +175,7 @@ business_view "Customer 360" {
 }
 ```
 
-`dql compile` adds the view to `businessViews` in the manifest and creates
+`zlens compile` adds the view to `businessViews` in the manifest and creates
 lineage edges from each term, included block, or nested business view into this
 view.
 

@@ -1,4 +1,4 @@
-# Getting help with DQL
+# Getting help with ZLens
 
 Pick whichever channel matches what you need:
 
@@ -26,4 +26,4 @@ We aim to acknowledge new issues within **3 business days** and apply a triage l
 
 - Discuss closed-source / commercial product details — that's a separate venue.
 - Triage issues filed against archived repos (`duckcode-observability`, `duck-code`) — those are unmaintained.
-- Provide tax, legal, financial, or compliance advice based on your data — DQL is a tool; you own the call.
+- Provide tax, legal, financial, or compliance advice based on your data — ZLens is a tool; you own the call.

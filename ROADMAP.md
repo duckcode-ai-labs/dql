@@ -1,6 +1,6 @@
-# DQL Roadmap
+# ZLens Roadmap
 
-DQL OSS is a local-first, single-user analytics-as-code workspace. The near-term
+ZLens OSS is a local-first, single-user analytics-as-code workspace. The near-term
 goal is adoption: make it easy for one analyst or analytics engineer to create
 certified reusable blocks, package them into Apps, compile a dbt-like manifest,
 and inspect lineage from source data to dashboard pages.
@@ -12,12 +12,12 @@ For completed changes, see [CHANGELOG.md](./CHANGELOG.md).
 The release manifests and the starter CLI range read `1.17.3`. Versions
 `1.13.5` through `1.17.2` were published to npm by hand; the last git tag is
 `v1.14.3-rc.1`, and the tag-driven release workflow has not published since.
-Check the registry (`npm view @duckcodeailabs/dql-cli dist-tags`) before stating
+Check the registry (`npm view zlens dist-tags`) before stating
 what is published. See
 [docs/contribute/current-dql-truth.md](./docs/contribute/current-dql-truth.md)
 for the dated snapshot.
 
-DQL OSS is ready for local-first use cases:
+ZLens OSS is ready for local-first use cases:
 
 - Author `.dql` blocks with SQL or semantic intent, metadata, chart specs, and
   tests.
@@ -132,7 +132,7 @@ DQL OSS is ready for local-first use cases:
   when certified metrics do not cover the requested analysis, with explicit
   uncertified status, source receipts, and policy validation.
 - Require existing OSS projects to preview and reapply dbt context after an npm
-  CLI upgrade so their immutable snapshot matches the running DQL version.
+  CLI upgrade so their immutable snapshot matches the running ZLens version.
 - Keep one explicit warehouse connection bound across Ask metadata retrieval,
   semantic compilation, generated/certified execution, and bounded validation,
   with the selected target visible in the Ask composer.
@@ -175,7 +175,7 @@ The OSS release is intentionally local and single-user:
 - Block Studio metadata editing still has some regex-backed paths. Canonical
   file parsing, formatting, and compilation use the DQL parser/AST, but richer
   round-trip AST editing is still planned.
-- `dql migrate` is scaffold-first. SQL import is active; Tableau and Power BI
+- `zlens migrate` is scaffold-first. SQL import is active; Tableau and Power BI
   helpers remain planned migration helpers.
 - Snowflake connector reads are streamed and capped before notebook rendering,
   but other connectors still need equivalent driver-level streaming and the UI
@@ -184,7 +184,7 @@ The OSS release is intentionally local and single-user:
   startup; offline cache and clearer unavailable-state messaging are planned.
 - dbt semantic model discovery reads local project artifacts/files. Optional
   dbt Cloud Semantic Layer execution requires a tested environment ID, regional
-  endpoint, and service token; DQL does not manage dbt Cloud projects or jobs.
+  endpoint, and service token; ZLens does not manage dbt Cloud projects or jobs.
 - The notebook browser happy path needs a hard-gated Playwright suite before the
   project should be called GA.
 - The `PERF-001` enterprise-scale correctness fixture passes, but several
@@ -193,7 +193,7 @@ The OSS release is intentionally local and single-user:
 
 ## Next Priorities
 
-- First-run polish: keep `create-dql-app`, `dql doctor`, Block Studio, compile,
+- First-run polish: keep `create-zlens-app`, `zlens doctor`, Block Studio, compile,
   certify, and lineage flows aligned around the 10-minute dbt-repo path.
 - Documentation accuracy: keep every code sample parser-valid and keep release,
   testing, and OSS boundary docs in sync with CI.

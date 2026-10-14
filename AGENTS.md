@@ -1,13 +1,13 @@
-# Agent guide — DQL
+# Agent guide — ZLens
 
-Guidance for AI agents (and humans) making changes here. Most of DQL is yours to
+Guidance for AI agents (and humans) making changes here. Most of ZLens is yours to
 evolve freely. The one thing to be careful about is the **shared design
 contract** below.
 
-## ⚠️ Shared design contract with host applications that embed DQL — do not break
+## ⚠️ Shared design contract with host applications that embed ZLens — do not break
 
-DQL can be embedded inside a host application, which reskins the embedded
-surface to its global theme. DQL already conforms to the shared contract — keep
+ZLens can be embedded inside a host application, which reskins the embedded
+surface to its global theme. ZLens already conforms to the shared contract — keep
 it that way. The host keeps the canonical copy of the token names in its own
 design-tokens package.
 **Renaming or removing any of the following silently breaks the embed** —
@@ -32,13 +32,13 @@ historical host branches.
 
 If you must change any of the above, **coordinate with the host application's
 maintainers**: update its design tokens and re-run its embed contract check.
-Standalone DQL is unaffected by hosts — these are just stability guarantees on
+Standalone ZLens is unaffected by hosts — these are just stability guarantees on
 the names embedding hosts depend on.
 
 ## General
 
 - Notebook app: `apps/dql-notebook`. Build:
-  `pnpm --filter @duckcodeailabs/dql-notebook-app build`.
+  `pnpm --filter @zlens/notebook-app build`.
 - See `CONTRIBUTING.md` for setup, tests, and the OSS-readiness checklist.
 
 ## Current truth and delivery
@@ -60,6 +60,6 @@ rules in that pack.
 
 An implementer may report a requirement as `implemented`; only a different
 verifier or the integration owner may mark it `verified`. UI verification must
-run the built `dql notebook` CLI against the designated fixture—Vite-only proof
+run the built `zlens notebook` CLI against the designated fixture—Vite-only proof
 does not satisfy acceptance. Do not commit generated evidence, caches, local
 connector/runtime state, or Playwright artifacts.

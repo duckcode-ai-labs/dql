@@ -6,7 +6,7 @@ Research answer. It is safe for local investigation; it does not upload data.
 
 ## 1. Capture the compact run context
 
-Before re-running the question, record the DQL binary path/version/commit and
+Before re-running the question, record the ZLens binary path/version/commit and
 the selected project/connection. From the Ask result, open **How it was
 answered** and then **Open full trace**. Save the run ID, trace ID, status,
 selected tier, trust state, and provider phase/cause if present.
@@ -48,10 +48,10 @@ normal progressively disclosed view.
 From a terminal in the project directory:
 
 ```bash
-dql agent trace show <run-id> --format json
-dql agent trace export <run-id> --out ./ask-trace-strict --profile strict
-dql agent trace validate ./ask-trace-strict
-dql agent trace replay ./ask-trace-strict --mode receipt
+zlens agent trace show <run-id> --format json
+zlens agent trace export <run-id> --out ./ask-trace-strict --profile strict
+zlens agent trace validate ./ask-trace-strict
+zlens agent trace replay ./ask-trace-strict --mode receipt
 ```
 
 The strict bundle pseudonymizes identifiers and refuses raw SQL, URLs, paths,
@@ -62,9 +62,9 @@ are safe to share.
 
 ## 4. Share an actionable gap
 
-For a DQL maintainer, share the strict bundle plus this redacted checklist:
+For a ZLens maintainer, share the strict bundle plus this redacted checklist:
 
-- DQL version, binary path, package/commit SHA
+- ZLens version, binary path, package/commit SHA
 - provider/model/base-origin **fingerprints** and readiness status, not values
 - manifest/catalog/SQLite/vector/runtime-schema fingerprints and timestamps
 - trace/run IDs, selected tier, trust state, stop reason, and stable failure code
@@ -81,7 +81,7 @@ recording is intentionally fail-open.
 Export a strict receipt from each run, then compare structurally:
 
 ```bash
-dql agent trace compare ./before ./after --mode compare
+zlens agent trace compare ./before ./after --mode compare
 ```
 
 Look for a change in source coverage, candidate role/reason counts, cascade

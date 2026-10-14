@@ -1,6 +1,6 @@
 # Home, following a page, and who an App is for
 
-What a reader sees first when they open DQL, how to keep an eye on a page, and
+What a reader sees first when they open ZLens, how to keep an eye on a page, and
 how an author says who an App is for.
 
 ## Home
@@ -14,7 +14,7 @@ Open **Ask** on a new chat. Above the question box:
   `Claims filed 41 → 47 (+6)`. Only certified or governed single figures (a
   KPI, a driver's current value, a leader's value) are compared; never a tile
   that needs review, never rows. They are *your* figures: your filters, your
-  persona and — when DQL runs inside a host that signs people in — your row
+  persona and — when ZLens runs inside a host that signs people in — your row
   rules. Nobody else's runs are read, and nothing is shared between people.
 - Anything your host adds, for example **Open requests**.
 
@@ -48,7 +48,7 @@ name the identity-provider groups it is for. They are saved in
 { "audience": "Claims leadership", "audienceGroups": ["claims-leaders"] }
 ```
 
-Without a host, you type the group names; DQL has one local owner, so this is
+Without a host, you type the group names; ZLens has one local owner, so this is
 a note that carries over when the project is hosted. Inside a host that signs
 people in, you pick from the host's groups, and the App opens only for those
 groups, its owners, people the host gave it, and people allowed to change it.

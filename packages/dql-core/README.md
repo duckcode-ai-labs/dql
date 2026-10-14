@@ -1,4 +1,4 @@
-# `@duckcodeailabs/dql-core`
+# `@zlens/core`
 
 Core language package for DQL.
 
@@ -7,13 +7,13 @@ It contains the lexer, parser, AST, semantic analysis, diagnostics, and formatte
 ## Install
 
 ```bash
-pnpm add @duckcodeailabs/dql-core
+pnpm add @zlens/core
 ```
 
 ## Example
 
 ```ts
-import { parse, analyze } from '@duckcodeailabs/dql-core';
+import { parse, analyze } from '@zlens/core';
 
 const source = `
 block "Revenue by segment" {

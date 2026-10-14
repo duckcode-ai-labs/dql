@@ -1,6 +1,6 @@
 # Third-party notices
 
-DQL is licensed under the Apache License 2.0 (see [LICENSE](LICENSE)). It
+ZLens is licensed under the Apache License 2.0 (see [LICENSE](LICENSE)). It
 ships the following third-party material under its own licence.
 
 ## Fonts
@@ -14,14 +14,14 @@ licensed under the SIL Open Font License, Version 1.1.
 - Built app: the licence ships beside the font files as `Inter-OFL.txt`
   (`apps/dql-notebook/dist/assets/`, and in the CLI package under
   `dist/assets/dql-notebook/assets/`). Any app that loads the shared styles can
-  do the same with the Vite plugin `@duckcodeailabs/dql-ui/font-licence`.
+  do the same with the Vite plugin `@zlens/ui/font-licence`.
 
 Code text uses JetBrains Mono only where the computer already has it, else the
-system's monospace face; DQL does not ship that font.
+system's monospace face; ZLens does not ship that font.
 
 ## Packages
 
-Every npm package DQL depends on carries its own licence in its package.
+Every npm package ZLens depends on carries its own licence in its package.
 
 ## Test fixtures
 
@@ -48,7 +48,7 @@ licence (GitHub reports none), so the manifest's code was replaced on
 
 - Model SQL, the project's own macros (`cents_to_dollars` and its adapter
   variants, `generate_schema_name`) and the unit-test rows and descriptions in
-  the manifest were written for this repository and are covered by the DQL
+  the manifest were written for this repository and are covered by the ZLens
   licence. They keep jaffle-shop's model, column, macro and test names and
   produce the same columns, but contain no upstream SQL or unit-test text.
 - The manifest's remaining project metadata (model, column, semantic-model,
@@ -78,4 +78,4 @@ questions are about.
 **`apps/cli/test/fixtures/jaffle-supply-chain`** and
 **`packages/dql-mcp/src/tools/__tests__/fixtures/jaffle-shop.datalex-manifest.json`**
 were written for this repository. They reuse the jaffle-shop table and column
-names but no upstream SQL or data, and are covered by the DQL licence.
+names but no upstream SQL or data, and are covered by the ZLens licence.

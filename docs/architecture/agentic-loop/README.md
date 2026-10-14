@@ -1,6 +1,6 @@
-# The DQL Agentic Analyst Loop
+# The ZLens Agentic Analyst Loop
 
-> How DQL turns a natural-language question into a **governed, grounded, trustworthy** answer —
+> How ZLens turns a natural-language question into a **governed, grounded, trustworthy** answer —
 > and how it searches, uses tools, evaluates, self-corrects, and learns over time.
 
 This folder is the reference for the whole agentic architecture. Start here for the high-level
@@ -20,7 +20,7 @@ picture, then follow the links into each concern.
 
 ## The thesis in one line
 
-**DQL is a *tiered governed analyst loop*: a Reflexion-style outer supervisor (plan → gate →
+**ZLens is a *tiered governed analyst loop*: a Reflexion-style outer supervisor (plan → gate →
 repair/escalate) whose executors are grounded in a governed semantic layer, with a
 learn-from-experience memory — never a raw text-to-SQL guess, never an auto-certified answer.**
 
@@ -84,7 +84,7 @@ question — the loop learns.
 
 ```mermaid
 mindmap
-  root((DQL Agentic Loop))
+  root((ZLens Agentic Loop))
     How it loops
       Plan then execute then gate then repair or escalate
       Bounded 4 steps and budgeted repairs

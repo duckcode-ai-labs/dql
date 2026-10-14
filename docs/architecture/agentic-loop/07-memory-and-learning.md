@@ -3,8 +3,8 @@
 > `packages/dql-agent/src/memory/sqlite-memory.ts` · `hints/*` · `skills/loader.ts` ·
 > `skills/defaults.ts` · `metadata/catalog.ts`
 
-DQL does not treat raw chat, a thumb, an execution error, or a successful query as truth. The shipped
-learning path is narrower: an analyst explicitly records a correction, DQL stores it as a
+ZLens does not treat raw chat, a thumb, an execution error, or a successful query as truth. The shipped
+learning path is narrower: an analyst explicitly records a correction, ZLens stores it as a
 Git-versioned candidate, and a later review runs the governed evaluation before approval. Runtime
 errors and feedback remain diagnostics; they do not create or promote hints automatically.
 
@@ -87,7 +87,7 @@ without a source rewrite.
 
 ### The Hint Graph projection
 
-Each hint is a governed node in the rebuildable `agent_hints` index. DQL also
+Each hint is a governed node in the rebuildable `agent_hints` index. ZLens also
 materializes typed `agent_hint_edges` from the hint's reviewed scope, dependency
 fingerprints, lifecycle provenance, and parsed corrected SQL:
 
@@ -109,7 +109,7 @@ reviewable but never enter normal KG search, and approved hints are still folded
 in only after certified routing.
 
 The Git hint set and projection schema are content-addressed. On Notebook
-startup, DQL compares that fingerprint with the local SQLite projection and
+startup, ZLens compares that fingerprint with the local SQLite projection and
 rebuilds it when missing or changed. Therefore an OSS clone receives the shared
 governed history from Git without committing or copying `.dql/cache`; an
 unchanged project keeps its current local index.
@@ -152,7 +152,7 @@ sequenceDiagram
     Note over G,R: next similar question retrieves the lesson → mistake not repeated
 ```
 
-This is governed experience reuse, not online reinforcement learning. DQL does
+This is governed experience reuse, not online reinforcement learning. ZLens does
 not change model weights, silently raise confidence after successful runs, or
 learn from raw outcomes. New experience becomes shared only through the same
 explicit candidate, evaluation, and review lifecycle.
