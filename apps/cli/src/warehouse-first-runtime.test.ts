@@ -4,7 +4,7 @@
  * warehouse's own relations.
  */
 import { afterEach, describe, expect, it } from 'vitest';
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { Server } from 'node:http';
@@ -19,6 +19,49 @@ describe('warehouse-first modeling in the local runtime', () => {
     server?.close();
     server = undefined;
     for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
+  });
+
+  // F3 (ZLens 0.1.0 e2e): "Model my warehouse without dbt" on a project that
+  // imports dbt turned it warehouse-first with an empty catalog, and Ask lost
+  // every table ("no table in this project matches") for the same question
+  // the CLI had answered minutes earlier.
+  it('never turns a project that reads dbt into warehouse-first modeling unasked', async () => {
+    const projectRoot = mkdtempSync(join(tmpdir(), 'dql-warehouse-first-dbt-'));
+    roots.push(projectRoot);
+    mkdirSync(join(projectRoot, 'target'), { recursive: true });
+    writeFileSync(join(projectRoot, 'target', 'manifest.json'), JSON.stringify({ metadata: { dbt_schema_version: 'https://schemas.getdbt.com/dbt/manifest/v12.json' }, nodes: {}, sources: {} }));
+    const config = { project: 'nba', layout: { version: 2, mode: 'oss-dbt-workspace' }, connections: { default: { driver: 'sqlite', filepath: ':memory:' } }, dbtImport: { anchors: ['path:models/'] } };
+    writeFileSync(join(projectRoot, 'dql.config.json'), JSON.stringify(config));
+    const port = await startLocalServer({ rootDir: projectRoot, projectRoot, executor: new QueryExecutor(), preferredPort: 0, captureServer: (created) => { server = created; } });
+    const base = `http://127.0.0.1:${port}`;
+
+    const modeling = await fetch(`${base}/api/modeling/dbt-first`);
+    expect(modeling.status).toBe(404);
+    expect(((await modeling.json()) as { code: string; details: { dbtDetected: boolean } })).toMatchObject({ code: 'DBT_FIRST_NOT_ENABLED', details: { dbtDetected: true } });
+
+    const enabled = await fetch(`${base}/api/modeling/warehouse/enable`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+    expect(enabled.status).toBe(409);
+    const refusal = await enabled.json() as { code: string; message: string };
+    expect(refusal.code).toBe('MODELING_MODE_CONFLICT');
+    expect(refusal.message).toContain('already reads a dbt project');
+    expect(JSON.parse(readFileSync(join(projectRoot, 'dql.config.json'), 'utf-8'))).toEqual(config);
+
+    // An explicit hybrid choice keeps the dbt models and adds warehouse tables.
+    const hybrid = await fetch(`${base}/api/modeling/warehouse/enable`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mode: 'hybrid' }) });
+    expect(hybrid.status).toBe(200);
+    expect(JSON.parse(readFileSync(join(projectRoot, 'dql.config.json'), 'utf-8')).modeling).toEqual({ mode: 'hybrid' });
+  });
+
+  it('turns a project without dbt into warehouse-first modeling', async () => {
+    const projectRoot = mkdtempSync(join(tmpdir(), 'dql-warehouse-first-nodbt-'));
+    roots.push(projectRoot);
+    writeFileSync(join(projectRoot, 'dql.config.json'), JSON.stringify({ project: 'shop', connections: { default: { driver: 'sqlite', filepath: ':memory:' } } }));
+    const port = await startLocalServer({ rootDir: projectRoot, projectRoot, executor: new QueryExecutor(), preferredPort: 0, captureServer: (created) => { server = created; } });
+    const modeling = await fetch(`http://127.0.0.1:${port}/api/modeling/dbt-first`);
+    expect(((await modeling.json()) as { details: { dbtDetected: boolean } }).details.dbtDetected).toBe(false);
+    const enabled = await fetch(`http://127.0.0.1:${port}/api/modeling/warehouse/enable`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+    expect(enabled.status).toBe(200);
+    expect(JSON.parse(readFileSync(join(projectRoot, 'dql.config.json'), 'utf-8')).modeling).toEqual({ mode: 'warehouse-first' });
   });
 
   it('syncs the warehouse catalog, lists its relations, binds entities with `relation:` and validates a join on the warehouse', async () => {

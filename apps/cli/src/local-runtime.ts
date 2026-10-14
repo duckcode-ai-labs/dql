@@ -14700,6 +14700,8 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
           details: {
             manifestVersion: projectConfig.manifestVersion ?? 2,
             modelingMode: projectConfig.modeling?.mode ?? null,
+            // The page offers warehouse-only modeling only to a project that has no dbt to lose.
+            dbtDetected: projectReadsDbtModels(projectRoot, projectConfig),
           },
           nextActions: ['Open Settings → Project & dbt and apply a valid dbt project.'],
         })));
@@ -15381,10 +15383,18 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
       const requestId = apiRequestId('modeling-warehouse-enable');
       try {
         const body = await readJSON(req).catch(() => ({})) as { mode?: string };
-        const current = modelingModeOf(loadProjectConfig(projectRoot));
+        const currentConfig = loadProjectConfig(projectRoot);
+        const current = modelingModeOf(currentConfig);
         const requested = body.mode === 'hybrid' ? 'hybrid' : 'warehouse-first';
         if (current === 'dbt-first' && requested !== 'hybrid') {
           throw Object.assign(new Error('This project models dbt. Choose hybrid to add warehouse tables that dbt does not cover.'), { code: 'MODELING_MODE_CONFLICT' });
+        }
+        // A project that already reads its dbt models is not "without dbt":
+        // warehouse-first modeling replaces them with the warehouse catalog,
+        // which is empty until a sync, and Ask, lineage and blocks lose every
+        // table (ZLens 0.1.0 e2e, F3). Only an explicit hybrid choice adds to them.
+        if (current === undefined && requested !== 'hybrid' && projectReadsDbtModels(projectRoot, currentConfig)) {
+          throw Object.assign(new Error('This project already reads a dbt project (its dbt manifest is imported). Warehouse-first modeling would replace those dbt models with warehouse tables only. Model it from Settings → Project & dbt, or choose hybrid to add warehouse tables dbt does not cover.'), { code: 'MODELING_MODE_CONFLICT' });
         }
         const next = current === 'warehouse-first' || current === 'hybrid' ? current : requested;
         if (next !== current) {
@@ -27849,7 +27859,9 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
           details: semanticRuntimeErrorDetails(error),
           nextActions: code === 'SEMANTIC_SOURCE_DRIFT'
             ? ['Deploy the intended dbt semantic project.', 'Reapply dbt Cloud Semantic Layer settings.']
-            : ['Check the selected semantic runtime and retry.'],
+            : code === 'SEMANTIC_RUNTIME_REQUIRED'
+              ? ['Open Settings → Semantic runtime and choose the runtime these metrics are defined for (DQL native for DQL semantic-layer metrics; local MetricFlow or dbt Cloud for dbt semantic models).']
+              : ['Check the selected semantic runtime and retry.'],
         })));
       }
       return;
@@ -44748,6 +44760,17 @@ export function resolveDbtProfileRuntimeConnection(
     !candidate.warnings.some((warning) => warning.startsWith('Not the default dbt target'))
   );
   return defaultTarget?.connection ?? (complete.length === 1 ? complete[0].connection : null);
+}
+
+/**
+ * Does this project already read dbt models — a dbt import, a configured dbt
+ * project, or a dbt manifest in the workspace? Such a project is not one to
+ * model "without dbt".
+ */
+function projectReadsDbtModels(projectRoot: string, projectConfig: ProjectConfig): boolean {
+  const config = projectConfig as ProjectConfig & { dbtImport?: unknown };
+  if (config.dbtImport || config.dbt?.projectDir) return true;
+  return existsSync(resolve(projectRoot, config.dbt?.manifestPath ?? 'target/manifest.json'));
 }
 
 function findDbtProjectPath(projectRoot: string, projectConfig: ProjectConfig): string {
