@@ -51,7 +51,7 @@ export interface EmitterConfig {
   onError?: (err: unknown) => void;
 }
 
-const PRODUCER = 'https://github.com/duckcode-ai-labs/dql';
+const PRODUCER = 'https://github.com/duckcode-ai-labs/zlens';
 const SCHEMA_URL =
   'https://openlineage.io/spec/2-0-0/OpenLineage.json#/definitions/RunEvent';
 

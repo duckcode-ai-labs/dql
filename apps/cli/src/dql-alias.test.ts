@@ -23,7 +23,7 @@ describe('dql alias', () => {
     expect(zlens.stdout).toMatch(/^zlens \d+\.\d+\.\d+/);
     expect(dql.stdout).toBe(zlens.stdout);
     expect(zlens.stderr).toBe('');
-    expect(dql.stderr).toBe('dql is now called zlens; the dql command will be removed in a future major version.\n');
+    expect(dql.stderr).toBe('dql is now called zlens; the dql command will be removed in a future release.\n');
   });
 
   it('keeps help text and exit codes identical', () => {

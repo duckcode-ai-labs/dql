@@ -2,17 +2,17 @@
   "name": "dql-language-support",
   "displayName": "DQL for ZLens",
   "description": "Syntax highlighting, snippets, formatting, and language server support for DQL files in ZLens projects.",
-  "version": "1.17.3",
+  "version": "0.1.0",
   "publisher": "dql",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
-    "url": "https://github.com/duckcode-ai-labs/dql.git",
+    "url": "https://github.com/duckcode-ai-labs/zlens.git",
     "directory": "apps/vscode-extension"
   },
-  "homepage": "https://github.com/duckcode-ai-labs/dql",
+  "homepage": "https://github.com/duckcode-ai-labs/zlens",
   "bugs": {
-    "url": "https://github.com/duckcode-ai-labs/dql/issues"
+    "url": "https://github.com/duckcode-ai-labs/zlens/issues"
   },
   "private": false,
   "engines": {

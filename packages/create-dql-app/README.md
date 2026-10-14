@@ -46,12 +46,12 @@ command. From an existing dbt repo, run `zlens init ./dql` before `cd dql`.
 
 ## Docs
 
-- [Quickstart](https://github.com/duckcode-ai-labs/dql/blob/main/docs/01-quickstart.md)
-- [Concepts](https://github.com/duckcode-ai-labs/dql/blob/main/docs/02-concepts.md)
-- [Connect your own warehouse](https://github.com/duckcode-ai-labs/dql/blob/main/docs/guides/connect-warehouse.md)
+- [Quickstart](https://github.com/duckcode-ai-labs/zlens/blob/main/docs/01-quickstart.md)
+- [Concepts](https://github.com/duckcode-ai-labs/zlens/blob/main/docs/02-concepts.md)
+- [Connect your own warehouse](https://github.com/duckcode-ai-labs/zlens/blob/main/docs/guides/connect-warehouse.md)
 
 ## License
 
-[Apache-2.0](https://github.com/duckcode-ai-labs/dql/blob/main/LICENSE). The
-package ships `LICENSE` and `NOTICE`. Versions up to and including 1.17.2 were
-published as MIT and keep that licence.
+[Apache-2.0](https://github.com/duckcode-ai-labs/zlens/blob/main/LICENSE). The
+package ships `LICENSE` and `NOTICE`. Versions of `create-dql-app` (its former
+name) up to and including 1.17.2 were published as MIT and keep that licence.

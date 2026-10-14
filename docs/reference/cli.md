@@ -3,7 +3,7 @@
 > **Source of truth:** the installed CLI. Run `zlens --help` (or the project-local
 > equivalent below) for the exact command list shipped by your version. This
 > page is maintained against
-> [`apps/cli/src/index.ts`](https://github.com/duckcode-ai-labs/dql/blob/main/apps/cli/src/index.ts),
+> [`apps/cli/src/index.ts`](https://github.com/duckcode-ai-labs/zlens/blob/main/apps/cli/src/index.ts),
 > and CI checks that every dispatched top-level command appears here.
 
 ```bash
@@ -33,7 +33,7 @@ npm exec -- zlens --help
 
 `npm run` adds `node_modules/.bin` to `PATH` for that script. A normal shell
 does not, so a bare `zlens` command requires
-`npm install -g zlens`. The command tables below use the
+`npm install -g @zlens/cli`. The command tables below use the
 short global form for readability; prepend `npm exec --` for a project-local
 installation.
 

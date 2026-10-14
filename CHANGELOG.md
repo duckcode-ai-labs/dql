@@ -6,9 +6,74 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 
 ---
 
-## Unreleased
+## v0.1.0 - 2026-10-13
 
-Changes merged after `v1.17.3` (`git log 2ad841be..main`). Not on npm yet.
+The first release under the name **ZLens**. ZLens is the product; DQL stays
+the name of its query language and file format. Version numbers restart at
+`0.1.0` for the new package names. The old `@duckcodeailabs/*` packages and
+`create-dql-app` ended at `1.17.2`.
+
+This release also ships every change listed below under
+[Changes since v1.17.3](#changes-since-v1173-shipped-in-v010).
+
+### What moved
+
+| Before | Now |
+| --- | --- |
+| `@duckcodeailabs/dql-cli`, command `dql` | `@zlens/cli`, command `zlens` (`dql` still works, see below) |
+| `create-dql-app` | `create-zlens-app` |
+| `@duckcodeailabs/dql-compiler`, `@duckcodeailabs/dql-lsp` | `@zlens/dql-compiler`, `@zlens/dql-lsp` |
+| `@duckcodeailabs/dql-<name>` (all other packages) | `@zlens/<name>`, e.g. `@zlens/core`, `@zlens/runtime`, `@zlens/agent` |
+| Environment variables `DQL_<NAME>` | `ZLENS_<NAME>`, read first; `DQL_<NAME>` is still read when the new name is not set |
+| Repository `github.com/duckcode-ai-labs/dql` | `github.com/duckcode-ai-labs/zlens` (GitHub redirects the old address) |
+| Docs at `dql.duckcode.ai` | <https://duckcode-ai-labs.github.io/zlens/> |
+
+- The `dql` command is an alias for `zlens`. It prints one line on stderr,
+  "dql is now called zlens; the dql command will be removed in a future
+  release.", then does exactly what `zlens` does. Standard output is
+  unchanged, so `--json` output and pipes keep working.
+- The VS Code extension keeps its id (`dql-language-support`) and is shown as
+  "DQL for ZLens". It is released with the other packages, so its version also
+  restarts at `0.1.0`.
+
+### Upgrading from DQL
+
+1. In each project, replace `@duckcodeailabs/dql-cli` with `@zlens/cli` and
+   reinstall:
+
+   ```bash
+   npm uninstall @duckcodeailabs/dql-cli
+   npm i -D @zlens/cli
+   ```
+
+2. For a global install, remove the old package first (both packages provide
+   a `dql` command):
+
+   ```bash
+   npm uninstall -g @duckcodeailabs/dql-cli
+   npm i -g @zlens/cli
+   ```
+
+3. Run `zlens doctor`. It reports a `package.json` that still declares
+   `@duckcodeailabs/dql-cli` and says what to replace it with.
+4. Code that imports a library changes the import name the same way, for
+   example `@duckcodeailabs/dql-core` to `@zlens/core`.
+5. Scripts that call `dql`, and `DQL_*` environment variables, keep working.
+   Move them to `zlens` and `ZLENS_*` when convenient.
+
+### What did not change
+
+- `.dql` files, the DQL grammar, `dql.config.json`, `dql.app.json` and the
+  `.dql/` project folder keep their names and formats. No project files need
+  to change.
+- The MCP server key `dql` that `zlens connect` writes, and the MCP tool
+  names, are the same, so configured agents keep working.
+- The `x-dql-*` HTTP headers are the same.
+
+## Changes since v1.17.3 (shipped in v0.1.0)
+
+Changes merged after `v1.17.3` (`git log 2ad841be..v0.1.0`). Package names in
+this section are the names from before the ZLens rename.
 
 ### Highlights
 

@@ -1,8 +1,8 @@
 site_name: ZLens
 site_description: Governed analytics for the agentic era — certified blocks, Apps, end-to-end lineage, and AI answers that cite their sources, on top of dbt.
-site_url: https://dql.duckcode.ai
-repo_url: https://github.com/duckcode-ai-labs/dql
-repo_name: duckcode-ai-labs/dql
+site_url: https://duckcode-ai-labs.github.io/zlens/
+repo_url: https://github.com/duckcode-ai-labs/zlens
+repo_name: duckcode-ai-labs/zlens
 edit_uri: edit/main/docs/
 
 theme:
@@ -62,7 +62,7 @@ plugins:
 extra:
   social:
     - icon: fontawesome/brands/github
-      link: https://github.com/duckcode-ai-labs/dql
+      link: https://github.com/duckcode-ai-labs/zlens
     - icon: fontawesome/brands/discord
       link: https://discord.gg/Dnm6bUvk
 
@@ -119,8 +119,8 @@ nav:
       - Connectors: reference/connectors.md
       - Compatibility: reference/compatibility.md
   - Community:
-      - Contributing: https://github.com/duckcode-ai-labs/dql/blob/main/CONTRIBUTING.md
-      - Roadmap: https://github.com/duckcode-ai-labs/dql/blob/main/ROADMAP.md
-      - Support & triage: https://github.com/duckcode-ai-labs/dql/blob/main/SUPPORT.md
+      - Contributing: https://github.com/duckcode-ai-labs/zlens/blob/main/CONTRIBUTING.md
+      - Roadmap: https://github.com/duckcode-ai-labs/zlens/blob/main/ROADMAP.md
+      - Support & triage: https://github.com/duckcode-ai-labs/zlens/blob/main/SUPPORT.md
       - Manifest spec: https://github.com/duckcode-ai/manifest-spec
       - DataLex (sister repo): https://github.com/duckcode-ai/DataLex

@@ -162,10 +162,12 @@ template lives in `create-dql-app`; the example dbt project is external.
 
 ## Current Release Decision
 
-The manifests and starter CLI range read `1.17.3`. Versions `1.13.5` through
-`1.17.2` were published by hand and have no git tags, so no tag-driven release
-has run since `v1.14.3-rc.1`. Registry, tag, and exact-version clean-install
-evidence must be captured before this document calls `1.17.3` published.
+The manifests and starter CLI range read `0.1.0`, the first release under the
+ZLens package names. The `@duckcodeailabs/*` packages ended at `1.17.2`;
+versions `1.13.5` through `1.17.2` were published by hand and have no git
+tags, so no tag-driven release has run since `v1.14.3-rc.1`. Registry, tag,
+and exact-version clean-install evidence must be captured before this document
+calls `0.1.0` published.
 
 The `1.14.3-rc.1` candidate contained the Ask AI governed-cascade recovery, stable
 conversation selection persistence, phase-specific provider diagnostics, and

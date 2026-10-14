@@ -11,7 +11,7 @@ database drivers, reinstall those project-local dependencies for the active
 runtime.
 
 ```bash
-npm i -D zlens@latest
+npm i -D @zlens/cli@latest
 npx zlens --version
 ```
 
@@ -20,14 +20,14 @@ the executable in `node_modules/.bin`, so use `npx zlens ...` or the repository'
 `npm run ...` scripts. A bare shell command requires a global installation:
 
 ```bash
-npm i -g zlens@latest
+npm i -g @zlens/cli@latest
 zlens --version
 ```
 
 Or run it without adding a dependency:
 
 ```bash
-npx zlens --help
+npx -p @zlens/cli zlens --help
 ```
 
 From this repo, you can also run:
@@ -54,7 +54,7 @@ If you want the dbt-integrated starter instead, use the Jaffle Shop semantic-lay
 git clone https://github.com/dbt-labs/Semantic-Layer-Online-Course.git jaffle-shop
 cd jaffle-shop
 pip install dbt-duckdb && dbt deps && dbt build --profiles-dir .
-npm i -D zlens
+npm i -D @zlens/cli
 npx zlens init .
 npx zlens semantic import dbt .
 npm run notebook

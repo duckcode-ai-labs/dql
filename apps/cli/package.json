@@ -1,6 +1,6 @@
 {
   "name": "@zlens/cli",
-  "version": "1.17.3",
+  "version": "0.1.0",
   "description": "Public CLI for ZLens: parsing, formatting, testing, and certifying DQL blocks",
   "license": "Apache-2.0",
   "type": "module",
@@ -36,12 +36,12 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/duckcode-ai-labs/dql.git",
+    "url": "https://github.com/duckcode-ai-labs/zlens.git",
     "directory": "apps/cli"
   },
-  "homepage": "https://github.com/duckcode-ai-labs/dql",
+  "homepage": "https://github.com/duckcode-ai-labs/zlens",
   "bugs": {
-    "url": "https://github.com/duckcode-ai-labs/dql/issues"
+    "url": "https://github.com/duckcode-ai-labs/zlens/issues"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.104.2",

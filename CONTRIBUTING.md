@@ -33,7 +33,7 @@ Before a non-trivial change, read the
 Requires Node.js 20 or newer (CI tests 20, 22, and 24) and pnpm 9.
 
 ```bash
-git clone https://github.com/duckcode-ai-labs/dql.git
+git clone https://github.com/duckcode-ai-labs/zlens.git
 cd dql
 pnpm install
 pnpm build
@@ -150,7 +150,7 @@ Use conventional commit prefixes:
 
 ## Good First Issues
 
-Look for issues tagged [`good first issue`](https://github.com/duckcode-ai-labs/dql/issues?q=label%3A%22good+first+issue%22) on GitHub. These are scoped tasks with clear acceptance criteria.
+Look for issues tagged [`good first issue`](https://github.com/duckcode-ai-labs/zlens/issues?q=label%3A%22good+first+issue%22) on GitHub. These are scoped tasks with clear acceptance criteria.
 
 Common contribution areas:
 
@@ -165,12 +165,14 @@ Common contribution areas:
 
 ZLens follows [Semantic Versioning](https://semver.org/):
 
-- **Patch** (`1.x.Y`): bug fixes, documentation, internal improvements
-- **Minor** (`1.X.0`): new features, new commands, new language constructs (backwards-compatible)
+- **Patch** (`x.y.Z`): bug fixes, documentation, internal improvements
+- **Minor** (`x.Y.0`): new features, new commands, new language constructs (backwards-compatible)
 - **Major** (`X.0.0`): breaking changes to the language syntax, CLI flags, or public package APIs
 
-The `1.x` packages are released together on the same version. `datalex-lsp`
-versions on its own (currently `0.2.0`).
+The release packages (every `@zlens/*` package in the release list,
+`create-zlens-app` and the VS Code extension's `dql-language-support`) are
+released together on the same version, starting at `0.1.0`. `datalex-lsp`
+versions on its own (currently `0.2.0`) and is not part of the tag release.
 
 ---
 

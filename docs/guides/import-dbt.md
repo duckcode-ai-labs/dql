@@ -61,7 +61,7 @@ release cadence from dbt.
 From the dbt repo root:
 
 ```bash
-npm i -D zlens
+npm i -D @zlens/cli
 npx zlens init ./dql
 ```
 
