@@ -1,5 +1,5 @@
 import { renderToStaticMarkup } from 'react-dom/server';
-import { tileQueryHash } from '@duckcodeailabs/dql-core/apps/tile-query';
+import { tileQueryHash } from '@zlens/core/apps/tile-query';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import type * as AppStudioV2Module from './AppStudioV2';
 

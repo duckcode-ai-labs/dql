@@ -3,11 +3,11 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { buildManifest, type DQLManifest } from '@duckcodeailabs/dql-core';
+import { buildManifest, type DQLManifest } from '@zlens/core';
 import {
   applySkillPolicies, buildMetadataSnapshot, buildVocabularyIndex, domainContextSearchDomains, loadSkills, openMetadataCatalog,
   projectVocabularySource, resolveDomainContextEnvelope, upsertMetadataSnapshot, type VocabularySource,
-} from '@duckcodeailabs/dql-agent';
+} from '@zlens/agent';
 import { joinScopeDecision, modelingJoinGraph, projectionScopeFor } from './ask-pipeline-host/host.js';
 import { buildVocabularySource } from './ask-pipeline-host/vocabulary-source.js';
 

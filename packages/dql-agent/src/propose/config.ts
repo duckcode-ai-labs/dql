@@ -1,5 +1,5 @@
 /**
- * Resolved configuration for the `dql propose` engine.
+ * Resolved configuration for the `zlens propose` engine.
  *
  * Conventions are **convention-agnostic by default**: with no config the
  * classifier falls back to a weighted cascade (meta → exposure → semantic →

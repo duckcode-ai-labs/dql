@@ -1,5 +1,5 @@
 /**
- * Design tokens — the single source of visual truth for the DQL UI.
+ * Design tokens — the single source of visual truth for the ZLens UI.
  *
  * Philosophy
  * - Tokens are abstract (role-based: `surface-raised`, not `gray-700`). A

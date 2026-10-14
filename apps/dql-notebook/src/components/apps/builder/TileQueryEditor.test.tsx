@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import type { DatasetDescriptor } from '@duckcodeailabs/dql-core/datasets/descriptor';
+import type { DatasetDescriptor } from '@zlens/core/datasets/descriptor';
 import { TileQueryEditor, datasetEditorFields, parseFilterValues } from './TileQueryEditor';
 import { buildDatasetComparison, defaultDatasetComparisonDraft } from '../app-dataset-comparison';
 

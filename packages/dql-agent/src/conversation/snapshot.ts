@@ -84,7 +84,7 @@ export interface ConversationEnvelopeV1 {
    */
   pendingClarification?: {
     sourceTurnId: string;
-    /** The clarifying question DQL asked. */
+    /** The clarifying question ZLens asked. */
     question: string;
     /** The user's original analytical question that triggered it. */
     sourceQuestion?: string;

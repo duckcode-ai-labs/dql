@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { formatAnswerForSlack } from './format.js';
-import type { AgentAnswer } from '@duckcodeailabs/dql-agent';
+import type { AgentAnswer } from '@zlens/agent';
 
 describe('formatAnswerForSlack', () => {
   it('emits a Certified badge + citations + feedback row for certified answers', () => {

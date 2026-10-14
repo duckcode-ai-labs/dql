@@ -6,15 +6,15 @@
  *     person asking, each with that person's own headers (an error: none);
  *   - with a host that signs people in but has no such hook: none — nobody's
  *     documents are read with a key from the project file;
- *   - with no host (`dql notebook`): the project's `.dql/mcp-servers.json`
+ *   - with no host (`zlens notebook`): the project's `.dql/mcp-servers.json`
  *     servers marked `use: ["knowledge"]`.
  *
  * Each server becomes a read-only KnowledgeSource over DQL's own MCP client.
  * Every knowledge call is reported to the host's audit sink as ids, links
  * and outcomes — never the question, search words or document text.
  */
-import { createKnowledgeSession, type KnowledgeSession, type KnowledgeSource } from '@duckcodeailabs/dql-agent';
-import { createMcpKnowledgeSource, type KnowledgeServerConfig } from '@duckcodeailabs/dql-mcp';
+import { createKnowledgeSession, type KnowledgeSession, type KnowledgeSource } from '@zlens/agent';
+import { createMcpKnowledgeSource, type KnowledgeServerConfig } from '@zlens/mcp';
 import { loadKnowledgeServers } from '../llm/mcp-config.js';
 import type { DqlHostHooks, DqlKnowledgeServer, DqlPrincipal } from './request-context.js';
 import { auditActor, auditKnowledge } from './observability.js';

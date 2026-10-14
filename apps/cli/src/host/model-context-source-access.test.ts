@@ -4,7 +4,7 @@ import type { Server } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import type { ConnectionConfig, QueryExecutor } from '@duckcodeailabs/dql-connectors';
+import type { ConnectionConfig, QueryExecutor } from '@zlens/connectors';
 import { startLocalServer } from '../local-runtime.js';
 import type { DqlHostHooks, DqlModelProvider, DqlPrincipal, DqlSourceRef } from './request-context.js';
 

@@ -1,13 +1,13 @@
 // Loaded with NODE_OPTIONS=--require <this file> (scripts/test-offline.mjs): records every name lookup and every
 // TCP or UDP connection a Node process starts towards an address that is not this machine, one JSON line each in
-// $DQL_NETWORK_LOG. Lookups are recorded too because they fail before a socket exists, so sampling sockets alone
+// $ZLENS_NETWORK_LOG. Lookups are recorded too because they fail before a socket exists, so sampling sockets alone
 // cannot see them. Nothing is blocked: the record is read after the run.
 'use strict';
 const fs = require('node:fs');
 const net = require('node:net');
 const dns = require('node:dns');
 const dgram = require('node:dgram');
-const out = process.env.DQL_NETWORK_LOG;
+const out = (process.env.ZLENS_NETWORK_LOG ?? process.env.DQL_NETWORK_LOG);
 const LOOPBACK = /^(127\.|::1$|::ffff:127\.|localhost$|0\.0\.0\.0$|::$)/i;
 if (out) { try { fs.appendFileSync(out, `${JSON.stringify({ pid: process.pid, kind: 'start' })}\n`); } catch {} }
 function record(kind, host, port) {

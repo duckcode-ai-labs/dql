@@ -9,10 +9,10 @@ type Tone = React.ComponentProps<typeof StatusPill>['tone'];
  * Canonical trust-label vocabulary.
  *
  * This MIRRORS the single source of truth in
- * `@duckcodeailabs/dql-core` (`src/trust/labels.ts`): the same five base
+ * `@zlens/core` (`src/trust/labels.ts`): the same five base
  * labels (Certified · Reviewed · AI-Generated · Insufficient-Context ·
  * Conflict), each with a base label + optional qualifier shape and a color
- * token. `dql-ui` is a browser-only leaf package with no DQL workspace
+ * token. `dql-ui` is a browser-only leaf package with no ZLens workspace
  * dependencies, so it cannot import dql-core (which carries node-only deps)
  * without bloating the UI bundle — hence this intentional mirror. Keep the two
  * in sync; the ids and base labels must match exactly.

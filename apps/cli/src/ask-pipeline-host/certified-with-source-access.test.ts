@@ -3,9 +3,9 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterAll, describe, expect, it, vi } from 'vitest';
-import type { ConnectionConfig, QueryExecutor } from '@duckcodeailabs/dql-connectors';
-import type { AgentProvider, AgentRunRequest } from '@duckcodeailabs/dql-agent';
-import { buildManifest, loadSemanticLayerFromDir } from '@duckcodeailabs/dql-core';
+import type { ConnectionConfig, QueryExecutor } from '@zlens/connectors';
+import type { AgentProvider, AgentRunRequest } from '@zlens/agent';
+import { buildManifest, loadSemanticLayerFromDir } from '@zlens/core';
 import { createAskPipelineRouteExecutor, type AskPipelineHostDeps } from './host.js';
 
 // The Harbor Mutual sandbox project, copied verbatim from dql-sandbox-workspace: the certified block

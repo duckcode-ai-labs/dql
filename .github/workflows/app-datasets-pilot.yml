@@ -7,7 +7,7 @@ name: App Datasets pilot (real DuckDB)
 # the parity checks: tile results equal hand-written SQL, and the block and
 # semantic routes agree on shared metrics.
 #
-# The suite skips itself unless DQL_APP_DATASETS_DUCKDB_CONNECTOR_ROOT names a
+# The suite skips itself unless ZLENS_APP_DATASETS_DUCKDB_CONNECTOR_ROOT names a
 # directory that loads DuckDB, because the workspace keeps native connectors
 # optional for normal DQL users. This job supplies that directory, so here the
 # suite runs for real and a skip would be a failure of this job's purpose.
@@ -54,7 +54,7 @@ jobs:
             exit 1
           fi
         env:
-          DQL_APP_DATASETS_DUCKDB_CONNECTOR_ROOT: ${{ runner.temp }}/app-datasets-connectors
+          ZLENS_APP_DATASETS_DUCKDB_CONNECTOR_ROOT: ${{ runner.temp }}/app-datasets-connectors
 
       - name: Run the pilot suite
         working-directory: apps/cli
@@ -70,4 +70,4 @@ jobs:
             exit 1
           fi
         env:
-          DQL_APP_DATASETS_DUCKDB_CONNECTOR_ROOT: ${{ runner.temp }}/app-datasets-connectors
+          ZLENS_APP_DATASETS_DUCKDB_CONNECTOR_ROOT: ${{ runner.temp }}/app-datasets-connectors

@@ -175,7 +175,7 @@ export function HomePage() {
       id: 'source',
       number: '1',
       title: 'Connect dbt and compile context',
-      body: 'Start with the dbt repo or semantic source. Import models, metrics, dimensions, and compile the local manifest context that DQL uses for lineage and AI.',
+      body: 'Start with the dbt repo or semantic source. Import models, metrics, dimensions, and compile the local manifest context that ZLens uses for lineage and AI.',
       state: sourceReady ? 'ready' : currentStep === 'source' ? 'active' : 'waiting',
       Icon: GitBranch,
       primaryLabel: sourceReady ? 'Refresh semantic import' : 'Connect dbt repo',
@@ -299,7 +299,7 @@ export function HomePage() {
         <section className="dql-home-hero dql-home-fade" style={{ animationDelay: '0ms' }}>
           <div className="dql-home-hero-copy">
             <div className="dql-home-brand-row">
-              <span className="dql-home-logo">DQL</span>
+              <span className="dql-home-logo">ZLens</span>
               <span style={{ color: t.textMuted }}>Guided setup</span>
             </div>
             <h1 style={{ color: t.textPrimary }}>
@@ -327,7 +327,7 @@ export function HomePage() {
           </div>
         </section>
 
-        <section className="dql-home-stepper dql-home-fade" aria-label="DQL setup steps" style={{ animationDelay: '60ms' }}>
+        <section className="dql-home-stepper dql-home-fade" aria-label="ZLens setup steps" style={{ animationDelay: '60ms' }}>
           {steps.map((step, index) => (
             <Stepper
               key={step.id}
@@ -618,10 +618,10 @@ function statusLabel(state: StepState): string {
 
 function nextActionCopy(currentStep: string): string {
   if (currentStep === 'source') {
-    return 'Connect a dbt project or semantic source first. DQL needs source context before it can recommend useful blocks and lineage.';
+    return 'Connect a dbt project or semantic source first. ZLens needs source context before it can recommend useful blocks and lineage.';
   }
   if (currentStep === 'connection') {
-    return 'Add a database connection and test it. This confirms DQL can execute the blocks created from your source context.';
+    return 'Add a database connection and test it. This confirms ZLens can execute the blocks created from your source context.';
   }
   if (currentStep === 'build') {
     return 'Create the first reviewed DQL block from a semantic metric, dbt model, table, or imported SQL file.';

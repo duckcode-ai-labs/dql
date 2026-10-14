@@ -1,5 +1,5 @@
 /**
- * Runtime driver for `dql agent eval`.
+ * Runtime driver for `zlens agent eval`.
  *
  * An in-process driver would skip the V2 router, `AgentRunEngine`,
  * `enforceOrdinaryAnalyticalPlanBoundary`
@@ -13,7 +13,7 @@
  * `AgentRun`, so the suite exercises routing, gates, and the transport projection
  * as a real end-to-end contract.
  */
-import type { AgentAnswer, AgentRun, AgentRunRoute, AgentRunStatus, AgentRunTrustState } from '@duckcodeailabs/dql-agent';
+import type { AgentAnswer, AgentRun, AgentRunRoute, AgentRunStatus, AgentRunTrustState } from '@zlens/agent';
 
 /** Eval-facing view of a run, shaped like the fields the scorer already reads. */
 export interface RuntimeDrivenRun {
@@ -193,7 +193,7 @@ export interface RuntimeDriverOptions {
 }
 
 /**
- * Post one question to a running `dql serve` and return the persisted run.
+ * Post one question to a running `zlens serve` and return the persisted run.
  *
  * Failures are surfaced rather than swallowed: a harness that silently scores a
  * transport error as a refusal would report a false-refusal spike that no code

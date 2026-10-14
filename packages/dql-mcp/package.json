@@ -1,7 +1,7 @@
 {
-  "name": "@duckcodeailabs/dql-mcp",
+  "name": "@zlens/mcp",
   "version": "1.17.3",
-  "description": "DQL MCP server: expose certified blocks, semantic layer, lineage, and governance to LLM agents via the Model Context Protocol",
+  "description": "ZLens MCP server: expose certified blocks, semantic layer, lineage, and governance to LLM agents via the Model Context Protocol",
   "license": "Apache-2.0",
   "type": "module",
   "main": "./dist/index.js",
@@ -37,10 +37,10 @@
     "access": "public"
   },
   "dependencies": {
-    "@duckcodeailabs/dql-agent": "workspace:*",
-    "@duckcodeailabs/dql-core": "workspace:*",
-    "@duckcodeailabs/dql-governance": "workspace:*",
-    "@duckcodeailabs/dql-project": "workspace:*",
+    "@zlens/agent": "workspace:*",
+    "@zlens/core": "workspace:*",
+    "@zlens/governance": "workspace:*",
+    "@zlens/project": "workspace:*",
     "@modelcontextprotocol/sdk": "^1.0.4",
     "zod": "^3.25.0"
   },

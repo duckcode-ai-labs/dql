@@ -7,11 +7,11 @@ import {
   resolveDataLexManifestPath,
   resolveSemanticLayerWithDiagnostics,
   type Diagnostic as CoreDiagnostic,
-} from '@duckcodeailabs/dql-core';
-import { Certifier, ENTERPRISE_RULES, evaluateInvariants, type InvariantResult } from '@duckcodeailabs/dql-governance';
-import type { BlockRecord, TestResultSummary, TestAssertionResult } from '@duckcodeailabs/dql-project';
-import { QueryExecutor, type ConnectionConfig } from '@duckcodeailabs/dql-connectors';
-import { buildExecutionPlan, type NotebookCell } from '@duckcodeailabs/dql-notebook';
+} from '@zlens/core';
+import { Certifier, ENTERPRISE_RULES, evaluateInvariants, type InvariantResult } from '@zlens/governance';
+import type { BlockRecord, TestResultSummary, TestAssertionResult } from '@zlens/project';
+import { QueryExecutor, type ConnectionConfig } from '@zlens/connectors';
+import { buildExecutionPlan, type NotebookCell } from '@zlens/notebook';
 import { loadProjectConfig, prepareLocalExecution, normalizeProjectConnection, resolveProjectSemanticConfig, resolveSemanticTableMapping } from '../local-runtime.js';
 import type { ProjectConfig } from '../local-runtime.js';
 import type { CLIFlags } from '../args.js';
@@ -237,7 +237,7 @@ async function registerDataViews(
 }
 
 export async function runCertify(filePath: string, flags: CLIFlags): Promise<void> {
-  // Tier-2 promotion: `dql certify --from-draft <path>` moves a draft to its
+  // Tier-2 promotion: `zlens certify --from-draft <path>` moves a draft to its
   // canonical certified location and surfaces the datalex-manifest.json patch.
   if (flags.fromDraft) {
     const result = promoteFromDraft(process.cwd(), flags);
@@ -253,7 +253,7 @@ export async function runCertify(filePath: string, flags: CLIFlags): Promise<voi
     }
     console.log(`\n  ✓ ${result.message}`);
     if (result.certifiedPath) {
-      console.log(`    Run \`dql compile\` to refresh dql-manifest.json.`);
+      console.log(`    Run \`zlens compile\` to refresh dql-manifest.json.`);
     }
     if (result.datalexManifestDiff) {
       console.log(`\n  Next: apply this patch to datalex-manifest.json:\n`);

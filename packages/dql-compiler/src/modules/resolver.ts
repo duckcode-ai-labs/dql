@@ -1,6 +1,6 @@
 import { readFileSync, existsSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
-import { parse, type ProgramNode, type DashboardBodyItem, NodeKind } from '@duckcodeailabs/dql-core';
+import { parse, type ProgramNode, type DashboardBodyItem, NodeKind } from '@zlens/core';
 
 export interface ModuleSymbol {
   name: string;

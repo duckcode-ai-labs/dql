@@ -1,5 +1,5 @@
 import { createHmac } from 'node:crypto';
-import type { AskPipelineReceiptV9 } from '@duckcodeailabs/dql-agent';
+import type { AskPipelineReceiptV9 } from '@zlens/agent';
 
 /**
  * RFC 0010: AN ASK TRACE AS SOMEONE OTHER THAN THE ASKER READS IT.

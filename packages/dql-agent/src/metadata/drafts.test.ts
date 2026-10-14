@@ -1,7 +1,7 @@
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { buildManifest, parse } from '@duckcodeailabs/dql-core';
+import { buildManifest, parse } from '@zlens/core';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { deriveGeneratedDraftSlug, deriveSemanticDraftName, upsertGeneratedDqlArtifactDraft, upsertGeneratedDraft } from './drafts.js';
 
@@ -117,7 +117,7 @@ describe('generated draft blocks', () => {
     expect(draft.path).toBe('domains/finance/blocks/_drafts/enterprise_revenue_by_week.dql');
 
     const source = readFileSync(join(projectRoot, draft.path), 'utf-8');
-    expect(source).toContain('dql certify --from-draft domains/finance/blocks/_drafts/enterprise_revenue_by_week.dql');
+    expect(source).toContain('zlens certify --from-draft domains/finance/blocks/_drafts/enterprise_revenue_by_week.dql');
     expect(() => parse(source)).not.toThrow();
 
     const manifest = buildManifest({ projectRoot, dqlVersion: 'test' });

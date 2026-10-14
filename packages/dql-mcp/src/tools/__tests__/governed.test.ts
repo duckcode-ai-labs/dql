@@ -96,7 +96,7 @@ describe('answerQuestion (governed answer via runtime proxy)', () => {
     expect(out.ok).toBe(false);
     if (out.ok) return;
     expect((out as { runtimeUnavailable?: boolean }).runtimeUnavailable).toBe(true);
-    expect(out.error).toMatch(/dql serve/);
+    expect(out.error).toMatch(/zlens serve/);
   });
 
   it('rejects an empty question without calling the runtime', async () => {
@@ -122,7 +122,7 @@ describe('buildBlockFromPrompt (governed NL→block via runtime proxy)', () => {
     expect(out.ok).toBe(true);
     if (!out.ok) return;
     expect(out.draftBlockPath).toBe('blocks/_drafts/weekly_revenue_by_region.dql');
-    expect(out.promote).toContain('dql certify --from-draft');
+    expect(out.promote).toContain('zlens certify --from-draft');
     expect(out.trustNote).toMatch(/never present it as certified/i);
   });
 

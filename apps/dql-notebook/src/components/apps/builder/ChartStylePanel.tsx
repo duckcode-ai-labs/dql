@@ -1,13 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
-import type { DashboardVizStyle } from '@duckcodeailabs/dql-core/apps/viz-style';
+import type { DashboardVizStyle } from '@zlens/core/apps/viz-style';
 import {
   CONDITIONAL_OP_SYMBOLS,
   CONDITIONAL_TONE_LABELS,
   type ConditionalRuleOp,
   type ConditionalTone,
   type DashboardConditionalFormat,
-} from '@duckcodeailabs/dql-core/apps/conditional-format';
-import { pivotTotalsWithDefaults, type PivotTotals } from '@duckcodeailabs/dql-core/apps/pivot';
+} from '@zlens/core/apps/conditional-format';
+import { pivotTotalsWithDefaults, type PivotTotals } from '@zlens/core/apps/pivot';
 
 const CARTESIAN = new Set(['bar', 'grouped_bar', 'stacked_bar', 'line', 'area']);
 const HAS_LEGEND = new Set(['bar', 'grouped_bar', 'stacked_bar', 'line', 'area', 'pie', 'donut']);

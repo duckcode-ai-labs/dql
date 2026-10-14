@@ -2,7 +2,7 @@
 //
 // Adds a stable format-version header and routes all writes through the
 // formatter so that files produced by the CLI, notebook, and block studio
-// byte-identical — the precondition for clean git diffs, `dql diff`, and
+// byte-identical — the precondition for clean git diffs, `zlens diff`, and
 // a safe file-format migration path.
 //
 // Format:

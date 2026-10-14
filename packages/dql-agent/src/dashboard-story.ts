@@ -3,7 +3,7 @@ import type {
   DashboardStoryBrief,
   DashboardStoryClaim,
   DashboardStoryFact,
-} from '@duckcodeailabs/dql-core';
+} from '@zlens/core';
 import { computeResultStats } from './synthesize.js';
 
 export interface DashboardStoryTileResult {

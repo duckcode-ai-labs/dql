@@ -1,5 +1,5 @@
 /**
- * `dql semantic import dbt`: dbt Labs' insurance semantic layer in miniature.
+ * `zlens semantic import dbt`: dbt Labs' insurance semantic layer in miniature.
  * Two semantic models declare the same entity, a metric is scoped by a
  * dimension on another model, and a derived metric adds two metrics.
  */
@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { loadSemanticLayerFromDir } from '@duckcodeailabs/dql-core';
+import { loadSemanticLayerFromDir } from '@zlens/core';
 import { performSemanticImport } from './semantic-import.js';
 
 const relation = (name: string) => ({ alias: name, schema_name: 'main', database: 'acme', relation_name: `"acme"."main"."${name}"` });

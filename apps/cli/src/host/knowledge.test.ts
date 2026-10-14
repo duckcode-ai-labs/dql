@@ -8,9 +8,9 @@ import {
   createScriptedAnalystProvider,
   type AgentMessage,
   type AgentProvider,
-} from '@duckcodeailabs/dql-agent';
-import { closeKnowledgeConnections, startFakeKnowledgeServer, type FakeKnowledgeServer } from '@duckcodeailabs/dql-mcp';
-import type { QueryExecutor } from '@duckcodeailabs/dql-connectors';
+} from '@zlens/agent';
+import { closeKnowledgeConnections, startFakeKnowledgeServer, type FakeKnowledgeServer } from '@zlens/mcp';
+import type { QueryExecutor } from '@zlens/connectors';
 import { startLocalServer } from '../local-runtime.js';
 import { knowledgeServersFor, knowledgeSessionFor, normalizeHostKnowledgeServer } from './knowledge-sources.js';
 import { withKnowledgeWithheld } from './answer-knowledge.js';

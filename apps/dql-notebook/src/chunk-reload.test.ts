@@ -114,7 +114,7 @@ describe('a browser that refuses storage: still one automatic reload, never a lo
     expect(second.reloads(), 'no second automatic reload').toBe(0);
     expect(again.defaultPrevented).toBe(false);
     expect(second.shown).toEqual([{ role: 'alert', text: CHUNK_RELOAD_MESSAGE }]);
-    expect(CHUNK_RELOAD_MESSAGE).toBe('DQL could not load part of the page. Reload the page.');
+    expect(CHUNK_RELOAD_MESSAGE).toBe('ZLens could not load part of the page. Reload the page.');
   });
 
   it('one automatic reload per page, however many chunks fail on it', () => {

@@ -5,10 +5,10 @@ import { tmpdir } from 'node:os';
 import { createHash } from 'node:crypto';
 import { Readable } from 'node:stream';
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import type { AppSourceCatalogRecord } from '@duckcodeailabs/dql-agent';
-import type { AppBuildDraft, AppBuildDraftSource, DashboardDocument, DatasetDescriptor } from '@duckcodeailabs/dql-core';
-import { appBuildPreviewIntentFingerprint, loadDashboardDocument } from '@duckcodeailabs/dql-core';
-import { defaultLocalAppsDbPath, defaultPersonaRegistry, LocalAppStorage } from '@duckcodeailabs/dql-project';
+import type { AppSourceCatalogRecord } from '@zlens/agent';
+import type { AppBuildDraft, AppBuildDraftSource, DashboardDocument, DatasetDescriptor } from '@zlens/core';
+import { appBuildPreviewIntentFingerprint, loadDashboardDocument } from '@zlens/core';
+import { defaultLocalAppsDbPath, defaultPersonaRegistry, LocalAppStorage } from '@zlens/project';
 import {
   __test__,
   addAskResultToAppBuildDraft,
@@ -1707,7 +1707,7 @@ describe('Apps command center API helpers', () => {
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.error).toContain('No certified DQL blocks matched strongly enough');
-    expect(result.error).toContain('DQL did not write an empty dashboard');
+    expect(result.error).toContain('ZLens did not write an empty dashboard');
     expect(existsSync(join(root, 'apps/revenue-app-for-leadership-without-any-certified-blocks'))).toBe(false);
   });
 
@@ -4757,8 +4757,8 @@ SELECT * FROM hidden_trace
   });
 
   it('bounds generated SQL preview so app research can finish with a review caveat', async () => {
-    const previous = process.env.DQL_APP_RESEARCH_PREVIEW_TIMEOUT_MS;
-    process.env.DQL_APP_RESEARCH_PREVIEW_TIMEOUT_MS = '500';
+    const previous = process.env.ZLENS_APP_RESEARCH_PREVIEW_TIMEOUT_MS;
+    process.env.ZLENS_APP_RESEARCH_PREVIEW_TIMEOUT_MS = '500';
     try {
       const result = await __test__.runGeneratedSqlPreview({
         projectRoot: createProject(),
@@ -4773,8 +4773,8 @@ SELECT * FROM hidden_trace
       expect(result.fatal).toBe(false);
       expect(result.error).toContain('preview timed out');
     } finally {
-      if (previous === undefined) delete process.env.DQL_APP_RESEARCH_PREVIEW_TIMEOUT_MS;
-      else process.env.DQL_APP_RESEARCH_PREVIEW_TIMEOUT_MS = previous;
+      if (previous === undefined) delete process.env.ZLENS_APP_RESEARCH_PREVIEW_TIMEOUT_MS;
+      else process.env.ZLENS_APP_RESEARCH_PREVIEW_TIMEOUT_MS = previous;
     }
   });
 

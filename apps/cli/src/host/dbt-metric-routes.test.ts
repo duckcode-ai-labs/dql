@@ -3,7 +3,7 @@ import type { Server } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import type { QueryExecutor } from '@duckcodeailabs/dql-connectors';
+import type { QueryExecutor } from '@zlens/connectors';
 import { startLocalServer } from '../local-runtime.js';
 import { routeAction } from './route-actions.js';
 import type { DqlAction, DqlHostHooks, DqlPrincipal } from './request-context.js';

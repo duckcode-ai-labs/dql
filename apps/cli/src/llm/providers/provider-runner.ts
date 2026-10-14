@@ -1,5 +1,5 @@
-import { composeAnswer, markProviderMetadata, markProviderMetadataArray, type HostFloorRefusalReason } from '@duckcodeailabs/dql-agent';
-import { parseAnalyticalTimeWindow, resolvePlanTimeRange, type AnalyticalTimeWindowV1 } from '@duckcodeailabs/dql-agent';
+import { composeAnswer, markProviderMetadata, markProviderMetadataArray, type HostFloorRefusalReason } from '@zlens/agent';
+import { parseAnalyticalTimeWindow, resolvePlanTimeRange, type AnalyticalTimeWindowV1 } from '@zlens/agent';
 import {
   ClaudeProvider,
   KGStore,
@@ -67,7 +67,7 @@ import {
   type AnswerLoopInput,
   type AgentMessage,
   type KGNode,
-} from '@duckcodeailabs/dql-agent';
+} from '@zlens/agent';
 import {
   CassetteStore,
   evalCassetteCanonicalizationV2,
@@ -81,7 +81,7 @@ import {
   type ProviderDispatchPhaseV1,
   type ProviderEgressPurpose,
   type ProviderEgressReceiptV1,
-} from '@duckcodeailabs/dql-core';
+} from '@zlens/core';
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
@@ -93,6 +93,7 @@ import { getEffectiveProviderConfig } from '../../settings/provider-settings.js'
 import { ClaudeCodeCliProvider, CodexCliProvider } from '../../providers/subscription-cli.js';
 import { ClaudeOAuthProvider, claudeOAuthConnected } from '../../providers/oauth/claude-oauth.js';
 import { CodexOAuthProvider, codexOAuthConnected } from '../../providers/oauth/codex-oauth.js';
+import { readEnv } from '@zlens/core';
 
 /**
  * Providers the governed answer-loop runner can drive. Beyond the API-key/local
@@ -176,7 +177,7 @@ const SPECS: Record<SimpleProviderId, ProviderSpec> = {
 };
 
 export function applyEvalCassette(provider: AgentProvider, projectRoot: string): AgentProvider {
-  const dir = process.env.DQL_EVAL_CASSETTE_DIR;
+  const dir = readEnv('ZLENS_EVAL_CASSETTE_DIR');
   if (!dir) return provider;
   return withCassette(
     provider,
@@ -197,7 +198,7 @@ export function applyEvalCassette(provider: AgentProvider, projectRoot: string):
  * make a network call; replay misses remain CassetteMissError failures.
  */
 export function createEvalCassetteReplayProvider(projectRoot: string): AgentProvider | undefined {
-  const dir = process.env.DQL_EVAL_CASSETTE_DIR;
+  const dir = readEnv('ZLENS_EVAL_CASSETTE_DIR');
   if (!dir || resolveCassetteModeFromEnv(process.env) !== 'replay') return undefined;
 
   const store = new CassetteStore(dir);

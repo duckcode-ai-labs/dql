@@ -4,7 +4,7 @@
  *
  * The dataset lives at apps/cli/test/fixtures/jaffle-supply-chain/seeds/seed.json
  * and is dialect-neutral. This script materializes it so that
- * `dql agent eval --execute` (and its --min-execution-match gate) can run against
+ * `zlens agent eval --execute` (and its --min-execution-match gate) can run against
  * a real warehouse. DuckDB is the free offline/CI target; `--print` emits portable
  * ANSI SQL you can pipe into any engine (Snowflake, BigQuery, Postgres, …), which
  * is how the credentialed multi-engine matrix seeds itself.

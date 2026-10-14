@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { QueryExecutor } from '@duckcodeailabs/dql-connectors';
+import { QueryExecutor } from '@zlens/connectors';
 import { createRuntimePageRunner, summarizeAppPageRun, type AppPageRunTile } from './app-page-run.js';
 import { createWebhookNotifier } from './notifiers/webhook.js';
 import { runAppDashboard } from './runner.js';

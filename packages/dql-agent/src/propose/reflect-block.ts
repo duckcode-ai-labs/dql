@@ -19,9 +19,9 @@
  * with no owner stays blocking), per the project's AI-drafts/human-certifies rule.
  */
 
-import { Certifier, type CertificationContext } from '@duckcodeailabs/dql-governance';
-import type { InvariantResult } from '@duckcodeailabs/dql-governance';
-import type { BlockRecord, BlockStatus, TestResultSummary } from '@duckcodeailabs/dql-project';
+import { Certifier, type CertificationContext } from '@zlens/governance';
+import type { InvariantResult } from '@zlens/governance';
+import type { BlockRecord, BlockStatus, TestResultSummary } from '@zlens/project';
 
 /** The mutable draft fields the reflection may revise. */
 export interface ReflectableDraft {

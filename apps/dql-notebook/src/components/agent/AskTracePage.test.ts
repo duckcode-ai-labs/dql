@@ -616,10 +616,10 @@ describe('AskTracePage presentation model', () => {
 
     expect(incidentSummaryForTrace(trace)).toEqual({
       state: 'attention',
-      whatHappened: 'DQL rejected an inconsistent exploratory SQL authorization receipt before execution.',
+      whatHappened: 'ZLens rejected an inconsistent exploratory SQL authorization receipt before execution.',
       why: 'Recorded origin: internal invariant; impact: execution not attempted.',
       impact: 'No SQL execution was attempted for this Ask run.',
-      howToFix: 'Export the redacted trace and share the recorded SQL authorization incident with DQL support.',
+      howToFix: 'Export the redacted trace and share the recorded SQL authorization incident with ZLens support.',
     });
   });
 
@@ -666,7 +666,7 @@ describe('AskTracePage presentation model', () => {
       spanId: 'c'.repeat(16),
       whatHappened: 'The Ask needs a declared fiscal calendar and date role before it can answer.',
       why: expect.stringContaining('fiscal calendar and date role'),
-      impact: 'No query executed; DQL is waiting for a choice that changes the analytical plan.',
+      impact: 'No query executed; ZLens is waiting for a choice that changes the analytical plan.',
       howToFix: 'Select or declare the fiscal calendar and date role, then retry the Ask.',
     });
     expect(incidentSummaryForTrace(trace).why).not.toContain('incomplete coverage');
@@ -750,7 +750,7 @@ describe('AskTracePage presentation model', () => {
       state: 'attention',
       spanId: 'e'.repeat(16),
       whatHappened: 'The frozen certified plan could not reach a database connection.',
-      why: 'The certified plan was frozen, but no database connection was configured before DQL could compile or execute its block.',
+      why: 'The certified plan was frozen, but no database connection was configured before ZLens could compile or execute its block.',
       impact: 'No query or data result executed after the frozen certified plan.',
       howToFix: 'Open Connections, add or select a warehouse or local DuckDB/file connection, then retry the Ask. Recorded safe action: configure a database connection.',
     }));
@@ -841,7 +841,7 @@ describe('AskTracePage presentation model', () => {
       spanId: 'c'.repeat(16),
       whatHappened: 'The Ask stopped because the requested relationship is not certified.',
       why: 'The cascade recorded MISSING_RELATIONSHIP: this request needs a certified relationship or approved allocation proof.',
-      impact: 'No query executed; DQL did not infer a relationship or allocation for the requested ranking.',
+      impact: 'No query executed; ZLens did not infer a relationship or allocation for the requested ranking.',
       howToFix: 'Add or certify the required relationship or approved allocation proof, then retry the Ask.',
     });
     expect(incidentSummaryForTrace(trace).whatHappened).not.toContain('clarification');

@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
-import type { DashboardFilter } from '@duckcodeailabs/dql-core';
+import type { DashboardFilter } from '@zlens/core';
 import { appViewClause, describeFilterValue, scopeAppCopilotRequest } from './app-copilot-scope.js';
 
 const FIXTURE = fileURLToPath(new URL('../test/fixtures/app-datasets-pilot', import.meta.url));

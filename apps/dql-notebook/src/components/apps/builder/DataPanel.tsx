@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { CalendarDays, Check, ChevronDown, Hash, Heading, Search, ShieldCheck, Table2, Type, X } from 'lucide-react';
 import type { AppBlockRecommendation } from '../../../api/client';
-import type { DatasetDescriptor, DatasetField } from '@duckcodeailabs/dql-core/datasets/descriptor';
-import type { TileQuery } from '@duckcodeailabs/dql-core/apps/tile-query';
+import type { DatasetDescriptor, DatasetField } from '@zlens/core/datasets/descriptor';
+import type { TileQuery } from '@zlens/core/apps/tile-query';
 import { groupDatasetFields, queryFieldNames } from './field-query';
 import { humanize } from './studio-ui';
 import { writeFieldDrag } from './ShelfEditor';
@@ -110,7 +110,7 @@ export function DataPanel({
       <div className="data-start">
         <Table2 size={20} aria-hidden="true" />
         <strong>Start with a table</strong>
-        <p>Pick a table in your database. DQL suggests what to add up, count and group by; you check it once, then build tiles from it.</p>
+        <p>Pick a table in your database. ZLens suggests what to add up, count and group by; you check it once, then build tiles from it.</p>
         {onStartFromTable ? <button type="button" className="primary" disabled={disabled} onClick={onStartFromTable}>Start from a table</button> : null}
         <button type="button" className="link" onClick={onBrowseSources}>Use a saved query instead</button>
       </div>

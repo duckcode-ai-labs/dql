@@ -5,8 +5,8 @@ import type {
   AppBuildSourcePolicy,
   DatasetDescriptor,
   MetricCapabilityContract,
-} from '@duckcodeailabs/dql-core';
-import { normalizeDatasetDescriptor, normalizeMetricCapabilityContract } from '@duckcodeailabs/dql-core';
+} from '@zlens/core';
+import { normalizeDatasetDescriptor, normalizeMetricCapabilityContract } from '@zlens/core';
 import {
   acquireActiveKnowledgeSnapshot,
   type MetadataObject,

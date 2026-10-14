@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type DragEvent } from 'react';
 import { ArrowDown, ArrowUp, CalendarDays, Hash, MoreHorizontal, Plus, SquareFunction, Type, X } from 'lucide-react';
-import type { DatasetDescriptor } from '@duckcodeailabs/dql-core/datasets/descriptor';
-import type { TileQuery } from '@duckcodeailabs/dql-core/apps/tile-query';
+import type { DatasetDescriptor } from '@zlens/core/datasets/descriptor';
+import type { TileQuery } from '@zlens/core/apps/tile-query';
 import {
   SHELF_LABELS,
   chartFromEncoding,
@@ -18,8 +18,8 @@ import {
   type FieldFormatKind,
   type ShelfFieldRef,
   type ShelfId,
-} from '@duckcodeailabs/dql-core/apps/viz-encoding';
-import { applyShowMe } from '@duckcodeailabs/dql-core/apps/show-me';
+} from '@zlens/core/apps/viz-encoding';
+import { applyShowMe } from '@zlens/core/apps/show-me';
 import {
   QUICK_CALC_KINDS,
   QUICK_CALC_LABELS,
@@ -30,7 +30,7 @@ import {
   uniqueCalculationId,
   type TileCalculation,
   type TileQuickCalcKind,
-} from '@duckcodeailabs/dql-core/apps/tile-calcs';
+} from '@zlens/core/apps/tile-calcs';
 import { CalculationEditor } from './CalculationEditor';
 import { shelfFieldLabel } from './field-labels';
 import type { QueryResult } from '../../../store/types';

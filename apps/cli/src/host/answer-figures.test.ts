@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { AgentRun } from '@duckcodeailabs/dql-agent';
+import type { AgentRun } from '@zlens/agent';
 import { answerFactsFromRun } from './answer-facts.js';
 import { shouldWithhold, WITHHELD_ANSWER, withholdRunFigures } from './answer-figures.js';
 

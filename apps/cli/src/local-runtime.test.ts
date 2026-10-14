@@ -142,7 +142,7 @@ import {
   validateBlockStudioSource,
   validateConnectionForTest,
 } from './local-runtime.js';
-import { Certifier, ENTERPRISE_RULES } from '@duckcodeailabs/dql-governance';
+import { Certifier, ENTERPRISE_RULES } from '@zlens/governance';
 import {
   getActiveProvider,
   providerSettingsPath,
@@ -164,9 +164,9 @@ import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import type { Server } from 'node:http';
-import { buildManifest, createWarehouseTargetIdentity, loadSemanticLayerFromDir, SemanticLayer } from '@duckcodeailabs/dql-core';
-import type { DQLManifest } from '@duckcodeailabs/dql-core';
-import type { AggregationSafetyProofV1 } from '@duckcodeailabs/dql-core';
+import { buildManifest, createWarehouseTargetIdentity, loadSemanticLayerFromDir, SemanticLayer } from '@zlens/core';
+import type { DQLManifest } from '@zlens/core';
+import type { AggregationSafetyProofV1 } from '@zlens/core';
 import {
   createAnalyticalFailure,
   createAgenticSqlExecutionCapability,
@@ -194,7 +194,7 @@ import {
   validateFrozenRequiredOutputProjection,
   validateSqlAgainstLocalContext,
   physicalRelationBinding,
-} from '@duckcodeailabs/dql-agent';
+} from '@zlens/agent';
 import type {
   AgentAnswer,
   AgentEvidenceCandidate,
@@ -205,8 +205,8 @@ import type {
   AgentRunRequest,
   AskTraceObserverV1,
   MetadataObject,
-} from '@duckcodeailabs/dql-agent';
-import type { DatabaseConnector, QueryExecutor, QueryResult } from '@duckcodeailabs/dql-connectors';
+} from '@zlens/agent';
+import type { DatabaseConnector, QueryExecutor, QueryResult } from '@zlens/connectors';
 import { saveTestedSemanticRuntimeSettings } from './semantic-runtime-settings.js';
 import { addAskResultToAppBuildDraft, createAppPackage, createStoredAppBuildDraft } from './apps-api.js';
 
@@ -1148,7 +1148,7 @@ describe('bounded Ask meaning resolution (AGT-009, PERF-002)', () => {
     )).toBe(45_000);
     expect(agentRunDeadlineMs(
       { question: 'total revenue?', requestedMode: 'ask' },
-      { DQL_AGENT_LOOKUP_DEADLINE_MS: '60000' } as unknown as NodeJS.ProcessEnv,
+      { ZLENS_AGENT_LOOKUP_DEADLINE_MS: '60000' } as unknown as NodeJS.ProcessEnv,
       'claude-code',
     )).toBe(45_000);
   });
@@ -1250,7 +1250,7 @@ describe('local runtime network boundary', () => {
       executor: {} as QueryExecutor,
       preferredPort: 0,
       host: '0.0.0.0',
-    })).rejects.toThrow('DQL_SERVER_TOKEN');
+    })).rejects.toThrow('ZLENS_SERVER_TOKEN');
   });
 
   it('does not grant wildcard CORS to a non-loopback browser origin', async () => {
@@ -2342,7 +2342,7 @@ describe('dbt-first onboarding runtime API', () => {
           },
         },
       },
-    } as unknown as import('@duckcodeailabs/dql-core').DQLManifest, 25, new Set(['model.shop.orders']));
+    } as unknown as import('@zlens/core').DQLManifest, 25, new Set(['model.shop.orders']));
 
     expect(tree).toEqual([expect.objectContaining({
       label: 'ANALYTICS.COMMERCE',
@@ -2440,8 +2440,8 @@ describe('dbt-first onboarding runtime API', () => {
     // developer's PATH: installing `mf` — the very thing you do to work on the
     // semantic runtime — flipped the engine to metricflow-cli and failed a
     // test about dbt config. Pin the runtime the assertion is about.
-    const previousMetricFlowBin = process.env.DQL_METRICFLOW_BIN;
-    process.env.DQL_METRICFLOW_BIN = join(tmpdir(), 'dql-absent-metricflow-bin');
+    const previousMetricFlowBin = process.env.ZLENS_METRICFLOW_BIN;
+    process.env.ZLENS_METRICFLOW_BIN = join(tmpdir(), 'dql-absent-metricflow-bin');
     const projectRoot = mkdtempSync(join(tmpdir(), 'dql-onboarding-dbt-'));
     tempDirs.push(projectRoot);
     mkdirSync(join(projectRoot, 'target'), { recursive: true });
@@ -2580,8 +2580,8 @@ describe('dbt-first onboarding runtime API', () => {
       expect(status.preparation).toMatchObject({ id: applied.jobId, status: 'completed' });
     } finally {
       await new Promise<void>((resolve) => server ? server.close(() => resolve()) : resolve());
-      if (previousMetricFlowBin === undefined) delete process.env.DQL_METRICFLOW_BIN;
-      else process.env.DQL_METRICFLOW_BIN = previousMetricFlowBin;
+      if (previousMetricFlowBin === undefined) delete process.env.ZLENS_METRICFLOW_BIN;
+      else process.env.ZLENS_METRICFLOW_BIN = previousMetricFlowBin;
     }
   });
 
@@ -3336,7 +3336,7 @@ describe('agent run runtime API', () => {
       answer: { refusalCode: 'grounding_gap' },
       executionFailure: false,
       fallbackReason: 'COMPILATION_FAILED',
-      title: 'DQL could not compile the frozen plan',
+      title: 'ZLens could not compile the frozen plan',
     });
     expect(projectTerminalAnalyticalFailureForRun(resultValidation)).toMatchObject({
       answer: { refusalCode: 'grounding_gap' },
@@ -6649,8 +6649,8 @@ describe('AI provider settings', () => {
   it('uses an explicit replay cassette for governed Ask when the fixture has no provider settings', async () => {
     const projectRoot = mkdtempSync(join(tmpdir(), 'dql-governed-cassette-provider-'));
     const cassetteDir = mkdtempSync(join(tmpdir(), 'dql-governed-cassette-store-'));
-    const oldDir = process.env.DQL_EVAL_CASSETTE_DIR;
-    const oldMode = process.env.DQL_EVAL_CASSETTE_MODE;
+    const oldDir = process.env.ZLENS_EVAL_CASSETTE_DIR;
+    const oldMode = process.env.ZLENS_EVAL_CASSETTE_MODE;
     try {
       new CassetteStore(cassetteDir).put({
         key: 'cassette-bootstrap',
@@ -6659,17 +6659,17 @@ describe('AI provider settings', () => {
         providerName: 'claude',
         recordedAt: '2026-08-22T00:00:00.000Z',
       });
-      process.env.DQL_EVAL_CASSETTE_DIR = cassetteDir;
-      delete process.env.DQL_EVAL_CASSETTE_MODE;
+      process.env.ZLENS_EVAL_CASSETTE_DIR = cassetteDir;
+      delete process.env.ZLENS_EVAL_CASSETTE_MODE;
 
       const governed = await resolveGovernedAnswerRunner(projectRoot);
       expect(governed?.provider).toBe('anthropic');
       expect(governed?.runner).toBeTruthy();
     } finally {
-      if (oldDir === undefined) delete process.env.DQL_EVAL_CASSETTE_DIR;
-      else process.env.DQL_EVAL_CASSETTE_DIR = oldDir;
-      if (oldMode === undefined) delete process.env.DQL_EVAL_CASSETTE_MODE;
-      else process.env.DQL_EVAL_CASSETTE_MODE = oldMode;
+      if (oldDir === undefined) delete process.env.ZLENS_EVAL_CASSETTE_DIR;
+      else process.env.ZLENS_EVAL_CASSETTE_DIR = oldDir;
+      if (oldMode === undefined) delete process.env.ZLENS_EVAL_CASSETTE_MODE;
+      else process.env.ZLENS_EVAL_CASSETTE_MODE = oldMode;
       rmSync(projectRoot, { recursive: true, force: true });
       rmSync(cassetteDir, { recursive: true, force: true });
     }
@@ -7143,11 +7143,11 @@ describe('normalizeProjectConnection', () => {
   });
 
   it('expands environment placeholders when the value is available', () => {
-    const previous = process.env.DQL_TEST_DATABASE;
-    process.env.DQL_TEST_DATABASE = 'analytics';
+    const previous = process.env.ZLENS_TEST_DATABASE;
+    process.env.ZLENS_TEST_DATABASE = 'analytics';
     try {
       expect(normalizeProjectConnection(
-        { driver: 'postgresql', host: 'localhost', database: '${DQL_TEST_DATABASE}', username: 'dql' },
+        { driver: 'postgresql', host: 'localhost', database: '${ZLENS_TEST_DATABASE}', username: 'dql' },
         '/tmp/demo-project',
       )).toEqual({
         driver: 'postgresql',
@@ -7158,8 +7158,8 @@ describe('normalizeProjectConnection', () => {
         moduleSearchPaths: ['/tmp/demo-project/.dql/connectors', '/tmp/demo-project'],
       });
     } finally {
-      if (previous === undefined) delete process.env.DQL_TEST_DATABASE;
-      else process.env.DQL_TEST_DATABASE = previous;
+      if (previous === undefined) delete process.env.ZLENS_TEST_DATABASE;
+      else process.env.ZLENS_TEST_DATABASE = previous;
     }
   });
 
@@ -7499,7 +7499,7 @@ describe('notebook cell execution isolation (API-006, API-007, UI-009, E2E-014)'
        * despite the prompt forbidding it. The suffix IS the physical relation,
        * and DQL's own error already said "use the physical relation instead" —
        * so rejecting the cell made the user (or another AI round trip) perform a
-       * substitution DQL can do itself. It is decoded, then run.
+       * substitution ZLens can do itself. It is decoded, then run.
        */
       const qualifiedInternalId = await executeCell(
         'cell_qualified_id',
@@ -7751,7 +7751,7 @@ describe('discoverDbtProfileConnections', () => {
     expect(fromFolder).toEqual(fromFile);
   });
 
-  it('maps dbt profiles.yml targets into DQL connection drafts, keeping unset secrets as references', () => {
+  it('maps dbt profiles.yml targets into ZLens connection drafts, keeping unset secrets as references', () => {
     const projectRoot = mkdtempSync(join(tmpdir(), 'dql-dbt-profiles-'));
     tempDirs.push(projectRoot);
     writeFileSync(join(projectRoot, 'dbt_project.yml'), 'name: banking\nprofile: banking\n', 'utf-8');
@@ -7856,10 +7856,10 @@ describe('discoverDbtProfileConnections', () => {
     for (const target of ['bq', 'rs', 'ms', 'tr', 'at']) expect(byTarget.get(target)?.missingFields, target).toEqual([]);
   });
 
-  it('resolves a relative duckdb path against the dbt project dir, not the DQL workspace (regression)', () => {
-    // Workspace layout: DQL workspace at projectRoot, dbt project in a sibling-style subdir.
+  it('resolves a relative duckdb path against the dbt project dir, not the ZLens workspace (regression)', () => {
+    // Workspace layout: ZLens workspace at projectRoot, dbt project in a sibling-style subdir.
     // A new user with a standard dbt+duckdb repo had the relative `path` resolved against the
-    // DQL workspace, so DuckDB silently created an EMPTY db there and every query failed.
+    // ZLens workspace, so DuckDB silently created an EMPTY db there and every query failed.
     const projectRoot = mkdtempSync(join(tmpdir(), 'dql-dbt-duckdb-path-'));
     tempDirs.push(projectRoot);
     const dbtDir = join(projectRoot, 'analytics');
@@ -10768,7 +10768,7 @@ describe('buildProposeReadiness (/api/propose handler core)', () => {
     for (const [index, proposal] of result.proposals.entries()) {
       expect(proposal.review.queueRank).toBe(index + 1);
       expect(proposal.review.draftPath).toMatch(/^blocks\/_drafts\/.+\.dql$/);
-      expect(proposal.review.certifyCommand).toContain(`dql certify --from-draft ${proposal.review.draftPath}`);
+      expect(proposal.review.certifyCommand).toContain(`zlens certify --from-draft ${proposal.review.draftPath}`);
       expect(proposal.review.payload).toMatchObject({
         model: proposal.model,
         domain: proposal.domain,
@@ -10834,7 +10834,7 @@ describe('buildProposeReadiness (/api/propose handler core)', () => {
     expect(dimCustomers?.review.firstSeenAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
     expect(dimCustomers?.review.lastUpdatedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
     expect(typeof dimCustomers?.review.reviewAgeHours).toBe('number');
-    expect(dimCustomers?.review.certifyCommand).toContain('dql certify --from-draft blocks/_drafts/dim_customers.dql');
+    expect(dimCustomers?.review.certifyCommand).toContain('zlens certify --from-draft blocks/_drafts/dim_customers.dql');
   });
 
   it('generateProposeDrafts never writes a plumbing model even if explicitly requested', async () => {
@@ -11060,8 +11060,8 @@ describe('buildProposeCandidatePreview (/api/propose/preview handler core)', () 
 describe('domains API (spec 17, part B)', () => {
   it('lists authored domains with per-domain block + skill + term counts', async () => {
     const { listDomains, parseDomainInput } = await import('./local-runtime.js');
-    const { writeDomainDeclaration } = await import('@duckcodeailabs/dql-core');
-    const { upsertSkill } = await import('@duckcodeailabs/dql-agent');
+    const { writeDomainDeclaration } = await import('@zlens/core');
+    const { upsertSkill } = await import('@zlens/agent');
     const projectRoot = mkdtempSync(join(tmpdir(), 'dql-domains-api-'));
     tempDirs.push(projectRoot);
     writeFileSync(join(projectRoot, 'dql.config.json'), JSON.stringify({ project: 'p' }), 'utf-8');
@@ -11170,7 +11170,7 @@ describe('domains API (spec 17, part B)', () => {
 
   it('parses a term body and places a new term in its domain package terms folder', async () => {
     const { parseTermInput, termDirectoryFor } = await import('./local-runtime.js');
-    const { writeDomainDeclaration } = await import('@duckcodeailabs/dql-core');
+    const { writeDomainDeclaration } = await import('@zlens/core');
     expect(parseTermInput({})).toBeNull();
     expect(parseTermInput({ name: '   ' })).toBeNull();
     expect(parseTermInput({ name: ' Revenue ', synonyms: ['sales', ' ', 'sales'], status: 'bogus', metricRefs: ['order_total'] })).toMatchObject({
@@ -11242,7 +11242,7 @@ describe('domains API (spec 17, part B)', () => {
 
 describe('skills carry an optional domain (spec 17, part B)', () => {
   it('round-trips skill.domain through write + load', async () => {
-    const { upsertSkill, loadSkills } = await import('@duckcodeailabs/dql-agent');
+    const { upsertSkill, loadSkills } = await import('@zlens/agent');
     const projectRoot = mkdtempSync(join(tmpdir(), 'dql-skill-domain-'));
     tempDirs.push(projectRoot);
     upsertSkill(projectRoot, { id: 'cxo-review', scope: 'project', domain: 'Finance', body: 'Board review.' });
@@ -11305,11 +11305,11 @@ describe('agentRunDeadlineMs env overrides (Slice 1)', () => {
   });
 
   it('keeps normative ceilings despite legacy env overrides', () => {
-    expect(agentRunDeadlineMs({ question: 'total revenue' }, { DQL_AGENT_LOOKUP_DEADLINE_MS: '180000' })).toBe(45_000);
-    expect(agentRunDeadlineMs({ question: 'x', requestedMode: 'research' }, { DQL_AGENT_RESEARCH_DEADLINE_MS: '420000' })).toBe(180_000);
-    expect(agentRunDeadlineMs({ question: 'total revenue' }, { DQL_AGENT_LOOKUP_DEADLINE_MS: '1' })).toBe(45_000);
-    expect(agentRunDeadlineMs({ question: 'total revenue' }, { DQL_AGENT_LOOKUP_DEADLINE_MS: '99999999' })).toBe(45_000);
-    expect(agentRunDeadlineMs({ question: 'total revenue' }, { DQL_AGENT_LOOKUP_DEADLINE_MS: 'not-a-number' })).toBe(45_000);
+    expect(agentRunDeadlineMs({ question: 'total revenue' }, { ZLENS_AGENT_LOOKUP_DEADLINE_MS: '180000' })).toBe(45_000);
+    expect(agentRunDeadlineMs({ question: 'x', requestedMode: 'research' }, { ZLENS_AGENT_RESEARCH_DEADLINE_MS: '420000' })).toBe(180_000);
+    expect(agentRunDeadlineMs({ question: 'total revenue' }, { ZLENS_AGENT_LOOKUP_DEADLINE_MS: '1' })).toBe(45_000);
+    expect(agentRunDeadlineMs({ question: 'total revenue' }, { ZLENS_AGENT_LOOKUP_DEADLINE_MS: '99999999' })).toBe(45_000);
+    expect(agentRunDeadlineMs({ question: 'total revenue' }, { ZLENS_AGENT_LOOKUP_DEADLINE_MS: 'not-a-number' })).toBe(45_000);
   });
 });
 

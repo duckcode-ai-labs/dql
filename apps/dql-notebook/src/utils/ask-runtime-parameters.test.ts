@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { DqlArtifactReference } from '@duckcodeailabs/dql-core/artifacts';
+import type { DqlArtifactReference } from '@zlens/core/artifacts';
 import { addAskResultFilter, askArtifactStateKey, askResultFilterCandidates } from './ask-runtime-parameters';
 
 const artifact: DqlArtifactReference = {

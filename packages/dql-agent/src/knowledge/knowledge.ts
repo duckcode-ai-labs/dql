@@ -2,8 +2,8 @@
  * KNOWLEDGE SOURCES — team documents an answer may cite (RFC 0010, HH-15).
  *
  * A knowledge source is a read-only document store (Confluence first) that
- * DQL reads through its own MCP client, so it works with every model
- * provider — Bedrock, Vertex and local models included — because DQL runs
+ * ZLens reads through its own MCP client, so it works with every model
+ * provider — Bedrock, Vertex and local models included — because ZLens runs
  * the tool itself, not the provider.
  *
  * The answer contract this module enforces:

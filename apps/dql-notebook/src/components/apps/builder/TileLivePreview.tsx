@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { RefreshCw } from 'lucide-react';
-import type { TileQuery } from '@duckcodeailabs/dql-core/apps/tile-query';
+import type { TileQuery } from '@zlens/core/apps/tile-query';
 import { api, type DatasetTileQueryPreview } from '../../../api/client';
 
 type PreviewState =

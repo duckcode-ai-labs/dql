@@ -1,4 +1,4 @@
-import type { DbtNodeAuthoringDetail } from '@duckcodeailabs/dql-core';
+import type { DbtNodeAuthoringDetail } from '@zlens/core';
 import type { DbtModelInventoryItem } from '../../api/client';
 import type { GovernanceStatus, SchemaColumn, SchemaTable } from '../../store/types';
 

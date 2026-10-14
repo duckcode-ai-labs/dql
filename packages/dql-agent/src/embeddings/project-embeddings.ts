@@ -6,6 +6,7 @@ import {
   type EmbeddingProvider,
   type EmbeddingResolveOptions,
 } from './provider.js';
+import { readEnv } from '@zlens/core';
 
 /**
  * Embedding settings a project declares in `dql.config.json`.
@@ -144,7 +145,7 @@ export interface EmbeddingAutoUpgradeResult {
  * mentioned.
  *
  * This lives here, rather than inline in the server, because the server was
- * the ONLY caller — so `dql agent ask` and `dql agent reindex` kept running
+ * the ONLY caller — so `zlens agent ask` and `zlens agent reindex` kept running
  * lexical retrieval on a machine with `nomic-embed-text` already pulled, and
  * the vector lane contributed zero candidates to every CLI answer.
  *
@@ -174,11 +175,11 @@ export async function autoUpgradeProjectEmbeddings(
     // An explicit project setting or environment override is the user's
     // decision and is never second-guessed.
     if (configured.provider
-      || process.env.DQL_OLLAMA_EMBED_URL
-      || process.env.DQL_OPENAI_API_KEY) {
+      || readEnv('ZLENS_OLLAMA_EMBED_URL')
+      || readEnv('ZLENS_OPENAI_API_KEY')) {
       return { providerId: configured.provider ?? 'configured', upgraded: false, reason: 'configured' };
     }
-    if (process.env.DQL_EMBEDDINGS_AUTODETECT === 'off') {
+    if (readEnv('ZLENS_EMBEDDINGS_AUTODETECT') === 'off') {
       return { providerId: 'hashed-token-v1', upgraded: false, reason: 'disabled' };
     }
     const local = await deps.probeLocalOllamaEmbeddings();

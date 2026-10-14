@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { SemanticLayer } from '@duckcodeailabs/dql-core';
+import { SemanticLayer } from '@zlens/core';
 
 import { expandContext } from '../expand-context.js';
 import { inspectMetadataContext } from '../kg.js';
@@ -81,7 +81,7 @@ describe('agentic analytics tools', () => {
         reviewStatus: 'draft_ready',
         certification: 'uncertified',
         draftPath: 'blocks/_drafts/monthly_revenue_by_order_channel.dql',
-        promotionPath: 'dql certify --from-draft',
+        promotionPath: 'zlens certify --from-draft',
       },
       mode: 'explicit_members',
       metrics: ['total_revenue'],

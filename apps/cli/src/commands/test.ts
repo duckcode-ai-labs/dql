@@ -1,8 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { Parser } from '@duckcodeailabs/dql-core';
-import { QueryExecutor, type ConnectionConfig } from '@duckcodeailabs/dql-connectors';
-import { buildExecutionPlan, type NotebookCell } from '@duckcodeailabs/dql-notebook';
+import { Parser } from '@zlens/core';
+import { QueryExecutor, type ConnectionConfig } from '@zlens/connectors';
+import { buildExecutionPlan, type NotebookCell } from '@zlens/notebook';
 import { loadProjectConfig, prepareLocalExecution } from '../local-runtime.js';
 import type { ProjectConfig } from '../local-runtime.js';
 import type { CLIFlags } from '../args.js';
@@ -71,8 +71,8 @@ function resolveConnection(flags: CLIFlags, projectConfig: ProjectConfig): Conne
 }
 
 export async function runTest(filePath: string, flags: CLIFlags): Promise<void> {
-  console.log('  ⚠ dql test is deprecated. Use dql certify --connection <driver> instead.');
-  console.log('    dql certify runs governance checks AND test assertions together.');
+  console.log('  ⚠ zlens test is deprecated. Use zlens certify --connection <driver> instead.');
+  console.log('    zlens certify runs governance checks AND test assertions together.');
   console.log('');
   const projectConfig = loadProjectConfig(process.cwd());
   const source = readFileSync(filePath, 'utf-8');

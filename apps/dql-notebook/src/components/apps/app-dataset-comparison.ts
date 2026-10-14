@@ -1,5 +1,5 @@
-import type { DatasetDescriptor, DatasetPhysicalField } from '@duckcodeailabs/dql-core/datasets/descriptor';
-import type { TileQueryComparison } from '@duckcodeailabs/dql-core/apps/tile-query';
+import type { DatasetDescriptor, DatasetPhysicalField } from '@zlens/core/datasets/descriptor';
+import type { TileQueryComparison } from '@zlens/core/apps/tile-query';
 
 const SUPPORTED_GRAINS = new Set(['day', 'week', 'month', 'quarter', 'year']);
 

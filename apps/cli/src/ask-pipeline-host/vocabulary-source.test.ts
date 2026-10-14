@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import type { SemanticLayer } from '@duckcodeailabs/dql-core';
-import type { DQLManifest } from '@duckcodeailabs/dql-core';
-import { renderPhysicalIdentifier, buildVocabularyIndex, renderCard } from '@duckcodeailabs/dql-agent';
-import { relationshipValidationProofFingerprint } from '@duckcodeailabs/dql-core';
+import type { SemanticLayer } from '@zlens/core';
+import type { DQLManifest } from '@zlens/core';
+import { renderPhysicalIdentifier, buildVocabularyIndex, renderCard } from '@zlens/agent';
+import { relationshipValidationProofFingerprint } from '@zlens/core';
 import { modelingJoinGraph, modelingJoinPaths } from './host.js';
 import { leafName, nativeAggregateBinding, nativeFormulaBinding, normalizeRelationName, parseMetricFilter, qualifyExpression, buildVocabularySource, columnLineageFromSql  } from './vocabulary-source.js';
 
@@ -597,7 +597,7 @@ describe('the source builder scales with the manifest', () => {
 
 describe('a warehouse observation merges into the relation dbt spelled with quotes', () => {
   it('adds probed columns to the provenance relation instead of creating a second one', async () => {
-    const { physicalRelationBinding } = await import('@duckcodeailabs/dql-agent');
+    const { physicalRelationBinding } = await import('@zlens/agent');
     const manifest = {
       sources: { stats: { name: 'player_game_stats', origin: 'dbt', referencedBy: [], dbtModel: { uniqueId: 'model.nba.player_game_stats', database: 'nba_analysis', schema: 'dev', columns: { pts: { name: 'pts', type: 'REAL' } } } } },
       dbtProvenance: { nodes: { 'model.nba.player_game_stats': { relation: '"nba_analysis"."dev"."player_game_stats"' } } },

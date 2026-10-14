@@ -3,9 +3,9 @@ import type { Server } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import type { QueryExecutor } from '@duckcodeailabs/dql-connectors';
-import { createAppBuildDraft } from '@duckcodeailabs/dql-core';
-import { LocalAppStorage, defaultLocalAppsDbPath } from '@duckcodeailabs/dql-project';
+import type { QueryExecutor } from '@zlens/connectors';
+import { createAppBuildDraft } from '@zlens/core';
+import { LocalAppStorage, defaultLocalAppsDbPath } from '@zlens/project';
 import { startLocalServer } from '../local-runtime.js';
 import type { DqlHostHooks, DqlPrincipal } from './request-context.js';
 

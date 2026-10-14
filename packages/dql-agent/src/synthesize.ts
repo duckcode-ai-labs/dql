@@ -1,4 +1,4 @@
-import type { SemanticDisplayFormat } from '@duckcodeailabs/dql-core';
+import type { SemanticDisplayFormat } from '@zlens/core';
 
 /**
  * Answer synthesis — turn a governed result into a reply whose *shape* matches the

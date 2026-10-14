@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
-import { closeKnowledgeConnections, startFakeKnowledgeServer, type FakeKnowledgeServer } from '@duckcodeailabs/dql-mcp';
+import { closeKnowledgeConnections, startFakeKnowledgeServer, type FakeKnowledgeServer } from '@zlens/mcp';
 import { startLocalServer } from '../local-runtime.js';
 import { createSeededSqliteExecutor, type GoldenSeed } from '../testkit/seeded-sqlite-executor.js';
 
@@ -33,8 +33,8 @@ beforeAll(async () => {
     tokens: ['project-token'],
     pages: [{ id: 'revenue', title: 'Revenue definition', url: 'https://wiki.example/revenue', text: PAGE }],
   });
-  process.env.DQL_EVAL_CASSETTE_DIR = join(fixtureDir, 'test-cassettes', 'golden');
-  process.env.DQL_EVAL_CASSETTE_MODE = 'replay';
+  process.env.ZLENS_EVAL_CASSETTE_DIR = join(fixtureDir, 'test-cassettes', 'golden');
+  process.env.ZLENS_EVAL_CASSETTE_MODE = 'replay';
 });
 afterEach(async () => {
   await closeKnowledgeConnections();

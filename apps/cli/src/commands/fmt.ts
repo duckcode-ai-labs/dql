@@ -1,5 +1,5 @@
 import { readFileSync, writeFileSync } from 'node:fs';
-import { canonicalize, canonicalizeNotebook } from '@duckcodeailabs/dql-core';
+import { canonicalize, canonicalizeNotebook } from '@zlens/core';
 import type { CLIFlags } from '../args.js';
 
 /**

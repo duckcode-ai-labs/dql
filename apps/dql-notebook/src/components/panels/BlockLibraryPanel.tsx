@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Plus, Sparkles } from 'lucide-react';
-import { PanelFrame, PanelEmpty, StatusPill } from '@duckcodeailabs/dql-ui';
+import { PanelFrame, PanelEmpty, StatusPill } from '@zlens/ui';
 import { api } from '../../api/client';
 import { useNotebook } from '../../store/NotebookStore';
 import { themes } from '../../themes/notebook-theme';

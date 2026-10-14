@@ -12,7 +12,7 @@ import {
   type DiffReport,
   type ImpactReport,
   type RecertItem,
-} from '@duckcodeailabs/dql-core';
+} from '@zlens/core';
 import { findRepoContext, readHeadBlob } from '../git-service.js';
 import type { CLIFlags } from '../args.js';
 
@@ -24,7 +24,7 @@ export async function runDiff(
   const secondArg = rest.find((a) => !a.startsWith('-')) ?? undefined;
 
   if (!firstArg) {
-    console.error('Usage: dql diff <path> [--impact] | dql diff <before> <after> [--impact]');
+    console.error('Usage: zlens diff <path> [--impact] | zlens diff <before> <after> [--impact]');
     process.exit(1);
   }
 
@@ -32,7 +32,7 @@ export async function runDiff(
     ? await diffTwoFiles(firstArg, secondArg)
     : await diffAgainstHead(firstArg);
 
-  // ---- Impact mode: --impact turns `dql diff` into an impact/re-cert gate ----
+  // ---- Impact mode: --impact turns `zlens diff` into an impact/re-cert gate ----
   if (flags.impact) {
     const impactContext = computeImpact(firstArg, report, flags);
     const impact = impactContext?.impact ?? null;
@@ -55,7 +55,7 @@ export async function runDiff(
   }
 
   // Exit 1 when there are changes — makes it scriptable as a gate
-  // (`dql diff a b && echo unchanged`), mirroring git-diff and fmt --check.
+  // (`zlens diff a b && echo unchanged`), mirroring git-diff and fmt --check.
   if (!report.identical) process.exit(1);
 }
 
@@ -73,7 +73,7 @@ async function diffAgainstHead(path: string): Promise<DiffReport> {
   }
   const ctx = findRepoContext(absPath);
   if (!ctx) {
-    console.error(`Error: ${path} is not inside a git repository. Use: dql diff <before> <after>`);
+    console.error(`Error: ${path} is not inside a git repository. Use: zlens diff <before> <after>`);
     process.exit(1);
   }
   const before = await readHeadBlob(ctx);
@@ -140,7 +140,7 @@ function emitImpact(
             requiresRecert: [],
             domainTrustDelta: [],
             hasCertifiedInvalidation: false,
-            note: 'No compiled lineage graph found (dql-manifest.json). Run `dql compile` for downstream impact.',
+            note: 'No compiled lineage graph found (dql-manifest.json). Run `zlens compile` for downstream impact.',
           },
           null,
           2,
@@ -154,7 +154,7 @@ function emitImpact(
     console.log(renderDiffText(report));
     console.log('');
     console.log('  Impact: no compiled lineage graph found (dql-manifest.json).');
-    console.log('  Run `dql compile` to enable downstream impact + re-cert gating.');
+    console.log('  Run `zlens compile` to enable downstream impact + re-cert gating.');
     return;
   }
   console.log(renderImpactText(impact));

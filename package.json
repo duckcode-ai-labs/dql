@@ -20,7 +20,7 @@
     "test:perf:scale": "pnpm build && node scripts/performance/dql2-scale-benchmark.mjs --gate"
   },
   "dependencies": {
-    "@duckcodeailabs/dql-cli": "workspace:*"
+    "@zlens/cli": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

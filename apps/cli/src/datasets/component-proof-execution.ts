@@ -13,7 +13,7 @@ import {
   type DatasetDescriptor,
   tileQueryMeasureScope,
   type TileQuery,
-} from '@duckcodeailabs/dql-core';
+} from '@zlens/core';
 import {
   DatasetAggregateComponentSourceError,
   type CompiledDatasetAggregateDistinctProbe,
@@ -22,9 +22,9 @@ import {
   parseDatasetAggregateComponentSource,
   type ParsedDatasetAggregateSource,
   type ParsedDatasetAggregateSourceComponent,
-} from '@duckcodeailabs/dql-core/datasets/component-proof.node';
-import type { DuckDBConsistentReadScope, QueryResult, SQLParamSpec } from '@duckcodeailabs/dql-connectors';
-import type { DatasetBlockProofMaterial } from '@duckcodeailabs/dql-agent';
+} from '@zlens/core/datasets/component-proof.node';
+import type { DuckDBConsistentReadScope, QueryResult, SQLParamSpec } from '@zlens/connectors';
+import type { DatasetBlockProofMaterial } from '@zlens/agent';
 import type { DatasetGrainRuntimeEvidence } from './grain-proof-execution.js';
 
 export class DatasetAggregateComponentProofError extends Error {

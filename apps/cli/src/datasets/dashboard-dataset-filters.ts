@@ -6,7 +6,7 @@ import {
   type DatasetDescriptor,
   type DatasetPhysicalField,
   type TileQueryFilter,
-} from '@duckcodeailabs/dql-core';
+} from '@zlens/core';
 
 export interface DashboardDatasetCrossFilterInput {
   fromTileId: string;

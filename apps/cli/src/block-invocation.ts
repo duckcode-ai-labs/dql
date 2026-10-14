@@ -5,7 +5,7 @@ import {
   blockParameterDefinitions,
   resolveBlockParameterValues,
   type BlockParameterDefinition,
-} from '@duckcodeailabs/dql-core';
+} from '@zlens/core';
 
 export type BlockInvocationSurface = 'block_studio' | 'ask_ai' | 'notebook' | 'app' | 'mcp' | 'cli';
 

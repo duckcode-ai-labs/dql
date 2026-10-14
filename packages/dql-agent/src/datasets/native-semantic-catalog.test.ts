@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { SemanticLayer, type DQLManifest } from '@duckcodeailabs/dql-core';
+import { SemanticLayer, type DQLManifest } from '@zlens/core';
 import { buildMetadataSnapshot } from '../metadata/catalog.js';
 
 const roots: string[] = [];

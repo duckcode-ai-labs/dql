@@ -22,13 +22,13 @@ export interface AppPageRunTile {
 export type AppPageRunner = (appId: string, dashboardId: string) => Promise<AppPageRunTile[]>;
 
 /**
- * A page runner backed by a DQL runtime. Scheduled runs go through the same
+ * A page runner backed by a ZLens runtime. Scheduled runs go through the same
  * full-page run endpoint the App reader uses, so every tile kind (blocks,
  * Datasets, semantic queries) runs with the same checks and defaults, and a
  * tile that needs review is never delivered as if it were certified.
  *
  * A runtime bound beyond loopback answers API calls only with its bearer
- * token (`DQL_SERVER_TOKEN`); pass it as `token`.
+ * token (`ZLENS_SERVER_TOKEN`); pass it as `token`.
  */
 export function createRuntimePageRunner(runtimeBase: string, fetchImpl: typeof fetch = fetch, token?: string): AppPageRunner {
   const base = runtimeBase.replace(/\/$/, '');

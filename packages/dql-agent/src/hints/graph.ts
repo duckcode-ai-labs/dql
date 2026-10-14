@@ -1,4 +1,4 @@
-import { analyzeSqlReferences } from '@duckcodeailabs/dql-core';
+import { analyzeSqlReferences } from '@zlens/core';
 import type {
   Hint,
   HintDependencyKind,

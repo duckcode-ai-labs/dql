@@ -63,18 +63,18 @@ const REFUSAL_TITLES: Record<AnswerRefusalCode, string> = {
   grounding_gap: 'Not enough context to answer safely',
   model_declined: 'The assistant declined to answer',
   provider_error: 'Could not finish working this one out',
-  orchestration_budget_exhausted: 'DQL stopped at its own orchestration budget',
+  orchestration_budget_exhausted: 'ZLens stopped at its own orchestration budget',
   execution_error: 'The selected query did not complete on the current connection',
   ambiguous: 'Needs one detail before running',
 };
 
 const REFUSAL_TEXT: Record<AnswerRefusalCode, string> = {
-  grounding_gap: 'DQL could not match every part of this question to governed data, so no query was run.',
+  grounding_gap: 'ZLens could not match every part of this question to governed data, so no query was run.',
   modeling_gap: 'Part of this question is not modeled in this project yet, so no governed query can answer it as asked.',
   no_data: 'The governed query ran and no rows matched the requested period or filter, so there is nothing to report for it.',
-  ambiguous: 'One business choice is required before DQL can run this question.',
+  ambiguous: 'One business choice is required before ZLens can run this question.',
   provider_error: 'This question was not worked out to a query, so nothing about the data has been ruled out.',
-  orchestration_budget_exhausted: 'DQL stopped this run at its own orchestration budget before the question was settled.',
+  orchestration_budget_exhausted: 'ZLens stopped this run at its own orchestration budget before the question was settled.',
   policy_blocked: 'A governance policy blocked this request before execution.',
   execution_error: 'The selected governed query did not complete on the current connection.',
   model_declined: 'The assistant declined to answer this question.',
@@ -118,7 +118,7 @@ function incident(shape: Extract<TerminalAnswerShape, { kind: 'incident' }>): st
     case 'ANALYTICAL_COVERAGE_GAP':
       return shape.unmodeled
         ? unmodeledTerm(shape.unmodeled.term, shape.unmodeled.modeled)
-        : 'DQL could not prove one safe analytical path from the governed data it holds. Review the available modeled fields, then retry.';
+        : 'ZLens could not prove one safe analytical path from the governed data it holds. Review the available modeled fields, then retry.';
     case 'ANALYTICAL_EXECUTION_FAILED':
       return 'The selected governed query did not complete on the current connection. Review the connection and trace, then retry.';
     case 'RUN_TIMEOUT':
@@ -136,7 +136,7 @@ function v2NoAnswer(shape: Extract<TerminalAnswerShape, { kind: 'v2_no_answer' }
     return 'The configured semantic runtime is not ready for the selected metric. Review semantic adapter readiness, then retry.';
   }
   if (reasonCode === 'SEMANTIC_EXECUTION_TARGET_MISMATCH') {
-    return 'DQL stopped before execution because the compiled semantic query did not match the frozen execution target. Review the execution target and trace; no query was run.';
+    return 'ZLens stopped before execution because the compiled semantic query did not match the frozen execution target. Review the execution target and trace; no query was run.';
   }
   if (outcome === 'budget_exhausted' && reasonCode === 'ASK_PROVIDER_DISPATCH_BUDGET_EXHAUSTED') {
     return lastResort('budget', []);
@@ -144,14 +144,14 @@ function v2NoAnswer(shape: Extract<TerminalAnswerShape, { kind: 'v2_no_answer' }
   if (outcome === 'provider_failure') return REFUSAL_TEXT.provider_error;
   if (outcome === 'execution_failure') {
     return reasonCode === 'SEMANTIC_FILTER_NOT_COMPILED'
-      ? 'The governed semantic engine could not apply the required member filter, and DQL refused to run the unfiltered query in its place. Ask through a certified block or governed SQL, or enable the MetricFlow runtime for cross-model filters.'
+      ? 'The governed semantic engine could not apply the required member filter, and ZLens refused to run the unfiltered query in its place. Ask through a certified block or governed SQL, or enable the MetricFlow runtime for cross-model filters.'
       : REFUSAL_TEXT.execution_error;
   }
   if (modelingGap) {
     return `"${modelingGap.term}" is not modeled in this project's governed data, so no query can compute it.${modelingGap.admitted.length ? ` Governed groupings available: ${modelingGap.admitted.join(', ')}.` : ''} Ask with one of those instead, or model "${modelingGap.term}" and re-sync.`;
   }
   if (reasonCode === 'ASK_V2_REMAINING_TIERS_DECLINED') return REMAINING_TIERS_DECLINED;
-  return 'DQL could not complete a safe analytical path from the governed data it holds.';
+  return 'ZLens could not complete a safe analytical path from the governed data it holds.';
 }
 
 function hostFloorRefusal(shape: Extract<TerminalAnswerShape, { kind: 'host_floor_refusal' }>): string {
@@ -198,7 +198,7 @@ function incidentTitle(code: TerminalIncidentCode | undefined): string {
   switch (code) {
     case 'CONNECTION_NOT_CONFIGURED': return 'No database connection is configured';
     case 'PROVIDER_FAILURE': return REFUSAL_TITLES.provider_error;
-    case 'COMPILATION_FAILED': return 'DQL could not compile the frozen plan';
+    case 'COMPILATION_FAILED': return 'ZLens could not compile the frozen plan';
     case 'RESULT_CONTRACT_MISMATCH': return 'The query result did not match the frozen plan';
     case 'ANALYTICAL_COVERAGE_GAP': return REFUSAL_TITLES.modeling_gap;
     case 'ANALYTICAL_EXECUTION_FAILED': return REFUSAL_TITLES.execution_error;
@@ -228,9 +228,9 @@ export function terminalTitle(input: {
   failurePhase?: 'compilation' | 'validation' | 'result_validation' | string;
   detailCode?: string;
 }): string {
-  if (input.failurePhase === 'compilation') return 'DQL could not compile the frozen plan';
+  if (input.failurePhase === 'compilation') return 'ZLens could not compile the frozen plan';
   if (input.failurePhase === 'validation') return 'The selected governed inputs need correction';
   if (input.failurePhase === 'result_validation') return 'The query result did not match the frozen plan';
-  if (input.detailCode === 'RUN_DEADLINE_INSUFFICIENT') return 'DQL stopped before starting another AI call';
+  if (input.detailCode === 'RUN_DEADLINE_INSUFFICIENT') return 'ZLens stopped before starting another AI call';
   return input.refusalCode ? REFUSAL_TITLES[input.refusalCode] : DEFAULT_TITLE;
 }

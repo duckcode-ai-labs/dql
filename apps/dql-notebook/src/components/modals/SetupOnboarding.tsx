@@ -181,8 +181,8 @@ export function SetupOnboarding({
       : 'Guided Setup';
   const launchNotice = launch?.reason === 'version_upgrade'
     ? requiresUpgradeReapply
-      ? `DQL was updated${launch.acknowledgedVersion ? ` from ${launch.acknowledgedVersion}` : ''} to ${launch.version}. Reapply the prefilled dbt project to rebuild its OSS governed snapshot with this version. Saved paths and credentials remain unchanged until Apply succeeds.`
-      : `DQL was updated${launch.acknowledgedVersion ? ` from ${launch.acknowledgedVersion}` : ''} to ${launch.version}. The dbt project was reapplied with this version; review the remaining saved connections before finishing.`
+      ? `ZLens was updated${launch.acknowledgedVersion ? ` from ${launch.acknowledgedVersion}` : ''} to ${launch.version}. Reapply the prefilled dbt project to rebuild its OSS governed snapshot with this version. Saved paths and credentials remain unchanged until Apply succeeds.`
+      : `ZLens was updated${launch.acknowledgedVersion ? ` from ${launch.acknowledgedVersion}` : ''} to ${launch.version}. The dbt project was reapplied with this version; review the remaining saved connections before finishing.`
     : launch?.reason === 'first_install'
       ? `DQL ${launch.version} is installed. Connect the project and database before entering the workspace; AI remains optional.`
       : null;
@@ -216,7 +216,7 @@ export function SetupOnboarding({
               {projectState === 'missing' && !requiresUpgradeReapply ? (
                 <div style={{ border: `1px solid ${t.headerBorder}`, background: t.cellBg, borderRadius: 10, padding: '12px 13px', display: 'flex', alignItems: 'center', gap: 12 }}>
                   <div style={{ flex: 1, fontSize: 11.5, color: supportingText, lineHeight: 1.55 }}>
-                    <strong style={{ color: t.textPrimary }}>No dbt project?</strong> Model your warehouse directly. DQL reads your tables' columns, keys and comments — never their rows — and drafts models and joins for you to review.
+                    <strong style={{ color: t.textPrimary }}>No dbt project?</strong> Model your warehouse directly. ZLens reads your tables' columns, keys and comments — never their rows — and drafts models and joins for you to review.
                     {warehouseError ? <div role="alert" style={{ color: 'var(--status-error)', marginTop: 6 }}>{warehouseError}</div> : null}
                   </div>
                   <button type="button" disabled={warehouseBusy} onClick={() => void chooseWarehouse()} style={{ ...secondaryButton, opacity: warehouseBusy ? 0.6 : 1 }}>
@@ -228,7 +228,7 @@ export function SetupOnboarding({
           ) : null}
 
           {step === 2 ? (
-            <SetupSection eyebrow="Step 2 of 4" title="Connect your database" description={warehouseChosen ? 'Connect and test the warehouse, choose the schemas to model, then Apply and synchronize. DQL reads their tables, columns, keys and comments.' : 'Use the same profile import, enterprise authentication fields, test, and rollback flow available in Settings.'} t={t}>
+            <SetupSection eyebrow="Step 2 of 4" title="Connect your database" description={warehouseChosen ? 'Connect and test the warehouse, choose the schemas to model, then Apply and synchronize. ZLens reads their tables, columns, keys and comments.' : 'Use the same profile import, enterprise authentication fields, test, and rollback flow available in Settings.'} t={t}>
               <ConnectionPanel
                 variant="setup"
                 onConfigured={(detail) => {

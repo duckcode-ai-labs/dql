@@ -8,8 +8,8 @@
  * back, and a deterministic draft built from the bindings alone is the
  * fallback, so the author always gets a valid story.
  */
-import type { DashboardNarrative, DashboardNarrativeBlock, StoryBindingCatalog } from '@duckcodeailabs/dql-core';
-import { MAX_STORY_BLOCKS, STORY_BINDING_PATTERN, validateStoryText } from '@duckcodeailabs/dql-core';
+import type { DashboardNarrative, DashboardNarrativeBlock, StoryBindingCatalog } from '@zlens/core';
+import { MAX_STORY_BLOCKS, STORY_BINDING_PATTERN, validateStoryText } from '@zlens/core';
 
 export interface StoryDraftInput {
   pageTitle: string;

@@ -8,7 +8,7 @@
  * (double quotes, backticks, brackets) and comments (`--`, `#`, `//`, block
  * comments, executable comments).
  *
- * Where an engine's reading depends on a setting DQL cannot see (MySQL's
+ * Where an engine's reading depends on a setting ZLens cannot see (MySQL's
  * NO_BACKSLASH_ESCAPES and ANSI_QUOTES, Postgres's standard_conforming_strings,
  * Spark's escapedStringLiterals), the statement is read every way the engine
  * could read it, and it is checked only when every reading agrees. Anything
@@ -37,7 +37,7 @@ export interface SqlToken {
 
 export class UnreadableStatement extends Error {}
 
-/** A choice an engine makes by a setting DQL cannot see: both readings must agree. */
+/** A choice an engine makes by a setting ZLens cannot see: both readings must agree. */
 type Choice = boolean | 'either';
 
 interface Lexicon {
@@ -124,12 +124,12 @@ const LEXICONS: Record<string, Lexicon> = {
   athena: { ...BASE, backtick: 'either' },
 };
 
-/** Whether DQL knows how this engine reads a statement. */
+/** Whether ZLens knows how this engine reads a statement. */
 export function knownLexicon(driver: string): boolean {
   return Object.prototype.hasOwnProperty.call(LEXICONS, driver);
 }
 
-/** Every concrete reading of an engine's lexicon (one per combination of the settings DQL cannot see). */
+/** Every concrete reading of an engine's lexicon (one per combination of the settings ZLens cannot see). */
 function readings(lexicon: Lexicon): Lexicon[] {
   let all: Lexicon[] = [lexicon];
   const choose = <K extends keyof Lexicon>(key: K, values: Array<Lexicon[K]>) => {

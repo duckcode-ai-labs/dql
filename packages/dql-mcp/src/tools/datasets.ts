@@ -1,6 +1,7 @@
-import type { TileQuery } from '@duckcodeailabs/dql-core';
+import type { TileQuery } from '@zlens/core';
 import type { DQLContext } from '../context.js';
 import { zodInputShapeForTool } from '../tool-schema.js';
+import { readEnv } from '@zlens/core';
 
 const DEFAULT_RUNTIME_URL = 'http://127.0.0.1:3474';
 
@@ -19,7 +20,7 @@ type DatasetRequest = {
 type RuntimeResponse = Record<string, unknown>;
 
 function runtimeBase(serverUrl?: string): string {
-  return (serverUrl ?? process.env.DQL_RUNTIME_URL ?? DEFAULT_RUNTIME_URL).replace(/\/$/, '');
+  return (serverUrl ?? readEnv('ZLENS_RUNTIME_URL') ?? DEFAULT_RUNTIME_URL).replace(/\/$/, '');
 }
 
 function runtimeUnavailable(base: string, projectRoot: string, error: unknown) {
@@ -27,8 +28,8 @@ function runtimeUnavailable(base: string, projectRoot: string, error: unknown) {
     ok: false as const,
     runtimeUnavailable: true as const,
     error:
-      `Could not reach the DQL runtime at ${base}. Dataset execution needs it running — ` +
-      `start it with \`dql serve\` in ${projectRoot} (or pass serverUrl), then retry. ` +
+      `Could not reach the ZLens runtime at ${base}. Dataset execution needs it running — ` +
+      `start it with \`zlens serve\` in ${projectRoot} (or pass serverUrl), then retry. ` +
       `(${error instanceof Error ? error.message : String(error)})`,
   };
 }
@@ -47,7 +48,7 @@ async function requestRuntime(
     return runtimeUnavailable(base, ctx.projectRoot, error);
   }
   const payload = await response.json().catch(async () => ({
-    error: `DQL runtime returned ${response.status}: ${await response.text().catch(() => '')}`,
+    error: `ZLens runtime returned ${response.status}: ${await response.text().catch(() => '')}`,
   })) as RuntimeResponse;
   return { payload, status: response.status };
 }
@@ -57,7 +58,7 @@ function isUnavailable(value: unknown): value is ReturnType<typeof runtimeUnavai
 }
 
 function runtimeError(status: number, payload: RuntimeResponse) {
-  const message = typeof payload.error === 'string' ? payload.error : `DQL runtime returned ${status}.`;
+  const message = typeof payload.error === 'string' ? payload.error : `ZLens runtime returned ${status}.`;
   return { ok: false as const, error: message };
 }
 

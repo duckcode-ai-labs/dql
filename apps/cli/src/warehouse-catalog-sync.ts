@@ -19,8 +19,8 @@ import {
   writeWarehouseCatalog,
   type WarehouseCatalogRelationV1,
   type WarehouseCatalogSnapshotV1,
-} from '@duckcodeailabs/dql-core';
-import type { ConnectionConfig, QueryExecutor } from '@duckcodeailabs/dql-connectors';
+} from '@zlens/core';
+import type { ConnectionConfig, QueryExecutor } from '@zlens/connectors';
 import { sqliteColumnsOneByOne, type ConnectionMetadataScopeV1 } from './warehouse-metadata.js';
 
 const MAX_ROWS = 50_000;

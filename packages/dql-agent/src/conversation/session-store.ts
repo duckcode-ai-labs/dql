@@ -574,15 +574,15 @@ export class ConversationStore {
   }
 }
 
-/** The conversation store surface DQL calls (RFC 0010 HH-6). */
+/** The conversation store surface ZLens calls (RFC 0010 HH-6). */
 export type ConversationStoreMethods = Pick<ConversationStore,
   | 'createThread' | 'threadIdForRun' | 'getThread' | 'listThreads' | 'archiveThread' | 'renameThread'
   | 'setThreadFavorite' | 'deleteThread' | 'appendTurn' | 'recentTurns' | 'tierDistribution'
   | 'turnsForCompaction' | 'updateThreadState' | 'searchTurns'>;
 
 /**
- * A conversation store as DQL uses it: this SQLite store, or a host's own
- * (RFC 0010 HH-6) whose methods return Promises. DQL awaits every call.
+ * A conversation store as ZLens uses it: this SQLite store, or a host's own
+ * (RFC 0010 HH-6) whose methods return Promises. ZLens awaits every call.
  */
 export type ConversationStoreLike = AwaitableMethods<ConversationStoreMethods> & {
   pruneThreads?(olderThanDays: number): Awaitable<number>;
@@ -595,7 +595,7 @@ export type ConversationStoreLike = AwaitableMethods<ConversationStoreMethods> &
  */
 export function newConversationThread(input: { id?: string; surface?: string; title?: string; notebookPath?: string; ownerId?: string } = {}): ConversationThread {
   const now = new Date().toISOString();
-  // A caller may NAME a thread. `dql agent ask --thread my-session` is
+  // A caller may NAME a thread. `zlens agent ask --thread my-session` is
   // documented as continuing a conversation, but nothing ever created the
   // thread, so every turn was dropped on the floor and each follow-up
   // started from zero. Naming is not new authority: an id that can be

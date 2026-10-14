@@ -13,7 +13,7 @@ import {
   Workflow,
   type LucideIcon,
 } from 'lucide-react';
-import { PanelFrame } from '@duckcodeailabs/dql-ui';
+import { PanelFrame } from '@zlens/ui';
 import { useNotebook } from '../../store/NotebookStore';
 import { hostReadOnly, useHostUi } from '../../host/host-ui';
 import { themes } from '../../themes/notebook-theme';

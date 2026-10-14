@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { FileSearch, FolderOpen, Loader2, Search, Upload, X } from 'lucide-react';
 import { api, type ContextAuthoringOperation, type ContextAuthoringProposalV1, type DbtFirstModelingResponse, type DbtModelInventoryItem, type ModelingImportSession } from '../../api/client';
-import { DEFAULT_MODEL_AREA_ID } from '@duckcodeailabs/dql-core/modeling-ids';
+import { DEFAULT_MODEL_AREA_ID } from '@zlens/core/modeling-ids';
 import type { Theme } from '../../themes/notebook-theme';
 
 /**
@@ -91,7 +91,7 @@ export function AddModelsDrawer({ data, domain, areaId, theme, onClose, onPropos
       </div>
     </> : step === 2 ? <>
       <ScopeFields scope={scope} theme={theme} />
-      <Note theme={theme}>Every model receives exactly one Domain and subject area. DQL stores the dbt unique ID and business overlay; dbt-owned columns, SQL, tests, descriptions, and lineage remain in dbt.</Note>
+      <Note theme={theme}>Every model receives exactly one Domain and subject area. ZLens stores the dbt unique ID and business overlay; dbt-owned columns, SQL, tests, descriptions, and lineage remain in dbt.</Note>
     </> : <>
       <Note theme={theme}>{operations.length} sparse entity-binding patch{operations.length === 1 ? '' : 'es'} will be prepared. No source changes occur until the exact proposal is reviewed and explicitly saved.</Note>
       {selectedItems.map((item) => <div key={item.uniqueId} style={choice(theme)}><span style={{ flex: 1 }}><b style={{ display: 'block', fontSize: 11 }}>{item.name}</b><code style={{ fontSize: 9.5, color: theme.textMuted }}>{item.uniqueId}</code></span><span style={{ fontSize: 10, color: theme.textMuted }}>{scope.scopeDomain} / {scope.scopeArea}</span></div>)}

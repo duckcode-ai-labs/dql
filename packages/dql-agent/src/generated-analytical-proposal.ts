@@ -2,7 +2,7 @@ import {
   buildGeneratedAnalyticalSqlSignature,
   buildSqlOutputExpressionSignature,
   type MetricCapabilityContract,
-} from '@duckcodeailabs/dql-core';
+} from '@zlens/core';
 import type { ExploratoryRequiredOutputBindingProofV1 } from './analytical-orchestration.js';
 import type { ResolvedAnalyticalPlan, ResolvedPlanMemberBinding } from './resolved-analytical-plan.js';
 import type { LocalContextPack, MetadataObject } from './metadata/catalog.js';

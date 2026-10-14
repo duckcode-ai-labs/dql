@@ -387,7 +387,7 @@ export function writeBlockStudioImportCandidate(
   writeFileSync(join(candidatesDir, candidateFile(candidate.id)), JSON.stringify(candidate, null, 2) + '\n', 'utf-8');
 }
 
-/** A candidate id DQL made: one file name in the import's folder, never a path. */
+/** A candidate id ZLens made: one file name in the import's folder, never a path. */
 function candidateFile(candidateId: string): string {
   if (typeof candidateId !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9_.:-]{0,199}$/.test(candidateId) || candidateId.includes('..')) {
     throw new Error('Import candidate not found.');
@@ -1129,7 +1129,7 @@ function buildSqlCandidate(options: {
     warnings,
     conversionNotes: [
       'Deterministic SQL extraction created this DQL draft locally.',
-      'Name, description, domain, and tags come from leading SQL comments when present; otherwise DQL uses the source path and import defaults.',
+      'Name, description, domain, and tags come from leading SQL comments when present; otherwise ZLens uses the source path and import defaults.',
       'Multiple scripts in one file are split by semicolon, GO batch separator, or repeated name/title header comments.',
       'The SQL statement is wrapped into query = """ ... """ without LLM rewriting.',
       'Visualization defaults to table until a reviewer chooses a chart type.',

@@ -9,7 +9,7 @@
  * Acceptance: AGT-017, AGT-018.
  */
 
-import { normalizeMetricCapabilityContract, type AnalyticalDimensionBindingV2, type AnalyticalQuestionFrameV2, type MetricCapabilityContract } from '@duckcodeailabs/dql-core';
+import { normalizeMetricCapabilityContract, type AnalyticalDimensionBindingV2, type AnalyticalQuestionFrameV2, type MetricCapabilityContract } from '@zlens/core';
 import { questionTypeFromText, type AgentEvidenceCandidate, type AgentRetrievalEvidence, type MeaningQueryIntent, type MeaningQuestionType } from './meaning-resolution.js';
 import type { ResolvedAnalyticalPlan, ResolvedPlanMemberBinding } from './resolved-analytical-plan.js';
 

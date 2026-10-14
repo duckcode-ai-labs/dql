@@ -2,7 +2,7 @@ import { authorizedFetch } from './server-auth';
 
 /**
  * Files made on the server (RFC 0010 HH-17). With a host, a download is not
- * the table on screen: DQL runs the statement again for the export, so the
+ * the table on screen: ZLens runs the statement again for the export, so the
  * host's rules for what may leave (masked or refused columns) apply to
  * exactly what the file holds.
  */

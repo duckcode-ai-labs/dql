@@ -4,7 +4,7 @@ import type {
   ProviderDispatchPhaseV1,
   ProviderEgressPurpose,
   ProviderEgressReceiptV1,
-} from '@duckcodeailabs/dql-core';
+} from '@zlens/core';
 
 export const PROVIDER_RESULT_ROW_REDACTION_POLICY_ID = 'research-result-rows-v1';
 export const PROVIDER_ZERO_RESULT_ROWS_POLICY_ID = 'no-result-rows-v1';

@@ -3,7 +3,7 @@ import {
   type ComposeQueryOptions,
   type DqlArtifactReference,
   type SemanticLayer,
-} from '@duckcodeailabs/dql-core';
+} from '@zlens/core';
 import {
   buildAnalysisQuestionPlan,
   composeSemanticQueryForQuestion,
@@ -11,9 +11,10 @@ import {
   renderSemanticDqlArtifact,
   upsertGeneratedDqlArtifactDraft,
   type GeneratedDraftBlock,
-} from '@duckcodeailabs/dql-agent';
+} from '@zlens/agent';
 import type { DQLContext } from '../context.js';
 import { zodInputShapeForTool } from '../tool-schema.js';
+import { readEnv } from '@zlens/core';
 
 export const querySemanticModelInput = zodInputShapeForTool('query_semantic_model');
 
@@ -216,7 +217,7 @@ function semanticCompileTrustStatus(draftBlock?: GeneratedDraftBlock, executionE
     certification: 'uncertified',
     trustLabelInfo: resolveTrustLabel('ai_generated'),
     draftPath: draftBlock?.path,
-    promotionPath: draftBlock ? 'dql certify --from-draft' : undefined,
+    promotionPath: draftBlock ? 'zlens certify --from-draft' : undefined,
     caveats: [
       'No certified block exactly answered this question.',
       'Semantic-layer members were compiled deterministically, but the generated DQL artifact must be reviewed before certification.',
@@ -254,7 +255,7 @@ async function previewSemanticQuery(
     };
   }
 
-  const base = input.serverUrl ?? process.env.DQL_RUNTIME_URL ?? 'http://127.0.0.1:3474';
+  const base = input.serverUrl ?? readEnv('ZLENS_RUNTIME_URL') ?? 'http://127.0.0.1:3474';
   const url = `${base.replace(/\/$/, '')}/api/notebook/execute`;
   let response: Response;
   try {
@@ -273,7 +274,7 @@ async function previewSemanticQuery(
   } catch (err) {
     return {
       executionStatus: 'runtime_unavailable',
-      error: `Could not reach DQL runtime at ${base}. Start it with \`dql serve\` in ${ctx.projectRoot}. (${err instanceof Error ? err.message : String(err)})`,
+      error: `Could not reach ZLens runtime at ${base}. Start it with \`zlens serve\` in ${ctx.projectRoot}. (${err instanceof Error ? err.message : String(err)})`,
       maxRowsReturned: rowLimit,
     };
   }

@@ -1,5 +1,5 @@
 /**
- * Shared best-effort AI-enrichment gather for `dql propose` (CLI) and the
+ * Shared best-effort AI-enrichment gather for `zlens propose` (CLI) and the
  * notebook generate endpoint. Runs a deterministic dryRun pass to collect facts,
  * then asks the configured provider to enrich human-facing content. Returns a
  * slug→content map, or `undefined` on any miss (no provider, 'off', no facts) so
@@ -17,7 +17,7 @@ import {
   type EnrichFacts,
   type EnrichedContent,
   type ProposeConfigInput,
-} from '@duckcodeailabs/dql-agent';
+} from '@zlens/agent';
 
 export async function gatherProposeEnrichment(
   projectRoot: string,

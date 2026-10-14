@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { groupingIdentityGapOfSql } from '@duckcodeailabs/dql-core';
+import { groupingIdentityGapOfSql } from '@zlens/core';
 import { extractBlockContract } from '../block-contract.js';
 import { parseIntent } from '../intent.js';
 import { buildVocabularyIndex } from '../vocabulary.js';

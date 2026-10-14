@@ -8,7 +8,7 @@ import type {
   ManifestDatasetMeasure,
   ModelingAuthoringChange,
   TermTemplateInput,
-} from '@duckcodeailabs/dql-core';
+} from '@zlens/core';
 import type { WriteSkillInput } from './skills/loader.js';
 
 export type ContextAuthoringOrigin =

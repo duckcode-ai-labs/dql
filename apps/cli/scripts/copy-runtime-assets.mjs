@@ -1,4 +1,4 @@
-import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -38,22 +38,25 @@ const cliPkg = JSON.parse(readFileSync(join(CLI_ROOT, 'package.json'), 'utf-8'))
 const deps = cliPkg.dependencies ?? {};
 let changed = false;
 
+// Package names no longer match folder names (`@zlens/core` lives in
+// packages/dql-core), so index every workspace package by its declared name.
+const workspaceVersions = new Map();
+for (const group of ['packages', 'apps']) {
+  const groupDir = join(REPO_ROOT, group);
+  if (!existsSync(groupDir)) continue;
+  for (const entry of readdirSync(groupDir, { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue;
+    const manifest = join(groupDir, entry.name, 'package.json');
+    if (!existsSync(manifest)) continue;
+    const pkg = JSON.parse(readFileSync(manifest, 'utf-8'));
+    if (pkg.name && pkg.version) workspaceVersions.set(pkg.name, pkg.version);
+  }
+}
+
 for (const [name, version] of Object.entries(deps)) {
   if (typeof version === 'string' && version.startsWith('workspace:')) {
     // Find the package's actual version in the monorepo
-    const shortName = name.replace('@duckcodeailabs/', '');
-    const candidates = [
-      join(REPO_ROOT, 'packages', shortName, 'package.json'),
-      join(REPO_ROOT, 'apps', shortName, 'package.json'),
-    ];
-    let resolvedVersion;
-    for (const candidate of candidates) {
-      if (existsSync(candidate)) {
-        const pkg = JSON.parse(readFileSync(candidate, 'utf-8'));
-        resolvedVersion = pkg.version;
-        break;
-      }
-    }
+    const resolvedVersion = workspaceVersions.get(name);
     if (resolvedVersion) {
       deps[name] = `^${resolvedVersion}`;
       changed = true;

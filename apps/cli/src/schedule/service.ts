@@ -1,5 +1,5 @@
-import { QueryExecutor, type ConnectionConfig } from '@duckcodeailabs/dql-connectors';
-import { findAppDocuments, loadAppDocument } from '@duckcodeailabs/dql-core';
+import { QueryExecutor, type ConnectionConfig } from '@zlens/connectors';
+import { findAppDocuments, loadAppDocument } from '@zlens/core';
 import { findProjectRoot, loadProjectConfig, normalizeProjectConnection } from '../local-runtime.js';
 import { discoverScheduledBlocks } from './discovery.js';
 import { runAppDashboard, runBlock } from './runner.js';
@@ -55,8 +55,8 @@ export interface AppScheduler {
 /**
  * Registers a cron task per App schedule and keeps them in step with the
  * project: a schedule added, changed or removed in `dql.app.json` is picked up
- * on the next refresh, without a restart. Used by `dql schedule start` and by
- * `dql notebook`, which runs its project's App schedules itself.
+ * on the next refresh, without a restart. Used by `zlens schedule start` and by
+ * `zlens notebook`, which runs its project's App schedules itself.
  */
 export function startAppScheduler(options: {
   projectRoot: string;
@@ -147,7 +147,7 @@ export async function runScheduledApp(
 /**
  * A loopback App runtime this process starts for scheduled pages. With
  * `closeWhenIdle` (DuckDB, where only one process may open the database
- * file) it is closed after every run, so a `dql notebook` started later can
+ * file) it is closed after every run, so a `zlens notebook` started later can
  * open the database; otherwise it is kept for the life of the service.
  */
 function ownRuntimePageRunner(
@@ -238,7 +238,7 @@ export async function startScheduleService(options: ServiceOptions = {}): Promis
     tasks.push({ stop: () => task.stop() });
   }
 
-  // App pages run through the App runtime. A `dql notebook` serving this
+  // App pages run through the App runtime. A `zlens notebook` serving this
   // project is used when one is running — it already holds the database, and
   // DuckDB allows one process per file — and when it runs App schedules
   // itself, this service leaves them to it. Otherwise pages run through a
@@ -252,7 +252,7 @@ export async function startScheduleService(options: ServiceOptions = {}): Promis
     run: async (schedule) => {
       const notebook = await findNotebook(projectRoot);
       if (notebook?.descriptor.appSchedules) {
-        log.log(`[schedule] ${schedule.appId}/${schedule.scheduleId} is run by dql notebook (pid ${notebook.descriptor.pid}); skipped here`);
+        log.log(`[schedule] ${schedule.appId}/${schedule.scheduleId} is run by zlens notebook (pid ${notebook.descriptor.pid}); skipped here`);
         return;
       }
       await runScheduledApp(schedule, {

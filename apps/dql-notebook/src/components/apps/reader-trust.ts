@@ -1,21 +1,21 @@
 import type { DashboardDocumentResponse, DashboardRunResponse } from '../../api/client';
-import type { TileQuery } from '@duckcodeailabs/dql-core/apps/tile-query';
-import { QUICK_CALC_LABELS, formatTileCalcExpr } from '@duckcodeailabs/dql-core/apps/tile-calcs';
+import type { TileQuery } from '@zlens/core/apps/tile-query';
+import { QUICK_CALC_LABELS, formatTileCalcExpr } from '@zlens/core/apps/tile-calcs';
 import {
   readerTileTrust as coreReaderTileTrust,
   isDataTileForTrust as coreIsDataTileForTrust,
   type ReaderTrust,
   type ReaderTrustItem,
   type ReaderTrustTile,
-} from '@duckcodeailabs/dql-core/apps/reader-trust';
+} from '@zlens/core/apps/reader-trust';
 
 /**
  * The reader's trust vocabulary lives in dql-core (RFC 0008 step 6, shared
  * with signed snapshots and digests in step 10). This module adds what only
  * the reader needs: freshness and the receipt behind a tile.
  */
-export { READER_TRUST_LABELS, readerTrustCounts, readerTrustSummary } from '@duckcodeailabs/dql-core/apps/reader-trust';
-export type { ReaderTrust, ReaderTrustState } from '@duckcodeailabs/dql-core/apps/reader-trust';
+export { READER_TRUST_LABELS, readerTrustCounts, readerTrustSummary } from '@zlens/core/apps/reader-trust';
+export type { ReaderTrust, ReaderTrustState } from '@zlens/core/apps/reader-trust';
 
 type LayoutItem = DashboardDocumentResponse['dashboard']['layout']['items'][number];
 type RunTile = DashboardRunResponse['tiles'][number];

@@ -1,28 +1,28 @@
 /**
- * `dql lineage` — Answer-layer lineage analysis.
+ * `zlens lineage` — Answer-layer lineage analysis.
  *
  * Shows how data flows from source tables through blocks, semantic metrics,
  * domains, and charts. Tracks trust chains and cross-domain impacts.
  *
  * Usage:
- *   dql lineage [path]                    Show full lineage graph summary
- *   dql lineage <name> [path]             Show upstream/downstream for a block, table, or metric
- *   dql lineage --term <name> [path]      Show lineage for a business term
- *   dql lineage --business-360 <name>     Show business definition, sources, consumers, and gaps
- *   dql lineage --business [name] [path]  Show business lineage, optionally focused on a view
- *   dql lineage --table <name> [path]     Show lineage for a specific source table
- *   dql lineage --metric <name> [path]    Show lineage for a specific metric
- *   dql lineage --domain <name> [path]    Show lineage within a domain
- *   dql lineage cross-domain [--domain <name>]
+ *   zlens lineage [path]                    Show full lineage graph summary
+ *   zlens lineage <name> [path]             Show upstream/downstream for a block, table, or metric
+ *   zlens lineage --term <name> [path]      Show lineage for a business term
+ *   zlens lineage --business-360 <name>     Show business definition, sources, consumers, and gaps
+ *   zlens lineage --business [name] [path]  Show business lineage, optionally focused on a view
+ *   zlens lineage --table <name> [path]     Show lineage for a specific source table
+ *   zlens lineage --metric <name> [path]    Show lineage for a specific metric
+ *   zlens lineage --domain <name> [path]    Show lineage within a domain
+ *   zlens lineage cross-domain [--domain <name>]
  *                                         Show cross-domain boundary flows
- *   dql lineage --impact <name> [path]    Impact analysis: what breaks if this node changes?
- *   dql lineage --trust-chain <from> <to> Show trust chain between two blocks
- *   dql lineage --search <term> [path]    Search lineage nodes by name
- *   dql lineage --focus <name> [path]     Show a focused lineage subgraph
- *   dql lineage --dashboard <name> [path] Show lineage for a dashboard/notebook
- *   dql lineage --dbt [path]              Show the dbt portion of lineage
- *   dql lineage --export [path]           Export lineage as JSON
- *   dql lineage --no-manifest             Force live scan (skip dql-manifest.json)
+ *   zlens lineage --impact <name> [path]    Impact analysis: what breaks if this node changes?
+ *   zlens lineage --trust-chain <from> <to> Show trust chain between two blocks
+ *   zlens lineage --search <term> [path]    Search lineage nodes by name
+ *   zlens lineage --focus <name> [path]     Show a focused lineage subgraph
+ *   zlens lineage --dashboard <name> [path] Show lineage for a dashboard/notebook
+ *   zlens lineage --dbt [path]              Show the dbt portion of lineage
+ *   zlens lineage --export [path]           Export lineage as JSON
+ *   zlens lineage --no-manifest             Force live scan (skip dql-manifest.json)
  */
 
 import { readdirSync, readFileSync, existsSync } from 'node:fs';
@@ -45,7 +45,7 @@ import {
   type LineageNode,
   type Business360Asset,
   type Business360Result,
-} from '@duckcodeailabs/dql-core';
+} from '@zlens/core';
 import type { CLIFlags } from '../args.js';
 
 export async function runLineage(
@@ -73,7 +73,7 @@ export async function runLineage(
     : resolve('.');
 
   if (!existsSync(join(projectRoot, 'dql.config.json'))) {
-    console.error('No DQL project found (missing dql.config.json). Run from a project root or pass a project path.');
+    console.error('No ZLens project found (missing dql.config.json). Run from a project root or pass a project path.');
     process.exitCode = 1;
     return;
   }
@@ -85,7 +85,7 @@ export async function runLineage(
 
   if (graph.nodeCount === 0) {
     console.log('\n  No lineage data found.');
-    console.log('  Run `dql compile` to generate the project manifest, or add blocks in blocks/.\n');
+    console.log('  Run `zlens compile` to generate the project manifest, or add blocks in blocks/.\n');
     return;
   }
 
@@ -346,7 +346,7 @@ function printSummary(graph: LineageGraph, _flags: CLIFlags): void {
   const businessViews = graph.getNodesByType('business_view');
   const charts = graph.getNodesByType('chart');
 
-  console.log('\n  DQL Lineage Summary');
+  console.log('\n  ZLens Lineage Summary');
   console.log('  ' + '='.repeat(50));
 
   // Overview counts

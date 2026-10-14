@@ -11,7 +11,7 @@
 # Raw: order_items, fct_orders, dim_customers, supplies.
 #
 # HOW TO RUN (needs a running server; no provider needed for the routing half):
-#   dql agent eval apps/cli/test/fixtures/jaffle-supply-chain/agent-evals/routing-taxonomy.agent-evals.yml \
+#   zlens agent eval apps/cli/test/fixtures/jaffle-supply-chain/agent-evals/routing-taxonomy.agent-evals.yml \
 #     --via runtime --format json
 
 cases:

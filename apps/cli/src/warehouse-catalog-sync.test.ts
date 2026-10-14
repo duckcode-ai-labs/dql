@@ -3,8 +3,8 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import Database from 'better-sqlite3';
-import { readWarehouseCatalog } from '@duckcodeailabs/dql-core';
-import type { ConnectionConfig, QueryExecutor } from '@duckcodeailabs/dql-connectors';
+import { readWarehouseCatalog } from '@zlens/core';
+import type { ConnectionConfig, QueryExecutor } from '@zlens/connectors';
 import { assembleWarehouseCatalog, buildWarehouseCatalogQueries, syncWarehouseCatalog } from './warehouse-catalog-sync.js';
 import type { ConnectionMetadataScopeV1 } from './warehouse-metadata.js';
 

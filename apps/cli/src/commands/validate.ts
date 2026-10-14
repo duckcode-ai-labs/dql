@@ -9,7 +9,7 @@ import {
   resolveDataLexManifestPath,
   type SemanticLayer,
   type Diagnostic as CoreDiagnostic,
-} from '@duckcodeailabs/dql-core';
+} from '@zlens/core';
 import type { CLIFlags } from '../args.js';
 
 interface Diagnostic {

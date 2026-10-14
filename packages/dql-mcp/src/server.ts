@@ -5,7 +5,7 @@ import {
   getDqlToolDefinition,
   type DqlToolName,
   type DqlToolSurface,
-} from '@duckcodeailabs/dql-agent';
+} from '@zlens/agent';
 import { DQLContext, findProjectRoot } from './context.js';
 import { zodRawShapeFromJsonSchema } from './tool-schema.js';
 import { searchBlocks } from './tools/search-blocks.js';
@@ -49,6 +49,7 @@ import {
   searchMetadata,
   validateSql,
 } from './tools/metadata.js';
+import { readEnv } from '@zlens/core';
 
 export interface CreateServerOptions {
   projectRoot?: string;
@@ -69,14 +70,14 @@ interface McpToolRegistration {
 }
 
 const DQL_MCP_AGENTIC_INSTRUCTIONS =
-  'DQL is a governed analytics MCP server. Start each session with ' +
+  'ZLens is a governed analytics MCP server. Start each session with ' +
   '`inspect_dql_project`; route every analytics question through `ask_dql` ' +
   'before writing SQL. It returns the safe route, trust label, certified ' +
   'candidate when available, allowed SQL context, and next tool.\n' +
-  'Two ways to answer: `answer_question` runs DQL\'s FULL governed cascade and ' +
+  'Two ways to answer: `answer_question` runs ZLens\'s FULL governed cascade and ' +
   'returns the executed answer + rows + canonical trust label + a reviewable ' +
-  'draft — use it when you want DQL to generate for you (same engine + trust ' +
-  'guards as the DQL UI). The BYOSQL path (`ask_dql` → inspect → ' +
+  'draft — use it when you want ZLens to generate for you (same engine + trust ' +
+  'guards as the ZLens UI). The BYOSQL path (`ask_dql` → inspect → ' +
   '`query_via_metadata` with your own SELECT) is for when you want to author the ' +
   'SQL yourself. To create a reusable block from a description, use ' +
   '`build_block_from_prompt` (governed, no SQL authoring); it returns a ' +
@@ -163,7 +164,7 @@ export function createDQLMCPServer(options: CreateServerOptions = {}): McpServer
   const toolProfile = resolveMcpToolProfile(options.toolProfile);
 
   const server = new McpServer(
-    { name: 'dql-mcp', version: options.version ?? '0.1.0' },
+    { name: 'dql-mcp', title: 'ZLens', version: options.version ?? '0.1.0' },
     { instructions: dqlMcpInstructionsForProfile(toolProfile) },
   );
 
@@ -186,7 +187,7 @@ function buildMcpToolRegistrations(ctx: DQLContext, profile: McpToolProfile = 'a
   const surface: DqlToolSurface = profile === 'full' ? 'mcp' : 'mcp_agentic';
   return dqlToolDefinitionsForSurface(surface).map((definition) => {
     const handler = handlers[definition.name];
-    if (!handler) throw new Error(`MCP DQL tool handler is missing for ${definition.name}`);
+    if (!handler) throw new Error(`MCP ZLens tool handler is missing for ${definition.name}`);
     return {
       name: definition.name,
       inputSchema: zodRawShapeFromJsonSchema(definition.inputSchema),
@@ -197,7 +198,7 @@ function buildMcpToolRegistrations(ctx: DQLContext, profile: McpToolProfile = 'a
 
 function resolveMcpToolProfile(explicit?: McpToolProfile): McpToolProfile {
   if (explicit) return explicit;
-  const raw = process.env.DQL_MCP_TOOL_PROFILE?.trim().toLowerCase();
+  const raw = readEnv('ZLENS_MCP_TOOL_PROFILE')?.trim().toLowerCase();
   return raw === 'full' || raw === 'expert' || raw === 'admin' ? 'full' : 'agentic';
 }
 
@@ -310,7 +311,7 @@ function toolDescription(name: DqlToolName): string {
 }
 
 function wrap(result: unknown) {
-  const text = process.env.DQL_MCP_PRETTY_JSON === '1'
+  const text = readEnv('ZLENS_MCP_PRETTY_JSON') === '1'
     ? JSON.stringify(result, null, 2)
     : JSON.stringify(result);
   return {

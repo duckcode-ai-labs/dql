@@ -1,7 +1,7 @@
 {
-  "name": "@duckcodeailabs/dql-telemetry",
+  "name": "@zlens/telemetry",
   "version": "1.17.3",
-  "description": "Opt-in, privacy-first usage telemetry for DQL.",
+  "description": "Opt-in, privacy-first usage telemetry for ZLens.",
   "license": "Apache-2.0",
   "type": "module",
   "repository": {

@@ -1,5 +1,5 @@
 /**
- * Knowledge graph node + edge shapes for the DQL agent.
+ * Knowledge graph node + edge shapes for the ZLens agent.
  *
  * The KG is built from the compiled `dql-manifest.json` (terms, business views,
  * blocks, dashboards, apps, metrics, dimensions, sources) plus dbt manifest data
@@ -8,8 +8,8 @@
  * structured filters for domain/kind.
  */
 
-import type { TrustLabelId } from '@duckcodeailabs/dql-core';
-import type { BlockParameterDefinition } from '@duckcodeailabs/dql-core';
+import type { TrustLabelId } from '@zlens/core';
+import type { BlockParameterDefinition } from '@zlens/core';
 
 export type KGNodeKind =
   | 'block'

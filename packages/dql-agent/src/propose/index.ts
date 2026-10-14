@@ -1,5 +1,5 @@
 /**
- * `dql propose` — turn dbt evidence into a ranked queue of DRAFT blocks.
+ * `zlens propose` — turn dbt evidence into a ranked queue of DRAFT blocks.
  * AI drafts, humans certify. Nothing here is ever written as certified.
  */
 export { propose, proposePlan, buildProposePreview } from './propose.js';

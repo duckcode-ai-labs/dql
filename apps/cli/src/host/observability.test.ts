@@ -4,10 +4,10 @@ import type { Server } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { QueryExecutor } from '@duckcodeailabs/dql-connectors';
+import type { QueryExecutor } from '@zlens/connectors';
 
-vi.mock('@duckcodeailabs/dql-agent', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@duckcodeailabs/dql-agent')>();
+vi.mock('@zlens/agent', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@zlens/agent')>();
   return {
     ...actual,
     createAskTracePortableBundleV1: vi.fn((trace: { envelope: { traceId: string } }) => ({ manifest: { profile: 'strict' }, trace: { ...trace, redacted: true } })),

@@ -1,5 +1,5 @@
-import type { BlockRecord, TestResultSummary } from '@duckcodeailabs/dql-project';
-import type { GroupingIdentityGap } from '@duckcodeailabs/dql-core';
+import type { BlockRecord, TestResultSummary } from '@zlens/project';
+import type { GroupingIdentityGap } from '@zlens/core';
 import { hasInvariantViolation, type InvariantResult } from './invariant-evaluator.js';
 
 /**

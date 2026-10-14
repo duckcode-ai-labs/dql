@@ -1,5 +1,5 @@
 /** Deterministic capability-readiness projection for modeling and diagnostics. */
-import { normalizeMetricCapabilityContract } from '@duckcodeailabs/dql-core';
+import { normalizeMetricCapabilityContract } from '@zlens/core';
 import type { AgentEvidenceCandidate } from './meaning-resolution.js';
 
 export type AnalyticalReadinessQuestion = 'scalar' | 'filter' | 'grouping' | 'trend' | 'comparison' | 'ranking';

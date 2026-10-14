@@ -169,7 +169,7 @@ describe('App dashboard interaction contract', () => {
 
     // The concrete hash is supplied by the shared core helper rather than a
     // field-name fallback. This mirrors the server's nested response shape.
-    const { tileQueryHash } = await import('@duckcodeailabs/dql-core/apps/tile-query');
+    const { tileQueryHash } = await import('@zlens/core/apps/tile-query');
     tile.dataset.authoredQueryFingerprint = tileQueryHash(item.query);
     const renderPanel = (tab: 'how' | 'dql' | 'sql') => renderToStaticMarkup(createElement(TileEvidencePanel, {
       item,
@@ -237,7 +237,7 @@ describe('App dashboard interaction contract', () => {
       sourceId: 'semantic.commerce', sourceRevision: 'sha256:semantic-a',
       query: { dimensions: [], measures: [{ measure: 'revenue' }] }, viz: { type: 'kpi' }, title: 'Semantic revenue',
     } as any;
-    const { tileQueryHash } = await import('@duckcodeailabs/dql-core/apps/tile-query');
+    const { tileQueryHash } = await import('@zlens/core/apps/tile-query');
     const semantic = renderToStaticMarkup(createElement(TileEvidencePanel, {
       item: semanticItem,
       tile: {

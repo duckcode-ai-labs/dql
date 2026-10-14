@@ -9,7 +9,7 @@ import {
   z,
   Kbd,
   StatusPill,
-} from '@duckcodeailabs/dql-ui';
+} from '@zlens/ui';
 import {
   Eye,
   EyeOff,

@@ -17,7 +17,7 @@ import {
   type DigestNode,
   type NarrativeNode,
   type SemanticLayer,
-} from '@duckcodeailabs/dql-core';
+} from '@zlens/core';
 import type {
   WorkbookIR,
   PageIR,

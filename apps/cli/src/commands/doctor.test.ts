@@ -3,7 +3,7 @@ import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ensureMetadataCatalogFresh } from '@duckcodeailabs/dql-agent';
+import { ensureMetadataCatalogFresh } from '@zlens/agent';
 import { isSnowflakeSupportedNodeVersion, runDoctor } from './doctor.js';
 
 const tempDirs: string[] = [];
@@ -66,11 +66,11 @@ describe('runDoctor', () => {
 
     expect(spy).toHaveBeenCalled();
     const output = spy.mock.calls.flat().join('\n');
-    expect(output).toContain('DQL Doctor');
+    expect(output).toContain('ZLens Doctor');
     expect(output).toContain('blocks/');
     expect(output).toContain('! Agent retrieval health');
     expect(output).not.toContain('✗ Agent retrieval health');
-    expect(output).toContain('npx dql notebook');
+    expect(output).toContain('npx zlens notebook');
     expect(output).not.toContain('add duckdb for file/duckdb local preview support');
   });
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { AnalyticalQuestionFrameV2 } from '@duckcodeailabs/dql-core';
+import type { AnalyticalQuestionFrameV2 } from '@zlens/core';
 import { resolveAnalyticalPeriods } from './analytical-period-resolution.js';
 
 function frame(policy: 'partial_current' | 'latest_complete' | 'closed_period', periods = [{ id: 'current', kind: 'current' as const }]): AnalyticalQuestionFrameV2 {

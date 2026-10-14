@@ -11,7 +11,7 @@ import { useNotebookStore } from '../../store/NotebookStore';
 import { themes } from '../../themes/notebook-theme';
 
 /**
- * Shown when the server refuses this tab's API calls: a DQL server shared on
+ * Shown when the server refuses this tab's API calls: a ZLens server shared on
  * the network answers only a browser that holds its access token, and a tab
  * opened without the full link has none. Asks for the link instead of leaving
  * every page loading.
@@ -65,11 +65,11 @@ export function ServerAccessGate() {
         aria-labelledby="dql-server-access-title"
         style={{ width: '100%', maxWidth: 480, background: t.modalBg, border: `1px solid ${t.cellBorder}`, borderRadius: 10, padding: 20, fontFamily: t.font, color: t.textPrimary, display: 'flex', flexDirection: 'column', gap: 12 }}
       >
-        <h2 id="dql-server-access-title" style={{ fontSize: 16, fontWeight: 600 }}>This DQL server needs its access link</h2>
+        <h2 id="dql-server-access-title" style={{ fontSize: 16, fontWeight: 600 }}>This ZLens server needs its access link</h2>
         <p style={{ fontSize: 13, lineHeight: 1.5, color: t.textSecondary }}>
           {hadToken
             ? 'The server did not accept the access token this tab has. It may have been restarted with a new token: paste the link it printed.'
-            : 'This server is shared on the network and answers only a browser that has its access token. Open the full link printed by dql notebook (it ends in #dql_token=…) in this tab, or paste the link or the token here.'}
+            : 'This server is shared on the network and answers only a browser that has its access token. Open the full link printed by zlens notebook (it ends in #dql_token=…) in this tab, or paste the link or the token here.'}
         </p>
         <input
           autoFocus

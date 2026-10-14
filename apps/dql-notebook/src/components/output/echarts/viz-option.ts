@@ -1,5 +1,5 @@
 import type { EChartsOption } from 'echarts';
-import type { DashboardVizStyle } from '@duckcodeailabs/dql-core/apps/viz-style';
+import type { DashboardVizStyle } from '@zlens/core/apps/viz-style';
 import type { CellChartConfig, QueryResult } from '../../../store/types';
 import type { ThemeMode } from '../../../themes/notebook-theme';
 import { formatChartValue } from '../../../utils/value-format';

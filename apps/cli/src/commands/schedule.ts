@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
-import { QueryExecutor } from '@duckcodeailabs/dql-connectors';
-import { buildManifest } from '@duckcodeailabs/dql-core';
+import { QueryExecutor } from '@zlens/connectors';
+import { buildManifest } from '@zlens/core';
 import type { CLIFlags } from '../args.js';
 import { findProjectRoot, loadProjectConfig, normalizeProjectConnection } from '../local-runtime.js';
 import { discoverScheduledBlocks } from '../schedule/discovery.js';
@@ -66,7 +66,7 @@ export async function runSchedule(
     case 'stop':
       return runScheduleStop(flags);
     default:
-      throw new Error('Usage: dql schedule <list|run|start|stop|status> [args]');
+      throw new Error('Usage: zlens schedule <list|run|start|stop|status> [args]');
   }
 }
 
@@ -131,7 +131,7 @@ async function runScheduleList(flags: CLIFlags): Promise<void> {
 
 async function runScheduleRun(rest: string[], flags: CLIFlags): Promise<void> {
   const target = rest[0];
-  if (!target) throw new Error('Usage: dql schedule run <path-to-block.dql> | dql schedule run <appId> [scheduleId]');
+  if (!target) throw new Error('Usage: zlens schedule run <path-to-block.dql> | zlens schedule run <appId> [scheduleId]');
 
   const projectRoot = findProjectRoot(process.cwd());
   const absPath = isAbsolute(target) ? target : resolve(process.cwd(), target);
@@ -195,7 +195,7 @@ async function runScheduleStatus(flags: CLIFlags): Promise<void> {
   }
 
   if (records.length === 0) {
-    console.log('No run history in .dql/runs/. Trigger a run with: dql schedule run <path>');
+    console.log('No run history in .dql/runs/. Trigger a run with: zlens schedule run <path>');
     return;
   }
 
@@ -213,7 +213,7 @@ async function runScheduleStart(flags: CLIFlags): Promise<void> {
   const existingPid = readPidfile(projectRoot);
   if (existingPid !== null && isProcessAlive(existingPid)) {
     throw new Error(
-      `[schedule] already running (pid ${existingPid}). Use 'dql schedule stop' first.`,
+      `[schedule] already running (pid ${existingPid}). Use 'zlens schedule stop' first.`,
     );
   }
   if (existingPid !== null) {
@@ -238,7 +238,7 @@ async function runScheduleStart(flags: CLIFlags): Promise<void> {
     removePidfile(projectRoot);
     return;
   } else {
-    console.log(`[schedule] running ${service.blocks.length} block(s) and ${service.apps.length} App schedule(s) (pid ${process.pid}). Ctrl+C or 'dql schedule stop' to end.`);
+    console.log(`[schedule] running ${service.blocks.length} block(s) and ${service.apps.length} App schedule(s) (pid ${process.pid}). Ctrl+C or 'zlens schedule stop' to end.`);
     for (const b of service.blocks) {
       console.log(`  - ${b.name}  cron="${b.schedule.cron}"`);
     }
@@ -246,9 +246,9 @@ async function runScheduleStart(flags: CLIFlags): Promise<void> {
       console.log(`  - app ${app.appId}/${app.scheduleId} (${app.dashboardId})  cron="${app.cron}"`);
     }
     if (notebook?.descriptor.appSchedules) {
-      console.log(`  App schedules are run by dql notebook (pid ${notebook.descriptor.pid}) while it is open; this service runs them after it stops.`);
+      console.log(`  App schedules are run by zlens notebook (pid ${notebook.descriptor.pid}) while it is open; this service runs them after it stops.`);
     } else if (notebook) {
-      console.log(`  App pages run through dql notebook (pid ${notebook.descriptor.pid}) while it is open.`);
+      console.log(`  App pages run through zlens notebook (pid ${notebook.descriptor.pid}) while it is open.`);
     }
   }
 
@@ -267,7 +267,7 @@ async function runScheduleStart(flags: CLIFlags): Promise<void> {
 }
 
 /**
- * `dql schedule run <appId> [scheduleId]` — run one App schedule now, exactly
+ * `zlens schedule run <appId> [scheduleId]` — run one App schedule now, exactly
  * as cron would: a full page run, monitors checked, and the digest delivered
  * to the schedule's targets (RFC 0008 step 10).
  */
@@ -283,12 +283,12 @@ async function runAppScheduleOnce(
     const ids = schedules.map((entry) => entry.id).join(', ') || 'none';
     throw new Error(scheduleId
       ? `App ${app.id} has no schedule "${scheduleId}". Schedules: ${ids}.`
-      : `App ${app.id} has ${schedules.length} schedules (${ids}); name one: dql schedule run ${app.id} <scheduleId>`);
+      : `App ${app.id} has ${schedules.length} schedules (${ids}); name one: zlens schedule run ${app.id} <scheduleId>`);
   }
   const projectConfig = loadProjectConfig(projectRoot);
   const connection = normalizeProjectConnection(projectConfig.defaultConnection ?? { driver: 'duckdb' }, projectRoot);
   // The page runs through an App runtime already serving this project when
-  // there is one — `--runtime-url`, or a running `dql notebook` found through
+  // there is one — `--runtime-url`, or a running `zlens notebook` found through
   // `.dql/local/notebook.json` — which DuckDB needs: only one process may
   // open the database file. Otherwise the run starts its own loopback runtime.
   const route = await resolveAppPageRoute(projectRoot, flags.runtimeUrl);
@@ -308,9 +308,9 @@ async function runAppScheduleOnce(
   const failed = record.queries.filter((query) => query.error).length;
   const firing = (record.monitors ?? []).filter((monitor) => monitor.status === 'breached');
   if (failed && !route.pageRunner && record.queries.some((query) => /could not set lock on file/i.test(query.error ?? ''))) {
-    console.log('  DuckDB is open in another process that did not announce itself (for example `dql schedule start`, or');
-    console.log('  a notebook from an older DQL). Stop it, or run through a runtime serving this project:');
-    console.log(`    dql schedule run ${app.id} ${schedule.id} --runtime-url http://127.0.0.1:<port>`);
+    console.log('  DuckDB is open in another process that did not announce itself (for example `zlens schedule start`, or');
+    console.log('  a notebook from an older ZLens). Stop it, or run through a runtime serving this project:');
+    console.log(`    zlens schedule run ${app.id} ${schedule.id} --runtime-url http://127.0.0.1:<port>`);
   }
   console.log(`  ${record.block} → ${record.error ? `error: ${record.error}` : failed ? `${failed} tile(s) did not run` : 'ok'}`);
   console.log(`  tiles: ${record.queries.length} (${record.queries.length - failed} ok)`);
@@ -329,9 +329,9 @@ const LOOPBACK_URL_HOSTS = new Set(['127.0.0.1', 'localhost', '[::1]', '::1']);
 
 /**
  * Where a one-off App schedule run sends its page: `--runtime-url` when
- * given, else the `dql notebook` running on this project, else nowhere
+ * given, else the `zlens notebook` running on this project, else nowhere
  * (`runAppDashboard` then starts a loopback runtime of its own). A runtime
- * beyond loopback gets `DQL_SERVER_TOKEN` as its bearer token.
+ * beyond loopback gets `ZLENS_SERVER_TOKEN` as its bearer token.
  */
 export async function resolveAppPageRoute(
   projectRoot: string,
@@ -351,6 +351,6 @@ export async function resolveAppPageRoute(
   if (!notebook) return {};
   return {
     pageRunner: notebookPageRunner(notebook, { env: options.env }),
-    via: `dql notebook (pid ${notebook.descriptor.pid}) at ${notebook.url}`,
+    via: `zlens notebook (pid ${notebook.descriptor.pid}) at ${notebook.url}`,
   };
 }

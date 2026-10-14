@@ -6,7 +6,7 @@
 REPO="$(cd "$1" && pwd)"; OUT="$2"; HERE="$(cd "$(dirname "$0")" && pwd)"
 mkdir -p "$OUT"
 # The real-DuckDB tests need a folder with the duckdb driver installed; they skip themselves without it.
-export DQL_APP_DATASETS_DUCKDB_CONNECTOR_ROOT
+export ZLENS_APP_DATASETS_DUCKDB_CONNECTOR_ROOT
 step() {
   name="$1"; shift
   echo "== $name $(date +%H:%M:%S) $(uptime | sed 's/.*load averages*: //')" | tee -a "$OUT/summary.txt"
@@ -21,7 +21,7 @@ step tsc-force sh -c 'for p in packages/dql-core packages/dql-connectors package
 # The CLI suite runs in the background so its process tree can be sampled.
 echo "== cli $(date +%H:%M:%S) $(uptime | sed 's/.*load averages*: //')" | tee -a "$OUT/summary.txt"
 start=$(date +%s)
-( cd apps/cli && DQL_NETWORK_LOG="$OUT/cli-netlog.jsonl" NODE_OPTIONS="--require $REPO/apps/cli/scripts/network-log.cjs" npx vitest run ) > "$OUT/cli.log" 2>&1 &
+( cd apps/cli && ZLENS_NETWORK_LOG="$OUT/cli-netlog.jsonl" NODE_OPTIONS="--require $REPO/apps/cli/scripts/network-log.cjs" npx vitest run ) > "$OUT/cli.log" 2>&1 &
 CLI=$!
 "$HERE/sample-sockets.sh" "$OUT/cli-sockets.txt" "$CLI" &
 SAMPLER=$!

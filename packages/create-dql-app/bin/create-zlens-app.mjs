@@ -1,12 +1,12 @@
 #!/usr/bin/env node
-// create-dql-app — self-contained scaffolder.
+// create-zlens-app — self-contained scaffolder.
 //
 // Contract (from the v1.0 "demo gate"): on a clean machine, `npx
-// create-dql-app` followed by `cd … && npx @duckcodeailabs/dql-cli notebook`
+// create-zlens-app` followed by `cd … && npx zlens notebook`
 // produces a running notebook in under 5 minutes.
 //
 // Design: this package writes template files *itself* rather than
-// delegating to `dql init`, so it stays self-contained and installable
+// delegating to `zlens init`, so it stays self-contained and installable
 // with zero-peer-dep friction. Templates live under ../templates/ and are
 // copied verbatim.
 
@@ -31,10 +31,10 @@ const c = {
 };
 
 function usage() {
-  console.log(`create-dql-app ${VERSION}
+  console.log(`create-zlens-app ${VERSION}
 
 Usage:
-  npx create-dql-app@latest <project-dir> [options]
+  npx create-zlens-app@latest <project-dir> [options]
 
 Options:
   --template <name>   Starter template (default: starter)
@@ -42,10 +42,10 @@ Options:
   --version, -v       Show version
 
 Examples:
-  npx create-dql-app@latest my-analytics
-  npx create-dql-app@latest dql --template starter   # inside your dbt repo
+  npx create-zlens-app@latest my-analytics
+  npx create-zlens-app@latest dql --template starter   # inside your dbt repo
 
-Want a ready-made dbt project to try DQL on?
+Want a ready-made dbt project to try ZLens on?
   git clone https://github.com/duckcode-ai/jaffle-shop-duckdb
 `);
 }
@@ -135,7 +135,7 @@ async function main() {
     process.exit(1);
   }
 
-  console.log(c.cyan(`\n⌁ create-dql-app ${VERSION}`));
+  console.log(c.cyan(`\n⌁ create-zlens-app ${VERSION}`));
   console.log(`  scaffolding ${c.bold(projectName)} (template: ${c.bold(args.template)})\n`);
 
   copyDir(tplDir, target);

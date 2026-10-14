@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import type { AgentRun } from '@duckcodeailabs/dql-agent';
+import type { AgentRun } from '@zlens/agent';
 import {
   driveViaRuntime,
   evalKindForRun,

@@ -17,7 +17,7 @@ const DIGIT_ZEROS = [
 function asciiDigit(char: string): string {
   const code = char.codePointAt(0)!;
   for (const zero of DIGIT_ZEROS) if (code >= zero && code < zero + 10) return String(code - zero);
-  // Another script's digit DQL has no table for: still a digit, so still a figure.
+  // Another script's digit ZLens has no table for: still a digit, so still a figure.
   return '5';
 }
 

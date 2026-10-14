@@ -15,9 +15,9 @@ import {
   Table2,
   TableProperties,
 } from 'lucide-react';
-import type { DatasetDescriptor } from '@duckcodeailabs/dql-core/datasets/descriptor';
-import type { TileQuery } from '@duckcodeailabs/dql-core/apps/tile-query';
-import { chartFromEncoding, outputAlias, type DashboardVizEncoding } from '@duckcodeailabs/dql-core/apps/viz-encoding';
+import type { DatasetDescriptor } from '@zlens/core/datasets/descriptor';
+import type { TileQuery } from '@zlens/core/apps/tile-query';
+import { chartFromEncoding, outputAlias, type DashboardVizEncoding } from '@zlens/core/apps/viz-encoding';
 import {
   SHOW_ME_CHARTS,
   showMe,
@@ -25,7 +25,7 @@ import {
   showMeInputFromEncoding,
   type ShowMeChart,
   type ShowMeSuggestion,
-} from '@duckcodeailabs/dql-core/apps/show-me';
+} from '@zlens/core/apps/show-me';
 import type { QueryResult } from '../../../store/types';
 import { shelfFieldLabel } from './field-labels';
 

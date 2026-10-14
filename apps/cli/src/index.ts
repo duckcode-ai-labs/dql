@@ -37,89 +37,89 @@ import { runPropose } from "./commands/propose.js";
 import { runModel } from "./commands/model.js";
 
 const HELP = `
-  dql — DQL CLI
+  zlens — ZLens CLI
 
   Usage:
-    dql init [directory]             Initialize DQL in a project (auto-detects dbt)
-    dql new <type> <name>           Create a domain, block, semantic block, view, term, dashboard, or workbook
-    dql build <file.dql>            Compile a DQL file to a static HTML bundle
-    dql doctor [path]               Run local setup checks for a DQL project
-    dql doctor scale [path]         Report enterprise-scale manifest/cache/index health
-    dql doctor git-hygiene [path]   Flag tracked local/generated files that create noisy commits
-    dql preview <file.dql>          Render a local browser preview for a DQL file
-    dql serve [directory]           Serve a built DQL bundle locally
-    dql parse <file.dql>            Parse and analyze a DQL file
-    dql test <file.dql>             [deprecated] Use dql certify --connection instead
-    dql validate [path]             Validate all DQL files and semantic references
-    dql certify <file.dql>          Evaluate certification rules
-    dql certify <file.dql> --enterprise
+    zlens init [directory]           Initialize ZLens in a project (auto-detects dbt)
+    zlens new <type> <name>         Create a domain, block, semantic block, view, term, dashboard, or workbook
+    zlens build <file.dql>          Compile a DQL file to a static HTML bundle
+    zlens doctor [path]             Run local setup checks for a ZLens project
+    zlens doctor scale [path]       Report enterprise-scale manifest/cache/index health
+    zlens doctor git-hygiene [path] Flag tracked local/generated files that create noisy commits
+    zlens preview <file.dql>        Render a local browser preview for a DQL file
+    zlens serve [directory]         Serve a built DQL bundle locally
+    zlens parse <file.dql>          Parse and analyze a DQL file
+    zlens test <file.dql>           [deprecated] Use zlens certify --connection instead
+    zlens validate [path]           Validate all DQL files and semantic references
+    zlens certify <file.dql>        Evaluate certification rules
+    zlens certify <file.dql> --enterprise
                                     Enforce enterprise reusable-block requirements
-    dql certify --from-draft <path> Promote a Tier-2 draft block to certified
+    zlens certify --from-draft <path> Promote a Tier-2 draft block to certified
                                     (auto-flips status, sets datalex_contract,
                                      surfaces datalex-manifest.json patch)
-    dql info <file.dql>             Show block metadata
-    dql migrate <source>            Scaffold migration from looker/tableau/dbt/metabase/raw-sql
-    dql migrate format [--check]    Upgrade all .dql/.dqlnb files to canonical format
-    dql migrate layout --to domain-first [--dry-run]
+    zlens info <file.dql>           Show block metadata
+    zlens migrate <source>          Scaffold migration from looker/tableau/dbt/metabase/raw-sql
+    zlens migrate format [--check]  Upgrade all .dql/.dqlnb files to canonical format
+    zlens migrate layout --to domain-first [--dry-run]
                                     Preview or apply legacy-to-domain folder moves
-    dql migrate parameters --check  Audit legacy block parameters before AI adaptation
-    dql migrate datalex --input <manifest.json> [--dry-run|--apply]
+    zlens migrate parameters --check  Audit legacy block parameters before AI adaptation
+    zlens migrate datalex --input <manifest.json> [--dry-run|--apply]
                                     Convert DataLex-only business semantics into
                                     draft dbt-first Domain Package overlays
-    dql migrate modeling --to dbt-first --dry-run|--apply
+    zlens migrate modeling --to dbt-first --dry-run|--apply
                                     Explicitly adopt manifest v3, consolidate
                                     modeling, and relocate legacy shared products
-    dql import sql <path>           Generate AI import drafts from SQL files/folders
-    dql import sql <path> --save    Compatibility alias; drafts autosave before certification
-    dql propose [path]              Draft a ranked governance layer from dbt evidence
+    zlens import sql <path>         Generate AI import drafts from SQL files/folders
+    zlens import sql <path> --save  Compatibility alias; drafts autosave before certification
+    zlens propose [path]            Draft a ranked governance layer from dbt evidence
                                     (one DRAFT block per high-value model; never
                                      auto-certified — humans certify)
-    dql propose --dry-run           Rank dbt models without writing any drafts
-    dql promote notebook <path> --to shared
+    zlens propose --dry-run         Rank dbt models without writing any drafts
+    zlens promote notebook <path> --to shared
                                     Strip local run/UI state and mark a notebook shared
-    dql promote app <app-id> --to shared
+    zlens promote app <app-id> --to shared
                                     Promote an App manifest to reviewed shared source
-    dql promote dashboard <app-id>/<dashboard-id> --to shared
+    zlens promote dashboard <app-id>/<dashboard-id> --to shared
                                     Strip local tiles/state and mark a dashboard shared
-    dql fmt <file.dql|.dqlnb>       Format DQL/notebook file in place
-    dql diff <path>                 Diff a .dql/.dqlnb file vs HEAD
-    dql diff <before> <after>       Semantic diff between two files
-    dql diff <path> --impact --write-recertification
+    zlens fmt <file.dql|.dqlnb>     Format DQL/notebook file in place
+    zlens diff <path>               Diff a .dql/.dqlnb file vs HEAD
+    zlens diff <before> <after>     Semantic diff between two files
+    zlens diff <path> --impact --write-recertification
                                     Mark impacted semantic YAML pending recertification
-    dql notebook [path]             Launch the browser-first notebook for a project
-    dql semantic <sub> [path]       Semantic layer: list, validate, query, pull
-    dql compile [path]              Generate project manifest (dql-manifest.json)
-    dql sync dbt [path]             Diff, compile, and reindex dbt-backed DQL state
-    dql sync dbt --check [path]     Report dbt/DQL drift without writing
-    dql sync warehouse [path]       Read warehouse schemas (tables, columns, keys) — no dbt needed
-    dql model list|validate [path]  Inspect or validate dbt-first Domain Packages
-    dql model discover [path]       Preview draft domains and joins (from dbt, or the warehouse catalog)
-    dql model apply-discovery [path] --apply
+    zlens notebook [path]           Launch the browser-first notebook for a project
+    zlens semantic <sub> [path]     Semantic layer: list, validate, query, pull
+    zlens compile [path]            Generate project manifest (dql-manifest.json)
+    zlens sync dbt [path]           Diff, compile, and reindex dbt-backed DQL state
+    zlens sync dbt --check [path]   Report dbt/DQL drift without writing
+    zlens sync warehouse [path]     Read warehouse schemas (tables, columns, keys) — no dbt needed
+    zlens model list|validate [path]  Inspect or validate dbt-first Domain Packages
+    zlens model discover [path]     Preview draft domains and joins (from dbt, or the warehouse catalog)
+    zlens model apply-discovery [path] --apply
                                     Write reviewed sparse Domain Package proposals
-    dql model import <file-or-directory> --domain <id> --area <id> --dry-run|--apply
+    zlens model import <file-or-directory> --domain <id> --area <id> --dry-run|--apply
                                     Import DQL/dbt YAML through the guarded proposal service
-    dql model explain <id> [path]   Explain whether a relationship is automatic join proof
-    dql lineage [block] [path]      Answer-layer lineage analysis
-    dql lineage cross-domain        Show cross-domain lineage flows (--domain filters)
-    dql mcp [--http]                Run the DQL MCP server (stdio by default; --http = loopback)
-    dql mcp test [path]             Check whether DQL MCP can load this project
-    dql connect <target> [path]     Configure Codex, Claude Code, Claude Desktop, or Cursor MCP
-    dql app new|generate|ls|show|build|reindex <name-or-path>
+    zlens model explain <id> [path] Explain whether a relationship is automatic join proof
+    zlens lineage [block] [path]    Answer-layer lineage analysis
+    zlens lineage cross-domain      Show cross-domain lineage flows (--domain filters)
+    zlens mcp [--http]              Run the ZLens MCP server (stdio by default; --http = loopback)
+    zlens mcp test [path]           Check whether ZLens MCP can load this project
+    zlens connect <target> [path]   Configure Codex, Claude Code, Claude Desktop, or Cursor MCP
+    zlens app new|generate|ls|show|build|reindex <name-or-path>
                                     Manage App artifacts (metadata, policies, dashboards, schedules)
-    dql schedule list|run|start|status  Local scheduler for @schedule'd blocks (alerts + notifications)
-      dql agent ask "<question>"      Block-first agent loop (certified blocks → fallback LLM SQL)
-      dql agent threads               List persisted conversation threads (resume with --thread)
-      dql agent trace list|show|export|validate|replay|compare
+    zlens schedule list|run|start|status  Local scheduler for @schedule'd blocks (alerts + notifications)
+      zlens agent ask "<question>"    Block-first agent loop (certified blocks → fallback LLM SQL)
+      zlens agent threads             List persisted conversation threads (resume with --thread)
+      zlens agent trace list|show|export|validate|replay|compare
                                     Inspect/export local redacted Ask execution traces
-      dql agent reindex [path]        Rebuild .dql/cache/agent-kg.sqlite and metadata.sqlite
-      dql agent feedback up|down      Record local answer-quality telemetry for later review
-      dql agent eval agent-evals.yml  Measure certified/follow-up/refusal accuracy
-    dql slack serve                 Slack slash-command bot (forwards to the answer loop)
-    dql verify                      Verify dql-manifest.json is reproducible from source
-    dql eval [path]                 Replay block examples + eval/*.yaml through the agent
+      zlens agent reindex [path]      Rebuild .dql/cache/agent-kg.sqlite and metadata.sqlite
+      zlens agent feedback up|down    Record local answer-quality telemetry for later review
+      zlens agent eval agent-evals.yml  Measure certified/follow-up/refusal accuracy
+    zlens slack serve               Slack slash-command bot (forwards to the answer loop)
+    zlens verify                    Verify dql-manifest.json is reproducible from source
+    zlens eval [path]               Replay block examples + eval/*.yaml through the agent
                                     router and score routing accuracy (CI-gateable)
-    dql --version                    Show version
-    dql --help                      Show this help
+    zlens --version                  Show version
+    zlens --help                    Show this help
 
   Options:
     --format json|text              Output format (default: text)
@@ -168,11 +168,11 @@ const HELP = `
 
 const COMMAND_HELP: Record<string, string> = {
   certify: `
-  dql certify — Evaluate local certification rules
+  zlens certify — Evaluate local certification rules
 
   Usage:
-    dql certify <file.dql> [--connection <driver|path>] [--skip-tests] [--enterprise]
-    dql certify --from-draft <path> [--contract <id@version>] [--force]
+    zlens certify <file.dql> [--connection <driver|path>] [--skip-tests] [--enterprise]
+    zlens certify --from-draft <path> [--contract <id@version>] [--force]
 
   Notes:
     Certification is a local OSS trust label. Use status = "certified" for
@@ -181,11 +181,11 @@ const COMMAND_HELP: Record<string, string> = {
     reusable pattern, review cadence, and test assertions hard requirements.
   `,
   import: `
-  dql import — Convert existing SQL into reviewable DQL drafts
+  zlens import — Convert existing SQL into reviewable DQL drafts
 
   Usage:
-    dql import sql <file-or-folder> [--domain <name>] [--owner <name>]
-    dql import sql <file-or-folder> --save [--domain <name>] [--owner <name>]
+    zlens import sql <file-or-folder> [--domain <name>] [--owner <name>]
+    zlens import sql <file-or-folder> --save [--domain <name>] [--owner <name>]
 
   Notes:
     Import creates AI-first draft blocks under _drafts, parameterizes safe
@@ -193,11 +193,11 @@ const COMMAND_HELP: Record<string, string> = {
     generated DQL automatically.
   `,
   propose: `
-  dql propose — Draft a governance layer from dbt evidence
+  zlens propose — Draft a governance layer from dbt evidence
 
   Usage:
-    dql propose [path] [--dbt-manifest <path>] [--owner <name>] [--limit <n>]
-    dql propose [path] --dry-run [--format json]
+    zlens propose [path] [--dbt-manifest <path>] [--owner <name>] [--limit <n>]
+    zlens propose [path] --dry-run [--format json]
 
   Reads dbt artifacts (manifest.json, catalog.json, semantic_manifest.json,
   run_results.json) and emits one DRAFT block per high-value model, inferring
@@ -207,82 +207,82 @@ const COMMAND_HELP: Record<string, string> = {
 
   Nothing is ever auto-certified. Re-running is idempotent — existing drafts
   and already-promoted blocks are never overwritten or duplicated. Promote a
-  reviewed draft with: dql certify --from-draft <path> --owner you@example.com
+  reviewed draft with: zlens certify --from-draft <path> --owner you@example.com
   `,
   app: `
-  dql app — Manage local App artifacts
+  zlens app — Manage local App artifacts
 
   Usage:
-    dql app new <name>
-    dql app generate "<prompt>" [--domain <domain>] [--owner <user>] [--ai-layout]
-    dql app ls [path]
-    dql app show <name> [path]
-    dql app build [path]
-    dql app reindex [path]
+    zlens app new <name>
+    zlens app generate "<prompt>" [--domain <domain>] [--owner <user>] [--ai-layout]
+    zlens app ls [path]
+    zlens app show <name> [path]
+    zlens app build [path]
+    zlens app reindex [path]
 
   Notes:
     --ai-layout stores DQL-native GenUI metadata for dynamic visualization and
     layout decisions while preserving certified block trust boundaries.
   `,
   compile: `
-  dql compile — Generate dql-manifest.json
+  zlens compile — Generate dql-manifest.json
 
   Usage:
-    dql compile [path] [--dbt-manifest <path>] [--dbt-hops <n>] [--datalex-manifest <path>] [--no-cache]
+    zlens compile [path] [--dbt-manifest <path>] [--dbt-hops <n>] [--datalex-manifest <path>] [--no-cache]
 
   dql-manifest.json is the dbt-like compiled artifact for blocks, notebooks,
   Apps, dashboards, semantic objects, sources, dbt imports, and lineage.
   `,
   doctor: `
-  dql doctor — Check a local DQL project
+  zlens doctor — Check a local ZLens project
 
   Usage:
-    dql doctor [path] [--format json]
-    dql doctor [path] --ai
-    dql doctor scale [path] [--format json]
-    dql doctor git-hygiene [path] [--format json]
+    zlens doctor [path] [--format json]
+    zlens doctor [path] --ai
+    zlens doctor scale [path] [--format json]
+    zlens doctor git-hygiene [path] [--format json]
 
   Prints setup checks and the next local-first commands to run.
   `,
   promote: `
-  dql promote — Turn private/local work into clean shared Git source
+  zlens promote — Turn private/local work into clean shared Git source
 
   Usage:
-    dql promote notebook <path> --to shared
-    dql promote app <app-id> --to shared
-    dql promote dashboard <app-id>/<dashboard-id> --to shared
+    zlens promote notebook <path> --to shared
+    zlens promote app <app-id> --to shared
+    zlens promote dashboard <app-id>/<dashboard-id> --to shared
 
   Promotion removes run snapshots, local UI state, AI pins, and legacy generated
   options while preserving reviewed app/notebook/dashboard metadata.
   `,
   connect: `
-  dql connect — Configure DQL for external AI agents
+  zlens connect — Configure ZLens for external AI agents
 
   Usage:
-    dql connect codex [path]          Write project .codex/config.toml + AGENTS.md
-    dql connect claude-code [path]    Write project .mcp.json + CLAUDE.md
-    dql connect claude-desktop [path]
-    dql connect cursor [path]
-    dql connect all [path]
+    zlens connect codex [path]        Write project .codex/config.toml + AGENTS.md
+    zlens connect claude-code [path]  Write project .mcp.json + CLAUDE.md
+    zlens connect claude-desktop [path]
+    zlens connect cursor [path]
+    zlens connect all [path]
 
-  After connecting, run: dql mcp test [path]
+  After connecting, run: zlens mcp test [path]
   `,
   semantic: `
-  dql semantic — Work with the local semantic layer
+  zlens semantic — Work with the local semantic layer
 
   Usage:
-    dql semantic list [path]
-    dql semantic validate [path]
-    dql semantic query <metrics> [dimensions]
+    zlens semantic list [path]
+    zlens semantic validate [path]
+    zlens semantic query <metrics> [dimensions]
   `,
   eval: `
-  dql eval — Score the answer agent's routing accuracy
+  zlens eval — Score the answer agent's routing accuracy
 
   Usage:
-    dql eval [path] [--format json]
-    dql eval [path] --min-route-accuracy <0..1> --min-refusal <0..1> --min-candidate-recall <0..1>
-    dql eval [path] --no-examples
-    dql eval [path] --init          Write a starter eval/golden.yaml template
+    zlens eval [path] [--format json]
+    zlens eval [path] --min-route-accuracy <0..1> --min-refusal <0..1> --min-candidate-recall <0..1>
+    zlens eval [path] --no-examples
+    zlens eval [path] --init        Write a starter eval/golden.yaml template
 
   Replays every certified block's examples[].question plus any eval/*.yaml
   cases through the existing agent router (no warehouse, no LLM judging) and
@@ -306,12 +306,12 @@ const COMMAND_HELP: Record<string, string> = {
       priorMeasures: ["<measure>"]       # optional; prior turn's answered measures
   `,
   verify: `
-  dql verify — Verify dql-manifest.json is reproducible
+  zlens verify — Verify dql-manifest.json is reproducible
 
   Usage:
-    dql verify [path] [--dbt-manifest <path>] [--dbt-hops <n>] [--datalex-manifest <path>] [--format json]
+    zlens verify [path] [--dbt-manifest <path>] [--dbt-hops <n>] [--datalex-manifest <path>] [--format json]
 
-  Run after dql compile in CI or before release commits.
+  Run after zlens compile in CI or before release commits.
   `,
 };
 
@@ -331,7 +331,7 @@ async function main() {
   const { command, file, rest, flags } = parseArgs(process.argv.slice(2));
 
   if (flags.version) {
-    console.log(`dql ${getVersion()}`);
+    console.log(`zlens ${getVersion()}`);
     process.exit(0);
   }
 
@@ -363,7 +363,7 @@ async function main() {
     (command === "certify" && Boolean(flags.fromDraft));
   if (!file && !commandAllowsNoFile) {
     console.error(
-      'Error: No file/argument specified. Run "dql --help" for usage.',
+      'Error: No file/argument specified. Run "zlens --help" for usage.',
     );
     process.exit(1);
   }
@@ -465,7 +465,7 @@ async function main() {
         break;
       default:
         console.error(
-          `Unknown command: ${command}. Run "dql --help" for usage.`,
+          `Unknown command: ${command}. Run "zlens --help" for usage.`,
         );
         process.exit(1);
     }

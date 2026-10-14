@@ -4,13 +4,13 @@ import {
   loadAppDocument,
   findAppDocuments,
   type AppDocument,
-} from '@duckcodeailabs/dql-core';
-import { PolicyEngine, type AccessLevel, type AccessPolicy, type DataClassification } from '@duckcodeailabs/dql-governance';
+} from '@zlens/core';
+import { PolicyEngine, type AccessLevel, type AccessPolicy, type DataClassification } from '@zlens/governance';
 import {
   OWNER_DEFAULT,
   defaultPersonaRegistry,
   mergePersonaVariables,
-} from '@duckcodeailabs/dql-project';
+} from '@zlens/project';
 import { currentPrincipal, hostPrincipalPolicyIdentity, hostPrincipalRunOwner, hostPrincipalVariables, hostUserContext, type DqlPrincipal } from './host/request-context.js';
 
 export class DQLAccessDeniedError extends Error {

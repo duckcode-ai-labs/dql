@@ -8,8 +8,8 @@ import {
   type SemanticExecutionReceiptV1,
   type SemanticTargetBindingV1,
   type WarehouseTargetIdentityV1,
-} from '@duckcodeailabs/dql-core';
-import type { PhysicalRelationBindingV1 } from '@duckcodeailabs/dql-agent';
+} from '@zlens/core';
+import type { PhysicalRelationBindingV1 } from '@zlens/agent';
 import {
   compileDbtCloudSemanticQuery,
   listDbtCloudCompatibleDimensions,
@@ -171,13 +171,13 @@ export interface MetricFlowAskTargetContext {
   snapshotId: string;
   /** Request-local provenance for physical bindings, never a MF target proof. */
   executionTargetFingerprint: string;
-  /** The selected DQL connection rendered as a redacted warehouse identity. */
+  /** The selected ZLens connection rendered as a redacted warehouse identity. */
   selectedExecutionTarget: WarehouseTargetIdentityV1;
   /** Exact bindings admitted to this Ask request on the selected target. */
   physicalBindings: readonly PhysicalRelationBindingV1[];
   /**
    * The actual default target MetricFlow will obtain from profiles.yml. It is
-   * absent when DQL cannot resolve a complete default dbt target, which is a
+   * absent when ZLens cannot resolve a complete default dbt target, which is a
    * pre-compilation refusal rather than permission to guess.
    */
   profileTarget?: {
@@ -247,14 +247,14 @@ export class MetricFlowAskTargetMismatchError extends SemanticRuntimeRequiredErr
     const profileLabel = `dbt profile "${profileName}" target "${targetName}"`;
     const message = input.reason === 'binding_target_mismatch'
       ? 'The exact physical metadata selected for this Ask request belongs to a different execution target. '
-        + 'DQL did not invoke local MetricFlow. Refresh the selected connection metadata and retry.'
+        + 'ZLens did not invoke local MetricFlow. Refresh the selected connection metadata and retry.'
       : input.reason === 'profile_target_missing'
         ? 'Local MetricFlow cannot prove that its default dbt profile target matches the warehouse selected for this Ask request. '
-          + 'DQL did not invoke MetricFlow. Configure a complete default target in profiles.yml for the selected DQL connection, then retry.'
+          + 'ZLens did not invoke MetricFlow. Configure a complete default target in profiles.yml for the selected ZLens connection, then retry.'
         : `Local MetricFlow uses ${profileLabel}, which does not match the warehouse selected for this Ask request`
           + `${input.mismatchFields?.length ? ` (${input.mismatchFields.join(', ')})` : ''}. `
-          + 'MetricFlow CLI has no per-query dbt target override, so DQL did not invoke it. '
-          + 'Select the matching DQL connection or make the dbt default target match it, then retry.';
+          + 'MetricFlow CLI has no per-query dbt target override, so ZLens did not invoke it. '
+          + 'Select the matching ZLens connection or make the dbt default target match it, then retry.';
     super(message);
     this.name = 'MetricFlowAskTargetMismatchError';
     this.details = {
@@ -818,7 +818,7 @@ export async function explainMissingSemanticRuntime(projectRoot: string, dbtProj
     }
   } else if (!cloud?.configured) {
     const managed = managedMetricFlowBin(projectRoot);
-    reasons.push(`MetricFlow is not on this server’s PATH: start the server from the shell where \`mf\` works (activate your dbt virtualenv) and restart it, set DQL_METRICFLOW_BIN to the path from \`which mf\`, or install the managed runtime in Settings (${managed}).`);
+    reasons.push(`MetricFlow is not on this server’s PATH: start the server from the shell where \`mf\` works (activate your dbt virtualenv) and restart it, set ZLENS_METRICFLOW_BIN to the path from \`which mf\`, or install the managed runtime in Settings (${managed}).`);
   }
 
   return reasons.length > 0

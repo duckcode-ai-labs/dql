@@ -6,7 +6,7 @@ import {
   openMetadataCatalog,
   type GroundingExpansionResult,
   type LocalContextPack,
-} from '@duckcodeailabs/dql-agent';
+} from '@zlens/agent';
 import type { DQLContext } from '../context.js';
 import { zodInputShapeForTool } from '../tool-schema.js';
 

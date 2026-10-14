@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { SemanticLayer } from '@duckcodeailabs/dql-core';
+import { SemanticLayer } from '@zlens/core';
 import {
   DEFAULT_METRIC_MATCH_EMBEDDING_ALPHA,
   REAL_PROVIDER_METRIC_MATCH_ALPHA,

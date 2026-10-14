@@ -245,7 +245,7 @@ export class MemoryStore {
   }
 }
 
-/** The memory store surface DQL calls (RFC 0010 HH-6): this SQLite store, or a host's own whose methods return Promises. */
+/** The memory store surface ZLens calls (RFC 0010 HH-6): this SQLite store, or a host's own whose methods return Promises. */
 export type MemoryStoreLike = AwaitableMethods<Pick<MemoryStore, 'upsert' | 'get' | 'list' | 'search' | 'setEnabled' | 'delete'>> & {
   close?(): Awaitable<void>;
 };

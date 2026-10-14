@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildStoryBindingCatalog, checkCanvasHtml } from '@duckcodeailabs/dql-core';
+import { buildStoryBindingCatalog, checkCanvasHtml } from '@zlens/core';
 import { canvasDraftUserPrompt, deterministicCanvasPage, draftCanvasPage, type CanvasDraftInput } from './canvas-draft.js';
 
 const input: CanvasDraftInput = {

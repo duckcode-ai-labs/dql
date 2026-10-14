@@ -4,7 +4,7 @@ import type { Server } from 'node:http';
 import { networkInterfaces, type NetworkInterfaceInfo } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { QueryExecutor, type ConnectionConfig } from '@duckcodeailabs/dql-connectors';
+import { QueryExecutor, type ConnectionConfig } from '@zlens/connectors';
 import type { DqlHostHooks } from '../host/request-context.js';
 import type { CLIFlags } from '../args.js';
 import type { AskAgentRuntimeMode, ProjectConfig } from '../local-runtime.js';
@@ -19,6 +19,7 @@ import {
 import { maybeOpenBrowser } from '../open-browser.js';
 import { createRuntimePageRunner } from '../schedule/app-page-run.js';
 import { findRunningNotebook, localRuntimeUrl, writeNotebookDescriptor } from '../schedule/notebook-runtime.js';
+import { readEnv } from '@zlens/core';
 
 const COMMAND_DIR = dirname(fileURLToPath(import.meta.url));
 // Bundled assets are always at dist/assets/ relative to the CLI dist root
@@ -59,7 +60,7 @@ export interface ProjectRuntimeHandle {
 
 /**
  * Start the local notebook/runtime HTTP server for a project and return a handle.
- * Shared by `dql notebook` (long-running) and `dql agent ask` (which starts an
+ * Shared by `zlens notebook` (long-running) and `zlens agent ask` (which starts an
  * ephemeral runtime on a free port — `preferredPort: 0` — and closes it after).
  */
 export async function startProjectRuntime(
@@ -68,9 +69,9 @@ export async function startProjectRuntime(
     preferredPort?: number;
     host?: string;
     askAgentRuntimeMode?: AskAgentRuntimeMode;
-    /** RFC 0010: run as a hosted runtime (see `@duckcodeailabs/dql-cli/host`). */
+    /** RFC 0010: run as a hosted runtime (see `@zlens/cli/host`). */
     hostHooks?: DqlHostHooks;
-    /** RFC 0010 rule 1: how long DQL waits for a host hook (default 10 s). */
+    /** RFC 0010 rule 1: how long ZLens waits for a host hook (default 10 s). */
     hostHookTimeoutMs?: number;
     /** Exact browser origins for a runtime behind a host's front door. */
     allowedOrigins?: string[];
@@ -81,7 +82,7 @@ export async function startProjectRuntime(
   const config = loadProjectConfig(projectRoot);
   const executor = new QueryExecutor();
   const connection = opts.connection !== undefined ? opts.connection : resolveNotebookConnection(config, projectRoot);
-  const host = opts.host ?? process.env.DQL_HOST ?? '127.0.0.1';
+  const host = opts.host ?? readEnv('ZLENS_HOST') ?? '127.0.0.1';
   const askTraceCapability = randomUUID();
   const instanceId = randomUUID();
   let server: Server | undefined;
@@ -159,11 +160,11 @@ export async function runNotebook(targetArg: string | null, flags: CLIFlags): Pr
   const projectRoot = findProjectRoot(baseDir);
   if (!existsSync(join(projectRoot, 'dql.config.json'))) {
     throw new Error(
-      `No DQL project was found at "${baseDir}". Run "dql notebook" from a project root, or pass a project path such as "dql notebook ./my-dql-project".`,
+      `No ZLens project was found at "${baseDir}". Run "zlens notebook" from a project root, or pass a project path such as "zlens notebook ./my-dql-project".`,
     );
   }
   const config = loadProjectConfig(projectRoot);
-  const host = flags.host ?? process.env.DQL_HOST ?? '127.0.0.1';
+  const host = flags.host ?? readEnv('ZLENS_HOST') ?? '127.0.0.1';
   // Validate the flag here so a typo fails before a server starts, but pass it
   // through UNRESOLVED: resolving an absent flag to the default would outrank
   // the project's own `agent.askRuntimeMode` and make the config key dead.
@@ -183,15 +184,15 @@ export async function runNotebook(targetArg: string | null, flags: CLIFlags): Pr
 
   // A server bound beyond loopback answers only a browser holding its token,
   // this machine's included: print links that carry it.
-  const token = LOOPBACK_HOSTS.has(host) ? undefined : process.env.DQL_SERVER_TOKEN;
+  const token = LOOPBACK_HOSTS.has(host) ? undefined : readEnv('ZLENS_SERVER_TOKEN');
   console.log(`\n  ✓ Notebook ready: ${withAccessToken(url, token)}`);
   const networkUrls = networkAccessUrls({ host, port, ...(token ? { token } : {}) });
   if (networkUrls.length > 0) {
-    const allowed = new Set((process.env.DQL_ALLOWED_ORIGINS ?? '').split(',').map((origin) => origin.trim().replace(/\/$/, '')).filter(Boolean));
+    const allowed = new Set((readEnv('ZLENS_ALLOWED_ORIGINS') ?? '').split(',').map((origin) => origin.trim().replace(/\/$/, '')).filter(Boolean));
     console.log(`    Bound on ${host}:${port}. From another device, open the full link (it carries the access token):`);
     for (const link of networkUrls) {
       const origin = new URL(link).origin;
-      console.log(`      ${link}${allowed.has(origin) ? '' : `  (add ${origin} to DQL_ALLOWED_ORIGINS, or browsers there are refused)`}`);
+      console.log(`      ${link}${allowed.has(origin) ? '' : `  (add ${origin} to ZLENS_ALLOWED_ORIGINS, or browsers there are refused)`}`);
     }
     console.log('    A new browser tab needs the full link again, or the token pasted when the page asks for it.');
   } else if (host !== '127.0.0.1') {
@@ -204,10 +205,10 @@ export async function runNotebook(targetArg: string | null, flags: CLIFlags): Pr
 
 /**
  * The notebook announces itself in `.dql/local/notebook.json` and runs the
- * project's App schedules on its own runtime. `dql schedule run|start` read
+ * project's App schedules on its own runtime. `zlens schedule run|start` read
  * the file and run through this server instead of opening the project's
  * database a second time, which DuckDB does not allow. Block (.dql)
- * schedules stay with `dql schedule start`.
+ * schedules stay with `zlens schedule start`.
  */
 async function startNotebookAppSchedules(
   projectRoot: string,
@@ -217,7 +218,7 @@ async function startNotebookAppSchedules(
 ): Promise<{ message?: string }> {
   const other = await findRunningNotebook(projectRoot);
   if (other && other.descriptor.pid !== process.pid) {
-    return { message: `Another dql notebook (pid ${other.descriptor.pid}) serves this project; it runs the App schedules.` };
+    return { message: `Another zlens notebook (pid ${other.descriptor.pid}) serves this project; it runs the App schedules.` };
   }
   const selfUrl = localRuntimeUrl(host, runtime.port);
   const loopback = LOOPBACK_HOSTS.has(host);
@@ -242,7 +243,7 @@ async function startNotebookAppSchedules(
     const connection = normalizeProjectConnection(config.defaultConnection ?? { driver: 'duckdb' }, projectRoot);
     // Pages run through this server's own page-run endpoint, exactly as a
     // reader's full run; beyond loopback that endpoint needs the token.
-    const pageRunner = createRuntimePageRunner(selfUrl, fetch, loopback ? undefined : process.env.DQL_SERVER_TOKEN);
+    const pageRunner = createRuntimePageRunner(selfUrl, fetch, loopback ? undefined : readEnv('ZLENS_SERVER_TOKEN'));
     const executor = new QueryExecutor();
     scheduler = startAppScheduler({
       projectRoot,
@@ -269,7 +270,7 @@ async function startNotebookAppSchedules(
     });
   }
 
-  if (!enabled) return { message: 'App schedules are off in this notebook (--no-schedules); dql schedule runs them through it.' };
+  if (!enabled) return { message: 'App schedules are off in this notebook (--no-schedules); zlens schedule runs them through it.' };
   const count = scheduler?.apps.length ?? 0;
   return count > 0
     ? { message: `Running ${count} App schedule${count === 1 ? '' : 's'} while this notebook is open.` }

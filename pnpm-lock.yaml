@@ -11,7 +11,7 @@ importers:
 
   .:
     dependencies:
-      '@duckcodeailabs/dql-cli':
+      '@zlens/cli':
         specifier: workspace:*
         version: link:apps/cli
     devDependencies:
@@ -36,31 +36,31 @@ importers:
       '@anthropic-ai/sdk':
         specifier: ^0.104.2
         version: 0.104.2(zod@3.25.76)
-      '@duckcodeailabs/dql-agent':
+      '@zlens/agent':
         specifier: workspace:*
         version: link:../../packages/dql-agent
-      '@duckcodeailabs/dql-compiler':
-        specifier: workspace:*
-        version: link:../../packages/dql-compiler
-      '@duckcodeailabs/dql-connectors':
+      '@zlens/connectors':
         specifier: workspace:*
         version: link:../../packages/dql-connectors
-      '@duckcodeailabs/dql-core':
+      '@zlens/core':
         specifier: workspace:*
         version: link:../../packages/dql-core
-      '@duckcodeailabs/dql-governance':
+      '@zlens/dql-compiler':
+        specifier: workspace:*
+        version: link:../../packages/dql-compiler
+      '@zlens/governance':
         specifier: workspace:*
         version: link:../../packages/dql-governance
-      '@duckcodeailabs/dql-mcp':
+      '@zlens/mcp':
         specifier: workspace:*
         version: link:../../packages/dql-mcp
-      '@duckcodeailabs/dql-notebook':
+      '@zlens/notebook':
         specifier: workspace:*
         version: link:../../packages/dql-notebook
-      '@duckcodeailabs/dql-project':
+      '@zlens/project':
         specifier: workspace:*
         version: link:../../packages/dql-project
-      '@duckcodeailabs/dql-slack':
+      '@zlens/slack':
         specifier: workspace:*
         version: link:../../packages/dql-slack
       better-sqlite3:
@@ -82,9 +82,6 @@ importers:
         specifier: ^6.44.0
         version: 6.44.0(zod@3.25.76)
     devDependencies:
-      '@duckcodeailabs/dql-notebook-app':
-        specifier: workspace:*
-        version: link:../dql-notebook
       '@types/better-sqlite3':
         specifier: ^7.6.13
         version: 7.6.13
@@ -97,6 +94,9 @@ importers:
       '@types/nodemailer':
         specifier: ^6.4.17
         version: 6.4.23
+      '@zlens/notebook-app':
+        specifier: workspace:*
+        version: link:../dql-notebook
       tsx:
         specifier: ^4.19.0
         version: 4.21.0
@@ -109,7 +109,7 @@ importers:
 
   apps/desktop:
     dependencies:
-      '@duckcodeailabs/dql-notebook-app':
+      '@zlens/notebook-app':
         specifier: workspace:*
         version: link:../dql-notebook
     devDependencies:
@@ -146,12 +146,6 @@ importers:
       '@dagrejs/dagre':
         specifier: ^3.0.0
         version: 3.0.0
-      '@duckcodeailabs/dql-core':
-        specifier: workspace:*
-        version: link:../../packages/dql-core
-      '@duckcodeailabs/dql-ui':
-        specifier: workspace:*
-        version: link:../../packages/dql-ui
       '@lezer/highlight':
         specifier: ^1.2.3
         version: 1.2.3
@@ -164,6 +158,12 @@ importers:
       '@xyflow/react':
         specifier: ^12.10.1
         version: 12.10.1(@types/react@18.3.28)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      '@zlens/core':
+        specifier: workspace:*
+        version: link:../../packages/dql-core
+      '@zlens/ui':
+        specifier: workspace:*
+        version: link:../../packages/dql-ui
       echarts:
         specifier: 6.1.0
         version: 6.1.0
@@ -264,13 +264,13 @@ importers:
 
   packages/dql-agent:
     dependencies:
-      '@duckcodeailabs/dql-core':
+      '@zlens/core':
         specifier: workspace:*
         version: link:../dql-core
-      '@duckcodeailabs/dql-governance':
+      '@zlens/governance':
         specifier: workspace:*
         version: link:../dql-governance
-      '@duckcodeailabs/dql-project':
+      '@zlens/project':
         specifier: workspace:*
         version: link:../dql-project
       better-sqlite3:
@@ -353,7 +353,7 @@ importers:
 
   packages/dql-compiler:
     dependencies:
-      '@duckcodeailabs/dql-core':
+      '@zlens/core':
         specifier: workspace:*
         version: link:../dql-core
     devDependencies:
@@ -403,10 +403,10 @@ importers:
 
   packages/dql-governance:
     dependencies:
-      '@duckcodeailabs/dql-core':
+      '@zlens/core':
         specifier: workspace:*
         version: link:../dql-core
-      '@duckcodeailabs/dql-project':
+      '@zlens/project':
         specifier: workspace:*
         version: link:../dql-project
     devDependencies:
@@ -419,7 +419,7 @@ importers:
 
   packages/dql-lsp:
     dependencies:
-      '@duckcodeailabs/dql-core':
+      '@zlens/core':
         specifier: workspace:*
         version: link:../dql-core
       vscode-languageserver:
@@ -435,21 +435,21 @@ importers:
 
   packages/dql-mcp:
     dependencies:
-      '@duckcodeailabs/dql-agent':
-        specifier: workspace:*
-        version: link:../dql-agent
-      '@duckcodeailabs/dql-core':
-        specifier: workspace:*
-        version: link:../dql-core
-      '@duckcodeailabs/dql-governance':
-        specifier: workspace:*
-        version: link:../dql-governance
-      '@duckcodeailabs/dql-project':
-        specifier: workspace:*
-        version: link:../dql-project
       '@modelcontextprotocol/sdk':
         specifier: ^1.0.4
         version: 1.29.0(zod@3.25.76)
+      '@zlens/agent':
+        specifier: workspace:*
+        version: link:../dql-agent
+      '@zlens/core':
+        specifier: workspace:*
+        version: link:../dql-core
+      '@zlens/governance':
+        specifier: workspace:*
+        version: link:../dql-governance
+      '@zlens/project':
+        specifier: workspace:*
+        version: link:../dql-project
       zod:
         specifier: ^3.25.0
         version: 3.25.76
@@ -466,10 +466,10 @@ importers:
 
   packages/dql-notebook:
     dependencies:
-      '@duckcodeailabs/dql-connectors':
+      '@zlens/connectors':
         specifier: workspace:*
         version: link:../dql-connectors
-      '@duckcodeailabs/dql-core':
+      '@zlens/core':
         specifier: workspace:*
         version: link:../dql-core
     devDependencies:
@@ -509,7 +509,7 @@ importers:
 
   packages/dql-project:
     dependencies:
-      '@duckcodeailabs/dql-core':
+      '@zlens/core':
         specifier: workspace:*
         version: link:../dql-core
       better-sqlite3:
@@ -543,13 +543,13 @@ importers:
 
   packages/dql-slack:
     dependencies:
-      '@duckcodeailabs/dql-agent':
+      '@zlens/agent':
         specifier: workspace:*
         version: link:../dql-agent
-      '@duckcodeailabs/dql-core':
+      '@zlens/core':
         specifier: workspace:*
         version: link:../dql-core
-      '@duckcodeailabs/dql-project':
+      '@zlens/project':
         specifier: workspace:*
         version: link:../dql-project
     devDependencies:

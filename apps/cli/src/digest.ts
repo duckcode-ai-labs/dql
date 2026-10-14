@@ -8,14 +8,14 @@
 import { execSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { buildManifest, type DQLManifest } from '@duckcodeailabs/dql-core';
+import { buildManifest, type DQLManifest } from '@zlens/core';
 import {
   buildDigest,
   type BlockSourceMap,
   type CompilationOutput,
   type DigestBuildResult,
   type DigestLLMProvider,
-} from '@duckcodeailabs/dql-compiler';
+} from '@zlens/dql-compiler';
 
 export function isDigestOutput(output: CompilationOutput): boolean {
   return Boolean(output.metadata?.narrative);

@@ -5,7 +5,7 @@ import { join } from "node:path";
 import {
   parseAppDocument,
   parseDashboardDocument,
-} from "@duckcodeailabs/dql-core";
+} from "@zlens/core";
 import { KGStore } from "./kg/sqlite-fts.js";
 import {
   generateAppFromPlan,

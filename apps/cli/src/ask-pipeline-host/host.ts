@@ -1,11 +1,11 @@
 import { createHash } from 'node:crypto';
 import { mkdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
-import { buildExecutionPlan } from '@duckcodeailabs/dql-notebook';
+import { buildExecutionPlan } from '@zlens/notebook';
 import { prepareBlockInvocation } from '../block-invocation.js';
 import { writeFileSync } from 'node:fs';
-import type { ConnectionConfig, QueryExecutor } from '@duckcodeailabs/dql-connectors';
-import { getDialect, type DQLManifest, type SemanticLayer } from '@duckcodeailabs/dql-core';
+import type { ConnectionConfig, QueryExecutor } from '@zlens/connectors';
+import { getDialect, type DQLManifest, type SemanticLayer } from '@zlens/core';
 import {
   type ProjectionScope,
   type PreparedRefusal,
@@ -72,9 +72,10 @@ import {
   type RuntimeSchemaTable,
   priorWithoutValues,
   sqlStringValues,
-} from '@duckcodeailabs/dql-agent';
+} from '@zlens/agent';
 import { buildProjectVocabulary, buildVocabularySource, embeddedManifestRelations, normalizeRelationName, type VocabularySourceInput } from './vocabulary-source.js';
 import { businessIdentifierLine, businessIdentifiers, modelingEntityTexts, certifiedJoinViolations, classifySqlJoins, ledgerJoins, markerTableLine, markerTables, modeledJoinPaths, modelingRelationshipEdges, sameRelation, sharedParentShortcuts, type LedgerJoin } from './join-relationships.js';
+import { readEnv } from '@zlens/core';
 
 /**
  * THE ASK PIPELINE HOST.
@@ -455,9 +456,9 @@ export function physicalRelationName(relation: string, databases: Map<string, st
   return database ? `${database}.${relation}` : relation;
 }
 
-/** The wall-clock budget of the column probe per snapshot and connection; `DQL_ASK_COLUMN_PROBE_MS` overrides (default 12 s). */
+/** The wall-clock budget of the column probe per snapshot and connection; `ZLENS_ASK_COLUMN_PROBE_MS` overrides (default 12 s). */
 export function columnProbeBudgetMs(env: NodeJS.ProcessEnv = process.env): number {
-  const configured = Number(env.DQL_ASK_COLUMN_PROBE_MS);
+  const configured = Number(readEnv('ZLENS_ASK_COLUMN_PROBE_MS', env));
   return Number.isFinite(configured) && configured > 0 ? configured : 12_000;
 }
 
@@ -1567,8 +1568,9 @@ export function createAskPipelineHost(deps: AskPipelineHostDeps): AskPipelineHos
       },
     };
     viewCache = { key: viewKey, view };
-    if (process.env.DQL_ASK_PIPELINE_DUMP_VOCABULARY) {
-      try { writeFileSync(process.env.DQL_ASK_PIPELINE_DUMP_VOCABULARY, `${vocabulary.renderCards({ maxChars: 1_000_000 })}\n`); } catch { /* debug only */ }
+    const vocabularyDumpPath = readEnv('ZLENS_ASK_PIPELINE_DUMP_VOCABULARY');
+    if (vocabularyDumpPath) {
+      try { writeFileSync(vocabularyDumpPath, `${vocabulary.renderCards({ maxChars: 1_000_000 })}\n`); } catch { /* debug only */ }
     }
     return view;
   };

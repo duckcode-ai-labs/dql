@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { AppAnalyticalContextV1, DatasetDescriptor, TileQuery } from '@duckcodeailabs/dql-core';
+import type { AppAnalyticalContextV1, DatasetDescriptor, TileQuery } from '@zlens/core';
 import { summarizeDatasetChartFacts } from './dataset-chart-fact-summary.js';
 
 describe('Dataset chart fact summary', () => {

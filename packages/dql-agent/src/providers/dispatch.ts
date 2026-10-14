@@ -98,7 +98,7 @@ export function completeProviderHttpDispatch(input: {
  * Where and how one provider request is sent when it does not go to the
  * provider's own public API — for example Claude on Amazon Bedrock or Google
  * Vertex, which take a different URL, a reshaped body and their own
- * signature. Given the request DQL would send, returns what to send instead.
+ * signature. Given the request ZLens would send, returns what to send instead.
  */
 export interface ProviderHttpTransport {
   prepare(input: { url: string; body: Record<string, unknown>; headers: Record<string, string> }): Promise<{ url: string; body: string; headers: Record<string, string> }>;

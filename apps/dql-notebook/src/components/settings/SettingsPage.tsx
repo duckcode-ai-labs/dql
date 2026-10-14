@@ -170,7 +170,7 @@ export function ConnectionRuntimeSettings({
 
             <GroupLabel
               title="Use your subscription"
-              detail="No API key — sign in with the provider's CLI. DQL runs each request through it using your plan."
+              detail="No API key — sign in with the provider's CLI. ZLens runs each request through it using your plan."
               t={t}
             />
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 14 }}>
@@ -448,7 +448,7 @@ function McpConnectionsEditor({
       {mode === 'json' ? (
         <div style={{ marginTop: 14 }}>
           <div style={{ color: t.textSecondary, fontSize: 12, lineHeight: 1.45, marginBottom: 8 }}>
-            Paste DQL MCP JSON, OpenAI Responses <code>tools</code>, or Claude <code>mcp_servers</code>. Existing stored tokens are preserved when <code>authorizationToken</code> is omitted and the same kind/name is kept.
+            Paste ZLens MCP JSON, OpenAI Responses <code>tools</code>, or Claude <code>mcp_servers</code>. Existing stored tokens are preserved when <code>authorizationToken</code> is omitted and the same kind/name is kept.
           </div>
           <textarea
             value={jsonDraft}
@@ -1394,7 +1394,7 @@ function HintReviewQueue({ t, onStatus }: { t: Theme; onStatus: (message: string
         onStatus(result.error ?? `Could not ${decision === 'approved' ? 'approve' : 'reject'} this correction.`);
       } else {
         onStatus(decision === 'approved'
-          ? `Approved. DQL will apply "${hint.title}" to matching questions.`
+          ? `Approved. ZLens will apply "${hint.title}" to matching questions.`
           : `Rejected. "${hint.title}" will not be used.`);
       }
     } catch (error) {

@@ -94,7 +94,7 @@ Use the governed revenue reporting policy.`;
 });
 
 describe('loadSkills', () => {
-  it('loads and writes Skills from layout.skillsPath relative to the DQL project', () => {
+  it('loads and writes Skills from layout.skillsPath relative to the ZLens project', () => {
     const repoRoot = join(root, 'dbt-repo');
     const dqlRoot = join(repoRoot, 'dql');
     const sharedSkills = join(repoRoot, 'skills');

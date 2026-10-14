@@ -1,7 +1,7 @@
 /**
- * `dql agent` — block-first answer loop on the command line.
+ * `zlens agent` — block-first answer loop on the command line.
  *
- *   dql agent ask "what was revenue last week?"
+ *   zlens agent ask "what was revenue last week?"
  *     [--provider claude|openai|gemini|ollama]
  *     [--user alice@acme.com]   (filters Skills + records feedback as this user)
  *     [--domain growth] [--purpose growth_attribution]
@@ -11,14 +11,14 @@
  *                                engine, which injects prior turns and records
  *                                this one server-side)
  *
- *   dql agent threads
+ *   zlens agent threads
  *     Lists persisted conversation threads (id, updated, title) from the runtime.
  *
- *   dql agent reindex [path]
+ *   zlens agent reindex [path]
  *     Rebuilds .dql/cache/agent-kg.sqlite and metadata.sqlite from the
- *     project's manifest + Skills folder. Equivalent to `dql app reindex`.
+ *     project's manifest + Skills folder. Equivalent to `zlens app reindex`.
  *
- *   dql agent feedback <up|down> --block <id> --question "..."
+ *   zlens agent feedback <up|down> --block <id> --question "..."
  *     Records feedback into the KG. Used by clients without MCP access.
  */
 
@@ -35,7 +35,7 @@ import {
   evalCassetteCanonicalizationV2,
   withCassette,
 } from './agent-eval-cassette.js';
-import type { AgentRun } from '@duckcodeailabs/dql-agent';
+import type { AgentRun } from '@zlens/agent';
 import { goldRowsMatch } from './eval-row-match.js';
 import { existsSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
@@ -85,21 +85,22 @@ import {
   type ProviderDispatchCompletionEvent,
   type ProviderDispatchEvent,
   type ProviderToolLoopOptions,
-} from '@duckcodeailabs/dql-agent';
+} from '@zlens/agent';
 import { createHash, randomUUID } from 'node:crypto';
-import { buildManifest, resolveDbtManifestPath } from '@duckcodeailabs/dql-core';
+import { buildManifest, resolveDbtManifestPath } from '@zlens/core';
 import type { CLIFlags } from '../args.js';
 import { findProjectRoot } from '../local-runtime.js';
 import { buildAnswerLoopTools, createGroundingContextExpander } from '../llm/answer-loop-tools.js';
 import { judgeAnswer, type JudgeCompletion } from './eval-judge.js';
 import { startProjectRuntime } from './notebook.js';
 import { runAgentTrace } from './agent-trace.js';
+import { readEnv } from '@zlens/core';
 
 /**
  * Resolve the runtime the agent posts certified blocks / generated SQL to.
  *
- * If the caller pinned one (`--runtime-url` / `DQL_RUNTIME_URL`) we validate it is
- * actually a reachable DQL runtime — a bare `/api/health` is not enough, since
+ * If the caller pinned one (`--runtime-url` / `ZLENS_RUNTIME_URL`) we validate it is
+ * actually a reachable ZLens runtime — a bare `/api/health` is not enough, since
  * unrelated servers (e.g. Docker on :3474) answer `{"status":"ok"}` and would then
  * swallow the block with a misleading "no connection" error. Otherwise we start an
  * ephemeral runtime bound to THIS project on a free port and close it when done, so
@@ -111,13 +112,13 @@ async function resolveAgentRuntime(
 ): Promise<{ runtimeBase: string; close: () => Promise<void>; askTraceCapability?: string }> {
   const explicit = (flags as { runtimeUrl?: string; runtime?: string }).runtimeUrl
     ?? (flags as { runtime?: string }).runtime
-    ?? process.env.DQL_RUNTIME_URL;
+    ?? readEnv('ZLENS_RUNTIME_URL');
   if (explicit) {
     const base = explicit.replace(/\/$/, '');
     if (!(await isDqlRuntime(base))) {
       throw new Error(
-        `No DQL runtime is reachable at ${base}. Start one with \`dql notebook\`, or omit ` +
-          `--runtime-url / DQL_RUNTIME_URL to let \`dql agent ask\` start an ephemeral runtime.`,
+        `No ZLens runtime is reachable at ${base}. Start one with \`zlens notebook\`, or omit ` +
+          `--runtime-url / ZLENS_RUNTIME_URL to let \`zlens agent ask\` start an ephemeral runtime.`,
       );
     }
     return { runtimeBase: base, close: async () => {} };
@@ -260,7 +261,7 @@ function cliAnalysisDepth(flags: CLIFlags): AnalysisDepth | undefined {
 
 /**
  * Compatibility test adapter for a standalone provider boundary. Production
- * `dql agent ask` no longer calls this: it uses the runtime AgentRun engine so
+ * `zlens agent ask` no longer calls this: it uses the runtime AgentRun engine so
  * the router, cascade, freeze, tools, SQL, and provider spans share one
  * canonical trace. Keep this adapter truthful for lower-level provider tests
  * without making it an alternate orchestration authority.
@@ -389,7 +390,7 @@ export function createDirectCliAskTraceProvider(
   };
 }
 
-/** A DQL runtime answers `/api/connections` with a connector/connection payload. */
+/** A ZLens runtime answers `/api/connections` with a connector/connection payload. */
 async function isDqlRuntime(base: string): Promise<boolean> {
   try {
     const response = await fetch(`${base}/api/connections`, { signal: AbortSignal.timeout(2500) });
@@ -421,13 +422,13 @@ export async function runAgent(
       return runEval(rest, flags);
     default:
       throw new Error(
-        'Usage: dql agent <ask|threads|trace|reindex|feedback|eval> [args]\n' +
-            '  dql agent ask "<question>" [--provider claude|openai|gemini|ollama] [--user <id>] [--domain <d>] [--purpose <approved-purpose>] [--thread <id>]\n' +
-      '  dql agent threads [--runtime-url <url>]\n' +
-      '  dql agent trace list|show|export|validate|replay|compare\n' +
-      '  dql agent reindex [path]\n' +
-      '  dql agent feedback up|down --block <id> --question "..."\n' +
-      '  dql agent eval agent-evals.yml [--provider claude|openai|gemini|ollama] [--execute] [--save]\n',
+        'Usage: zlens agent <ask|threads|trace|reindex|feedback|eval> [args]\n' +
+            '  zlens agent ask "<question>" [--provider claude|openai|gemini|ollama] [--user <id>] [--domain <d>] [--purpose <approved-purpose>] [--thread <id>]\n' +
+      '  zlens agent threads [--runtime-url <url>]\n' +
+      '  zlens agent trace list|show|export|validate|replay|compare\n' +
+      '  zlens agent reindex [path]\n' +
+      '  zlens agent feedback up|down --block <id> --question "..."\n' +
+      '  zlens agent eval agent-evals.yml [--provider claude|openai|gemini|ollama] [--execute] [--save]\n',
         );
   }
 }
@@ -440,7 +441,7 @@ export async function runAgent(
  */
 async function runAsk(rest: string[], flags: CLIFlags): Promise<void> {
   const question = rest.join(' ').trim();
-  if (!question) throw new Error('Usage: dql agent ask "<question>"');
+  if (!question) throw new Error('Usage: zlens agent ask "<question>"');
   const threadId = (flags as { thread?: string }).thread;
   return threadId
     ? runThreadAsk(question, threadId, flags)
@@ -455,7 +456,7 @@ async function runAsk(rest: string[], flags: CLIFlags): Promise<void> {
  */
 async function runLegacyDirectAsk(rest: string[], flags: CLIFlags): Promise<void> {
   const question = rest.join(' ').trim();
-  if (!question) throw new Error('Usage: dql agent ask "<question>"');
+  if (!question) throw new Error('Usage: zlens agent ask "<question>"');
   return runCanonicalCliAsk(question, (flags as { thread?: string }).thread, flags);
 
   // Thread-scoped ask: hand the question to the runtime's agent-run engine with
@@ -711,8 +712,8 @@ function warnWhenRetrievalIsLexicalOnly(projectRoot: string): void {
     if (readProjectEmbeddingSettings(projectRoot).provider) return;
     if (!isHashedEmbeddingProvider(projectEmbeddingProvider(projectRoot))) return;
     lexicalRetrievalWarned = true;
-    console.error('DQL: retrieval is using the token-hash index (lexical matching only).'
-      + ' Run `dql agent reindex` to embed with a local model, if one is installed.');
+    console.error('ZLens: retrieval is using the token-hash index (lexical matching only).'
+      + ' Run `zlens agent reindex` to embed with a local model, if one is installed.');
   } catch {
     // A warning must never be the reason an answer does not happen.
   }
@@ -777,7 +778,7 @@ export async function runCanonicalCliAsk(question: string, threadId: string | un
 }
 
 /**
- * `dql agent ask --thread <id>` — POST the question to the runtime's
+ * `zlens agent ask --thread <id>` — POST the question to the runtime's
  * `/api/agent-runs` with the threadId in the body. The server injects the
  * thread's prior turns into the conversation context and records the completed
  * run as the next turn, so follow-ups resolve "those"/"that product" correctly
@@ -787,7 +788,7 @@ async function runThreadAsk(question: string, threadId: string, flags: CLIFlags)
   return runCanonicalCliAsk(question, threadId, flags);
 }
 
-/** `dql agent threads` — list server-persisted conversation threads. */
+/** `zlens agent threads` — list server-persisted conversation threads. */
 async function runThreads(flags: CLIFlags): Promise<void> {
   const projectRoot = findProjectRoot(process.cwd());
   const format = (flags as { format?: string }).format;
@@ -804,14 +805,14 @@ async function runThreads(flags: CLIFlags): Promise<void> {
       return;
     }
     if (threads.length === 0) {
-      console.log('No conversation threads yet. Ask from the notebook UI, or continue one here with `dql agent ask "<question>" --thread <id>`.');
+      console.log('No conversation threads yet. Ask from the notebook UI, or continue one here with `zlens agent ask "<question>" --thread <id>`.');
       return;
     }
     for (const thread of threads) {
       const updated = thread.updatedAt ? new Date(thread.updatedAt).toISOString().replace('T', ' ').slice(0, 16) : 'unknown';
       console.log(`  ${thread.id}  ${updated}  [${thread.surface ?? 'notebook'}]  ${thread.title ?? '(untitled)'}`);
     }
-    console.log(`\n${threads.length} thread(s). Continue one: dql agent ask "<question>" --thread <id>`);
+    console.log(`\n${threads.length} thread(s). Continue one: zlens agent ask "<question>" --thread <id>`);
   } finally {
     await close();
   }
@@ -871,7 +872,7 @@ async function runReindex(rest: string[], flags: CLIFlags): Promise<void> {
 async function runFeedback(rest: string[], flags: CLIFlags): Promise<void> {
   const rating = rest[0];
   if (rating !== 'up' && rating !== 'down') {
-    throw new Error('Usage: dql agent feedback up|down --block <id> --question "..."');
+    throw new Error('Usage: zlens agent feedback up|down --block <id> --question "..."');
   }
   const blockId = (flags as { block?: string }).block;
   const question = (flags as { question?: string }).question;
@@ -880,7 +881,7 @@ async function runFeedback(rest: string[], flags: CLIFlags): Promise<void> {
 
   const projectRoot = findProjectRoot(process.cwd());
   const kgPath = defaultKgPath(projectRoot);
-  if (!existsSync(kgPath)) throw new Error('KG not built. Run `dql agent reindex`.');
+  if (!existsSync(kgPath)) throw new Error('KG not built. Run `zlens agent reindex`.');
   const kg = new KGStore(kgPath);
   try {
     kg.recordFeedback({
@@ -1071,7 +1072,7 @@ async function runEval(rest: string[], flags: CLIFlags): Promise<void> {
   const rawProvider = await pickProvider(providerName);
   // Cassettes make a provider-backed suite repeatable and free to re-run. They
   // apply to the in-process driver here; `--via runtime` needs the SERVER
-  // started with DQL_EVAL_CASSETTE_DIR, since it owns its own provider.
+  // started with ZLENS_EVAL_CASSETTE_DIR, since it owns its own provider.
   const cassetteMode = (flags as { cassette?: string }).cassette;
   const provider = cassetteMode === 'record' || cassetteMode === 'replay'
     ? withCassette(
@@ -1102,7 +1103,7 @@ async function runEval(rest: string[], flags: CLIFlags): Promise<void> {
   }
   const runtimeBase = (flags as { runtimeUrl?: string; runtime?: string }).runtimeUrl
     ?? (flags as { runtime?: string }).runtime
-    ?? process.env.DQL_RUNTIME_URL
+    ?? readEnv('ZLENS_RUNTIME_URL')
     ?? 'http://127.0.0.1:3474';
   if (via === 'runtime') {
     // Fail fast and loudly. Without this, an unreachable server turns every case
@@ -1111,7 +1112,7 @@ async function runEval(rest: string[], flags: CLIFlags): Promise<void> {
     const probe = await fetch(`${runtimeBase.replace(/\/$/, '')}/api/health`).catch(() => null);
     if (!probe?.ok) {
       throw new Error(
-        `--via runtime needs a running server at ${runtimeBase}. Start one with \`dql serve\`, or use --via loop to score the answer loop in-process.`,
+        `--via runtime needs a running server at ${runtimeBase}. Start one with \`zlens serve\`, or use --via loop to score the answer loop in-process.`,
       );
     }
   }
@@ -1156,7 +1157,7 @@ async function runEval(rest: string[], flags: CLIFlags): Promise<void> {
             }
           : undefined,
       }).catch(() => undefined);
-      // `--via runtime` posts to a running `dql serve` so the case exercises the
+      // `--via runtime` posts to a running `zlens serve` so the case exercises the
       // router, engine, plan boundary, and gates. The in-process driver below
       // calls the answer loop directly and cannot observe any of them, which is
       // why a refusal metric taken from it reads cleaner than users experience.
@@ -1254,7 +1255,7 @@ async function runEval(rest: string[], flags: CLIFlags): Promise<void> {
   // not inspect prompts or provider credentials; it only classifies the
   // checked-in response provenance.
   const cassetteDirectory = via === 'runtime'
-    ? process.env.DQL_EVAL_CASSETTE_DIR
+    ? readEnv('ZLENS_EVAL_CASSETTE_DIR')
     : cassetteMode === 'record' || cassetteMode === 'replay'
       ? cassetteDirFor(projectRoot, rest[0] ?? 'agent-evals')
       : undefined;
@@ -1310,7 +1311,7 @@ async function runEval(rest: string[], flags: CLIFlags): Promise<void> {
   if (metrics.meaning_resolved_rate !== null && metrics.meaning_resolved_rate < 1) {
     console.log(
       `  ! Semantic judgment ran for only ${formatRate(metrics.meaning_resolved_rate)} of cases. `
-      + 'Without a reachable provider DQL will not settle a reading by lexical rank (AGT-017), so ambiguous '
+      + 'Without a reachable provider ZLens will not settle a reading by lexical rank (AGT-017), so ambiguous '
       + 'questions clarify by design — treat the clarification rate above as an artifact, not a product signal.',
     );
   }

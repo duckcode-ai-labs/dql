@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { SemanticLayer } from '@duckcodeailabs/dql-core';
+import { SemanticLayer } from '@zlens/core';
 import type { AgentMessage, AgentProvider } from '../providers/types.js';
 import { extractFirstJsonObject, selectSemanticMembersViaLlm } from './member-select.js';
 

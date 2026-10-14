@@ -5,7 +5,7 @@ import type {
   AppBuildSourcePolicy,
   DatasetDescriptor,
   TileQuery,
-} from '@duckcodeailabs/dql-core';
+} from '@zlens/core';
 import {
   datasetMeasures,
   datasetPhysicalFields,
@@ -13,9 +13,9 @@ import {
   tileQueryOutputAliases,
   tileQueryValidationRuns,
   validateTileQuery,
-} from '@duckcodeailabs/dql-core';
+} from '@zlens/core';
 import type { AppSourceCatalogRecord } from './app-source-catalog.js';
-import { readDashboardVizStyle, type DashboardVizStyle } from '@duckcodeailabs/dql-core';
+import { readDashboardVizStyle, type DashboardVizStyle } from '@zlens/core';
 
 export type AppBuilderComponentRole = AppBuildRequirement['role'];
 export type AppBuilderComponentView = 'kpi' | 'line' | 'bar' | 'table';

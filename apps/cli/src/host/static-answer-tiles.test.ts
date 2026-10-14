@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Readable } from 'node:stream';
 import { afterEach, describe, expect, it } from 'vitest';
-import type { AppBuildDraft } from '@duckcodeailabs/dql-core';
+import type { AppBuildDraft } from '@zlens/core';
 import {
   ANSWER_FIGURES_DEPEND_ON_READER,
   STATIC_ANSWER_TILE_PLACEHOLDER,

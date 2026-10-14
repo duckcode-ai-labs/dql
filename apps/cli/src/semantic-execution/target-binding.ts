@@ -12,7 +12,7 @@ import {
   type SemanticTargetBindingV1,
   type WarehouseTargetIdentityV1,
   type WarehouseTargetMismatchV1,
-} from '@duckcodeailabs/dql-core';
+} from '@zlens/core';
 import { getEffectiveDbtCloudSemanticSettings } from '../semantic-runtime-settings.js';
 
 export class SemanticExecutionTargetMismatchError extends Error {
@@ -33,7 +33,7 @@ export class SemanticExecutionTargetMismatchError extends Error {
     const fields = input.mismatches.map((item) => item.field).join(', ') || 'target fingerprint';
     super(
       `Semantic compilation target does not match the active warehouse execution target (${fields}). `
-      + 'Select the matching DQL connection or reapply the semantic runtime settings against this connection.',
+      + 'Select the matching ZLens connection or reapply the semantic runtime settings against this connection.',
     );
     this.name = 'SemanticExecutionTargetMismatchError';
     this.details = {

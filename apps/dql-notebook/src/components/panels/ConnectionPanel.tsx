@@ -14,7 +14,7 @@ import {
   type WarehouseMetadataDiscovery,
   type WarehouseMetadataStatus,
 } from '../../api/client';
-import { PanelFrame } from '@duckcodeailabs/dql-ui';
+import { PanelFrame } from '@zlens/ui';
 import { DriverLogo } from './DriverLogo';
 import {
   CONNECTOR_SCHEMAS,
@@ -1116,7 +1116,7 @@ export function ConnectionPanel({
           {warehouseFirst ? (
             <>
               <strong style={{ color: t.textPrimary }}>Choose the schemas to model.</strong>
-              {' '}DQL reads their tables, columns, declared keys and comments — never their rows — for Ask and Modeling.
+              {' '}ZLens reads their tables, columns, declared keys and comments — never their rows — for Ask and Modeling.
             </>
           ) : (
             <>

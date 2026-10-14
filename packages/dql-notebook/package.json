@@ -1,7 +1,7 @@
 {
-  "name": "@duckcodeailabs/dql-notebook",
+  "name": "@zlens/notebook",
   "version": "1.17.3",
-  "description": "Notebook document model and execution helpers for DQL",
+  "description": "Notebook document model and execution helpers for ZLens",
   "license": "Apache-2.0",
   "type": "module",
   "main": "./dist/index.js",
@@ -36,8 +36,8 @@
     "access": "public"
   },
   "dependencies": {
-    "@duckcodeailabs/dql-core": "workspace:*",
-    "@duckcodeailabs/dql-connectors": "workspace:*"
+    "@zlens/core": "workspace:*",
+    "@zlens/connectors": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

@@ -3,12 +3,12 @@ import type { IncomingMessage, Server } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import type { QueryExecutor } from '@duckcodeailabs/dql-connectors';
+import type { QueryExecutor } from '@zlens/connectors';
 import { capHostLinksByPlacement, startLocalServer } from '../local-runtime.js';
 import { HostModelUnavailableError, hostActor, hostModelProvider, normalizeHostPrincipal, resultValuesMayReachModel, setHostModelHooks, withRequestContext, type DqlHostHooks, type DqlPrincipal } from './request-context.js';
 
 /**
- * RFC 0010 HH-1: a host says who is asking, and DQL records that person —
+ * RFC 0010 HH-1: a host says who is asking, and ZLens records that person —
  * never a name from the request body.
  */
 const PEOPLE: Record<string, DqlPrincipal> = {
@@ -39,7 +39,7 @@ async function start(hostHooks?: DqlHostHooks, fixture?: string): Promise<string
   return `http://127.0.0.1:${port}`;
 }
 
-/** A host that reads the person from a header, as a proxy in front of DQL would. */
+/** A host that reads the person from a header, as a proxy in front of ZLens would. */
 const headerHost: DqlHostHooks = {
   resolvePrincipal: async (req: IncomingMessage) => {
     const who = req.headers['x-test-person'];
@@ -78,7 +78,7 @@ describe('host principal (RFC 0010 HH-1)', () => {
     for (const person of [undefined, 'boom', 'bad']) {
       const response = await fetch(`${base}/api/identity`, person ? { headers: { 'x-test-person': person } } : {});
       expect(response.status).toBe(401);
-      expect(await response.json()).toEqual({ error: 'Sign in to use DQL.' });
+      expect(await response.json()).toEqual({ error: 'Sign in to use ZLens.' });
     }
   });
 
@@ -242,7 +242,7 @@ describe('the model and the privacy boundary (RFC 0010 HH-5)', () => {
     expect(resultValuesMayReachModel(bedrock, () => true)).toBe(false);
   });
 
-  it('tells the boundary rule which tables the values came from, when DQL knows them all', () => {
+  it('tells the boundary rule which tables the values came from, when ZLens knows them all', () => {
     const bedrock = { id: 'anthropic', name: 'claude', model: 'eu.anthropic.claude-sonnet-5-v1:0' };
     const seen: Array<string[] | undefined> = [];
     setHostModelHooks({ isInBoundary: (_model, context) => { seen.push(context?.relations); return !context?.relations?.includes('claims.patients'); } });
@@ -276,7 +276,7 @@ describe('where a run\'s values came from (HH-5)', () => {
 
 describe('one place every tool runs (RFC 0010 HH-7)', () => {
   it('passes each tool call to the host with the person asking, and only with a host', async () => {
-    const { runGatedTool } = await import('@duckcodeailabs/dql-agent');
+    const { runGatedTool } = await import('@zlens/agent');
     const calls: Array<{ name: string; principal: string | null }> = [];
     await start({
       ...headerHost,
@@ -318,7 +318,7 @@ describe('one place every tool runs (RFC 0010 HH-7)', () => {
       .map((file) => relative(repo, file).replaceAll('\\', '/'))
       .sort();
     // The gate itself, and wrappers that decorate a tool inside a gated call;
-    // `dql agent eval` replays cassettes in the CLI, not the server.
+    // `zlens agent eval` replays cassettes in the CLI, not the server.
     expect(ungated).toEqual([
       'apps/cli/src/commands/agent-eval-cassette.ts',
       'apps/cli/src/llm/answer-loop-tools.ts',

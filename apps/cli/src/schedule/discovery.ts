@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { relative } from 'node:path';
-import { compile } from '@duckcodeailabs/dql-compiler';
-import { collectInputFiles } from '@duckcodeailabs/dql-core';
+import { compile } from '@zlens/dql-compiler';
+import { collectInputFiles } from '@zlens/core';
 import type { ScheduledBlock } from './types.js';
 
 export function discoverScheduledBlocks(projectRoot: string): ScheduledBlock[] {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { SemanticLayer } from '@duckcodeailabs/dql-core';
-import { buildVocabularyIndex } from '@duckcodeailabs/dql-agent';
+import type { SemanticLayer } from '@zlens/core';
+import { buildVocabularyIndex } from '@zlens/agent';
 import { buildVocabularySource } from './vocabulary-source.js';
 
 /** A dbt metric's `config.meta.synonyms` reach Ask's vocabulary as aliases of the metric itself. */

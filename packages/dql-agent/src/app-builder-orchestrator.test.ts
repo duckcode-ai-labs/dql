@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { planAppBuildBrief } from './app-builder-orchestrator.js';
 import type { AppSourceCatalogRecord } from './app-source-catalog.js';
-import type { DatasetDescriptor } from '@duckcodeailabs/dql-core';
+import type { DatasetDescriptor } from '@zlens/core';
 
 const candidates: AppSourceCatalogRecord[] = [
   source('app:block:sales:revenue', 'Revenue trend', 'certified'),

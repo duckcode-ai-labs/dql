@@ -99,7 +99,7 @@ export type DashboardBlockRef =
   | { ref: string; version?: string };
 
 export type DashboardVizConfig = {
-  /** Chart kind. The renderer picks the matching @duckcodeailabs/dql-charts component. */
+  /** Chart kind. The renderer picks the matching @zlens/charts component. */
   type:
     | 'single_value'
     | 'grouped_bar'

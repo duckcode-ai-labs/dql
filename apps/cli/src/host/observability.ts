@@ -3,7 +3,7 @@ import { createHmac, randomBytes } from 'node:crypto';
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { join } from 'node:path';
-import { createAskTracePortableBundleV1, toOtlpOpenInferenceJsonV1 } from '@duckcodeailabs/dql-agent';
+import { createAskTracePortableBundleV1, toOtlpOpenInferenceJsonV1 } from '@zlens/agent';
 import type { DqlPrincipal } from './request-context.js';
 import type { DqlRouteAction } from './route-actions.js';
 
@@ -289,7 +289,7 @@ export function keyQuestionFingerprints<T>(trace: T, key: string): T {
 
 /**
  * The key question fingerprints leave under: the host's (`traceSalt`, stable
- * for its workspace), or one DQL makes once and keeps in the project's private
+ * for its workspace), or one ZLens makes once and keeps in the project's private
  * folder (`.dql/local/private/trace-salt`), never in git.
  */
 export function traceQuestionKey(projectRoot: string, hostSalt?: unknown): string {

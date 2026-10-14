@@ -13,7 +13,7 @@ import {
   resolveBlockParameterValues,
   planDataLexMigration,
   resolveDbtManifestPath,
-} from '@duckcodeailabs/dql-core';
+} from '@zlens/core';
 import type { CLIFlags } from '../args.js';
 import { findProjectRoot } from '../local-runtime.js';
 import { runImport } from './import.js';
@@ -125,7 +125,7 @@ export async function runMigrate(file: string, flags: CLIFlags): Promise<void> {
     return;
   }
 
-  console.log(`\n  DQL Migration: ${source}`);
+  console.log(`\n  ZLens Migration: ${source}`);
   console.log('  ─────────────────────────────');
 
   switch (source) {
@@ -172,10 +172,10 @@ export async function runMigrate(file: string, flags: CLIFlags): Promise<void> {
   console.log(example.split('\n').map((l) => `    ${l}`).join('\n'));
 
   console.log('  Next steps:');
-  console.log(`    1. Provide source files: dql migrate ${source} --input <path>`);
+  console.log(`    1. Provide source files: zlens migrate ${source} --input <path>`);
   console.log('    2. Review generated blocks in blocks/migrated/');
-  console.log('    3. Run: dql validate blocks/migrated/example.dql');
-  console.log('    4. Run: dql certify blocks/migrated/example.dql --connection <driver>');
+  console.log('    3. Run: zlens validate blocks/migrated/example.dql');
+  console.log('    4. Run: zlens certify blocks/migrated/example.dql --connection <driver>');
   console.log('    4. Commit and push for certification');
   console.log('');
 }
@@ -245,7 +245,7 @@ interface DbtBindingIndex {
 /** MIG-001/MIG-002: explicit, previewable adoption of the canonical dbt-first layout. */
 export async function runModelingMigration(flags: CLIFlags): Promise<void> {
   if (flags.to !== 'dbt-first' || (flags.apply === true && flags.dryRun === true)) {
-    throw new Error('Usage: dql migrate modeling --to dbt-first --dry-run|--apply');
+    throw new Error('Usage: zlens migrate modeling --to dbt-first --dry-run|--apply');
   }
   const projectRoot = findProjectRoot(resolve(flags.input || process.cwd()));
   const plan = planModelingMigration(projectRoot);
@@ -581,8 +581,8 @@ function planLegacyProducts(
           code: 'TARGET_COLLISION',
           path: targetRel,
           detail: claimedBy
-            ? 'Multiple domain-local Apps resolve to the same global target; DQL will not choose one.'
-            : 'Global App target already exists; DQL will not merge or overwrite it.',
+            ? 'Multiple domain-local Apps resolve to the same global target; ZLens will not choose one.'
+            : 'Global App target already exists; ZLens will not merge or overwrite it.',
           candidates: claimedBy ? [claimedBy, sourceRel] : [sourceRel, targetRel],
         });
         continue;
@@ -613,8 +613,8 @@ function planLegacyProducts(
           code: 'TARGET_COLLISION',
           path: targetRel,
           detail: claimedBy
-            ? 'Multiple domain-local Notebooks resolve to the same global target; DQL will not choose one.'
-            : 'Global Notebook target already exists; DQL will not merge or overwrite it.',
+            ? 'Multiple domain-local Notebooks resolve to the same global target; ZLens will not choose one.'
+            : 'Global Notebook target already exists; ZLens will not merge or overwrite it.',
           candidates: claimedBy ? [claimedBy, sourceRel] : [sourceRel, targetRel],
         });
         continue;
@@ -883,7 +883,7 @@ async function runDataLexManifestMigration(flags: CLIFlags): Promise<void> {
   const projectRoot = findProjectRoot(process.cwd());
   const datalexManifestPath = flags.datalexManifestPath || flags.input;
   if (!datalexManifestPath) {
-    console.error('Usage: dql migrate datalex --input <datalex-manifest.json> [--dry-run|--apply]');
+    console.error('Usage: zlens migrate datalex --input <datalex-manifest.json> [--dry-run|--apply]');
     process.exitCode = 1;
     return;
   }
@@ -1069,7 +1069,7 @@ export async function runParameterMigrateCheck(flags: CLIFlags): Promise<void> {
 
 export async function runLayoutMigrate(flags: CLIFlags): Promise<void> {
   if (flags.to !== 'domain-first') {
-    throw new Error('Usage: dql migrate layout --to domain-first [--dry-run]');
+    throw new Error('Usage: zlens migrate layout --to domain-first [--dry-run]');
   }
 
   const projectRoot = findProjectRoot(resolve(flags.input || process.cwd()));
@@ -1127,7 +1127,7 @@ export async function runLayoutMigrate(flags: CLIFlags): Promise<void> {
     return;
   }
 
-  console.log(`\n  DQL layout migration to domain-first${dryRun ? ' (dry run)' : ''}`);
+  console.log(`\n  ZLens layout migration to domain-first${dryRun ? ' (dry run)' : ''}`);
   console.log('  ─────────────────────────────');
   console.log(`  Project:       ${projectRoot}`);
   console.log(`  Scanned:       ${report.scanned}`);
@@ -1193,7 +1193,7 @@ export async function runFormatMigrate(root: string, flags: CLIFlags): Promise<v
     return;
   }
 
-  console.log(`\n  DQL format migration${dryRun ? ' (dry run)' : ''}`);
+  console.log(`\n  ZLens format migration${dryRun ? ' (dry run)' : ''}`);
   console.log('  ─────────────────────────────');
   console.log(`  Scanned:            ${report.scanned}`);
   console.log(`  Already canonical:  ${report.alreadyCanonical}`);

@@ -355,7 +355,7 @@ export async function hydrateInitialAskConversationList(input: {
 
 /**
  * Reconcile the temporary browser cache against one successful local runtime
- * response. A browser origin is not a project boundary: a new `dql notebook`
+ * response. A browser origin is not a project boundary: a new `zlens notebook`
  * process can serve a different project at the same origin. Treat an absent,
  * changed, or malformed identity as untrusted rather than reusing old rows.
  */

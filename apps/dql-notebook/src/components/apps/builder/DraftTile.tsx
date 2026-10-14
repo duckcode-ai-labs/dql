@@ -1,16 +1,16 @@
 import { useEffect, useRef, useState } from 'react';
 import { Plus, X } from 'lucide-react';
-import type { DatasetDescriptor } from '@duckcodeailabs/dql-core/datasets/descriptor';
+import type { DatasetDescriptor } from '@zlens/core/datasets/descriptor';
 import {
   datasetMeasureField,
   datasetPhysicalField,
-} from '@duckcodeailabs/dql-core/datasets/descriptor';
+} from '@zlens/core/datasets/descriptor';
 import {
   datasetTileVisualizationCompatibility,
   tileQueryValidationRuns,
   validateTileQuery,
   type TileQuery,
-} from '@duckcodeailabs/dql-core/apps/tile-query';
+} from '@zlens/core/apps/tile-query';
 import { api, type DatasetTileQueryPreview } from '../../../api/client';
 import type { CellChartConfig, QueryResult, ResultColumnMeta } from '../../../store/types';
 import type { ThemeMode } from '../../../themes/notebook-theme';
@@ -19,12 +19,12 @@ import { TableOutput } from '../../output/TableOutput';
 import { TileQueryEditor } from './TileQueryEditor';
 import { autoTileView, defaultTileTitle, descriptorTimeField, tileVisualization, vizTypeForEncoding, type TileView } from './field-query';
 import { ShelfEditor, type ShelfChange } from './ShelfEditor';
-import type { DashboardVizEncoding } from '@duckcodeailabs/dql-core/apps/viz-encoding';
+import type { DashboardVizEncoding } from '@zlens/core/apps/viz-encoding';
 import { encodedChartConfig, encodedTileResult } from '../dashboard-chart-config';
 import { humanize } from './studio-ui';
-import { checkTileCalculations } from '@duckcodeailabs/dql-core/apps/tile-calcs';
-import { pivotLayout, withPivotRollups } from '@duckcodeailabs/dql-core/apps/pivot';
-import { encodingFromQuery } from '@duckcodeailabs/dql-core/apps/viz-encoding';
+import { checkTileCalculations } from '@zlens/core/apps/tile-calcs';
+import { pivotLayout, withPivotRollups } from '@zlens/core/apps/pivot';
+import { encodingFromQuery } from '@zlens/core/apps/viz-encoding';
 import { PivotTable } from '../PivotTable';
 import { KpiCard, usesKpiCard } from '../KpiCard';
 

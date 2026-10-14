@@ -153,8 +153,8 @@ describe('queryViaBlock — certified-only enforcement (the wedge)', () => {
     }) as unknown as typeof fetch;
 
     const result = await queryViaBlock(ctx, { name: 'My Block' });
-    expect((result as { error: string }).error).toMatch(/Could not reach DQL runtime/);
-    expect((result as { error: string }).error).toMatch(/dql serve/);
+    expect((result as { error: string }).error).toMatch(/Could not reach ZLens runtime/);
+    expect((result as { error: string }).error).toMatch(/zlens serve/);
   });
 
   it('surfaces the runtime error response unchanged', async () => {
@@ -288,9 +288,9 @@ describe('queryViaBlock — certified-only enforcement (the wedge)', () => {
     });
   });
 
-  it('respects DQL_RUNTIME_URL when no serverUrl is passed', async () => {
+  it('respects ZLENS_RUNTIME_URL when no serverUrl is passed', async () => {
     const ctx = makeCtx({ 'My Block': makeManifestBlock() });
-    process.env.DQL_RUNTIME_URL = 'http://example.test:9999';
+    process.env.ZLENS_RUNTIME_URL = 'http://example.test:9999';
     const fetchSpy = vi.fn(async () => ({
       ok: true,
       json: async () => ({ result: { columns: [], rows: [], executionTime: 0 } }),
@@ -302,7 +302,7 @@ describe('queryViaBlock — certified-only enforcement (the wedge)', () => {
       'http://example.test:9999/api/notebook/execute',
       expect.any(Object),
     );
-    delete process.env.DQL_RUNTIME_URL;
+    delete process.env.ZLENS_RUNTIME_URL;
   });
 });
 

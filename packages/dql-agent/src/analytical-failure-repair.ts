@@ -8,7 +8,7 @@ import {
   type AnalyticalRepairChange,
   type AnalyticalRepairTrustTransition,
   type AnalyticalTrustState,
-} from '@duckcodeailabs/dql-core';
+} from '@zlens/core';
 
 /**
  * Stable diagnostics and immutable repair derivations for RFC 0005.

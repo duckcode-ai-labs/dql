@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { SemanticLayer } from '@duckcodeailabs/dql-core';
+import { SemanticLayer } from '@zlens/core';
 import { buildResolvedAnalyticalPlan } from './resolved-analytical-plan.js';
 import { buildAnalyticalExecutionGraph } from './analytical-execution-graph.js';
 import {
@@ -11,7 +11,7 @@ import {
 } from './plan-execution-adapter.js';
 import type { AgentEvidenceCandidate, AgentRetrievalEvidence, MeaningResolution } from './meaning-resolution.js';
 import type { KGNode } from './kg/types.js';
-import type { AnalyticalQuestionFrameV2, MetricCapabilityContract } from '@duckcodeailabs/dql-core';
+import type { AnalyticalQuestionFrameV2, MetricCapabilityContract } from '@zlens/core';
 
 const metric: AgentEvidenceCandidate = {
   id: 'semantic:metric:usage.rollover_balance',

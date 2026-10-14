@@ -25,7 +25,7 @@
  *
  * Anything that fails a check is simply not offered.
  */
-import { analyzeSqlReferences } from '@duckcodeailabs/dql-core';
+import { analyzeSqlReferences } from '@zlens/core';
 
 /** Clauses that must come AFTER the WHERE clause we are extending or adding. */
 const TRAILING_CLAUSES = [

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 
-vi.mock('@duckcodeailabs/dql-governance', () => ({
+vi.mock('@zlens/governance', () => ({
   Certifier: class {
     evaluate() {
       return {

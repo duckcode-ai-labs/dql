@@ -1,9 +1,9 @@
-import type { DatasetDescriptor, TileQuery } from '@duckcodeailabs/dql-core';
+import type { DatasetDescriptor, TileQuery } from '@zlens/core';
 import {
   buildDatasetComparisonPlan,
   executeDatasetComparisonPlan,
   type DatasetComparisonPlanResult,
-} from '@duckcodeailabs/dql-agent';
+} from '@zlens/agent';
 
 export class DatasetPeriodComparisonError extends Error {
   constructor(

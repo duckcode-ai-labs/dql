@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { loadSemanticLayerFromDir } from '@duckcodeailabs/dql-core';
+import { loadSemanticLayerFromDir } from '@zlens/core';
 
 import { listProposals } from '../list-proposals.js';
 import { makeCtx } from './_helpers.js';
@@ -121,7 +121,7 @@ describe('listProposals', () => {
       proposedContractId: 'customer.Customer.monthly_active_customers',
       upstreamRefs: ['fct_orders', 'dim_customers'],
     });
-    expect(out.proposals[0].certifyHint).toContain('dql certify --from-draft');
+    expect(out.proposals[0].certifyHint).toContain('zlens certify --from-draft');
     expect(out.proposals[0].certifyHint).toContain('--domain customer');
   });
 
@@ -171,7 +171,7 @@ describe('listProposals', () => {
       proposedDomain: 'finance',
       proposedEntity: 'Revenue',
     });
-    expect(out.proposals[0].certifyHint).toContain('dql certify --from-draft domains/finance/blocks/_drafts/enterprise_revenue_by_week.dql');
+    expect(out.proposals[0].certifyHint).toContain('zlens certify --from-draft domains/finance/blocks/_drafts/enterprise_revenue_by_week.dql');
   });
 
   it('ranks by askedTimes DESC, then lastAsked DESC', () => {

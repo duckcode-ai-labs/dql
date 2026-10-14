@@ -2,7 +2,7 @@
  * Governance rule pack contract.
  *
  * FROZEN at v1.0. A rule pack is a named bundle of lint rules that run
- * against block ASTs — in the editor (real-time) and at `dql certify`
+ * against block ASTs — in the editor (real-time) and at `zlens certify`
  * (gating).
  */
 

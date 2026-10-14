@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { SemanticLayer } from '@duckcodeailabs/dql-core';
+import { SemanticLayer } from '@zlens/core';
 import type { KGStore } from '../kg/sqlite-fts.js';
 import { buildSemanticStageTools } from './toolset.js';
 

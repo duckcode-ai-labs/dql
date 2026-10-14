@@ -1,7 +1,7 @@
 /**
  * The warehouse catalog snapshot (RFC 0007, warehouse-first modeling).
  *
- * A team without a dbt project models its warehouse directly: `dql sync
+ * A team without a dbt project models its warehouse directly: `zlens sync
  * warehouse` reads the selected schemas' tables, views, columns, comments, declared
  * keys and view definitions into one snapshot, and modeling entities bind to
  * those relations with `relation:`. The snapshot holds metadata only, never a

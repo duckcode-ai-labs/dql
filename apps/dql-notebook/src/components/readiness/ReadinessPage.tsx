@@ -29,7 +29,7 @@ import {
   UserRound,
   GraduationCap,
 } from 'lucide-react';
-import { TrustBadge } from '@duckcodeailabs/dql-ui';
+import { TrustBadge } from '@zlens/ui';
 import { api } from '../../api/client';
 import { useDispatch, useNotebookStore } from '../../store/NotebookStore';
 import { openAiBuild } from '../../utils/ai-build-bus';

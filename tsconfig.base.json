@@ -5,26 +5,26 @@
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
     "paths": {
-      "@duckcodeailabs/dql-core": ["packages/dql-core/src/index.ts"],
-      "@duckcodeailabs/dql-core/format": [
+      "@zlens/core": ["packages/dql-core/src/index.ts"],
+      "@zlens/core/format": [
         "packages/dql-core/src/format/index.ts"
       ],
-      "@duckcodeailabs/dql-core/lineage": [
+      "@zlens/core/lineage": [
         "packages/dql-core/src/lineage/index.ts"
       ],
-      "@duckcodeailabs/dql-core/artifacts": [
+      "@zlens/core/artifacts": [
         "packages/dql-core/src/artifacts/index.ts"
       ],
-      "@duckcodeailabs/dql-compiler": ["packages/dql-compiler/src/index.ts"],
-      "@duckcodeailabs/dql-runtime": ["packages/dql-runtime/src/index.ts"],
-      "@duckcodeailabs/dql-charts": ["packages/dql-charts/src/index.ts"],
-      "@duckcodeailabs/dql-lsp": ["packages/dql-lsp/src/index.ts"],
-      "@duckcodeailabs/dql-connectors": ["packages/dql-connectors/src/index.ts"],
-      "@duckcodeailabs/dql-governance": ["packages/dql-governance/src/index.ts"],
-      "@duckcodeailabs/dql-project": ["packages/dql-project/src/index.ts"],
-      "@duckcodeailabs/dql-notebook": ["packages/dql-notebook/src/index.ts"],
-      "@duckcodeailabs/dql-ui": ["packages/dql-ui/src/index.ts"],
-      "@duckcodeailabs/dql-mcp": ["packages/dql-mcp/src/index.ts"]
+      "@zlens/dql-compiler": ["packages/dql-compiler/src/index.ts"],
+      "@zlens/runtime": ["packages/dql-runtime/src/index.ts"],
+      "@zlens/charts": ["packages/dql-charts/src/index.ts"],
+      "@zlens/dql-lsp": ["packages/dql-lsp/src/index.ts"],
+      "@zlens/connectors": ["packages/dql-connectors/src/index.ts"],
+      "@zlens/governance": ["packages/dql-governance/src/index.ts"],
+      "@zlens/project": ["packages/dql-project/src/index.ts"],
+      "@zlens/notebook": ["packages/dql-notebook/src/index.ts"],
+      "@zlens/ui": ["packages/dql-ui/src/index.ts"],
+      "@zlens/mcp": ["packages/dql-mcp/src/index.ts"]
     },
     "declaration": true,
     "declarationMap": true,

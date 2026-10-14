@@ -14,7 +14,7 @@
  * the only ones that legitimately need free SQL.
  */
 import type { AnalysisQuestionPlan } from '../metadata/analysis-planner.js';
-import type { SemanticLayer } from '@duckcodeailabs/dql-core';
+import type { SemanticLayer } from '@zlens/core';
 
 export type GovernedQueryShape = 'compiler_expressible' | 'runtime_required' | 'genuine_gap';
 

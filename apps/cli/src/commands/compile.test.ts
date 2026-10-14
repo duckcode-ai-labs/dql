@@ -2,8 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { mkdtempSync, writeFileSync, readFileSync, mkdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { ManifestCache, type TrackedFile } from '@duckcodeailabs/dql-project';
-import { collectInputFiles, type DQLManifest } from '@duckcodeailabs/dql-core';
+import { ManifestCache, type TrackedFile } from '@zlens/project';
+import { collectInputFiles, type DQLManifest } from '@zlens/core';
 import { manifestCacheTrackedFiles, runCompile } from './compile.js';
 
 const baseFlags = {

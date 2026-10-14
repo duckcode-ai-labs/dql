@@ -1,5 +1,5 @@
-import type { ScheduleIR, NotificationIR, AlertIR, DigestDiagnostic } from '@duckcodeailabs/dql-compiler';
-import type { MonitorEvaluation } from '@duckcodeailabs/dql-core';
+import type { ScheduleIR, NotificationIR, AlertIR, DigestDiagnostic } from '@zlens/dql-compiler';
+import type { MonitorEvaluation } from '@zlens/core';
 
 export interface ScheduledBlock {
   /** Absolute path to the .dql file. */

@@ -1,7 +1,7 @@
 {
-  "name": "@duckcodeailabs/dql-charts",
+  "name": "@zlens/charts",
   "version": "1.17.3",
-  "description": "DQL chart library: visx-powered React SVG components for reusable analytics blocks",
+  "description": "ZLens chart library: visx-powered React SVG components for reusable analytics blocks",
   "license": "Apache-2.0",
   "type": "module",
   "main": "./dist/index.js",

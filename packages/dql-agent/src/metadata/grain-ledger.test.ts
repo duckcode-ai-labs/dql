@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { analyzeSqlReferences } from '@duckcodeailabs/dql-core';
+import { analyzeSqlReferences } from '@zlens/core';
 import {
   aggregationIntegrityIssuesForSql,
   buildGrainLedger,

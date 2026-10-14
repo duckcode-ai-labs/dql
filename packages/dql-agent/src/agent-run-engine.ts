@@ -8,7 +8,7 @@ import {
   type AgentRunTelemetryV1,
   type AnalyticalRepairCapabilityV1,
   type ProviderEgressReceiptV1,
-} from '@duckcodeailabs/dql-core';
+} from '@zlens/core';
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import {
@@ -79,6 +79,7 @@ import {
   recordExecutionAttemptSummaryV1,
 } from './ask-observability/index.js';
 import type { AskTraceObserverV1, AgentRunTraceReferenceV1, AskTraceSurfaceV1 } from './ask-observability/index.js';
+import { readEnv } from '@zlens/core';
 
 export type AgentRunRequestedMode = "auto" | "ask" | "research" | "sql" | "block" | "app" | "modeling" | "skill";
 
@@ -1013,10 +1014,10 @@ const MAX_DEADLINE_MS = 600_000;
  */
 /**
  * Host-registered default scale, set from the ACTIVE provider's latency
- * class. DQL knows a local Ollama model or a subscription-CLI passthrough
+ * class. ZLens knows a local Ollama model or a subscription-CLI passthrough
  * costs 10-90s per dispatch; making every user of a slow provider discover
  * an environment variable turned that knowledge into a support ticket. An
- * explicit DQL_AGENT_DEADLINE_SCALE still wins over this default.
+ * explicit ZLENS_AGENT_DEADLINE_SCALE still wins over this default.
  */
 let processDefaultDeadlineScale = 1;
 
@@ -1025,7 +1026,7 @@ export function setProcessDefaultDeadlineScale(scale: number): void {
 }
 
 export function deadlineScale(env: Record<string, string | undefined> = process.env): number {
-  const raw = Number(env.DQL_AGENT_DEADLINE_SCALE);
+  const raw = Number(readEnv('ZLENS_AGENT_DEADLINE_SCALE', env));
   if (!Number.isFinite(raw) || raw <= 0) return processDefaultDeadlineScale;
   // Bounded: below 1 would tighten a safety deadline someone is relying on.
   return Math.min(Math.max(raw, 1), 20);
@@ -3552,7 +3553,7 @@ function preserveFrozenAnalyticalRoute(
     status: 'blocked',
     trustState: 'blocked',
     stopReason: 'blocked',
-    summary: `The frozen ${route.replaceAll('_', ' ')} plan could not execute as selected. DQL did not substitute another analytical tier.`,
+    summary: `The frozen ${route.replaceAll('_', ' ')} plan could not execute as selected. ZLens did not substitute another analytical tier.`,
     answer: 'The selected analytical plan could not be executed as selected. No fallback answer was returned.',
     artifacts: [],
     evaluations: [{
@@ -3968,7 +3969,7 @@ function enforceOrdinaryAnalyticalPlanBoundary(
     !analytical
   ) return decision;
 
-  const message = 'DQL could not freeze an exact analytical plan for the requested metric, grain, filters, ordering, and outputs. Choose a governed identifier or model the missing capability before retrying.';
+  const message = 'ZLens could not freeze an exact analytical plan for the requested metric, grain, filters, ordering, and outputs. Choose a governed identifier or model the missing capability before retrying.';
   const blocked: IntentDecision = {
     ...decision,
     action: 'block',
@@ -4031,7 +4032,7 @@ function softBoundaryResult(
     summary: `The ${seconds}-second discovery target elapsed before an analytical plan was frozen. No new provider, tool, or retrieval branch was started.`,
     answer: budget.mode === 'research'
       ? `Research stopped starting new queries at ${seconds} seconds. Refine the question or retry; any already validated partial findings remain available.`
-      : 'The discovery window ended before DQL could freeze an exact analytical plan. Refine the metric or grain, or retry the same bounded question.',
+      : 'The discovery window ended before ZLens could freeze an exact analytical plan. Refine the metric or grain, or retry the same bounded question.',
     artifacts: [],
     evaluations: [],
     nextActions: [{ id: 'retry-after-soft-target', label: 'Retry the same question' }],
@@ -5102,7 +5103,7 @@ function businessAnswerForRun(run: AgentRun): BusinessAnswer {
   const deterministicAnswer = run.status === 'blocked' || run.status === 'cancelled'
     ? deterministicTerminalAnswerForRun(run)
     : run.status === 'needs_clarification'
-      ? 'One business choice is required before DQL can run this question.'
+      ? 'One business choice is required before ZLens can run this question.'
       : run.analyticalTaskOutcomeSummary?.status === 'partial'
         ? taskOutcomeAggregateSummaryText(run.analyticalTaskOutcomeSummary)
       : 'The query completed, but no fact-linked narrative was retained. Open the result to review the validated data.';
@@ -5164,7 +5165,7 @@ function modeledFieldLabels(run: AgentRun): string[] {
 /**
  * Say what is missing, and what exists instead.
  *
- * "DQL could not prove one safe analytical path" is true and useless: it does
+ * "ZLens could not prove one safe analytical path" is true and useless: it does
  * not say which part of the question could not be served, so the reader cannot
  * tell a modeling gap from a bug and has nothing to try next. When a term in
  * the question matches nothing the snapshot admitted — asking for "region"

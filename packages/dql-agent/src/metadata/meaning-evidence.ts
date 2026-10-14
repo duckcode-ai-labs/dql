@@ -6,7 +6,7 @@ import {
   normalizeMetricCapabilityContract,
   type AnalyticalPolicyContract,
   type MetricCapabilityContract,
-} from "@duckcodeailabs/dql-core";
+} from "@zlens/core";
 import {
   candidateMatchesCategoricalDimensionRequirement,
   categoricalDimensionTermsMatch,

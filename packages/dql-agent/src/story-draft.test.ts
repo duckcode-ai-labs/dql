@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildStoryBindingCatalog } from '@duckcodeailabs/dql-core';
+import { buildStoryBindingCatalog } from '@zlens/core';
 import { draftStoryNarrative, deterministicStoryNarrative, promptBindings, storyDraftUserPrompt, type StoryDraftInput } from './story-draft.js';
 
 const catalog = buildStoryBindingCatalog([

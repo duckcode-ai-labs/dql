@@ -25,7 +25,7 @@ import {
   type ReaderTrustItem,
   type ReaderTrustTile,
   type StoryBindingCatalog,
-} from '@duckcodeailabs/dql-core';
+} from '@zlens/core';
 import type { AppPageRunTile } from './app-page-run.js';
 
 export interface DigestState {

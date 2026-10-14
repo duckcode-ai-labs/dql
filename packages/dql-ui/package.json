@@ -1,7 +1,7 @@
 {
-  "name": "@duckcodeailabs/dql-ui",
+  "name": "@zlens/ui",
   "version": "1.17.3",
-  "description": "Design tokens, theme provider, and headless primitives for the DQL notebook + dashboard shell",
+  "description": "Design tokens, theme provider, and headless primitives for the ZLens notebook + dashboard shell",
   "license": "Apache-2.0",
   "type": "module",
   "main": "./dist/index.js",

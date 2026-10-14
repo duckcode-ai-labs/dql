@@ -1,6 +1,6 @@
-// The licence of the fonts DQL serves itself (Inter, SIL Open Font License 1.1), shipped with them: a Vite plugin
+// The licence of the fonts ZLens serves itself (Inter, SIL Open Font License 1.1), shipped with them: a Vite plugin
 // that writes fonts/OFL.txt beside the font files a build copies (as `Inter-OFL.txt` in the same folder). Any app
-// that loads `@duckcodeailabs/dql-ui/styles` or `/styles/fonts` adds it to its Vite plugins.
+// that loads `@zlens/ui/styles` or `/styles/fonts` adds it to its Vite plugins.
 import { readFileSync } from 'node:fs';
 import { posix } from 'node:path';
 import { fileURLToPath } from 'node:url';

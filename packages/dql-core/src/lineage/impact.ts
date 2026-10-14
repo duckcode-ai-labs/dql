@@ -4,7 +4,7 @@
  * DQL composition is unbounded freeform `ref()`. The safety net: when a block
  * changes, you must know what downstream *certified* work it invalidates.
  *
- * Given changed block name(s) — from `dql diff` or explicit input — this module:
+ * Given changed block name(s) — from `zlens diff` or explicit input — this module:
  *   1. walks the dependency DAG **downstream** to the full transitive set,
  *   2. flags the cross-domain edges that get invalidated,
  *   3. computes the resulting `domainTrust` delta,

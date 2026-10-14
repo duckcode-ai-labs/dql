@@ -1,4 +1,4 @@
-import type { DatasetCacheDeliveryReceiptV1, DatasetTileProvenanceV1, ProviderDispatchPhaseV1, ProviderEgressPurpose, SemanticAggregationCompilerReceiptV1, SemanticDisplayFormat, SemanticTileConversionProvenanceV1 } from '@duckcodeailabs/dql-core';
+import type { DatasetCacheDeliveryReceiptV1, DatasetTileProvenanceV1, ProviderDispatchPhaseV1, ProviderEgressPurpose, SemanticAggregationCompilerReceiptV1, SemanticDisplayFormat, SemanticTileConversionProvenanceV1 } from '@zlens/core';
 import {
   terminalTitle,
   parsePhysicalIdentifier,
@@ -6,7 +6,7 @@ import {
   physicalRelationText,
   type PhysicalRelationBindingV1,
   setAgentToolGate,
-} from '@duckcodeailabs/dql-agent';
+} from '@zlens/agent';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { execFileSync, execSync } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
@@ -75,7 +75,7 @@ import {
   buildParamValues,
   expandArrayParameters,
   normalizeSQLPlaceholders,
-} from "@duckcodeailabs/dql-connectors";
+} from "@zlens/connectors";
 import {
   buildExecutionPlan,
   createWelcomeNotebook,
@@ -86,7 +86,7 @@ import {
   resolveSemanticRefs,
   type NotebookCell,
   type SemanticRefResolutionOptions,
-} from '@duckcodeailabs/dql-notebook';
+} from '@zlens/notebook';
 import {
   type TermTemplateInput,
   termFilePath,
@@ -226,11 +226,11 @@ import {
   resolveBlockReplacement,
   groupingIdentityGapOfSql,
   type RelationKeyKnowledge,
-} from '@duckcodeailabs/dql-core';
+} from '@zlens/core';
 import {
   prepareDatasetDeclarationPatch,
   type DatasetDeclarationPatch,
-} from '@duckcodeailabs/dql-core/datasets/source-authoring.node';
+} from '@zlens/core/datasets/source-authoring.node';
 import { dump as dumpYaml, load as loadYaml } from 'js-yaml';
 import { listBlockTemplates } from './block-templates.js';
 import { scopeAppCopilotRequest } from './app-copilot-scope.js';
@@ -263,7 +263,7 @@ import {
   type ExploratoryExecutionFreezeV1,
   type SqlAuthorizationCheck,
   setProviderUsageListener,
-} from '@duckcodeailabs/dql-agent';
+} from '@zlens/agent';
 import { applyEvalCassette, createDqlAgentProviderRunner, createEvalCassetteReplayProvider, resolveAgentFollowUpContext } from './llm/providers/provider-runner.js';
 import type {
   AgentConversationContext,
@@ -277,7 +277,7 @@ import { listRemoteMcpSettings, saveRemoteMcpSettings } from './llm/mcp-config.j
 import { knowledgeSessionFor } from './host/knowledge-sources.js';
 import { ledgeredProvider, withAnswerKnowledge, withKnowledgeWithheld } from './host/answer-knowledge.js';
 import { traceDetailForReviewer, traceListEntryForReviewer } from './host/trace-review.js';
-import { knowledgeContextSource, type AskStoryStepV1, type KnowledgeSession } from '@duckcodeailabs/dql-agent';
+import { knowledgeContextSource, type AskStoryStepV1, type KnowledgeSession } from '@zlens/agent';
 import {
   composeBusinessExplanation,
   ClaudeProvider,
@@ -542,7 +542,7 @@ import {
   normalizeAnalyticalExecutionFingerprint,
   normalizeAnalyticalExecutionReceipt,
   createAgentRunCancellationError,
-} from '@duckcodeailabs/dql-agent';
+} from '@zlens/agent';
 import { addSqlResultFilter, dashboardFilterableResultColumns, filterableResultColumns, replaceBlockStudioSql } from './sql-result-filter.js';
 import { gatherProposeEnrichment } from './propose-enrich.js';
 import {
@@ -583,7 +583,7 @@ import {
   inspectDatasetAggregateComponentProof,
   prepareDatasetAggregateComponentProof,
 } from './datasets/component-proof-execution.js';
-import { classifyDatasetAggregateSource } from '@duckcodeailabs/dql-core/datasets/component-proof.node';
+import { classifyDatasetAggregateSource } from '@zlens/core/datasets/component-proof.node';
 import {
   resolveDashboardDatasetFilters,
   type DashboardDatasetCrossFilterInput,
@@ -637,15 +637,15 @@ import {
   loadRuntimeApp,
   runtimeVariables,
 } from './governance-runtime.js';
-import { LocalAppStorage, LocalNotebookResearchStorage, defaultLocalAppsDbPath, defaultNotebookResearchDbPath, defaultPersonaRegistry } from '@duckcodeailabs/dql-project';
-import type { BlockRecord, LocalAppPreviewDatasetBindingEvidence, NotebookResearchDiagnostics, NotebookResearchDqlArtifact, NotebookResearchDqlPromotion, NotebookResearchDqlPromotionAction, NotebookResearchIntent, NotebookResearchNextActionFilter, NotebookResearchPlan, NotebookResearchReadinessFilter, NotebookResearchRun, NotebookResearchRunListResult, NotebookResearchSort, NotebookResearchSourceCellInput, TestAssertionResult, TestResultSummary } from '@duckcodeailabs/dql-project';
+import { LocalAppStorage, LocalNotebookResearchStorage, defaultLocalAppsDbPath, defaultNotebookResearchDbPath, defaultPersonaRegistry } from '@zlens/project';
+import type { BlockRecord, LocalAppPreviewDatasetBindingEvidence, NotebookResearchDiagnostics, NotebookResearchDqlArtifact, NotebookResearchDqlPromotion, NotebookResearchDqlPromotionAction, NotebookResearchIntent, NotebookResearchNextActionFilter, NotebookResearchPlan, NotebookResearchReadinessFilter, NotebookResearchRun, NotebookResearchRunListResult, NotebookResearchSort, NotebookResearchSourceCellInput, TestAssertionResult, TestResultSummary } from '@zlens/project';
 import {
   Certifier,
   ENTERPRISE_RULES,
   evaluateInvariants,
   hasInvariantViolation,
   type InvariantResult,
-} from '@duckcodeailabs/dql-governance';
+} from '@zlens/governance';
 import {
   buildSemanticObjectDetail,
   buildSemanticTree,
@@ -716,7 +716,7 @@ import {
 import { createAskPipelineHost, type AskSemanticCompileContext } from './ask-pipeline-host/host.js';
 import { modelingRelationshipEdges } from './ask-pipeline-host/join-relationships.js';
 import { createInvestigationExecutor } from './research/investigation-executor.js';
-import type { AnalyticalIntentV1 } from '@duckcodeailabs/dql-agent';
+import type { AnalyticalIntentV1 } from '@zlens/agent';
 import {
   getSemanticRuntimeSettings,
   saveTestedSemanticRuntimeSettings,
@@ -777,6 +777,7 @@ import { answerFactsFromRun, answerSql, answerValuesFromRun } from './host/answe
 const HOST_ICONS = new Set(['inbox', 'requests', 'review', 'work', 'health', 'admin', 'people', 'git', 'link']);
 import { isViewerToken, mintViewerToken, readViewerToken, viewerDecision, viewerLinkBlockedReason, viewerPrincipal } from './host/viewer-links.js';
 import { boundAgentSchemaColumns, mergeAgentSchemaCompleteness } from './ask-schema-context.js';
+import { readEnv } from '@zlens/core';
 
 export const APP_SOURCE_REUSABLE_TAG = 'app-source';
 const NOTEBOOK_EXECUTE_PREVIEW_ROW_LIMIT = 500;
@@ -939,7 +940,7 @@ export interface ProjectConfig {
     };
   };
   metadataScopes?: Record<string, ConnectionMetadataScopeInput>;
-  /** Optional `dql propose` conventions (classifier + bounded selection). */
+  /** Optional `zlens propose` conventions (classifier + bounded selection). */
   propose?: ProposeConfigInput;
 }
 
@@ -1046,10 +1047,10 @@ export interface LocalServerOptions {
   /**
    * Host the HTTP server binds to. Defaults to `127.0.0.1` (loopback only)
    * for security. Set to `0.0.0.0` when running inside a container so the
-   * port is reachable from the host. Honours `DQL_HOST` env var when unset.
+   * port is reachable from the host. Honours `ZLENS_HOST` env var when unset.
    */
   host?: string;
-  /** Required for non-loopback bindings. Defaults to `DQL_SERVER_TOKEN`. */
+  /** Required for non-loopback bindings. Defaults to `ZLENS_SERVER_TOKEN`. */
   authToken?: string;
   /**
    * RFC 0010: a program embedding DQL says who is asking. With
@@ -1058,7 +1059,7 @@ export interface LocalServerOptions {
    */
   hostHooks?: DqlHostHooks;
   /**
-   * RFC 0010 rule 1: how long DQL waits for a host hook before treating it as
+   * RFC 0010 rule 1: how long ZLens waits for a host hook before treating it as
    * failed (and failing closed). Decisions and stores: this (default 10 s);
    * delivery, signing and git: six times this. See host/hook-deadline.ts.
    */
@@ -1067,13 +1068,13 @@ export interface LocalServerOptions {
   allowedOrigins?: string[];
   /**
    * Receives the underlying HTTP server once created, so short-lived callers
-   * (e.g. `dql agent ask` starting an ephemeral runtime) can `close()` it and
+   * (e.g. `zlens agent ask` starting an ephemeral runtime) can `close()` it and
    * let the process exit instead of hanging on an open listener.
    */
   captureServer?: (server: import('node:http').Server) => void;
   /**
    * Random id for this server start, echoed by `/api/health`. Another DQL
-   * process on the project (`dql schedule`) checks it before running through
+   * process on the project (`zlens schedule`) checks it before running through
    * this server, so a reused pid or port is never mistaken for it.
    */
   instanceId?: string;
@@ -2101,7 +2102,7 @@ export type OrdinaryAskNarrationPolicy = 'off' | 'gaps_only' | 'always';
  * than the seconds should be able to say so.
  */
 function readOrdinaryAskNarrationPolicy(projectRoot: string): OrdinaryAskNarrationPolicy {
-  const fromEnv = process.env.DQL_ASK_NARRATION;
+  const fromEnv = readEnv('ZLENS_ASK_NARRATION');
   const accepted = new Set(['off', 'gaps_only', 'always']);
   if (fromEnv && accepted.has(fromEnv)) return fromEnv as OrdinaryAskNarrationPolicy;
   try {
@@ -3301,7 +3302,7 @@ async function recordConversationTurn(store: ConversationStoreLike | null, threa
     const existing = await store.getThread(threadId);
     if (existing && !conversationVisibleToCaller(existing)) return;
     if (!existing) {
-      // Open the named thread rather than discarding the turn. `dql agent ask
+      // Open the named thread rather than discarding the turn. `zlens agent ask
       // --thread <id>` documents itself as continuing a conversation, but the
       // CLI never created the thread and this guard then dropped every turn —
       // so a follow-up reached the analyst with no prior plan, no prior
@@ -3778,7 +3779,7 @@ export function appAutopilotContextWithoutValues(promptContext: string): string 
  * rows, a story's figures, a grouped tile's members, an earlier answer's text, conversation memory, a preview's
  * grouped facts, Research's computed facts — asks here, once, whether those values may reach this model:
  *
- * - with a host: the host's `isInBoundary` (told every table the values came from, when DQL knows them all; an
+ * - with a host: the host's `isInBoundary` (told every table the values came from, when ZLens knows them all; an
  *   error or anything but `true` is no); a host without that rule: only a model on this machine;
  * - without a host: a model on this machine (`this-machine`), or — for the prompts the single-user product has
  *   always sent to the model the person chose (a conversation's memory, a follow-up's earlier answer, App
@@ -4972,7 +4973,7 @@ export async function executePreparedAgenticSqlBoundary<T>(input: {
       ...input.scope,
       bindings: input.bindings,
     });
-    if (process.env.DQL_ORCHESTRATOR_TRACE) {
+    if (readEnv('ZLENS_ORCHESTRATOR_TRACE')) {
       console.warn(`[dql] execution authorization: ${verdict.ok ? 'admitted' : 'REFUSED'} proven=${authorization.provenIdentifiers.length}${verdict.ok ? '' : ` reason=${verdict.reason}`}`);
     }
     if (!verdict.ok) {
@@ -5062,7 +5063,7 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
   // the warehouse's own words (which can quote the host's rewrite) go to the log.
   // With a host, the engine also reaches the connection's database only: DuckDB opens restricted, and a
   // statement that reads a file, the environment or a setting is refused (host/engine-guard.ts).
-  // RFC 0010 rule 1: every hook DQL waits for answers within a time limit, or counts as failed (host/hook-deadline.ts).
+  // RFC 0010 rule 1: every hook ZLens waits for answers within a time limit, or counts as failed (host/hook-deadline.ts).
   const hookTimeoutMs = hostHookTimeoutMs(opts.hostHookTimeoutMs);
   const hostHooks = opts.hostHooks ? hooksWithDeadlines(opts.hostHooks, hookTimeoutMs) : undefined;
   scope.hooks = hostHooks;
@@ -5078,23 +5079,23 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
     opts.askAgentRuntimeMode ?? readProjectAskRuntimeMode(projectRoot),
   );
   const projectWatcherFactory: typeof watch = opts.projectWatcherFactory ?? watch;
-  const bindHost = opts.host ?? process.env.DQL_HOST ?? '127.0.0.1';
+  const bindHost = opts.host ?? readEnv('ZLENS_HOST') ?? '127.0.0.1';
   const loopback = bindHost === '127.0.0.1' || bindHost === 'localhost' || bindHost === '::1';
-  const authToken = opts.authToken ?? process.env.DQL_SERVER_TOKEN;
+  const authToken = opts.authToken ?? readEnv('ZLENS_SERVER_TOKEN');
   const trustedCliTraceToken = opts.trustedCliTraceToken;
   const cliAskTraceCapabilities = createLocalCliAskTraceCapabilityRegistryV1();
   // Process-local and deliberately non-persistent. Its opaque tokens are
   // attached only to the transient retrieval candidate that the runtime will
   // immediately consume/strip before any planner or trace projection.
   const literalProbeCapabilities = createLocalLiteralProbeCapabilityRegistryV1();
-  // An ephemeral `dql agent ask` runtime receives its one-shot capability from
+  // An ephemeral `zlens agent ask` runtime receives its one-shot capability from
   // its parent process. Register it through the same short-lived, scoped
   // registry used by an already-running loopback runtime's challenge endpoint.
   if (trustedCliTraceToken) cliAskTraceCapabilities.issue({ capability: trustedCliTraceToken });
   const runtimeVersion = readDqlRuntimeVersion();
   // Warm the latest-version cache in the background (2s cap, 24h cache; offline → unknown).
   void fetchLatestPublishedDqlVersion();
-  const allowedOrigins = new Set((opts.allowedOrigins ?? (process.env.DQL_ALLOWED_ORIGINS ?? '').split(','))
+  const allowedOrigins = new Set((opts.allowedOrigins ?? (readEnv('ZLENS_ALLOWED_ORIGINS') ?? '').split(','))
     .map((value) => value.trim().replace(/\/$/, ''))
     .filter(Boolean));
   // RFC 0010: with a host, Dataset grain proofs are each person's (their row rules decided them); none stays shared.
@@ -5126,10 +5127,10 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
   // persona ("view as"), apart from the owner's.
   if (hostIdentity || !loopback) installHostPersonaSlots(defaultPersonaRegistry);
   if (!loopback && !authToken && !hostIdentity) {
-    throw new Error('Non-loopback DQL server binding requires DQL_SERVER_TOKEN (or LocalServerOptions.authToken).');
+    throw new Error('Non-loopback ZLens server binding requires ZLENS_SERVER_TOKEN (or LocalServerOptions.authToken).');
   }
   if (!loopback && allowedOrigins.size === 0) {
-    throw new Error('Non-loopback DQL server binding requires DQL_ALLOWED_ORIGINS (or LocalServerOptions.allowedOrigins).');
+    throw new Error('Non-loopback ZLens server binding requires ZLENS_ALLOWED_ORIGINS (or LocalServerOptions.allowedOrigins).');
   }
   const gitRoot = await resolveGitRoot(projectRoot);
   if (gitRoot) ensureLocalRuntimeGitignore(projectRoot);
@@ -5161,14 +5162,14 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
       setProcessDefaultEmbeddingProvider,
     });
     if (upgrade.model && upgrade.providerId !== 'hashed-token-v1') {
-      console.log(`DQL: semantic retrieval enabled with local Ollama embeddings (${upgrade.model}).`);
+      console.log(`ZLens: semantic retrieval enabled with local Ollama embeddings (${upgrade.model}).`);
     }
   })();
   // A slow provider needs a longer Ask window, and DQL already knows which
   // class the active provider is in: a local Ollama model or a
   // subscription-CLI passthrough costs 10-90s PER DISPATCH, so the default
   // 45s budget made them structurally unusable and every user rediscovered
-  // DQL_AGENT_DEADLINE_SCALE the hard way. Register the class-appropriate
+  // ZLENS_AGENT_DEADLINE_SCALE the hard way. Register the class-appropriate
   // default; the environment variable still overrides.
   const syncDeadlineScaleToActiveProvider = () => {
     // Deterministic tests spin many servers with varied provider fixtures in
@@ -5224,7 +5225,7 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
     pageFilters?: Array<{ id: string; label: string; value: string }>;
     /** The reader trust state of each tile in this run (step 10). */
     tileTrust?: Record<string, ReaderTrustState | null>;
-    /** The tables each finished tile read (null: DQL cannot list them), for the model boundary (HH-5). */
+    /** The tables each finished tile read (null: ZLens cannot list them), for the model boundary (HH-5). */
     tileRelations?: Record<string, string[] | null>;
     appId: string;
     dashboardId: string;
@@ -5315,7 +5316,7 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
     runScopeGeneration?: number;
     chartContexts: AppAnalyticalContextV1[];
     failedTileContexts: DatasetChartFailedTileEvidence[];
-    /** The tables each finished tile read (null: DQL cannot list them), for the model boundary (HH-5). */
+    /** The tables each finished tile read (null: ZLens cannot list them), for the model boundary (HH-5). */
     tileRelations?: Record<string, string[] | null>;
     /** Who ran it (`activePersonaRunOwnerFingerprint`): a question about the chart is theirs alone. */
     ownerFingerprint: string;
@@ -5571,7 +5572,7 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
         return real === root || real.startsWith(`${root}${sep}`);
       };
       if (!inside(dbtProjectDir) || (typeof body.profilesDir === 'string' && !inside(resolve(projectRoot, body.profilesDir)))) {
-        throw Object.assign(new Error('The dbt project must be inside this DQL project.'), { code: 'DBT_ARTIFACT_INVALID' });
+        throw Object.assign(new Error('The dbt project must be inside this ZLens project.'), { code: 'DBT_ARTIFACT_INVALID' });
       }
     }
     const manifestInput = typeof body.manifestPath === 'string' ? body.manifestPath : projectConfig.dbt?.manifestPath ?? 'target/manifest.json';
@@ -5652,7 +5653,7 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
    * connections by name; a connection object in a request is never used
    * (its `${ENV}` and `${secret:}` references are never expanded), and the
    * server's own local DuckDB workspace, which everyone it serves shares, only
-   * where the host allows it. Single-user `dql notebook` is unchanged: its
+   * where the host allows it. Single-user `zlens notebook` is unchanged: its
    * own UI picks connections.
    */
   const hostedRequest = (): boolean => Boolean(hostHooks) || Boolean(currentPrincipal());
@@ -5786,7 +5787,7 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
     ? pageForReader(page, (relations) => hostFiguresDependOnReader(currentHostHooks() ?? hostHooks, relations), () => mayKeepAnswerText(appId))
     : Promise.resolve(page));
   /**
-   * What a person reads for a failure: its own text without a host. With a host, a failure DQL did not expect (a
+   * What a person reads for a failure: its own text without a host. With a host, a failure ZLens did not expect (a
    * JavaScript runtime error, whose text names code or quotes a value it met) is a plain sentence and a reference;
    * its own text goes to the server's log under that reference (RFC 0010 rule 1).
    */
@@ -5987,7 +5988,7 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
   // in one coalesced worker lane and remain observable across page navigation.
   // RFC 0010: an operation (an Ask in progress, a page run, a refresh) belongs
   // to whoever the server placed when it started; with a principal, a person
-  // sees, follows and cancels only their own. Without one (`dql notebook`),
+  // sees, follows and cancels only their own. Without one (`zlens notebook`),
   // the one user sees everything, as before.
   const operationViewer = (): string | undefined => currentPrincipal()?.id;
   const operationCoordinator = new LocalOperationCoordinator(
@@ -6550,7 +6551,7 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
       } catch {
         return previewValidationFailure(
           'APP_AUTOPILOT_PREVIEW_VALIDATION_FAILED',
-          'DQL could not confirm this App preview against the current governed source. Run the current preview before asking App Autopilot.',
+          'ZLens could not confirm this App preview against the current governed source. Run the current preview before asking App Autopilot.',
         );
       }
     };
@@ -6967,9 +6968,9 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
       case 'fix_provider_configuration':
         return 'APP_AUTOPILOT_PROVIDER_FAILED: The configured provider needs local configuration attention before this App request can continue.';
       case 'none':
-        return 'APP_AUTOPILOT_PROVIDER_FAILED: The configured provider request was cancelled before DQL could validate an App response.';
+        return 'APP_AUTOPILOT_PROVIDER_FAILED: The configured provider request was cancelled before ZLens could validate an App response.';
       default:
-        return 'APP_AUTOPILOT_PROVIDER_FAILED: The configured provider failed before DQL could validate an App response; inspect this local run for its safe diagnostic.';
+        return 'APP_AUTOPILOT_PROVIDER_FAILED: The configured provider failed before ZLens could validate an App response; inspect this local run for its safe diagnostic.';
     }
   };
 
@@ -7869,7 +7870,7 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
   /**
    * UI-019: authoring must never dead-end on a Domain/Area that does not exist
    * yet. Every modeling operation still belongs to exactly one Domain and Area
-   * (`11-context-authoring-and-ai.md`); the difference is that DQL now creates
+   * (`11-context-authoring-and-ai.md`); the difference is that ZLens now creates
    * the missing scope as part of the same reviewable proposal instead of
    * blocking the author until they create it by hand. The synthesized
    * operations are ordinary reviewable patches, so nothing is written until the
@@ -9381,7 +9382,7 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
   // existing history is imported once and the JSON renamed to *.migrated.
   // RFC 0010 HH-6: a host may keep runs elsewhere and hear of each finished answer.
   // HH-6: a host's stores answer with Promises; every call below is awaited.
-  // A host's store that fails, or answers in a shape DQL cannot read, is a plain message with a reference; its own
+  // A host's store that fails, or answers in a shape ZLens cannot read, is a plain message with a reference; its own
   // words go to the log (host/host-stores.ts).
   const hostMemoryStore = hostHooks?.stores?.memory;
   const openMemoryStore = (): MemoryStoreLike => (hostMemoryStore
@@ -9683,7 +9684,7 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
   ): Promise<AgentResultPayload> => {
     // Everything from here to the executor call is DQL's OWN block compiler:
     // parse, parameter resolution, plan build, semantic compose. A failure in
-    // any of it means DQL could not rebuild its artifact — the warehouse was
+    // any of it means ZLens could not rebuild its artifact — the warehouse was
     // never contacted. Tagging the origin here stops the answer loop from
     // reporting these as "the generated SQL failed to execute".
     const invocation = withAnalyticalCompilationOrigin('bind', () => prepareBlockInvocation({
@@ -9781,7 +9782,7 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
         // opt-in dump names the offending relation/column and the column lists
         // the gate actually held, which is what tells a wide-warehouse false
         // rejection apart from a genuinely wrong query.
-        if (process.env.DQL_DEBUG_EXECUTION_ERROR) {
+        if (readEnv('ZLENS_DEBUG_EXECUTION_ERROR')) {
           console.error('[DQL_DEBUG closure]', JSON.stringify({
             code: (closureValidation as { code?: string }).code,
             error: (closureValidation as { error?: string }).error,
@@ -10195,7 +10196,7 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
         try {
           targetFingerprint = (await observeWarehouseTargetIdentity(executor, activeConnection)).identityFingerprint;
         } catch {
-          throw analyticalError('DQL could not re-confirm the selected execution target, so the analyst-approved query was not run.', {
+          throw analyticalError('ZLens could not re-confirm the selected execution target, so the analyst-approved query was not run.', {
             origin: 'governance_gate', stage: 'execute', code: 'unauthorized_sql',
           });
         }
@@ -10512,7 +10513,7 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
     const analysis = analyzeSqlReferences(boundedSql, activeConnection.driver);
     if (!analysis.parsed && sqlMayContainJoin(boundedSql)) {
       return failed(
-        'DQL could not parse the exploratory SQL to validate its join predicates. Nothing was sent to the warehouse.',
+        'ZLens could not parse the exploratory SQL to validate its join predicates. Nothing was sent to the warehouse.',
         boundedSql,
         repairs,
         [],
@@ -10537,7 +10538,7 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
       return failed('This exploratory query has more than four joins and requires an analyst to review the relationship path.', boundedSql, repairs, [], 'exploratory_join_limit');
     }
     if (probeableJoins.some((join) => !join.leftRelation || !join.rightRelation)) {
-      return failed('This exploratory query has a join endpoint DQL could not resolve for bounded validation.', boundedSql, repairs, [], 'exploratory_join_unresolved');
+      return failed('This exploratory query has a join endpoint ZLens could not resolve for bounded validation.', boundedSql, repairs, [], 'exploratory_join_unresolved');
     }
 
     // Structural binding: when the candidate carries a declared draft join path,
@@ -10553,7 +10554,7 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
           || declaredExploratoryRelationMatches(join.leftRelation!, value.toRelation) && declaredExploratoryRelationMatches(join.rightRelation!, value.fromRelation));
         if (!edge) {
           return failed(
-            `The join between ${join.leftRelation} and ${join.rightRelation} is not part of the declared relationship path, so DQL did not execute it. Declare the relationship in the DQL model to enable it.`,
+            `The join between ${join.leftRelation} and ${join.rightRelation} is not part of the declared relationship path, so ZLens did not execute it. Declare the relationship in the DQL model to enable it.`,
             boundedSql,
             repairs,
             [],
@@ -10640,7 +10641,7 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
    *
    * The payoff is honesty as much as recall: after this probe, a miss is
    * evidence. The refusal can say the relation is not visible to this
-   * connection, rather than only that DQL had not looked at it.
+   * connection, rather than only that ZLens had not looked at it.
    */
   const probeNamedRelationsForAgent = async (
     relations: string[],
@@ -10879,7 +10880,7 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
     }
     const sourceSignature = buildSqlAnalyticalSignature(sourceSql, input.targetConnection.driver);
     if (!sourceSignature) {
-      throw boundedRepairError('DQL could not prove an immutable analytical signature for the source SQL. Repair it manually.', 409);
+      throw boundedRepairError('ZLens could not prove an immutable analytical signature for the source SQL. Repair it manually.', 409);
     }
     let result: AgentResultPayload | undefined;
     let repairedSql = sourceSql;
@@ -11032,11 +11033,11 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
       repairedSql = proposal.sql.trim();
       const requiredPlaceholders = (input.sqlParams ?? []).map((parameter) => `$${parameter.position}`);
       if (requiredPlaceholders.some((placeholder) => !new RegExp(`${placeholder.replace('$', '\\$')}\\b`).test(repairedSql))) {
-        throw boundedRepairError('The repair changed this cell\'s parameter contract, so DQL stopped it before execution.', 422);
+        throw boundedRepairError('The repair changed this cell\'s parameter contract, so ZLens stopped it before execution.', 422);
       }
       const repairedSignature = buildSqlAnalyticalSignature(repairedSql, input.targetConnection.driver);
       if (!repairedSignature || stableExecutionValue(repairedSignature) !== stableExecutionValue(sourceSignature)) {
-        throw boundedRepairError('The provider repair changed or could not prove the immutable analytical plan, so DQL stopped before execution.', 409);
+        throw boundedRepairError('The provider repair changed or could not prove the immutable analytical plan, so ZLens stopped before execution.', 409);
       }
       const aggregationProof = buildAggregationSafetyProof(repairedSql, undefined, input.targetConnection.driver);
       if (aggregationProof.status !== 'safe') {
@@ -11210,13 +11211,13 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
     }
     if (!/\bstatus\s*=\s*"certified"/i.test(input.source)
       && /\bstatus\s*=\s*"certified"/i.test(repairedSource)) {
-      throw boundedRepairError('The repair attempted to certify an AI-edited block, so DQL stopped it.', 422);
+      throw boundedRepairError('The repair attempted to certify an AI-edited block, so ZLens stopped it.', 422);
     }
 
     const beforeParameters = dqlRepairParameterContract(input.source);
     const afterParameters = dqlRepairParameterContract(repairedSource);
     if (beforeParameters.join('|') !== afterParameters.join('|')) {
-      throw boundedRepairError('The repair changed this block\'s parameter contract, so DQL stopped it before execution.', 422);
+      throw boundedRepairError('The repair changed this block\'s parameter contract, so ZLens stopped it before execution.', 422);
     }
 
     let invocation: ReturnType<typeof prepareBlockInvocation>;
@@ -11485,7 +11486,7 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
       }
     }
     if (!input.sourceSql?.trim()) {
-      return failed('DQL retained the failure, but no read-only SQL or editable DQL was available for bounded repair.');
+      return failed('ZLens retained the failure, but no read-only SQL or editable DQL was available for bounded repair.');
     }
     if (!analyticalFailureAllowsDeterministicRetry(failure)) {
       return failed('This failure needs an access, policy, or connection decision and was not sent to AI repair.');
@@ -11826,7 +11827,7 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
         dqlArtifact = baselineDqlArtifact ?? dqlArtifact;
         usedBaselineFallback = true;
         generationWarnings.push([
-          'The deeper composition did not produce a safer executable query, so DQL kept and revalidated the successful Ask baseline on the same data target.',
+          'The deeper composition did not produce a safer executable query, so ZLens kept and revalidated the successful Ask baseline on the same data target.',
           failure ? `Research detail: ${failure}` : '',
         ].filter(Boolean).join(' '));
       }
@@ -13240,7 +13241,7 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
       return refuse(message === 'BLOCK_EXISTS' ? 'DATASET_TILE_SAVE_PATH_EXISTS' : 'DATASET_TILE_SAVE_FAILED',
         message === 'BLOCK_EXISTS'
           ? 'A review draft already uses that block path. Choose a different name.'
-          : `DQL could not save this Dataset tile as a review draft: ${message}`,
+          : `ZLens could not save this Dataset tile as a review draft: ${message}`,
         message === 'BLOCK_EXISTS' ? 409 : 400);
     }
   };
@@ -13335,7 +13336,7 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
         return refuse('DATASET_TILE_REPLACE_BLOCK_STALE', 'The selected review draft does not match this current Dataset tile and execution. Save a new review draft before replacing it.');
       }
     } catch (error) {
-      return refuse('DATASET_TILE_REPLACE_BLOCK_INVALID', `DQL could not read this review draft as one executable block: ${error instanceof Error ? error.message : String(error)}`, 400);
+      return refuse('DATASET_TILE_REPLACE_BLOCK_INVALID', `ZLens could not read this review draft as one executable block: ${error instanceof Error ? error.message : String(error)}`, 400);
     }
 
     const snapshot = projectSnapshot();
@@ -13385,7 +13386,7 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
       const candidateVariables = candidatePlan?.variables ?? {};
       if (!candidateSql || candidateSql.includes('?')
         || candidateParams.some((parameter) => !Object.prototype.hasOwnProperty.call(candidateVariables, parameter.name))) {
-        return refuse('dataset_tile_dynamic_binding_not_representable', 'The saved review draft requires runtime bindings, so DQL will not replace the static Dataset tile.');
+        return refuse('dataset_tile_dynamic_binding_not_representable', 'The saved review draft requires runtime bindings, so ZLens will not replace the static Dataset tile.');
       }
       const target = await observeWarehouseTargetIdentity(executor, currentConnection);
       if (target.identityFingerprint !== execution.targetFingerprint) {
@@ -13518,7 +13519,7 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
       scheduleProjectRefresh('Replaced a Dataset tile with an equivalence-proved review draft.');
       return { ok: true, draft: next, blockPath: normalizedBlockPath, equivalenceProofFingerprint: proofFingerprint };
     } catch (error) {
-      return refuse('DATASET_TILE_REPLACE_FAILED', `DQL could not prove this replacement safely: ${error instanceof Error ? error.message : String(error)}`, 400);
+      return refuse('DATASET_TILE_REPLACE_FAILED', `ZLens could not prove this replacement safely: ${error instanceof Error ? error.message : String(error)}`, 400);
     }
   };
 
@@ -13569,19 +13570,19 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
     const legacySemantic = tile.semantic;
     const sourceId = tile.sourceId?.trim();
     if (!sourceId) {
-      return refuse('legacy_semantic_identity_incomplete', 'This legacy semantic tile has no persisted governed source identity, so DQL cannot convert it safely.');
+      return refuse('legacy_semantic_identity_incomplete', 'This legacy semantic tile has no persisted governed source identity, so ZLens cannot convert it safely.');
     }
     const snapshot = projectSnapshot();
     if (snapshot.error || snapshot.stale) {
       return refuse('SEMANTIC_TILE_CONVERSION_SOURCE_STALE', 'The current project source cannot be resolved safely. Refresh the source and run the legacy tile again.');
     }
     if (!semanticLayer) {
-      return refuse('SEMANTIC_TILE_CONVERSION_SEMANTIC_UNAVAILABLE', 'The native semantic layer is unavailable, so DQL cannot prove this conversion.');
+      return refuse('SEMANTIC_TILE_CONVERSION_SEMANTIC_UNAVAILABLE', 'The native semantic layer is unavailable, so ZLens cannot prove this conversion.');
     }
     try {
       await ensureMetadataCatalogFresh(projectRoot, { manifest: snapshot.manifest, semanticLayer });
     } catch (error) {
-      return refuse('SEMANTIC_TILE_CONVERSION_SOURCE_STALE', `DQL could not refresh the governed source catalog: ${error instanceof Error ? error.message : String(error)}`);
+      return refuse('SEMANTIC_TILE_CONVERSION_SOURCE_STALE', `ZLens could not refresh the governed source catalog: ${error instanceof Error ? error.message : String(error)}`);
     }
     const resolved = resolveAppSourceCatalogRecords(projectRoot, [sourceId], draft.sourcePolicy);
     const source = resolved.items[0];
@@ -13941,7 +13942,7 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
       semanticTileConversionPreviews.delete(input.proposalId);
       return { ok: true, draft: next, equivalenceProofFingerprint: prepared.proofFingerprint };
     } catch (error) {
-      return refuse('SEMANTIC_TILE_CONVERSION_ACCEPT_FAILED', `DQL could not save this reviewed conversion: ${error instanceof Error ? error.message : String(error)}`, 400);
+      return refuse('SEMANTIC_TILE_CONVERSION_ACCEPT_FAILED', `ZLens could not save this reviewed conversion: ${error instanceof Error ? error.message : String(error)}`, 400);
     }
   };
 
@@ -14000,7 +14001,7 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
         viewerAppId = viewer.appId;
       } else if (authorization !== `Bearer ${authToken}`) {
         res.writeHead(401, { 'Content-Type': 'application/json; charset=utf-8', 'WWW-Authenticate': 'Bearer' });
-        res.end(serializeJSON({ error: isViewerToken(bearer) ? 'This link has expired or was changed. Ask for a new link.' : 'A valid DQL server bearer token is required.' }));
+        res.end(serializeJSON({ error: isViewerToken(bearer) ? 'This link has expired or was changed. Ask for a new link.' : 'A valid ZLens server bearer token is required.' }));
         return;
       }
     }
@@ -14030,7 +14031,7 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
       if (!requestPrincipal) {
         // The host did not say in time who is asking: refused, in words that do not send them to sign in again.
         res.writeHead(identityUnavailable ? 503 : 401, { 'Content-Type': 'application/json; charset=utf-8', ...(identityUnavailable ? { 'Retry-After': '5' } : {}) });
-        res.end(serializeJSON(identityUnavailable ? { error: HOST_IDENTITY_UNAVAILABLE, code: 'HOST_UNAVAILABLE' } : { error: 'Sign in to use DQL.' }));
+        res.end(serializeJSON(identityUnavailable ? { error: HOST_IDENTITY_UNAVAILABLE, code: 'HOST_UNAVAILABLE' } : { error: 'Sign in to use ZLens.' }));
         return;
       }
       Object.assign(auditWho, { principal: requestPrincipal, actor: auditActor(requestPrincipal) });
@@ -14080,7 +14081,7 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
       ...(hostHooks ? { hooks: hostHooks } : {}),
     } : hostHooks ? { requestId, hooks: hostHooks } : undefined, async () => {
 
-    // Existing `dql notebook` runtimes cannot hand their in-memory capability
+    // Existing `zlens notebook` runtimes cannot hand their in-memory capability
     // to a later CLI process. A short-lived challenge is therefore issued only
     // when BOTH the server binding and requesting socket are loopback. Remote
     // and browser-origin requests retain their normal `browser` attribution.
@@ -14213,7 +14214,7 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
         res.end(serializeJSON(apiErrorEnvelope({
           requestId,
           code: 'DBT_REAPPLY_REQUIRED',
-          message: `Reapply the saved dbt project with DQL ${runtimeVersion} before completing the update review.`,
+          message: `Reapply the saved dbt project with ZLens ${runtimeVersion} before completing the update review.`,
           nextActions: ['Open Project & dbt, preview the prefilled project, then choose Reapply project.'],
         })));
         return;
@@ -14746,7 +14747,7 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
           requestId,
           snapshotId: snapshot.snapshotId,
           code: 'DBT_MANIFEST_COMPILE_FAILED',
-          message: snapshot.error ?? 'DQL could not compile Domain Studio from the configured dbt manifest.',
+          message: snapshot.error ?? 'ZLens could not compile Domain Studio from the configured dbt manifest.',
           details: { manifestPath: configuredManifestPath },
           nextActions: ['Review the dbt artifact and DQL compile diagnostics, rebuild the dbt manifest, then refresh Domain Studio.'],
         })));
@@ -14836,7 +14837,7 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
           requestId,
           snapshotId: snapshot.snapshotId,
           code: 'DBT_MANIFEST_COMPILE_FAILED',
-          message: snapshot.error ?? 'DQL could not compile the dbt database catalog.',
+          message: snapshot.error ?? 'ZLens could not compile the dbt database catalog.',
           details: { manifestPath: configuredManifestPath },
           nextActions: ['Review the dbt artifact, rebuild it, then refresh the database catalog.'],
         })));
@@ -15199,7 +15200,7 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
     }
 
     // Add or edit a MetricFlow metric (and the measure/dimensions it needs) in the dbt project's own YAML.
-    // Same contract as dbt-source above; the metric stays owned by dbt, DQL only writes the reviewed patch.
+    // Same contract as dbt-source above; the metric stays owned by dbt, ZLens only writes the reviewed patch.
     if (req.method === 'POST' && path === '/api/modeling/dbt-first/dbt-metric/preview') {
       const requestId = apiRequestId('modeling-dbt-metric-preview');
       const snapshot = projectSnapshot();
@@ -15246,7 +15247,7 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
         if (!expectedFingerprint) throw Object.assign(new Error('The reviewed source patch fingerprint is required.'), { code: 'SOURCE_CHANGED' });
         const { dbtProjectDir, manifestPath } = onboardingDbtPaths({});
         const applied = applyDbtMetricPatch(dbtProjectDir, manifestPath, body.change, expectedFingerprint);
-        // DQL reads dbt's compiled manifest first, so the new metric is only visible once dbt has parsed the YAML.
+        // ZLens reads dbt's compiled manifest first, so the new metric is only visible once dbt has parsed the YAML.
         // This route writes the reviewed YAML and nothing else: running dbt on the server is a settings.manage
         // action (route-actions.ts) and would block the server while it runs. The next step is named instead.
         const changed = applied.patches.some((patch) => patch.changed);
@@ -15471,7 +15472,7 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
           snapshotId: snapshot.snapshotId,
           code,
           message: apiErrorMessage(error),
-          nextActions: code === 'WAREHOUSE_CATALOG_MISSING' ? ['Open Settings → Connections and Sync schema, or run `dql sync warehouse --schemas <schema>`.'] : [],
+          nextActions: code === 'WAREHOUSE_CATALOG_MISSING' ? ['Open Settings → Connections and Sync schema, or run `zlens sync warehouse --schemas <schema>`.'] : [],
         })));
       }
       return;
@@ -15507,7 +15508,7 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
           snapshotId: snapshot.snapshotId,
           code,
           message: apiErrorMessage(error),
-          nextActions: code === 'WAREHOUSE_CATALOG_MISSING' ? ['Open Settings → Connections and Sync schema, or run `dql sync warehouse --schemas <schema>`.'] : [],
+          nextActions: code === 'WAREHOUSE_CATALOG_MISSING' ? ['Open Settings → Connections and Sync schema, or run `zlens sync warehouse --schemas <schema>`.'] : [],
         })));
       }
       return;
@@ -15566,7 +15567,7 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
       res.end(serializeJSON({
         code: schemaUnsupported ? 'TRACE_SCHEMA_UNSUPPORTED' : 'TRACE_STORE_UNAVAILABLE',
         error: schemaUnsupported
-          ? 'The local Ask trace schema is newer than this DQL runtime can read.'
+          ? 'The local Ask trace schema is newer than this ZLens runtime can read.'
           : 'Local Ask trace storage is unavailable.',
         status: traceStatus,
       }));
@@ -16066,7 +16067,7 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
         });
         const embeddedSql = restoreNotebookDqlParameterInterpolations(sqlRepair.repairedSql, originalPlan.sqlParams);
         const repairedSource = replaceNotebookDqlQueryForRepair(sourceDqlArtifact.source, embeddedSql);
-        if (!repairedSource) throw boundedRepairError('DQL could not reinsert the repaired SQL into the immutable wrapper.', 422);
+        if (!repairedSource) throw boundedRepairError('ZLens could not reinsert the repaired SQL into the immutable wrapper.', 422);
         const repairedInvocation = prepareBlockInvocation({
           source: repairedSource,
           parameters: sourceDqlArtifact.parameterValues,
@@ -16087,7 +16088,7 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
           parameters: repairedInvocation.values,
         });
         if (!repairedPlan?.sql?.trim() || normalizeSqlForComparison(repairedPlan.sql) !== normalizeSqlForComparison(sqlRepair.repairedSql)) {
-          throw boundedRepairError('The repaired wrapper recompiled to different SQL, so DQL stopped before publishing it.', 422);
+          throw boundedRepairError('The repaired wrapper recompiled to different SQL, so ZLens stopped before publishing it.', 422);
         }
         const repairedExecutionReceipt = createDqlArtifactExecutionReceipt(
           repairedSource,
@@ -16564,7 +16565,7 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
         }
         // A trace surface is host-controlled metadata. Do not parse it from
         // the JSON body: only the unguessable per-runtime capability passed
-        // from `dql agent ask` may mark this local request as CLI.
+        // from `zlens agent ask` may mark this local request as CLI.
         const traceSurface = cliAskTraceCapabilities.consume({
           capability: req.headers['x-dql-ask-trace-capability'],
           scope: 'agent-runs',
@@ -17314,7 +17315,7 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
           mode,
           blockPath,
           // With a host, the draft's owner is the signed-in person (never a name in the body, and never one
-          // DQL would otherwise look up and save in dql.config.json).
+          // ZLens would otherwise look up and save in dql.config.json).
           owner: hostedOwner ?? owner,
           persistOwner: !hostedRequest(),
           domain,
@@ -17383,7 +17384,7 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
       return;
     }
 
-    // RFC 0010 HH-9: what the DQL app shows around its screens for this
+    // RFC 0010 HH-9: what the ZLens app shows around its screens for this
     // person — who they are, what they may do, and the host's additions.
     // Without a host: { host: false } and the app is unchanged.
     if (req.method === 'GET' && path === '/api/host/ui') {
@@ -17426,7 +17427,7 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
       } catch (error) {
         // Never the failure's own words: a plain sentence and a reference (the app keeps its last map and tries again).
         res.writeHead(503, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
-        res.end(serializeJSON({ error: plainFailureMessage(logUnderReference('Reading what this person may do failed', error), 'DQL could not load what you may do here.') }));
+        res.end(serializeJSON({ error: plainFailureMessage(logUnderReference('Reading what this person may do failed', error), 'ZLens could not load what you may do here.') }));
       }
       return;
     }
@@ -17504,7 +17505,7 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
       }
       return readHomeState(projectRoot, ownFilesKey() ?? NOBODY_FILES).follows;
     };
-    const mayOpenAppForHome = async (app: import('@duckcodeailabs/dql-core').AppDocument): Promise<boolean> => {
+    const mayOpenAppForHome = async (app: import('@zlens/core').AppDocument): Promise<boolean> => {
       const principal = currentPrincipal();
       if (!principal || principal.source !== 'host') return true;
       if (!appAudienceDecision(app, principal).allow) return false;
@@ -18100,7 +18101,7 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
     }
 
     // ── Domains (spec 17, part B) — first-class business domain declarations.
-    //    Authoring here satisfies `dql doctor`'s "missing domain declaration"
+    //    Authoring here satisfies `zlens doctor`'s "missing domain declaration"
     //    warning. AI drafts, humans certify; domains carry no certification. ────
     if (req.method === 'GET' && path === '/api/domains') {
       try {
@@ -19838,7 +19839,7 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
         }
         const proposal = applyTableDatasetChoices(drafted.proposal, body.measures);
         if (!proposal.key) {
-          reply(422, { ok: false, code: 'TABLE_DATASET_KEY_REQUIRED', error: `No column in ${table.name} is filled and different on every row, so DQL cannot count its rows safely. Choose a table with an id column.` });
+          reply(422, { ok: false, code: 'TABLE_DATASET_KEY_REQUIRED', error: `No column in ${table.name} is filled and different on every row, so ZLens cannot count its rows safely. Choose a table with an id column.` });
           return;
         }
         const blockName = (typeof body.name === 'string' ? body.name : '').replace(/["\\\n\r]/g, '').trim().slice(0, 80) || proposal.name;
@@ -20190,7 +20191,7 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
               || preparedSource.connection.schema !== input.connection.schema) {
               throw new DatasetAggregateComponentProofError(
                 'DATASET_AGGREGATE_COMPONENT_SNAPSHOT_UNSUPPORTED',
-                'The prepared aggregate Dataset source changed its connection binding, so DQL cannot prove components and tile rows on one current read scope.',
+                'The prepared aggregate Dataset source changed its connection binding, so ZLens cannot prove components and tile rows on one current read scope.',
               );
             }
             const connector = await executor.getConnector(input.connection);
@@ -22485,7 +22486,7 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
             boundParameters: datasetBoundParameters.get(tile.tileId) ?? [],
           }];
         });
-        // Where each tile's values came from, from the SQL DQL sent: a host's
+        // Where each tile's values came from, from the SQL ZLens sent: a host's
         // boundary rule can then say whether they may reach a model (HH-5).
         const tileRelations: Record<string, string[] | null> = Object.fromEntries(settledTiles
           .filter((tile) => tile.status === 'ok')
@@ -22930,7 +22931,7 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
               } catch (error) {
                 return {
                   ok: false as const,
-                  error: `DQL could not confirm this chart against the current governed source: ${error instanceof Error ? error.message : String(error)}. Run the chart again before asking about it.`,
+                  error: `ZLens could not confirm this chart against the current governed source: ${error instanceof Error ? error.message : String(error)}. Run the chart again before asking about it.`,
                 };
               }
             };
@@ -26735,7 +26736,7 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
         // With a host, a dataset is a file the person uploads: a path names a file on the server, which is not theirs to read.
         if (hostedRequest() && typeof body.sourcePath === 'string' && body.sourcePath.trim()) {
           res.writeHead(403, { 'Content-Type': 'application/json; charset=utf-8' });
-          res.end(serializeJSON({ error: 'Upload the file here: a path names a file on DQL\'s server, which DQL does not read for a request.', code: 'PERMISSION_DENIED' }));
+          res.end(serializeJSON({ error: 'Upload the file here: a path names a file on the ZLens server, which ZLens does not read for a request.', code: 'PERMISSION_DENIED' }));
           return;
         }
         await ensureLocalWorkspaceReady();
@@ -28186,7 +28187,7 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
         // is not one DQL looks up (the lookup binds names, and this keeps them out of every statement besides).
         if (hostedRequest() && relationParts.some((part) => /['"`\\\u0000-\u001f\u007f]/.test(part))) {
           res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
-          res.end(serializeJSON({ error: 'DQL looks up a table by its plain name. This name holds a quote, a backslash or a control character, so DQL did not look it up.', code: 'RELATION_NAME_REFUSED' }));
+          res.end(serializeJSON({ error: 'ZLens looks up a table by its plain name. This name holds a quote, a backslash or a control character, so ZLens did not look it up.', code: 'RELATION_NAME_REFUSED' }));
           return;
         }
         const tablePath = relationParts.at(-1)!;
@@ -28349,7 +28350,7 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
         const cell = normalizeNotebookCell(body.cell);
         if (!cell || (cell.type !== 'sql' && cell.type !== 'dql')) {
           res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
-          res.end(serializeJSON({ error: 'An editable SQL or DQL notebook cell is required.' }));
+          res.end(serializeJSON({ error: 'An editable SQL or ZLens notebook cell is required.' }));
           return;
         }
         if (cell.type === 'dql' && /^\s*@block\(/i.test(cell.source)) {
@@ -28450,7 +28451,7 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
         } else {
           const sourceSql = plan?.sql ?? attemptedSql;
           if (!sourceSql?.trim()) {
-            throw boundedRepairError('DQL could not identify an embedded query to repair.', 422);
+            throw boundedRepairError('ZLens could not identify an embedded query to repair.', 422);
           }
           const sqlParams = plan?.sqlParams ?? [];
           repaired = await executeBoundedSqlRepair({
@@ -28475,7 +28476,7 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
           }
         }
         if (!repairedSource) {
-          throw boundedRepairError('DQL could not safely replace the embedded query in this cell.', 422);
+          throw boundedRepairError('ZLens could not safely replace the embedded query in this cell.', 422);
         }
 
         // Prove the repaired DQL wrapper still compiles. SQL execution above
@@ -29336,12 +29337,12 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
     }
 
     if (req.method === 'GET' && path === '/api/notebook/bootstrap') {
-      const welcomeNotebook = resolveNotebook(projectRoot, projectConfig.project ?? 'DQL Project');
+      const welcomeNotebook = resolveNotebook(projectRoot, projectConfig.project ?? 'ZLens Project');
       res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(serializeJSON({
         // With a host: no server path, the connection's kind only (its settings are the host's), and only files the file routes open.
         ...(hostedRequest() ? {} : { projectRoot }),
-        project: projectConfig.project ?? 'DQL Project',
+        project: projectConfig.project ?? 'ZLens Project',
         defaultConnection: hostedRequest()
           ? (() => { const active = projectConfig.defaultConnection ?? connection; return active ? { driver: active.driver } : null; })()
           : projectConfig.defaultConnection ?? connection,
@@ -30578,7 +30579,7 @@ export function askDispatchReasoningEffort(
   // The reading is the slowest call of an Ask turn (on the Anthropic API about
   // 17 s of a 27 s question, most of it thinking). An operator may set its
   // effort apart from SQL drafting, which stays at the authoring effort:
-  // DQL_ASK_READING_EFFORT=low|medium|high. The request's own choice and the
+  // ZLENS_ASK_READING_EFFORT=low|medium|high. The request's own choice and the
   // provider's Settings ceiling still apply.
   // On a configured API provider the reading defaults to low effort: measured on the
   // Anthropic API over 3×41 questions, the median fell from 20.6 s to 15.3 s
@@ -30587,7 +30588,7 @@ export function askDispatchReasoningEffort(
   // providers keep the route effort.
   // Looking up team documents is a short reading call too.
   const reading = purpose === 'resolve' || purpose === 'correct' || purpose === 'knowledge';
-  const envReading = process.env.DQL_ASK_READING_EFFORT;
+  const envReading = readEnv('ZLENS_ASK_READING_EFFORT');
   const readingOverride = !reading
     ? undefined
     : isReasoningEffortSetting(envReading)
@@ -31297,7 +31298,7 @@ function datasetProofFailureMessage(proofState: string): string {
     case 'invalid':
       return 'This Dataset grain/key evidence is invalid for the active source. Review the Dataset contract before running.';
     case 'target_required':
-      return 'Connect the selected source so DQL can validate its Dataset evidence against the active warehouse target.';
+      return 'Connect the selected source so ZLens can validate its Dataset evidence against the active warehouse target.';
     default:
       return 'This Dataset source does not have a valid target-bound grain/key proof.';
   }
@@ -32279,7 +32280,7 @@ function createModelingImportSession(
     const requested = realpathSync(requestedInput);
     if (requested !== allowedRoot && !requested.startsWith(`${allowedRoot}${sep}`)) throw Object.assign(new Error('Import path must stay inside the current Git workspace.'), { code: 'PATH_ACCESS_FORBIDDEN' });
     const paths = collectModelingYamlPaths(requested, MODELING_IMPORT_FILE_LIMIT);
-    // Truncation used to be silent, which reads as "DQL did not find my file".
+    // Truncation used to be silent, which reads as "ZLens did not find my file".
     if (paths.length >= MODELING_IMPORT_FILE_LIMIT) {
       truncationWarnings.push(`Only the first ${MODELING_IMPORT_FILE_LIMIT} YAML files in this location were scanned. Point the import at a narrower folder to see the rest.`);
     }
@@ -34127,14 +34128,14 @@ function renderNotFound(path: string): string {
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <title>DQL Local Runtime</title>
+    <title>ZLens Local Runtime</title>
     <style>
       body { font-family: Inter, system-ui, sans-serif; margin: 40px; color: #111827; }
       code { background: #f3f4f6; padding: 2px 6px; border-radius: 6px; }
     </style>
   </head>
   <body>
-    <h1>DQL Local Runtime</h1>
+    <h1>ZLens Local Runtime</h1>
     <p>No file exists for <code>${escapeHtml(path)}</code>.</p>
     <p>Try opening <code>/</code> or confirm that you built the bundle correctly.</p>
   </body>
@@ -34254,7 +34255,7 @@ function sendDbtOwnedSemanticAuthoringError(res: {
   res.end(serializeJSON({
     error: 'dbt-first projects use dbt/MetricFlow as the physical and metric source of truth. Edit the dbt project and refresh artifacts instead of creating duplicate local semantic definitions.',
     code: 'DQL_MODELING_DBT_OWNED',
-    nextAction: 'Create or edit the metric in dbt/MetricFlow, run dbt parse or dbt build, then run dql sync dbt.',
+    nextAction: 'Create or edit the metric in dbt/MetricFlow, run dbt parse or dbt build, then run zlens sync dbt.',
   }));
 }
 
@@ -34350,7 +34351,7 @@ export interface ReviewableProposalResult extends ProposalResult {
  * Core of the `/api/propose` endpoint, factored out as a pure function so it can
  * be unit-tested without standing up an HTTP server.
  *
- * It reuses the existing `propose` engine from `@duckcodeailabs/dql-agent`
+ * It reuses the existing `propose` engine from `@zlens/agent`
  * verbatim (no inference/ranking logic is duplicated here) in `dryRun` mode so a
  * readiness preview never mutates the project. Every returned proposal is a
  * `status: draft` block with the engine's stored Certifier verdict attached.
@@ -34495,7 +34496,7 @@ function buildReviewableProposals(
         firstSeenAt,
         lastUpdatedAt,
         reviewAgeHours,
-        certifyCommand: `dql certify --from-draft ${quoteCliArg(draftPath)} --owner you@example.com`,
+        certifyCommand: `zlens certify --from-draft ${quoteCliArg(draftPath)} --owner you@example.com`,
         payload: {
           question: preview?.examples?.[0] ?? proposal.inference.examples[0]?.question ?? `Review ${proposal.slug}`,
           model: proposal.model,
@@ -35185,7 +35186,7 @@ function executionFingerprint(value: string): string {
 
 /**
  * Opaque browser-cache identity for local Ask conversations.  A browser origin
- * is not a project boundary: a user can stop one `dql notebook` process and
+ * is not a project boundary: a user can stop one `zlens notebook` process and
  * start a different project on the same port.  The client therefore receives
  * only this one-way, server-owned value and never a local path. It is not a
  * secret: it is intentionally linkable only within the local browser/runtime
@@ -35465,7 +35466,7 @@ function metadataScopeDbtDefaults(
   }
 }
 
-/** What the Settings page and `dql sync warehouse` show about the warehouse catalog snapshot. */
+/** What the Settings page and `zlens sync warehouse` show about the warehouse catalog snapshot. */
 export interface WarehouseCatalogSummary {
   path: string;
   relations?: number;
@@ -35541,7 +35542,7 @@ async function refreshWarehouseCatalogAfterSync(
 }
 
 /**
- * `dql sync warehouse`: the same work as Settings → Sync schema, without a
+ * `zlens sync warehouse`: the same work as Settings → Sync schema, without a
  * running server. With `schemas`, the schema selection is saved first.
  */
 export async function syncProjectWarehouse(projectRoot: string, options: {
@@ -35590,7 +35591,7 @@ export async function syncRuntimeSchema(projectRoot: string, executor: QueryExec
 }
 
 /**
- * `dql model discover` and Modeling → Build the map for warehouse-first and
+ * `zlens model discover` and Modeling → Build the map for warehouse-first and
  * hybrid modeling: draft domains, entities and relationships from the
  * warehouse catalog snapshot, optionally checked on the warehouse.
  */
@@ -35609,7 +35610,7 @@ export async function discoverProjectWarehouseModel(projectRoot: string, options
   }
   const { snapshot, error } = readWarehouseCatalog(projectRoot);
   if (!snapshot) {
-    throw Object.assign(new Error(error ? `The warehouse catalog could not be read: ${error}` : 'No warehouse catalog yet. Run `dql sync warehouse --schemas <schema>` or Sync schema in Settings first.'), { code: 'WAREHOUSE_CATALOG_MISSING' });
+    throw Object.assign(new Error(error ? `The warehouse catalog could not be read: ${error}` : 'No warehouse catalog yet. Run `zlens sync warehouse --schemas <schema>` or Sync schema in Settings first.'), { code: 'WAREHOUSE_CATALOG_MISSING' });
   }
   const manifest = options.manifest ?? buildManifest({ projectRoot, dbtManifestPath: resolveDbtManifestPath(projectRoot, cfg) ?? undefined });
   const connectionId = snapshot.connectionId || warehouseCatalogConnectionId(cfg);
@@ -35622,7 +35623,7 @@ export async function discoverProjectWarehouseModel(projectRoot: string, options
   if (options.queryHistory && connection && options.executor) {
     const sql = queryHistorySql(connection.driver, { database: connection.database ?? connection.catalog, location: (connection as { location?: string }).location });
     if (!sql) {
-      queryHistory = { error: `${connection.driver} keeps no query history DQL can read.` };
+      queryHistory = { error: `${connection.driver} keeps no query history ZLens can read.` };
     } else {
       try {
         const result = await options.executor.executePositional(sql, [], connection, { maxRows: 20_000, maxBytes: 64 * 1024 * 1024, batchSize: 1_000, deadlineMs: 60_000 });
@@ -36030,7 +36031,7 @@ export function assertConnectionNodeCompatibility(
       new Error(
         `Snowflake notebook execution requires Node.js ${SNOWFLAKE_MINIMUM_NODE_MAJOR} or newer, but this process is Node.js ${version}. `
         + `Install Node ${SNOWFLAKE_TESTED_NODE_MAJORS.join(', ')} (or newer), reinstall project dependencies, and start the notebook again. `
-        + 'DQL stopped before loading the connector so the server cannot crash later under an unsupported runtime.',
+        + 'ZLens stopped before loading the connector so the server cannot crash later under an unsupported runtime.',
       ),
       {
         code: 'UNSUPPORTED_NODE_RUNTIME',
@@ -37335,7 +37336,7 @@ function repairExploratoryNonAdditiveAggregates(
     if (!owner) {
       return {
         sql: repaired,
-        blockedReason: `The exploratory query sums non-additive measure ${column} after a join, but DQL cannot prove its owning grain. Clarify the desired allocation or keep the owning entity in the result.`,
+        blockedReason: `The exploratory query sums non-additive measure ${column} after a join, but ZLens cannot prove its owning grain. Clarify the desired allocation or keep the owning entity in the result.`,
       };
     }
     const ownerAliases = Object.entries(analysis.aliasToRelation)
@@ -37631,7 +37632,7 @@ function internalDqlRelationIdValidationError(
     return `${head} ${probe.ambiguous.join(', ')} matched more than one schema in this connection, so the name alone does not identify a relation. Qualify it as database.schema.table.`;
   }
   if (probe?.probed) {
-    return `${head} DQL checked this connection and no relation with that name is visible to it. Qualify it as database.schema.table, or connect to the source that holds it.`;
+    return `${head} ZLens checked this connection and no relation with that name is visible to it. Qualify it as database.schema.table, or connect to the source that holds it.`;
   }
   return `${head} Use the physical database.schema.table relation instead, or choose Ask AI to fix from the notebook error.`;
 }
@@ -37887,7 +37888,7 @@ function safeJoin(rootDir: string, requestPath: string): string | null {
 const HOSTED_FILE_EXTENSIONS = new Set(['.dqlnb', '.dql', '.dqld', '.md', '.sql', '.yaml', '.yml', '.json']);
 const HOSTED_DENIED_FOLDERS = new Set(['node_modules', 'target', 'data', 'dist', 'logs', 'seeds']);
 const HOSTED_DENIED_NAMES = new Set(['dql.config.json', 'profiles.yml', 'profiles.yaml', 'package.json', 'package-lock.json']);
-export const HOSTED_FILE_REFUSED = 'This file is not one DQL opens here: only notebooks, blocks, Apps, domains, the semantic layer and docs. Open it from the Files list.';
+export const HOSTED_FILE_REFUSED = 'This file is not one ZLens opens here: only notebooks, blocks, Apps, domains, the semantic layer and docs. Open it from the Files list.';
 export const HOSTED_SETTINGS_FILE_REFUSED = "This file holds the workspace's connections and settings. They belong to Production and are changed there, not from a draft space. Ask an admin to change them in Production.";
 
 /** The sentence a refused hosted file request gets: why, when the file is the project's connection or dbt profile settings. */
@@ -37905,7 +37906,7 @@ function hostedFileRuleBroken(relativePath: string, privateDrafts: boolean): boo
   if (segments.some((segment) => segment.startsWith('.'))) return true;
   if (segments.slice(0, -1).some((segment) => HOSTED_DENIED_FOLDERS.has(segment.toLowerCase()))) return true;
   if (HOSTED_DENIED_NAMES.has(name) || /secret|credential|password|token/i.test(name)) return true;
-  // A notebook's last run kept beside it (before a host, or by `dql notebook`) holds one person's result rows.
+  // A notebook's last run kept beside it (before a host, or by `zlens notebook`) holds one person's result rows.
   if (name.endsWith('.run.json')) return true;
   return !HOSTED_FILE_EXTENSIONS.has(extension);
 }
@@ -41040,7 +41041,7 @@ export function storyValueRelations(
 }
 
 /**
- * The host's additions to the DQL app (HH-9), as DQL passes them on: each field of its own shape and plain, every
+ * The host's additions to the ZLens app (HH-9), as ZLens passes them on: each field of its own shape and plain, every
  * link same-origin, or left out. A malformed answer (not an object, a list that is not a list, entries that are not
  * objects) gives none of the fields it got wrong, never a failure.
  */
@@ -42777,7 +42778,7 @@ async function selectAssistProvider(
   const resilient = alternates.length > 0
     ? createFailoverProvider(wrapped, alternates, {
       onFailover: (event) => console.warn(
-        `DQL: ${event.from} could not answer, continued on ${event.to}. (${event.reason})`,
+        `ZLens: ${event.from} could not answer, continued on ${event.to}. (${event.reason})`,
       ),
     })
     : wrapped;
@@ -43753,7 +43754,7 @@ function resolveBlockWriteTarget(
 /**
  * Whether the project has a dbt project to read: a dbt_project.yml where DQL
  * looks, a repository URL, or a configured folder that exists. A placeholder
- * folder that does not exist (create-dql-app writes one) is not a dbt
+ * folder that does not exist (create-zlens-app writes one) is not a dbt
  * project; treating it as one hid the no-dbt path in Setup.
  */
 function dbtProjectConfigured(projectRoot: string, projectConfig: ProjectConfig): boolean {
@@ -44687,7 +44688,7 @@ export function discoverDbtProfileConnections(projectRoot: string, projectConfig
         const mapped = mapDbtProfileOutput(output);
         if (!mapped) continue;
         // dbt resolves a relative duckdb `path` against the dbt project dir (where it runs),
-        // NOT the DQL workspace. Resolve to an absolute path here so the imported connection
+        // NOT the ZLens workspace. Resolve to an absolute path here so the imported connection
         // opens the real warehouse instead of silently creating an empty db next to dql.config.json.
         if (
           mapped.adapter === 'duckdb' &&
@@ -44733,7 +44734,7 @@ export function buildDbtParseArgs(dbtProjectDir: string, profilesDir?: string): 
   ];
 }
 
-/** CFG-003: use a complete default dbt target when no saved DQL connection exists. */
+/** CFG-003: use a complete default dbt target when no saved ZLens connection exists. */
 export function resolveDbtProfileRuntimeConnection(
   projectRoot: string,
   projectConfig: ProjectConfig,
@@ -45291,7 +45292,7 @@ export function buildDbtStatus(projectRoot: string, projectConfig: ProjectConfig
   const setupHint = !configured
     ? 'No dbt project detected. Start without dbt or run DQL from a repo with dbt_project.yml.'
     : !manifestExists
-      ? 'Run `dbt parse`, `dbt compile`, or `dbt build`, then run `dql sync dbt`.'
+      ? 'Run `dbt parse`, `dbt compile`, or `dbt build`, then run `zlens sync dbt`.'
       : !semanticExists
         ? 'dbt manifest is ready. Run `dbt parse` or `dbt build` if you use dbt Semantic Layer metrics.'
         : semanticMetricCount === 0 && semanticModelCount === 0 && savedQueryCount === 0
@@ -45387,7 +45388,7 @@ export function buildSemanticLayerDiagnostics(
       issues.push({
         severity: 'error',
         code: 'dbt_manifest_missing',
-        message: 'dbt manifest.json is missing, so DQL cannot build dbt model context.',
+        message: 'dbt manifest.json is missing, so ZLens cannot build dbt model context.',
         action: 'Run dbt parse, dbt compile, or dbt build, then reload the semantic layer.',
         path: dbt.artifacts.manifest.path,
       });
@@ -45396,7 +45397,7 @@ export function buildSemanticLayerDiagnostics(
       issues.push({
         severity: 'warning',
         code: 'metricflow_semantic_manifest_missing',
-        message: 'dbt MetricFlow semantic_manifest.json is missing. DQL can still inspect dbt models, but MetricFlow metrics and saved queries may be incomplete.',
+        message: 'dbt MetricFlow semantic_manifest.json is missing. ZLens can still inspect dbt models, but MetricFlow metrics and saved queries may be incomplete.',
         action: 'Run dbt parse or dbt build with semantic models configured, then reload. For execution, ensure MetricFlow is installed and mf is on PATH.',
         path: dbt.artifacts.semanticManifest.path,
       });
@@ -45413,7 +45414,7 @@ export function buildSemanticLayerDiagnostics(
       issues.push({
         severity: 'warning',
         code: 'dbt_model_inventory_only',
-        message: 'DQL loaded dbt model inventory, but no MetricFlow semantic metrics were found.',
+        message: 'ZLens loaded dbt model inventory, but no MetricFlow semantic metrics were found.',
         action: 'Create dbt semantic_models and metrics, or use AI Import to build DQL blocks from dbt model metadata.',
       });
     }
@@ -45619,7 +45620,7 @@ export interface GitStatusResult {
   changes: Array<{ path: string; status: string }>;
   /**
    * The project's folder inside the repository, '' when the project is the
-   * repository root. A DQL workspace inside a larger repo (a dbt project, say)
+   * repository root. A ZLens workspace inside a larger repo (a dbt project, say)
    * used to list and stage that whole repo's changes; changes are now scoped
    * here, and the prefix is reported so the UI can say what it is showing.
    */
@@ -45787,7 +45788,7 @@ export async function readBlockHistory(projectRoot: string, rawPath: unknown): P
   }
   const inside = await execGit(projectRoot, ['rev-parse', '--is-inside-work-tree']);
   if (inside.missing) {
-    return { httpStatus: 200, body: { entries: [], status: 'git_unavailable', message: 'Git is not installed or is not on the PATH of the DQL server.' } };
+    return { httpStatus: 200, body: { entries: [], status: 'git_unavailable', message: 'Git is not installed or is not on the PATH of the ZLens server.' } };
   }
   if (inside.code !== 0 || inside.stdout.trim() !== 'true') {
     if (inside.code === 0 || /not a git repository/i.test(inside.stderr)) {
@@ -45820,7 +45821,7 @@ export async function readBlockHistory(projectRoot: string, rawPath: unknown): P
 export async function gitInitProject(projectRoot: string): Promise<{ ok: boolean; error?: string; code?: string; status?: GitStatusResult }> {
   const version = await execGit(projectRoot, ['--version']);
   if (version.missing || version.code !== 0) {
-    return { ok: false, code: 'git_unavailable', error: 'Git is not installed or is not on the PATH of the DQL server. Install Git, then try again.' };
+    return { ok: false, code: 'git_unavailable', error: 'Git is not installed or is not on the PATH of the ZLens server. Install Git, then try again.' };
   }
   const existingRoot = await resolveGitRoot(projectRoot);
   if (existingRoot) {
@@ -45937,7 +45938,7 @@ function projectPrefixWithin(gitRoot: string, cwd: string): string {
 }
 
 /**
- * Whether a porcelain path belongs to this project. A DQL workspace inside a
+ * Whether a porcelain path belongs to this project. A ZLens workspace inside a
  * larger repository listed — and could stage — that whole repository's
  * changes; the project only reviews its own. A rename reads `old -> new`, and
  * either side landing in the project makes it this project's business.
@@ -46333,7 +46334,7 @@ async function gitCommit(
     if (add.code !== 0) return { ok: false, error: gitErrorOutput(add) };
   } else if (options.stageAll) {
     // Scoped to this project. A bare `add -A` runs at the repository root, so
-    // a DQL workspace inside a larger repo swept every unrelated change in
+    // a ZLens workspace inside a larger repo swept every unrelated change in
     // that repo into the commit.
     const projectPrefix = projectPrefixWithin(gitRoot, cwd);
     if (projectPrefix.startsWith('..')) {
@@ -46792,9 +46793,9 @@ function collectSettingsEnvStatus(): SettingsEnvGroup[] {
       title: 'Slack',
       description: 'Use webhooks for scheduled App deliveries, or bot credentials for the Slack chat front-end.',
       vars: [
-        v('DQL_SLACK_WEBHOOK', 'Schedule webhook', 'Incoming webhook used by App schedules that deliver to Slack.'),
-        v('SLACK_SIGNING_SECRET', 'Slack signing secret', 'Required only when running `dql slack serve`.'),
-        v('SLACK_BOT_TOKEN', 'Slack bot token', 'Bot token used by Slack chat commands when `dql slack serve` is enabled.'),
+        v('ZLENS_SLACK_WEBHOOK', 'Schedule webhook', 'Incoming webhook used by App schedules that deliver to Slack.'),
+        v('SLACK_SIGNING_SECRET', 'Slack signing secret', 'Required only when running `zlens slack serve`.'),
+        v('SLACK_BOT_TOKEN', 'Slack bot token', 'Bot token used by Slack chat commands when `zlens slack serve` is enabled.'),
       ],
     },
     {
@@ -46802,8 +46803,8 @@ function collectSettingsEnvStatus(): SettingsEnvGroup[] {
       title: 'Email',
       description: 'SMTP is optional. Without it, email schedules stay in stub mode with a clear delivery message.',
       vars: [
-        v('DQL_SMTP_URL', 'SMTP URL', 'SMTP connection URL for email schedule delivery.'),
-        v('DQL_SMTP_FROM', 'SMTP sender', 'Optional sender address for scheduled emails.'),
+        v('ZLENS_SMTP_URL', 'SMTP URL', 'SMTP connection URL for email schedule delivery.'),
+        v('ZLENS_SMTP_FROM', 'SMTP sender', 'Optional sender address for scheduled emails.'),
       ],
     },
     {
@@ -46811,9 +46812,9 @@ function collectSettingsEnvStatus(): SettingsEnvGroup[] {
       title: 'Runtime',
       description: 'Local server and runtime toggles used by Docker and native notebook sessions.',
       vars: [
-        v('DQL_HOST', 'Notebook bind host', 'Host interface for the local notebook server. Docker uses 0.0.0.0 inside the container.'),
-        v('DQL_RUNTIME_URL', 'Runtime URL', 'Optional URL used by headless agent commands to call an existing runtime.'),
-        v('DQL_LLM_KEY', 'Legacy LLM key', 'Fallback key accepted by older Claude provider configurations.'),
+        v('ZLENS_HOST', 'Notebook bind host', 'Host interface for the local notebook server. Docker uses 0.0.0.0 inside the container.'),
+        v('ZLENS_RUNTIME_URL', 'Runtime URL', 'Optional URL used by headless agent commands to call an existing runtime.'),
+        v('ZLENS_LLM_KEY', 'Legacy LLM key', 'Fallback key accepted by older Claude provider configurations.'),
       ],
     },
   ];
@@ -47028,7 +47029,7 @@ const RUNTIME_SNAPSHOT_MAX_AGE_MS = 60 * 60 * 1000; // 1 hour
  * the clarification gate (AGT-017). The effect is that a local model cannot
  * answer anything ambiguous, in a product whose whole positioning is local-first.
  *
- * Scaled by the same `DQL_AGENT_DEADLINE_SCALE` as the run budget, so one
+ * Scaled by the same `ZLENS_AGENT_DEADLINE_SCALE` as the run budget, so one
  * setting moves the provider's whole time envelope together rather than leaving
  * an inner bound to silently cap an outer one.
  */
@@ -49223,7 +49224,7 @@ function quoteAgentIdentifier(identifier: string, connection: ConnectionConfig):
 
 /**
  * A probe value as a string literal for `driver`. A value with a backslash or a control character is not probed
- * (engines escape them differently, and some by a setting DQL cannot see); BigQuery has no doubled quote, so its
+ * (engines escape them differently, and some by a setting ZLens cannot see); BigQuery has no doubled quote, so its
  * quote is escaped with a backslash.
  */
 function sqlStringLiteral(value: string, driver?: string): string {

@@ -8,7 +8,7 @@
  * validates every one of them against the Dataset contract again, so this
  * module can only ask; it cannot widen what a reader may see. Pure: no I/O.
  */
-import { tileQueryOutputAliases, type TileQuery } from '@duckcodeailabs/dql-core/apps/tile-query';
+import { tileQueryOutputAliases, type TileQuery } from '@zlens/core/apps/tile-query';
 import type { DashboardDatasetHierarchyDrill, DashboardDocumentResponse, DashboardDriverDefinitionV1, DashboardRunResponse } from '../../api/client';
 
 type LayoutItem = DashboardDocumentResponse['dashboard']['layout']['items'][number];

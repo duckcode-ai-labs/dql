@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { INTERFACE_FONT, INTERFACE_FONT_SAMPLE } from './interface-fonts';
 
 const render = vi.fn();
-vi.mock('@duckcodeailabs/dql-ui/styles', () => ({}));
+vi.mock('@zlens/ui/styles', () => ({}));
 vi.mock('./components/home/ask-run-link', () => ({ resolveAskRunLink: () => Promise.resolve() }));
 vi.mock('react-dom/client', () => ({ createRoot: () => ({ render }) }));
 vi.mock('./App', () => ({ App: () => null }));

@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { analyzeSqlReferences } from '@duckcodeailabs/dql-core';
+import { analyzeSqlReferences } from '@zlens/core';
 import { normalizeScopeName, type HintDependency, type HintDependencyKind, type HintScope } from './types.js';
 
 export interface HintDependencyObject {

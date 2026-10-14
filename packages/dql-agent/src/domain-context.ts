@@ -1,4 +1,4 @@
-import type { DQLManifest } from '@duckcodeailabs/dql-core';
+import type { DQLManifest } from '@zlens/core';
 
 export interface DomainContextEnvelope {
   /** CTX-001: server-validated request scope shared by UI, runtime, and agent. */

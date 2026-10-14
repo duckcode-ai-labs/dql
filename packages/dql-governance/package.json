@@ -1,7 +1,7 @@
 {
-  "name": "@duckcodeailabs/dql-governance",
+  "name": "@zlens/governance",
   "version": "1.17.3",
-  "description": "DQL Governance: block testing, certification, cost estimation, and access policies",
+  "description": "ZLens governance: block testing, certification, cost estimation, and access policies",
   "license": "Apache-2.0",
   "type": "module",
   "main": "./dist/index.js",
@@ -37,8 +37,8 @@
     "access": "public"
   },
   "dependencies": {
-    "@duckcodeailabs/dql-core": "workspace:*",
-    "@duckcodeailabs/dql-project": "workspace:*"
+    "@zlens/core": "workspace:*",
+    "@zlens/project": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^5.7.0",

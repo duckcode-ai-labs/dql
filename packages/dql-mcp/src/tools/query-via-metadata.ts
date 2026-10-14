@@ -14,13 +14,14 @@ import {
   type LocalContextPack,
   type MetadataFollowUpContext,
   type SqlContextValidationResult,
-} from '@duckcodeailabs/dql-agent';
+} from '@zlens/agent';
 import type {
   DataLexConformance,
   DataLexRelationship,
   JoinPathResolution,
-} from '@duckcodeailabs/dql-core';
+} from '@zlens/core';
 import { zodInputShapeForTool } from '../tool-schema.js';
+import { readEnv } from '@zlens/core';
 
 const DEFAULT_QUERY_VIA_METADATA_ROW_LIMIT = 200;
 
@@ -38,7 +39,7 @@ export const queryViaMetadataInput = zodInputShapeForTool('query_via_metadata');
  *   counter increments on dedupe.
  *
  * The agent contract: surface `uncertified: true` verbatim, and tell the
- * user about the draft block path + the `dql certify --from-draft` command
+ * user about the draft block path + the `zlens certify --from-draft` command
  * if they want the answer certified for next time.
  */
 export async function queryViaMetadata(
@@ -213,12 +214,12 @@ export async function queryViaMetadata(
       dqlArtifact,
       validationWarnings: contextValidation.warnings,
       promote: draftBlock
-        ? `if you want this question certified, run: dql certify --from-draft ${draftBlock.path}`
+        ? `if you want this question certified, run: zlens certify --from-draft ${draftBlock.path}`
         : undefined,
     };
   }
 
-  const base = args.serverUrl ?? process.env.DQL_RUNTIME_URL ?? 'http://127.0.0.1:3474';
+  const base = args.serverUrl ?? readEnv('ZLENS_RUNTIME_URL') ?? 'http://127.0.0.1:3474';
   const url = `${base.replace(/\/$/, '')}/api/notebook/execute`;
 
   let response: Response;
@@ -236,7 +237,7 @@ export async function queryViaMetadata(
       }),
     });
   } catch (err) {
-    const error = `Could not reach DQL runtime at ${base}. Start it with \`dql serve\` in ${ctx.projectRoot}. (${err instanceof Error ? err.message : String(err)})`;
+    const error = `Could not reach ZLens runtime at ${base}. Start it with \`zlens serve\` in ${ctx.projectRoot}. (${err instanceof Error ? err.message : String(err)})`;
     recordTier2QueryRun(ctx.projectRoot, { slug, question: args.question, status: 'runtime_unavailable', errorCode: 'runtime_unavailable', contextPack });
     return {
       uncertified: true,
@@ -340,7 +341,7 @@ export async function queryViaMetadata(
     dqlArtifact,
     validationWarnings: executedWarnings,
     promote: draftBlock
-      ? `if you want this question certified, run: dql certify --from-draft ${draftBlock.path}`
+      ? `if you want this question certified, run: zlens certify --from-draft ${draftBlock.path}`
       : undefined,
   };
 }
@@ -713,7 +714,7 @@ function metadataTrustStatus(
     reviewStatus,
     certification: 'uncertified',
     draftPath: draftBlock?.path,
-    promotionPath: draftBlock ? 'dql certify --from-draft' : undefined,
+    promotionPath: draftBlock ? 'zlens certify --from-draft' : undefined,
     caveats: [
       'No certified block exactly answered this grain.',
       'SQL was generated from metadata and must be reviewed before certification.',

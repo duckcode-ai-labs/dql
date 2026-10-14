@@ -1,7 +1,7 @@
 /**
  * Build OpenLineage events from a compiled DQL manifest.
  *
- * Turns a `dql compile` artifact into a START/COMPLETE event series that
+ * Turns a `zlens compile` artifact into a START/COMPLETE event series that
  * hydrates a Marquez / DataHub / Atlan / Monte Carlo backend with the
  * project's lineage graph: dbt sources → dbt models → DataLex contracts →
  * DQL blocks → apps.
@@ -16,7 +16,7 @@ import { randomUUID } from 'node:crypto';
 import type { LineageDataset, LineageEvent, LineageJob, OpenLineageEmitter } from './index.js';
 
 /**
- * Subset of `@duckcodeailabs/dql-core` `DQLManifest` consumed here. Kept
+ * Subset of `@zlens/core` `DQLManifest` consumed here. Kept
  * structural to avoid a circular package dep — dql-openlineage stays
  * dependency-free.
  */

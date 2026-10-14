@@ -5,10 +5,11 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
-import { ConversationStore, SqliteAgentRunStore } from '@duckcodeailabs/dql-agent';
-import { QueryExecutor, type ConnectionConfig } from '@duckcodeailabs/dql-connectors';
+import { ConversationStore, SqliteAgentRunStore } from '@zlens/agent';
+import { QueryExecutor, type ConnectionConfig } from '@zlens/connectors';
 import { startLocalServer } from '../local-runtime.js';
 import { currentPrincipal, currentRequestContext, personaSlotCount, PERSONA_SLOT_LIMIT, type DqlConversationStore, type DqlHostHooks, type DqlPrincipal, type DqlRunStore } from './request-context.js';
+import { readEnv } from '@zlens/core';
 
 /**
  * The host-hook contract, request context: 200 interleaved requests as 4 people, with every hook and store
@@ -19,7 +20,7 @@ import { currentPrincipal, currentRequestContext, personaSlotCount, PERSONA_SLOT
  * the persona slots, up to their LRU cap.
  */
 const here = dirname(fileURLToPath(import.meta.url));
-const connectorRoot = process.env.DQL_APP_DATASETS_DUCKDB_CONNECTOR_ROOT?.trim();
+const connectorRoot = readEnv('ZLENS_APP_DATASETS_DUCKDB_CONNECTOR_ROOT')?.trim();
 const duckIt = connectorRoot ? it : it.skip;
 const evidenceDir = process.env.HOST_CHECK_EVIDENCE_DIR?.trim();
 function evidence(name: string, record: unknown): void {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { groupingIdentityGapOfSql } from '@duckcodeailabs/dql-core';
-import type { BlockRecord } from '@duckcodeailabs/dql-project';
+import { groupingIdentityGapOfSql } from '@zlens/core';
+import type { BlockRecord } from '@zlens/project';
 import { BUILTIN_RULES, Certifier } from './certifier.js';
 
 const block = {

@@ -584,7 +584,7 @@ const CORE_TOOL_DEFINITIONS = [
   {
     name: 'answer_question',
     description:
-      "Governed one-shot answer. Runs DQL's OWN governed cascade (certified block → semantic metric → generated SQL) end-to-end and returns the executed answer with rows, SQL preview, canonical trust label, citations, and a reviewable draft — the SAME engine and trust guards as the DQL UI. Use this when you want DQL to generate AND answer for you. Prefer query_via_metadata when you want to author the SQL yourself. Requires the DQL runtime (`dql serve`).",
+      "Governed one-shot answer. Runs DQL's OWN governed cascade (certified block → semantic metric → generated SQL) end-to-end and returns the executed answer with rows, SQL preview, canonical trust label, citations, and a reviewable draft — the SAME engine and trust guards as the DQL UI. Use this when you want DQL to generate AND answer for you. Prefer query_via_metadata when you want to author the SQL yourself. Requires the DQL runtime (`zlens serve`).",
     inputSchema: {
       type: 'object',
       additionalProperties: false,
@@ -608,7 +608,7 @@ const CORE_TOOL_DEFINITIONS = [
   {
     name: 'build_block_from_prompt',
     description:
-      "Governed block builder from a natural-language prompt. Runs DQL's buildFromPrompt (the same governed engine the UI uses) to draft a reusable, review-required DQL block — you do NOT author SQL. Symmetric with build_dql_app. Returns the draft path, dqlArtifact source, and the Certifier verdict; NEVER auto-certifies. Requires the DQL runtime (`dql serve`).",
+      "Governed block builder from a natural-language prompt. Runs DQL's buildFromPrompt (the same governed engine the UI uses) to draft a reusable, review-required DQL block — you do NOT author SQL. Symmetric with build_dql_app. Returns the draft path, dqlArtifact source, and the Certifier verdict; NEVER auto-certifies. Requires the DQL runtime (`zlens serve`).",
     inputSchema: {
       type: 'object',
       additionalProperties: false,

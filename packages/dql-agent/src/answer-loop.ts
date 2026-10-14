@@ -1,5 +1,5 @@
 
-import { type SemanticLayer, type ResolvedTrustLabel, type TrustLabelId, type DqlArtifactReference, type DqlArtifactExecutionReceipt, type DqlExecutableArtifactV1, type DQLManifest, type AnalyticalFailureV1, type SemanticAggregationCompilerReceiptV1, type ProviderEgressReceiptV1, type AggregationSafetyProofV1 } from '@duckcodeailabs/dql-core';
+import { type SemanticLayer, type ResolvedTrustLabel, type TrustLabelId, type DqlArtifactReference, type DqlArtifactExecutionReceipt, type DqlExecutableArtifactV1, type DQLManifest, type AnalyticalFailureV1, type SemanticAggregationCompilerReceiptV1, type ProviderEgressReceiptV1, type AggregationSafetyProofV1 } from '@zlens/core';
 import type { KGStore } from './kg/sqlite-fts.js';
 import type { KGNode, KGSearchHit } from './kg/types.js';
 import type { AgentProvider, AgentToolDefinition, ProviderToolLoopOptions } from './providers/types.js';

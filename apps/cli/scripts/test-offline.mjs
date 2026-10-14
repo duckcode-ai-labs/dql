@@ -16,7 +16,7 @@ const preload = join(here, 'network-log.cjs');
 const run = spawnSync('npx', ['vitest', 'run', ...process.argv.slice(2)], {
   cwd: join(here, '..'),
   stdio: 'inherit',
-  env: { ...process.env, DQL_NETWORK_LOG: log, NODE_OPTIONS: `${process.env.NODE_OPTIONS ?? ''} --require ${preload}`.trim() },
+  env: { ...process.env, ZLENS_NETWORK_LOG: log, NODE_OPTIONS: `${process.env.NODE_OPTIONS ?? ''} --require ${preload}`.trim() },
 });
 let lines = [];
 try { lines = readFileSync(log, 'utf8').split('\n').filter(Boolean).map((line) => JSON.parse(line)); } catch { /* nothing recorded */ }

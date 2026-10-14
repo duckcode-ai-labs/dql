@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { load as loadYaml } from 'js-yaml';
 import { describe, expect, it } from 'vitest';
-import { buildManifest } from '@duckcodeailabs/dql-core';
+import { buildManifest } from '@zlens/core';
 
 const fixtureRoot = resolve(process.cwd(), 'test/fixtures/ask-observability-office');
 

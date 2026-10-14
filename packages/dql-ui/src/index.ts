@@ -1,4 +1,4 @@
-// Public entry for @duckcodeailabs/dql-ui
+// Public entry for @zlens/ui
 
 // tokens
 export {

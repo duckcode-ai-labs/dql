@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import { parseCanvasHtml } from '@duckcodeailabs/dql-core/apps/canvas-page';
-import type { StoryBindingCatalog } from '@duckcodeailabs/dql-core/apps/story-bindings';
+import { parseCanvasHtml } from '@zlens/core/apps/canvas-page';
+import type { StoryBindingCatalog } from '@zlens/core/apps/story-bindings';
 import { CanvasLayoutSurface, NumberList, layoutPieceLabel, layoutRefusal } from './CanvasLayoutSurface';
 import { CanvasEditor } from './CanvasEditor';
 

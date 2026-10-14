@@ -120,7 +120,7 @@ const BASE = `block "base" {
   query = """SELECT 1 AS x"""
 }`;
 
-describe('dql diff --impact gate', () => {
+describe('zlens diff --impact gate', () => {
   it('exits non-zero when a semantic change invalidates certified downstream', async () => {
     const dir = makeProject();
     writeManifest(dir);

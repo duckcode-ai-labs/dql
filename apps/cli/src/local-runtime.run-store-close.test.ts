@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { Server } from 'node:http';
 import { afterEach, describe, expect, it } from 'vitest';
-import type { QueryExecutor } from '@duckcodeailabs/dql-connectors';
+import type { QueryExecutor } from '@zlens/connectors';
 import { startLocalServer } from './local-runtime.js';
 
 const roots: string[] = [];

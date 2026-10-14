@@ -8,9 +8,10 @@ import {
   createScriptedAnalystProvider,
   SCRIPTED_ANALYST_PERSONAS,
   type ScriptedAnalystPersona,
-} from '@duckcodeailabs/dql-agent';
+} from '@zlens/agent';
 import { startLocalServer, type AskAgentRuntimeMode } from './local-runtime.js';
-import type { QueryExecutor } from '@duckcodeailabs/dql-connectors';
+import type { QueryExecutor } from '@zlens/connectors';
+import { readEnv } from '@zlens/core';
 
 /**
  * THE ASK BATTERY.
@@ -105,8 +106,8 @@ async function startFixture(fixture: string): Promise<Harness> {
     executor: executor(sqlLog),
     connection: { driver: 'file' },
     // No --ask-runtime-mode: the battery runs what a user gets by default,
-    // unless DQL_ASK_BATTERY_MODE selects a runtime under test.
-    ...(process.env.DQL_ASK_BATTERY_MODE ? { askAgentRuntimeMode: process.env.DQL_ASK_BATTERY_MODE as AskAgentRuntimeMode } : {}),
+    // unless ZLENS_ASK_BATTERY_MODE selects a runtime under test.
+    ...(readEnv('ZLENS_ASK_BATTERY_MODE') ? { askAgentRuntimeMode: readEnv('ZLENS_ASK_BATTERY_MODE') as AskAgentRuntimeMode } : {}),
     askAnalyticalPlannerProviderFactory: () => createScriptedAnalystProvider(persona),
     preferredPort: 0,
     captureServer: (created) => { server = created; },

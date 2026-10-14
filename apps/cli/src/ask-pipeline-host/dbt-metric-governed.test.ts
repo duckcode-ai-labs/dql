@@ -4,9 +4,9 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as yaml from 'js-yaml';
 import { afterAll, describe, expect, it, vi } from 'vitest';
-import type { ConnectionConfig, QueryExecutor } from '@duckcodeailabs/dql-connectors';
-import type { AgentProvider, AgentRunRequest } from '@duckcodeailabs/dql-agent';
-import { applyDbtMetricPatch, buildManifest, previewDbtMetricPatch, resolveSemanticLayer, type DbtMetricAuthoringInput } from '@duckcodeailabs/dql-core';
+import type { ConnectionConfig, QueryExecutor } from '@zlens/connectors';
+import type { AgentProvider, AgentRunRequest } from '@zlens/agent';
+import { applyDbtMetricPatch, buildManifest, previewDbtMetricPatch, resolveSemanticLayer, type DbtMetricAuthoringInput } from '@zlens/core';
 import { createAskPipelineRouteExecutor } from './host.js';
 
 // Owner scenario B4: in a dbt-first workspace, add "Average claimed amount" (avg(claimed_amount)) from Modeling,
@@ -21,7 +21,7 @@ const connection = { driver: 'duckdb', path: ':memory:' } as ConnectionConfig;
 const COLUMNS = ['claim_id', 'region', 'product', 'claim_type', 'status', 'claimed_amount', 'reported_date'];
 
 // Stand-in for `dbt parse`: it writes the model nodes and every semantic model and metric in the YAML into
-// target/manifest.json. DQL reads that manifest first and only falls back to YAML when it holds no metrics,
+// target/manifest.json. ZLens reads that manifest first and only falls back to YAML when it holds no metrics,
 // so a metric added to the YAML is invisible to Ask until dbt has parsed again.
 function dbtParse(root: string) {
   const document = yaml.load(readFileSync(join(root, 'models', 'claims', 'claims_semantic.yml'), 'utf8')) as {

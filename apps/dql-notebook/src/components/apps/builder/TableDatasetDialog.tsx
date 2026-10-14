@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Check, CalendarDays, Hash, Search, Table2, X } from 'lucide-react';
-import type { TableDatasetProposal } from '@duckcodeailabs/dql-core/datasets/table-draft';
+import type { TableDatasetProposal } from '@zlens/core/datasets/table-draft';
 import { api, type WarehouseTableSummary } from '../../../api/client';
 import { messageOf } from './studio-ui';
 
@@ -38,7 +38,7 @@ export function TableDatasetDialog({
     void api.listWarehouseTables().then((response) => {
       if (!active) return;
       if (response.ok) setTables(response.tables);
-      else setListError(response.error ?? 'DQL could not read the tables in your database.');
+      else setListError(response.error ?? 'ZLens could not read the tables in your database.');
     });
     return () => { active = false; };
   }, []);
@@ -61,7 +61,7 @@ export function TableDatasetDialog({
     void api.draftTableDataset(table.id).then((response) => {
       setChecking(false);
       if (!response.ok || !response.proposal) {
-        setError(response.error ?? 'DQL could not read this table.');
+        setError(response.error ?? 'ZLens could not read this table.');
         return;
       }
       setDraft({ proposal: response.proposal, rows: response.rows ?? 0 });
@@ -77,7 +77,7 @@ export function TableDatasetDialog({
     void api.createTableDataset({ tableId: picked.id, name: name.trim() || draft.proposal.name, ...(domain ? { domain } : {}), measures: choices }).then((response) => {
       setSaving(false);
       if (!response.ok) {
-        setError(response.error ?? 'DQL could not save this data.');
+        setError(response.error ?? 'ZLens could not save this data.');
         return;
       }
       if (response.status !== 'certified') {
@@ -103,7 +103,7 @@ export function TableDatasetDialog({
           <span className="table-dataset-icon"><Table2 size={17} aria-hidden="true" /></span>
           <div>
             <h2 id="table-dataset-title">{proposal ? 'Check the numbers' : 'Start from a table'}</h2>
-            <p>{proposal ? `From ${picked?.schema ? `${picked.schema}.` : ''}${picked?.name} · ${draft!.rows.toLocaleString()} rows` : 'Pick a table from your database. DQL suggests what to add up, count and group by.'}</p>
+            <p>{proposal ? `From ${picked?.schema ? `${picked.schema}.` : ''}${picked?.name} · ${draft!.rows.toLocaleString()} rows` : 'Pick a table from your database. ZLens suggests what to add up, count and group by.'}</p>
           </div>
           <button type="button" className="icon" onClick={onClose} disabled={saving} aria-label="Close"><X size={15} /></button>
         </header>
@@ -139,7 +139,7 @@ export function TableDatasetDialog({
             {proposal.key ? (
               <p className="table-dataset-row"><Check size={14} aria-hidden="true" /><span>Each row is one <strong>{proposal.key.entity.replace(/_/g, ' ')}</strong>: <code>{proposal.key.column}</code> is filled and different on all {draft!.rows.toLocaleString()} rows, so rows can be counted safely.</span></p>
             ) : (
-              <p className="table-dataset-error" role="alert">No column is filled and different on every row, so DQL cannot count this table's rows safely. Choose a table with an id column.</p>
+              <p className="table-dataset-error" role="alert">No column is filled and different on every row, so ZLens cannot count this table's rows safely. Choose a table with an id column.</p>
             )}
             <fieldset className="table-dataset-numbers">
               <legend>Numbers</legend>
@@ -173,7 +173,7 @@ export function TableDatasetDialog({
                 </p>
               </div>
             ) : null}
-            {proposal.skipped?.length ? <p className="table-dataset-muted">Left out (names DQL cannot use): {proposal.skipped.join(', ')}.</p> : null}
+            {proposal.skipped?.length ? <p className="table-dataset-muted">Left out (names ZLens cannot use): {proposal.skipped.join(', ')}.</p> : null}
             {error ? <p className="table-dataset-error" role="alert">{error}</p> : null}
           </div>
         )}

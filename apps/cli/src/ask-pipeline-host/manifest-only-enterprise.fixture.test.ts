@@ -4,8 +4,8 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { buildVocabularyIndex, runAskPipeline, type AgentProvider } from '@duckcodeailabs/dql-agent';
-import type { DQLManifest } from '@duckcodeailabs/dql-core';
+import { buildVocabularyIndex, runAskPipeline, type AgentProvider } from '@zlens/agent';
+import type { DQLManifest } from '@zlens/core';
 import { buildVocabularySource, embeddedManifestRelations } from './vocabulary-source.js';
 import { relevantRelationsForQuestion, runtimeSchemaForVocabulary } from './host.js';
 

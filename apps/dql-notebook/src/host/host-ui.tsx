@@ -2,10 +2,10 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from '
 import { authorizedFetch } from '../api/server-auth';
 
 /**
- * When DQL runs inside a host (RFC 0010 HH-9), the host says who is signed
+ * When ZLens runs inside a host (RFC 0010 HH-9), the host says who is signed
  * in, what they may do, and what it adds around DQL's screens: links to its
  * own pages, its sign-out, and actions on answers that need review. The
- * screens stay DQL's. Without a host (`dql notebook`) this is `{ host: false }`
+ * screens stay DQL's. Without a host (`zlens notebook`) this is `{ host: false }`
  * and nothing in the app changes.
  */
 export interface HostUi {
@@ -64,7 +64,7 @@ export async function fetchHostAnswerStatuses(runIds: string[]): Promise<Record<
 const HostPageContext = createContext<{ page: HostPage | null; openPage: (page: HostPage) => void }>({ page: null, openPage: () => undefined });
 
 /**
- * Whether the page DQL served says it runs under a host (`<meta name="dql-hosted" content="1">`, set by the server
+ * Whether the page ZLens served says it runs under a host (`<meta name="dql-hosted" content="1">`, set by the server
  * when it has host hooks). A hosted page never shows the single-user screens, even before the capability map arrives
  * or when loading it fails.
  */
@@ -97,7 +97,7 @@ export function hostUiFrom(value: unknown): HostUi | null {
 
 /** Waits between attempts to load the host map while it is not known yet: quick at first, then every 30 seconds. */
 export const HOST_RETRY_DELAYS_MS = [1_000, 2_000, 4_000, 8_000, 15_000, 30_000];
-/** After this long without a map, the page says DQL cannot be reached (it keeps trying). */
+/** After this long without a map, the page says ZLens cannot be reached (it keeps trying). */
 export const HOST_UNREACHABLE_AFTER_MS = 15_000;
 
 type Pending = { since: number; attempts: number; status: number | null };
@@ -160,7 +160,7 @@ export function HostUiProvider({ children, initial }: { children: ReactNode; ini
     window.addEventListener('message', onMessage);
     window.addEventListener('focus', onFocus);
     const timer = window.setInterval(load, 60_000);
-    // Re-render the waiting screen as time passes (to say when DQL cannot be reached).
+    // Re-render the waiting screen as time passes (to say when ZLens cannot be reached).
     const clock = window.setInterval(() => { if (!known) setTick((value) => value + 1); }, 1_000);
     return () => {
       cancelled = true;
@@ -191,10 +191,10 @@ export function HostConnecting({ pending, now = Date.now() }: { pending: Pending
     >
       <div style={{ maxWidth: 420, display: 'flex', flexDirection: 'column', gap: 12, alignItems: 'center' }}>
         {signedOut ? (
-          <span>Sign in to use DQL.</span>
+          <span>Sign in to use ZLens.</span>
         ) : unreachable ? (
           <>
-            <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>DQL can't be reached right now.</span>
+            <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>ZLens can't be reached right now.</span>
             <span>It keeps trying. You can also reload the page.</span>
             <button
               type="button"

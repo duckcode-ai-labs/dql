@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { tileQueryHash, type TileQuery } from '@duckcodeailabs/dql-core/apps/tile-query';
+import { tileQueryHash, type TileQuery } from '@zlens/core/apps/tile-query';
 import type { DashboardRunResponse } from '../../api/client';
 import {
   datasetTileNotices,

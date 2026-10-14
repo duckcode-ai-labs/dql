@@ -3,14 +3,14 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import type { Server } from 'node:http';
-import type { QueryExecutor } from '@duckcodeailabs/dql-connectors';
+import type { QueryExecutor } from '@zlens/connectors';
 import {
   completeProviderHttpDispatch,
   prepareProviderHttpDispatch,
   RESEARCH_ROW_EGRESS_POLICY,
   type AgentRunRequest,
   type AskTraceObserverV1,
-} from '@duckcodeailabs/dql-agent';
+} from '@zlens/agent';
 import {
   agentRunProviderDispatchBudgetForMode,
   createRouterInterpretationProviderTrace,

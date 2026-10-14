@@ -1,7 +1,7 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ChevronRight, Lightbulb, MessageSquare, Plus, X } from 'lucide-react';
-import type { TileQuery } from '@duckcodeailabs/dql-core/apps/tile-query';
+import type { TileQuery } from '@zlens/core/apps/tile-query';
 import type { DashboardDriverAnalysisV1, DashboardDriverDefinitionV1, DashboardRunResponse } from '../../api/client';
 import type { CellChartConfig, QueryResult } from '../../store/types';
 import type { ThemeMode } from '../../themes/notebook-theme';

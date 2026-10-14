@@ -1,5 +1,5 @@
-import type { DqlArtifactReference } from '@duckcodeailabs/dql-core/artifacts';
-import type { BlockParameterDefinition } from '@duckcodeailabs/dql-core/blocks';
+import type { DqlArtifactReference } from '@zlens/core/artifacts';
+import type { BlockParameterDefinition } from '@zlens/core/blocks';
 import type { QueryResult } from '../store/types';
 import {
   inferVisualParameterType,

@@ -5,17 +5,18 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { Server } from 'node:http';
 import { describe, expect, it } from 'vitest';
-import { QueryExecutor, type ConnectionConfig } from '@duckcodeailabs/dql-connectors';
+import { QueryExecutor, type ConnectionConfig } from '@zlens/connectors';
 import { startLocalServer } from '../local-runtime.js';
 import { applyTableDatasetChoices } from './table-dataset.js';
+import { readEnv } from '@zlens/core';
 
 /**
  * Start from a table (RFC 0009, "15-minute first page"), end to end on real
  * DuckDB: list the tables, draft one checked against its rows, save it, and
  * find it in App Studio's sources as a certified Dataset. Needs a DuckDB
- * connector root (DQL_APP_DATASETS_DUCKDB_CONNECTOR_ROOT).
+ * connector root (ZLENS_APP_DATASETS_DUCKDB_CONNECTOR_ROOT).
  */
-const connectorRoot = process.env.DQL_APP_DATASETS_DUCKDB_CONNECTOR_ROOT?.trim();
+const connectorRoot = readEnv('ZLENS_APP_DATASETS_DUCKDB_CONNECTOR_ROOT')?.trim();
 const duckDbIt = connectorRoot ? it : it.skip;
 const fixtureRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../test/fixtures/app-datasets-pilot');
 const seedWarehouse = resolve(dirname(fileURLToPath(import.meta.url)), '../../../../scripts/seed-eval-warehouse.mjs');

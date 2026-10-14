@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
-import { resolveBlockReplacement, type DQLManifest, type SemanticLayer, type WarehouseCatalogSnapshotV1 } from '@duckcodeailabs/dql-core';
-import { buildVocabularyIndex, extractBlockContract, parsePhysicalIdentifier, physicalRelationBinding, physicalRelationIdentity, physicalRelationText, mergePhysicalRelationBinding, renderPhysicalIdentifier, type PhysicalRelationBindingV1, type VocabularyEntry, type VocabularyIndex, type VocabularySource } from '@duckcodeailabs/dql-agent';
+import { resolveBlockReplacement, type DQLManifest, type SemanticLayer, type WarehouseCatalogSnapshotV1 } from '@zlens/core';
+import { buildVocabularyIndex, extractBlockContract, parsePhysicalIdentifier, physicalRelationBinding, physicalRelationIdentity, physicalRelationText, mergePhysicalRelationBinding, renderPhysicalIdentifier, type PhysicalRelationBindingV1, type VocabularyEntry, type VocabularyIndex, type VocabularySource } from '@zlens/agent';
 
 /**
  * The whole authorized vocabulary of a project, from the objects the host

@@ -13,13 +13,13 @@
  *   warm <  2000 ms
  *   edit <  5000 ms
  *
- * Run:  pnpm --filter @duckcodeailabs/dql-cli bench:manifest [-- --models 4000]
+ * Run:  pnpm --filter @zlens/cli bench:manifest [-- --models 4000]
  */
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { buildManifest, collectInputFiles } from '@duckcodeailabs/dql-core';
-import { ManifestCache } from '@duckcodeailabs/dql-project';
+import { buildManifest, collectInputFiles } from '@zlens/core';
+import { ManifestCache } from '@zlens/project';
 
 interface BenchOptions {
   models: number;

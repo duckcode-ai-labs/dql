@@ -1,7 +1,7 @@
 /**
  * SLACK IS A THIN TRANSPORT TO THE RUNTIME, WITH A SCOPE. A question may name
  * its domain up front (`in growth: how many leads`, or `--domain growth how
- * many leads`), a channel may default to one (`DQL_SLACK_DOMAIN_DEFAULTS`, a
+ * many leads`), a channel may default to one (`ZLENS_SLACK_DOMAIN_DEFAULTS`, a
  * JSON map of channel id to domain), and the runtime resolves the envelope —
  * the bot never does. The conversation is the channel: follow-ups in one
  * channel reach the same thread the notebook would.

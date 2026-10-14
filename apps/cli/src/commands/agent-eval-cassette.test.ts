@@ -3,7 +3,7 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import type { AgentProvider, AgentToolDefinition } from '@duckcodeailabs/dql-agent';
+import type { AgentProvider, AgentToolDefinition } from '@zlens/agent';
 import {
   CassetteMissError,
   CassetteStore,
@@ -537,13 +537,13 @@ describe('resolveCassetteModeFromEnv', () => {
     // misspelled mode must mean "never call a live model", not a surprise bill
     // and a non-deterministic suite.
     expect(resolveCassetteModeFromEnv({})).toBe('replay');
-    expect(resolveCassetteModeFromEnv({ DQL_EVAL_CASSETTE_MODE: undefined })).toBe('replay');
-    expect(resolveCassetteModeFromEnv({ DQL_EVAL_CASSETTE_MODE: 'recrod' })).toBe('replay');
-    expect(resolveCassetteModeFromEnv({ DQL_EVAL_CASSETTE_MODE: 'RECORD' })).toBe('replay');
+    expect(resolveCassetteModeFromEnv({ ZLENS_EVAL_CASSETTE_MODE: undefined })).toBe('replay');
+    expect(resolveCassetteModeFromEnv({ ZLENS_EVAL_CASSETTE_MODE: 'recrod' })).toBe('replay');
+    expect(resolveCassetteModeFromEnv({ ZLENS_EVAL_CASSETTE_MODE: 'RECORD' })).toBe('replay');
   });
 
   it('honours an explicit record or live', () => {
-    expect(resolveCassetteModeFromEnv({ DQL_EVAL_CASSETTE_MODE: 'record' })).toBe('record');
-    expect(resolveCassetteModeFromEnv({ DQL_EVAL_CASSETTE_MODE: 'live' })).toBe('live');
+    expect(resolveCassetteModeFromEnv({ ZLENS_EVAL_CASSETTE_MODE: 'record' })).toBe('record');
+    expect(resolveCassetteModeFromEnv({ ZLENS_EVAL_CASSETTE_MODE: 'live' })).toBe('live');
   });
 });

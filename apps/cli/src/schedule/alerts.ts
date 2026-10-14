@@ -1,5 +1,5 @@
-import type { AlertIR } from '@duckcodeailabs/dql-compiler';
-import type { QueryExecutor, ConnectionConfig } from '@duckcodeailabs/dql-connectors';
+import type { AlertIR } from '@zlens/dql-compiler';
+import type { QueryExecutor, ConnectionConfig } from '@zlens/connectors';
 import type { AlertEvaluation } from './types.js';
 
 export async function evaluateAlerts(

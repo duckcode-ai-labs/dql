@@ -1,14 +1,15 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { createRuntimePageRunner, type AppPageRunner } from './app-page-run.js';
+import { readEnv } from '@zlens/core';
 
 /**
- * Where a running `dql notebook` announces itself to other DQL processes on
+ * Where a running `zlens notebook` announces itself to other DQL processes on
  * the same project. Local runtime state: `.dql/local/` is never committed.
  */
 export const NOTEBOOK_DESCRIPTOR_RELATIVE = '.dql/local/notebook.json';
 
-/** What a running `dql notebook` writes so `dql schedule` can run through it. */
+/** What a running `zlens notebook` writes so `zlens schedule` can run through it. */
 export interface NotebookDescriptor {
   version: 1;
   pid: number;
@@ -28,7 +29,7 @@ export interface NotebookDescriptor {
 export interface RunningNotebook {
   descriptor: NotebookDescriptor;
   url: string;
-  /** False when bound beyond loopback: every API call then needs `DQL_SERVER_TOKEN`. */
+  /** False when bound beyond loopback: every API call then needs `ZLENS_SERVER_TOKEN`. */
   loopback: boolean;
 }
 
@@ -111,7 +112,7 @@ export interface FindNotebookOptions {
 }
 
 /**
- * The `dql notebook` serving this project right now, if any. The descriptor
+ * The `zlens notebook` serving this project right now, if any. The descriptor
  * alone is not trusted: its process must be alive and its server must answer
  * `/api/health` (which needs no token) with the same instance id. A
  * descriptor whose process is gone is removed.
@@ -144,12 +145,12 @@ export async function findRunningNotebook(projectRoot: string, options: FindNote
 }
 
 /**
- * The bearer token for API calls to a DQL server: none on loopback, and
- * `DQL_SERVER_TOKEN` otherwise — the same token the server was started with.
+ * The bearer token for API calls to a ZLens server: none on loopback, and
+ * `ZLENS_SERVER_TOKEN` otherwise — the same token the server was started with.
  */
 export function serverTokenFor(loopback: boolean, env: NodeJS.ProcessEnv = process.env): string | undefined {
   if (loopback) return undefined;
-  const token = env.DQL_SERVER_TOKEN?.trim();
+  const token = readEnv('ZLENS_SERVER_TOKEN', env)?.trim();
   return token || undefined;
 }
 
@@ -161,8 +162,8 @@ export function notebookPageRunner(
   const token = serverTokenFor(notebook.loopback, options.env);
   if (!notebook.loopback && !token) {
     throw new Error(
-      `dql notebook (pid ${notebook.descriptor.pid}) serves this project on ${notebook.descriptor.host}:${notebook.descriptor.port}, `
-      + 'which answers API calls only with its token. Set DQL_SERVER_TOKEN to the same value here and run again.',
+      `zlens notebook (pid ${notebook.descriptor.pid}) serves this project on ${notebook.descriptor.host}:${notebook.descriptor.port}, `
+      + 'which answers API calls only with its token. Set ZLENS_SERVER_TOKEN to the same value here and run again.',
     );
   }
   return createRuntimePageRunner(notebook.url, options.fetchImpl ?? fetch, token);

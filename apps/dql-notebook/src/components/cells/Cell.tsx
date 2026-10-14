@@ -61,7 +61,7 @@ import { format as formatSQL } from "sql-formatter";
 import { api, type DatasetSource } from "../../api/client";
 import { useHostUi } from "../../host/host-ui";
 import { exportQuery } from "../../api/exports";
-import { CellChrome } from "@duckcodeailabs/dql-ui";
+import { CellChrome } from "@zlens/ui";
 import { CombineDataPanel, type CombineDataRequest } from '../notebook/CombineDataPanel';
 import { buildCombinedDatasetCell } from '../../utils/dataset-references';
 import { BlockParameterControls } from '../parameters/BlockParameterControls';
@@ -3034,7 +3034,7 @@ function TeachCorrectionBar({ cell, t }: { cell: Cell; t: Theme }) {
         </div>
         <div style={{ marginTop: 3, color: t.textMuted, fontSize: 10.75, lineHeight: 1.45 }}>
           {state === 'error'
-            ? (error ?? 'DQL could not create the review candidate. Try again.')
+            ? (error ?? 'ZLens could not create the review candidate. Try again.')
             : <>Review the before/after SQL, explain the reusable lesson, and confirm where it applies. Saving creates a candidate only.</>}
         </div>
       </div>

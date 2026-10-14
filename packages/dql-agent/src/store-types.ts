@@ -3,10 +3,10 @@
  *
  * DQL's own stores are SQLite files and answer synchronously. A host that runs
  * several copies of DQL on one database (Postgres, say) answers with
- * Promises. DQL awaits every store call, so either works:
+ * Promises. ZLens awaits every store call, so either works:
  *
  * - `PromisedMethods<T>`: the host contract, every method returns a Promise.
- * - `AwaitableMethods<T>`: what DQL itself accepts, a value or a Promise.
+ * - `AwaitableMethods<T>`: what ZLens itself accepts, a value or a Promise.
  */
 
 export type Awaitable<T> = T | Promise<T>;

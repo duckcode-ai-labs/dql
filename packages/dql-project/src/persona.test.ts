@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { PersonaRegistry, OWNER_DEFAULT } from './persona.js';
-import type { AppDocument } from '@duckcodeailabs/dql-core';
+import type { AppDocument } from '@zlens/core';
 
 const app: AppDocument = {
   version: 1,

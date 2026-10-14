@@ -30,7 +30,7 @@ export function domainStudioUnavailableState(error: unknown): DomainStudioUnavai
   if (apiError?.code === 'DBT_FIRST_NOT_ENABLED') {
     return {
       title: 'Set up modeling',
-      detail: 'Model a dbt project: open Settings → Project & dbt to connect and apply it. No dbt? Model your warehouse\'s own tables instead — DQL reads their columns, keys and comments, and drafts the joins for you to review.',
+      detail: 'Model a dbt project: open Settings → Project & dbt to connect and apply it. No dbt? Model your warehouse\'s own tables instead — ZLens reads their columns, keys and comments, and drafts the joins for you to review.',
       status: 'Modeling mode · Not enabled',
       action: 'enable_warehouse',
     };
@@ -58,7 +58,7 @@ export function domainStudioUnavailableState(error: unknown): DomainStudioUnavai
 
   const message = error instanceof Error && error.message
     ? error.message
-    : 'The local DQL notebook server did not return Modeling data.';
+    : 'The local ZLens notebook server did not return Modeling data.';
   return {
     title: 'Modeling could not load',
     detail: message,

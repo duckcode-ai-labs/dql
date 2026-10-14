@@ -24,7 +24,7 @@ describe("defaultAgentRunGates", () => {
   // The reported symptom: DQL's own block-compiler throw was reported to the
   // user as a warehouse execution failure, sending people to debug SQL that ran
   // fine in a notebook because the warehouse never saw it.
-  it("names DQL itself — not the warehouse — when the block compiler is what failed", () => {
+  it("names ZLens itself — not the warehouse — when the block compiler is what failed", () => {
     const evaluations = gateFor("generated_answer", {
       answer: "Here is the result.",
       artifacts: [{
@@ -41,7 +41,7 @@ describe("defaultAgentRunGates", () => {
 
     const exec = evaluations.find((evaluation) => evaluation.id === "execution-error");
     expect(exec?.passed).toBe(false);
-    expect(exec?.message).toContain("DQL could not turn this answer into a reusable block");
+    expect(exec?.message).toContain("ZLens could not turn this answer into a reusable block");
     expect(exec?.message).not.toContain("failed to execute against the bounded preview");
     expect(exec?.message).toContain("I need values for: region.");
   });

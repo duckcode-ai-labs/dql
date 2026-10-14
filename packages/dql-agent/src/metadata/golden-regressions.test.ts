@@ -12,7 +12,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { DQLManifest } from '@duckcodeailabs/dql-core';
+import type { DQLManifest } from '@zlens/core';
 import {
   planAgentAnswer,
   upsertMetadataSnapshot,

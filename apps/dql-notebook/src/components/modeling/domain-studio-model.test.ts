@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { ManifestDbtFirstModeling, ManifestModelEntity } from '@duckcodeailabs/dql-core';
+import type { ManifestDbtFirstModeling, ManifestModelEntity } from '@zlens/core';
 import { DOMAIN_STUDIO_NAVIGATION, domainPackageTree, domainStudioLocationHref, entityRecords, isDescriptiveOnlyChange, isDomainStudioSection, modelingThreadScope, normalizeDomainStudioSection, parseDomainStudioLocation, resolveDomainStudioLocation, resolveEntityRecordKey, withoutDomainStudioLocationHref } from './domain-studio-model';
 
 function entity(domain: string, localId: string): ManifestModelEntity {

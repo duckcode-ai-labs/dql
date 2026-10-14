@@ -828,7 +828,7 @@ export function AppsView(): JSX.Element {
         await new Promise((resolve) => window.setTimeout(resolve, 500));
       }
       setBuilderSaving(false);
-      setBuilderError('The proposal is still running. You can retry now; DQL will also recover the completed Build Brief when you return to Apps.');
+      setBuilderError('The proposal is still running. You can retry now; ZLens will also recover the completed Build Brief when you return to Apps.');
     } catch (error) {
       setBuilderSaving(false);
       setBuilderError(error instanceof Error ? error.message : String(error));
@@ -1746,8 +1746,8 @@ function AppCreateSurface({
           <div className="dql-app-flow-head">
             <h2>{isPageBuild ? 'Build a new App page' : 'Build an app'}</h2>
             <p>{isPageBuild
-              ? 'DQL plans one page from the existing App context, then waits for approval without changing any current page.'
-              : 'DQL resolves certified blocks and semantic metrics, then waits for your approval before writing a private App draft.'}</p>
+              ? 'ZLens plans one page from the existing App context, then waits for approval without changing any current page.'
+              : 'ZLens resolves certified blocks and semantic metrics, then waits for your approval before writing a private App draft.'}</p>
           </div>
 
           {/* sent prompt */}
@@ -2630,7 +2630,7 @@ function AppWorkspaceSurface({
         <div className="dql-app-title-row">
           <div className="dql-app-title-copy">
             <div className="dql-app-title-meta">
-              <span><LayoutDashboard size={14} /> {metadataApp?.domain ?? dashboardDoc?.dashboard.metadata.domain ?? 'DQL App'}</span>
+              <span><LayoutDashboard size={14} /> {metadataApp?.domain ?? dashboardDoc?.dashboard.metadata.domain ?? 'ZLens App'}</span>
               {onDashboards ? (
                 // While on a page the heading below edits the PAGE title, so
                 // this is the only place the App's own name can be renamed.
@@ -2660,7 +2660,7 @@ function AppWorkspaceSurface({
             ) : (
               <h1>{tidyTitle(onDashboards ? dashboardDoc?.dashboard.metadata.title : workspaceAppName) || 'App'}</h1>
             )}
-            <p>{cleanStakeholderCopy((onDashboards ? dashboardDoc?.dashboard.metadata.description : metadataApp?.description) ?? (hostReader(hostUi) ? '' : 'Local DQL App'))}</p>
+            <p>{cleanStakeholderCopy((onDashboards ? dashboardDoc?.dashboard.metadata.description : metadataApp?.description) ?? (hostReader(hostUi) ? '' : 'Local ZLens App'))}</p>
           </div>
           <div className="dql-app-nav-row">
             <AppWorkspaceTabs
@@ -3415,7 +3415,7 @@ function buildAppShareText(
   dashboardApp?: AppDocumentSummary['app'] | null,
 ): string {
   const appId = app?.id ?? dashboardApp?.id ?? appDoc?.app.id ?? 'app';
-  const appName = app?.name ?? dashboardApp?.name ?? appDoc?.app.name ?? 'DQL App';
+  const appName = app?.name ?? dashboardApp?.name ?? appDoc?.app.name ?? 'ZLens App';
   const dashboard = dashboardDoc?.dashboard.metadata.title ?? appDoc?.dashboards[0]?.title ?? 'Overview';
   const origin = typeof window !== 'undefined' ? window.location.origin : null;
   const pageId = dashboardDoc?.dashboard.id ?? appDoc?.dashboards[0]?.id ?? null;
@@ -3424,7 +3424,7 @@ function buildAppShareText(
     `App ID: ${appId}`,
     `Dashboard: ${dashboard}`,
     `Domain: ${app?.domain ?? dashboardApp?.domain ?? appDoc?.app.domain ?? dashboardDoc?.dashboard.metadata.domain ?? 'unknown'}`,
-    `Open: ${origin ? appPageUrl(origin, { appId, pageId }) : 'local DQL'}`,
+    `Open: ${origin ? appPageUrl(origin, { appId, pageId }) : 'local ZLens'}`,
   ].join('\n');
 }
 
@@ -3435,7 +3435,7 @@ function buildAppBriefMarkdown(
   dashboardApp?: AppDocumentSummary['app'] | null,
 ): string {
   const appModel = appDoc?.app ?? dashboardApp;
-  const title = app?.name ?? appModel?.name ?? 'DQL App';
+  const title = app?.name ?? appModel?.name ?? 'ZLens App';
   const dashboards = appDoc?.dashboards ?? [];
   const notebooks = appDoc?.notebooks ?? appModel?.notebooks ?? [];
   const drafts = appDoc?.drafts ?? [];
@@ -3447,7 +3447,7 @@ function buildAppBriefMarkdown(
   const lines = [
     `# ${title}`,
     '',
-    app?.description ?? dashboard?.metadata.description ?? appModel?.description ?? 'Local DQL App brief.',
+    app?.description ?? dashboard?.metadata.description ?? appModel?.description ?? 'Local ZLens App brief.',
     '',
     '## App Metadata',
     '',

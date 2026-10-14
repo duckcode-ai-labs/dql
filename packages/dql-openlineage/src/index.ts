@@ -1,3 +1,4 @@
+import { readEnv } from './env.js';
 // OpenLineage emitter for DQL. Sends START/COMPLETE/FAIL run events to an
 // OpenLineage-compatible receiver (Marquez, DataHub, Atlan, Monte Carlo).
 //
@@ -57,13 +58,13 @@ const SCHEMA_URL =
 /**
  * Resolve config from args → env → disabled default. Env vars follow the
  * OpenLineage standard (OPENLINEAGE_URL, OPENLINEAGE_NAMESPACE) plus our
- * opt-out flag DQL_OPENLINEAGE_DISABLED.
+ * opt-out flag ZLENS_OPENLINEAGE_DISABLED.
  */
 export function resolveConfig(partial: EmitterConfig = {}): Required<
   Pick<EmitterConfig, 'enabled' | 'url' | 'namespace'>
 > & Pick<EmitterConfig, 'fetch' | 'onError'> {
   const env = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env ?? {};
-  const disabled = env.DQL_OPENLINEAGE_DISABLED === '1';
+  const disabled = readEnv('ZLENS_OPENLINEAGE_DISABLED', env) === '1';
   const enabled = !disabled && (partial.enabled ?? Boolean(partial.url ?? env.OPENLINEAGE_URL));
   return {
     enabled,

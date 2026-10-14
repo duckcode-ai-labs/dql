@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { splitStoryText, type StoryBindingCatalog } from '@duckcodeailabs/dql-core/apps/story-bindings';
+import { splitStoryText, type StoryBindingCatalog } from '@zlens/core/apps/story-bindings';
 import type { DashboardNarrativeV1, StoryEditionV1 } from '../../api/client';
 import { NUMBER_RECEIPT_STYLES, ReceiptValue, type NumberReceiptInfo } from './NumberReceipt';
 

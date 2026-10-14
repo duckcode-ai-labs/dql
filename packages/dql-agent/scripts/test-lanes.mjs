@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * Run DQL Agent tests in two deterministic lanes.
+ * Run ZLens Agent tests in two deterministic lanes.
  *
  * `catalog.test.ts` and `project-state.test.ts` intentionally build large
  * local indexes. They remain unchanged and run in every package test. To avoid
@@ -13,7 +13,7 @@
  * aggregate JSON receipts
  * prove the complete, non-skipped suite still ran exactly once.
  *
- * `--lane=ordinary` or `--lane=heavy` (or DQL_AGENT_TEST_LANE) runs one lane
+ * `--lane=ordinary` or `--lane=heavy` (or ZLENS_AGENT_TEST_LANE) runs one lane
  * and audits that lane against its own pinned counts. CI uses this: the
  * ordinary lane runs inside `pnpm test` with every other package, and the
  * heavy lane runs in its own step once nothing else is running, because its
@@ -98,7 +98,8 @@ const EXPECTED_TEST_FILES = 188;
 // 2445 (187 files) with the lexical reading (lexical-reading.test.ts, lexical-reading-guards.test.ts, +19 tests).
 // 2451 (188 files) with the identity-key warning (certified-identity-warning.test.ts, +6 tests).
 // 2454 (188 files) with GROUP BY ALL, by-position and aliased-label cases in that file (+3 tests).
-const EXPECTED_TESTS = 2454;
+// 2456 with capability questions that name ZLens as well as DQL (analytical-request-policy.test.ts, +2 tests).
+const EXPECTED_TESTS = 2456;
 // The heavy lane's share of EXPECTED_TESTS (catalog.test.ts 72 + project-state.test.ts 4), pinned so
 // a lane run on its own (CI runs the two lanes as separate steps) is audited as exactly as both together.
 // The ordinary lane's share is the difference: 2316.
@@ -112,7 +113,7 @@ function requestedLane() {
     : process.argv[flagIndex].includes('=')
       ? process.argv[flagIndex].slice('--lane='.length)
       : process.argv[flagIndex + 1];
-  const lane = (fromFlag ?? process.env.DQL_AGENT_TEST_LANE ?? 'all').trim() || 'all';
+  const lane = (fromFlag ?? (process.env.ZLENS_AGENT_TEST_LANE ?? process.env.DQL_AGENT_TEST_LANE) ?? 'all').trim() || 'all';
   if (!LANES.includes(lane)) throw new Error(`Unknown test lane "${lane}"; expected one of ${LANES.join(', ')}.`);
   return lane;
 }
@@ -211,14 +212,14 @@ function assertLanes({ ordinary, heavy }) {
   if (totalFailed !== 0 || totalPending !== 0 || totalTodo !== 0) {
     failures.push(`found failed=${totalFailed}, skipped=${totalPending}, todo=${totalTodo}; expected all tests to run and pass`);
   }
-  if (failures.length > 0) throw new Error(`DQL Agent test-lane audit failed: ${failures.join('; ')}`);
+  if (failures.length > 0) throw new Error(`ZLens Agent test-lane audit failed: ${failures.join('; ')}`);
 
   const lanes = [
     ordinarySummary ? `${ordinarySummary.files} ordinary bounded` : undefined,
     heavySummary ? `${heavySummary.files} isolated serial` : undefined,
   ].filter(Boolean).join(' + ');
   console.log(
-    `\nDQL Agent test-lane audit: ${uniquePaths.size}/${expectedPaths.size} files, `
+    `\nZLens Agent test-lane audit: ${uniquePaths.size}/${expectedPaths.size} files, `
     + `${totalPassed}/${expectedTests} tests, no skips (${lanes}).`,
   );
 }

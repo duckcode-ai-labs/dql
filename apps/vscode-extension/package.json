@@ -1,7 +1,7 @@
 {
   "name": "dql-language-support",
-  "displayName": "DQL Language Support",
-  "description": "Syntax highlighting, snippets, formatting, and language server support for DQL.",
+  "displayName": "DQL for ZLens",
+  "description": "Syntax highlighting, snippets, formatting, and language server support for DQL files in ZLens projects.",
   "version": "1.17.3",
   "publisher": "dql",
   "license": "Apache-2.0",

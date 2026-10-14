@@ -2,7 +2,7 @@
  * Model area identity helpers.
  *
  * Deliberately dependency-free: this module is exposed as the browser-safe
- * `@duckcodeailabs/dql-core/modeling-ids` subpath so the notebook can share one
+ * `@zlens/core/modeling-ids` subpath so the notebook can share one
  * implementation with the server instead of re-deriving area ids by hand. The
  * rest of `manifest/` reaches Node built-ins and cannot be bundled.
  *

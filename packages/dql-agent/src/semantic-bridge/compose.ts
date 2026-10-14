@@ -7,7 +7,7 @@ import {
   type DqlArtifactReference,
   type MetricDefinition,
   type SemanticLayer,
-} from '@duckcodeailabs/dql-core';
+} from '@zlens/core';
 import type { KGNode } from '../kg/types.js';
 import type { AnalysisQuestionPlan } from '../metadata/analysis-planner.js';
 

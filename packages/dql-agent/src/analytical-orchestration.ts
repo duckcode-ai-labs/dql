@@ -16,7 +16,7 @@ import { unboundMeasureQualifierTerms } from './metadata/analysis-planner.js';
 export { unboundMeasureQualifierTerms } from './metadata/analysis-planner.js';
 import { createHash } from 'node:crypto';
 import { parseAnalyticalTimeWindow } from './requirement-clauses.js';
-import type { AgentRunTelemetryV1, DqlArtifactExecutionReceipt } from '@duckcodeailabs/dql-core';
+import type { AgentRunTelemetryV1, DqlArtifactExecutionReceipt } from '@zlens/core';
 
 export const ANALYTICAL_ORCHESTRATION_CONTRACT_VERSION = 1 as const;
 
@@ -1823,7 +1823,7 @@ function normalizedTypedAggregationRequirements(input: {
  * Keep grammatical wrappers out of the physical tuple. In particular, a
  * parser can return `sales based on the region` as a dimension for a simple
  * revenue-by-region request. That is neither a business dimension nor an
- * object DQL may report as absent.
+ * object ZLens may report as absent.
  */
 function normalizeAnalyticalDimensionTerms(question: string, values: readonly string[]): string[] {
   const hasRegion = /\b(?:by|based\s+on(?:\s+the)?|across|per)\s+(?:the\s+)?region\b/i.test(question);

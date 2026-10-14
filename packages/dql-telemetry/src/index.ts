@@ -3,7 +3,7 @@
 // Principles (per v1.0 roadmap):
 //   - OFF by default. Must be explicitly enabled.
 //   - No PII. Ever. Only enum-valued counters and durations.
-//   - One-line opt-out (env, config, or `dql telemetry off`).
+//   - One-line opt-out (env, config, or `zlens telemetry off`).
 //   - The event shape is documented publicly — no hidden fields.
 //   - Best-effort transport. Failures are silent and bounded.
 //
@@ -14,13 +14,14 @@ import { createHash, randomUUID } from 'node:crypto';
 import { mkdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
+import { readEnv } from './env.js';
 
 export type TelemetryEventName =
   | 'cli.command'       // a CLI subcommand completed
   | 'notebook.open'     // notebook booted
   | 'block.certified'   // a block was promoted to certified
-  | 'dbt.synced'        // dql sync dbt finished
-  | 'dashboard.built';  // dql build produced a dashboard
+  | 'dbt.synced'        // zlens sync dbt finished
+  | 'dashboard.built';  // zlens build produced a dashboard
 
 export interface TelemetryEvent {
   name: TelemetryEventName;
@@ -34,7 +35,7 @@ export interface TelemetryConfig {
   enabled?: boolean;
   endpoint?: string;     // defaults to https://telemetry.duckcode.ai/v1/events
   anonymousId?: string;  // auto-generated stable UUID per machine
-  version?: string;      // DQL version string; included as a property
+  version?: string;      // ZLens version string; included as a property
   fetch?: typeof fetch;
   onError?: (err: unknown) => void;
 }
@@ -88,14 +89,14 @@ export function getStatus(): { enabled: boolean; anonymousId: string | null } {
  */
 function resolveConfig(partial: TelemetryConfig): Required<Pick<TelemetryConfig, 'enabled' | 'endpoint' | 'anonymousId'>> & Pick<TelemetryConfig, 'fetch' | 'onError' | 'version'> {
   const env = process.env;
-  if (env.DQL_TELEMETRY_DISABLED === '1' || env.DO_NOT_TRACK === '1') {
+  if (readEnv('ZLENS_TELEMETRY_DISABLED', env) === '1' || env.DO_NOT_TRACK === '1') {
     return { enabled: false, endpoint: '', anonymousId: '', version: partial.version };
   }
   const persisted = loadPersisted();
   const enabled = partial.enabled ?? persisted?.enabled ?? false;
   return {
     enabled,
-    endpoint: partial.endpoint ?? env.DQL_TELEMETRY_ENDPOINT ?? DEFAULT_ENDPOINT,
+    endpoint: partial.endpoint ?? readEnv('ZLENS_TELEMETRY_ENDPOINT', env) ?? DEFAULT_ENDPOINT,
     anonymousId: partial.anonymousId ?? persisted?.anonymousId ?? '',
     fetch: partial.fetch,
     onError: partial.onError,

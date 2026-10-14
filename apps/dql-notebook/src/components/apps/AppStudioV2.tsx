@@ -25,14 +25,14 @@ import {
 import type {
   DatasetDescriptor,
   DatasetField,
-} from '@duckcodeailabs/dql-core/datasets/descriptor';
+} from '@zlens/core/datasets/descriptor';
 import {
   datasetTileVisualizationCompatibility,
   tileQueryOutputAliases,
   tileQueryValidationRuns,
   validateTileQuery,
   type TileQuery,
-} from '@duckcodeailabs/dql-core/apps/tile-query';
+} from '@zlens/core/apps/tile-query';
 import type { AppSummary } from '../../store/types';
 import type { CellChartConfig, QueryResult } from '../../store/types';
 import type { ThemeMode } from '../../themes/notebook-theme';
@@ -51,8 +51,8 @@ import { StoryEditor } from './builder/StoryEditor';
 import { CanvasEditor } from './builder/CanvasEditor';
 import { PageFormatPicker } from './builder/PageFormatPicker';
 import { CanvasPageFrame, type CanvasFrameEditing } from './CanvasPageFrame';
-import { checkCanvasHtml, insertCanvasNodes, parseCanvasHtml, serializeCanvasNodes, type CanvasNode } from '@duckcodeailabs/dql-core/apps/canvas-page';
-import { buildStoryBindingCatalog, type StoryBindingTileInput } from '@duckcodeailabs/dql-core/apps/story-bindings';
+import { checkCanvasHtml, insertCanvasNodes, parseCanvasHtml, serializeCanvasNodes, type CanvasNode } from '@zlens/core/apps/canvas-page';
+import { buildStoryBindingCatalog, type StoryBindingTileInput } from '@zlens/core/apps/story-bindings';
 import { DriverTileSettings } from './builder/DriverTileSettings';
 import { driverProbeFor, filtersForNewDriverTile } from './driver-probe';
 import {
@@ -68,14 +68,14 @@ import {
   tileBodyHeight,
   type CanvasShortcut,
 } from './builder/canvas-interactions';
-import { firstFreeGridCell, moveGridItem, nudgeGridItem, placeGridCopy, resizeGridItem, settleGridLayout } from '@duckcodeailabs/dql-core/apps/grid-layout';
+import { firstFreeGridCell, moveGridItem, nudgeGridItem, placeGridCopy, resizeGridItem, settleGridLayout } from '@zlens/core/apps/grid-layout';
 import { projectProposal, type ProposedPage } from './builder/proposal-preview';
 import { EMPTY_TILE_QUERY, autoTileView, defaultTileTitle, descriptorTimeField, descriptorTimeGrain, isTimeField, tileVisualization, toggleFieldInQuery, vizTypeForEncoding } from './builder/field-query';
-import { addFieldByClick, encodingFromQuery, encodingHas, queryFromEncoding, removeField } from '@duckcodeailabs/dql-core/apps/viz-encoding';
+import { addFieldByClick, encodingFromQuery, encodingHas, queryFromEncoding, removeField } from '@zlens/core/apps/viz-encoding';
 import type { ShelfChange } from './builder/ShelfEditor';
-import type { DashboardVizEncoding } from '@duckcodeailabs/dql-core/apps/viz-encoding';
-import { applyShowMe, showMeFactsFromDescriptor, showMeFirstChoice, showMeInputFromQuery } from '@duckcodeailabs/dql-core/apps/show-me';
-import { pivotLayout, withPivotRollups, withoutRollups, type PivotTotals } from '@duckcodeailabs/dql-core/apps/pivot';
+import type { DashboardVizEncoding } from '@zlens/core/apps/viz-encoding';
+import { applyShowMe, showMeFactsFromDescriptor, showMeFirstChoice, showMeInputFromQuery } from '@zlens/core/apps/show-me';
+import { pivotLayout, withPivotRollups, withoutRollups, type PivotTotals } from '@zlens/core/apps/pivot';
 import { PivotTable } from './PivotTable';
 import { TableDatasetDialog } from './builder/TableDatasetDialog';
 import { KpiCard, usesKpiCard } from './KpiCard';
@@ -317,7 +317,7 @@ export function AppStudioLaunchSurface({
   return <section className="dql-app-studio-home" aria-labelledby="app-studio-home-title">
     <style>{APP_STUDIO_V2_STYLES}</style>
     <div className="dql-studio-v2-intro">
-      <span className="eyebrow"><Sparkles size={14} /> DQL App Studio 2.0</span>
+      <span className="eyebrow"><Sparkles size={14} /> ZLens App Studio 2.0</span>
       <h1 id="app-studio-home-title">Start with the decision.<br />Shape the experience together.</h1>
       <p>Build with AI or by hand. Everything stays a private draft until you publish it.</p>
     </div>
@@ -1479,7 +1479,7 @@ export function AppStudioV2({
     const result = await api.enableDatasetTiles();
     setEnablingDatasets(false);
     if (!result.ok) {
-      setCatalogError(result.error || 'DQL could not turn on field-based tiles for this project.');
+      setCatalogError(result.error || 'ZLens could not turn on field-based tiles for this project.');
       return;
     }
     setCatalogRefreshNonce((current) => current + 1);
@@ -3499,7 +3499,7 @@ function PublishReadinessDialog({
         </section>)}
         {requirements.map((requirement) => <section className="readiness-item" key={requirement.id}>
           <span className="step-mark"><Sparkles size={15} /></span>
-          <div><strong>Unanswered App question</strong><p>{requirement.question}</p><small>DQL will not pretend that an unrelated tile covers this question.</small><div className="readiness-actions"><button type="button" className="primary" onClick={() => onReviseRequirement(requirement.question)} disabled={busy}><Bot size={13} /> Revise with AI</button><button type="button" onClick={() => onRemoveRequirement(requirement.id)} disabled={busy}>Remove from publish scope</button></div></div>
+          <div><strong>Unanswered App question</strong><p>{requirement.question}</p><small>ZLens will not pretend that an unrelated tile covers this question.</small><div className="readiness-actions"><button type="button" className="primary" onClick={() => onReviseRequirement(requirement.question)} disabled={busy}><Bot size={13} /> Revise with AI</button><button type="button" onClick={() => onRemoveRequirement(requirement.id)} disabled={busy}>Remove from publish scope</button></div></div>
         </section>)}
         {tasks.map((task) => <section className="readiness-item" key={task.id}>
           <span className="step-mark"><FileText size={15} /></span>
@@ -3971,7 +3971,7 @@ export function ComponentInspector({ initialTab = 'data', tile, run, pageId, pag
     {dataTile && tab === 'data' ? <>
     {tile.query && dataset && tileEncoding ? <DatasetTileQueryInspector descriptor={dataset} query={tile.query} visualization={tile.viz.type} encoding={tileEncoding} disabled={disabled} onChange={updateDatasetQuery} onShelves={updateShelves} onOpenSources={onOpenSources} result={run?.status === 'ok' ? run.result : undefined} /> : null}
     <section className="data-trust"><label>Data & trust</label><div><span className={`trust-dot ${calculatedTrust ? 'governed' : tile.trustState ?? 'draft_ready'}`} /><strong>{calculatedTrust ? 'Governed' : humanize(tile.trustState ?? 'draft_ready')}</strong></div>{calculatedTrust ? <small>Calculations over certified measures read as Governed: the arithmetic is checked, but nobody reviewed the formula.</small> : null}<p>{tile.query && dataset ? `Dataset: ${dataset.label} · ${dataset.kind === 'semantic' ? 'governed semantic source' : 'governed block source'}` : tile.block ? `${tile.trustState === 'certified' ? 'Certified' : 'Review-required'} block: ${'blockId' in tile.block ? tile.block.blockId : tile.block.ref}` : tile.semantic ? `Governed semantic query: ${tile.semantic.id}` : tile.draftAnalysis ? `Review-required DQL: ${tile.draftAnalysis.ref}` : 'Local narrative component'}</p>{tile.sourceEvidence?.slice(0, 2).map((evidence, index) => <small key={`${evidence.source}-${index}`}>{evidence.reason}</small>)}{run ? <small>{run.status === 'ok' ? `Settled on ${run.result?.rowCount ?? run.result?.rows.length ?? 0} rows` : run.error}</small> : null}{grainKeyCheck ? <small>Full-source key check: {grainKeyCheck}</small> : null}{run?.dataset?.cacheDelivery ? <div className="dataset-cache-delivery"><small>Cached {new Date(run.dataset.cacheDelivery.cachedAt).toLocaleString()} · this is not fresh publication or reusable-block evidence.</small><button type="button" disabled={disabled} onClick={onRefreshDatasetTile}>Refresh live data</button></div> : null}{tile.query ? <details className="dataset-dql-receipt"><summary>View execution evidence</summary>{currentDatasetEvidence ? <DatasetTileExecutionEvidence presentation={currentDatasetEvidence} /> : <p>{run ? 'This execution evidence no longer matches the selected Dataset source or query. Run a governed preview to inspect the current Dataset query, executed SQL, binding evidence, and provenance.' : 'Run a governed preview to inspect the current Dataset query, executed SQL, binding evidence, and provenance.'}</p>}</details> : null}{tile.query ? <div className="dataset-reusable-block"><strong>Reusable block</strong><p>Save this settled result as a separate review draft. This App tile stays unchanged and the new block is not certified.</p><button type="button" disabled={disabled || savingDatasetTileAsBlock || replacingDatasetTileWithBlock || !currentDatasetEvidence || Boolean(run?.dataset?.cacheDelivery)} onClick={onSaveDatasetTileAsBlock}>{savingDatasetTileAsBlock ? 'Saving review draft…' : 'Save as reusable review draft'}</button>{savedDatasetReviewDraft ? <div className="dataset-review-replacement"><small>Saved review draft: {savedDatasetReviewDraft.path}</small>{savedDatasetReviewDraft.replacementEligible ? <button type="button" disabled={disabled || savingDatasetTileAsBlock || replacingDatasetTileWithBlock || !currentDatasetEvidence || Boolean(run?.dataset?.cacheDelivery)} onClick={onReplaceDatasetTileWithBlock}>{replacingDatasetTileWithBlock ? 'Proving equivalence…' : 'Replace with this review draft'}</button> : <small>{savedDatasetReviewDraft.replacementMessage ?? 'This saved draft is fixed-value only and cannot replace the interactive Dataset tile.'}</small>}</div> : null}{!currentDatasetEvidence ? <small>Run the current Dataset tile before saving it.</small> : null}{run?.dataset?.cacheDelivery ? <small>Refresh live data before saving or replacing this tile.</small> : null}</div> : null}</section>
-    {tile.semantic && !tile.query ? <section className="dataset-reusable-block"><strong>Convert to Dataset query</strong><p>Preview an exact field-query mapping for this legacy semantic tile. DQL runs both paths in one fresh read scope before it can apply the change. The original semantic payload is retained as provenance; this does not certify the source.</p><button type="button" disabled={disabled || previewingLegacySemanticConversion || acceptingLegacySemanticConversion} onClick={onPreviewLegacySemanticConversion}>{previewingLegacySemanticConversion ? 'Proving conversion…' : 'Preview Dataset conversion'}</button>{semanticTileConversionPreview ? <div className="dataset-review-replacement"><small>Mapped source: {semanticTileConversionPreview.candidate.sourceId}</small><small>Mapped query: {semanticTileConversionPreview.candidate.query.measures.map((measure) => measure.measure).join(', ')}{semanticTileConversionPreview.candidate.query.dimensions.length ? ` by ${semanticTileConversionPreview.candidate.query.dimensions.map((dimension) => dimension.field).join(', ')}` : ''}</small><button type="button" disabled={disabled || previewingLegacySemanticConversion || acceptingLegacySemanticConversion} onClick={onAcceptLegacySemanticConversion}>{acceptingLegacySemanticConversion ? 'Rechecking and applying…' : 'Apply Dataset conversion'}</button></div> : <small>Preview first. Unsupported bindings, source drift, or an incomplete comparison stay with the original semantic tile.</small>}</section> : null}
+    {tile.semantic && !tile.query ? <section className="dataset-reusable-block"><strong>Convert to Dataset query</strong><p>Preview an exact field-query mapping for this legacy semantic tile. ZLens runs both paths in one fresh read scope before it can apply the change. The original semantic payload is retained as provenance; this does not certify the source.</p><button type="button" disabled={disabled || previewingLegacySemanticConversion || acceptingLegacySemanticConversion} onClick={onPreviewLegacySemanticConversion}>{previewingLegacySemanticConversion ? 'Proving conversion…' : 'Preview Dataset conversion'}</button>{semanticTileConversionPreview ? <div className="dataset-review-replacement"><small>Mapped source: {semanticTileConversionPreview.candidate.sourceId}</small><small>Mapped query: {semanticTileConversionPreview.candidate.query.measures.map((measure) => measure.measure).join(', ')}{semanticTileConversionPreview.candidate.query.dimensions.length ? ` by ${semanticTileConversionPreview.candidate.query.dimensions.map((dimension) => dimension.field).join(', ')}` : ''}</small><button type="button" disabled={disabled || previewingLegacySemanticConversion || acceptingLegacySemanticConversion} onClick={onAcceptLegacySemanticConversion}>{acceptingLegacySemanticConversion ? 'Rechecking and applying…' : 'Apply Dataset conversion'}</button></div> : <small>Preview first. Unsupported bindings, source drift, or an incomplete comparison stay with the original semantic tile.</small>}</section> : null}
     </> : null}
     {dataTile && tab === 'visual' ? <>
     {tile.query && dataset && tileEncoding ? <section><ShowMePanel suggestions={tileShowMe(dataset, tileEncoding, tile.query, run?.status === 'ok' ? run.result : undefined)} current={currentShowMeChart(tile.viz.type, tileEncoding, descriptorTimeField(dataset))} disabled={disabled} onPick={(suggestion) => { const encoding = applyShowMe(tileEncoding, suggestion); const message = updateShelves({ encoding, query: queryFromEncoding(encoding, tile.query!, descriptorTimeGrain(dataset)), visualization: suggestion.viz }); if (message) setVisualizationFeedback(message); }} />{visualizationFeedback ? <small className="dataset-interaction-message" role="status">{visualizationFeedback}</small> : null}</section> : <section><label>Chart</label><div className="chart-type-grid" role="radiogroup" aria-label="Chart type">{CHART_TYPE_OPTIONS.map(([type, label]) => { const active = tile.viz.type === type || (type === 'single_value' && tile.viz.type === 'kpi'); return <button key={type} type="button" role="radio" aria-checked={active} className={active ? 'on' : ''} disabled={disabled} onClick={() => { if (!active) updateVisualization(type); }}>{chartTypeIcon(type)}<span>{label}</span></button>; })}</div>{savedDatasetVisualization && !savedDatasetVisualization.compatible ? <small className="dataset-builder-error" role="alert">{savedDatasetVisualization.message} Choose Table to keep all selected fields visible.</small> : null}{visualizationFeedback ? <small className="dataset-interaction-message" role="status">{visualizationFeedback}</small> : null}</section>}

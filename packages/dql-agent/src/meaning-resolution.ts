@@ -10,7 +10,7 @@ import type {
   AnalyticalPolicyContract,
   AnalyticalQuestionFrameV2,
   MetricCapabilityContract,
-} from '@duckcodeailabs/dql-core';
+} from '@zlens/core';
 import type { KnowledgeLens } from './domain-context.js';
 import {
   buildAnalyticalRequirementSet,

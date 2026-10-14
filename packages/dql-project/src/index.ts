@@ -119,7 +119,7 @@ export {
   findAllDashboards,
   isBlockIdRef,
   extractDashboardBlockRefs,
-} from '@duckcodeailabs/dql-core';
+} from '@zlens/core';
 export type {
   AppDocument,
   AppMember,
@@ -139,4 +139,4 @@ export type {
   DashboardGridItem,
   DashboardLoadResult,
   DashboardParseError,
-} from '@duckcodeailabs/dql-core';
+} from '@zlens/core';

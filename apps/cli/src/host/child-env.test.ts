@@ -3,14 +3,14 @@ import type { Server } from 'node:http';
 import { tmpdir } from 'node:os';
 import { delimiter, join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import type { QueryExecutor } from '@duckcodeailabs/dql-connectors';
+import type { QueryExecutor } from '@zlens/connectors';
 import { minimalChildEnv, startLocalServer } from '../local-runtime.js';
 import { listMetricFlowDimensions } from '../metricflow.js';
 import { routeAction } from './route-actions.js';
 import type { DqlPrincipal } from './request-context.js';
 
 /**
- * With a host, a program DQL runs on project content (dbt parse during
+ * With a host, a program ZLens runs on project content (dbt parse during
  * onboarding) gets a minimal environment, never the server's secrets; setting
  * the project up is an administrator's action, and its paths stay inside the
  * project.
@@ -24,7 +24,7 @@ afterEach(async () => {
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
   process.env.PATH = savedPath;
   delete process.env.DQL_TEST_SECRET_FOR_CHILD;
-  delete process.env.DQL_METRICFLOW_BIN;
+  delete process.env.ZLENS_METRICFLOW_BIN;
   delete process.env.DBT_TEST_WAREHOUSE_ACCOUNT;
 });
 
@@ -49,7 +49,7 @@ describe('children run on project content with a minimal environment', () => {
     const mf = join(projectRoot, 'mf-stand-in');
     writeFileSync(mf, `#!/usr/bin/env node\nif (process.argv.includes('--version')) { console.log('mf, version 0.207.0'); process.exit(0); }\nrequire('fs').writeFileSync(${JSON.stringify(seen)}, JSON.stringify(process.env));\nprocess.exit(1);\n`);
     chmodSync(mf, 0o755);
-    process.env.DQL_METRICFLOW_BIN = mf;
+    process.env.ZLENS_METRICFLOW_BIN = mf;
     process.env.DQL_TEST_SECRET_FOR_CHILD = CANARY;
     process.env.DBT_TEST_WAREHOUSE_ACCOUNT = 'harbor';
     const port = await startLocalServer({

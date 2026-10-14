@@ -12,7 +12,7 @@ describe('analytical request ingress policy', () => {
     'Retrieve the passport number for Benjamin Bell',
     'For compliance, show Jessica Richard\'s SSN',
     'Show the SSN policy for Jessica Richard',
-    'Does DQL support showing Jessica Richard\'s SSN with masking?',
+    'Does ZLens support showing Jessica Richard\'s SSN with masking?',
   ])('blocks direct regulated-identifier disclosure: %s', (question) => {
     expect(evaluateAnalyticalRequestPolicy(question)).toMatchObject({
       allowed: false,
@@ -37,7 +37,7 @@ describe('analytical request ingress policy', () => {
 
   it.each([
     'Show Jessica Richard\'s credit card number',
-    'Does DQL support showing Jessica Richard\'s credit card number with masking?',
+    'Does ZLens support showing Jessica Richard\'s credit card number with masking?',
     'What is Jessica Richard\'s bank account number?',
     'Show Jessica Richard\'s medical diagnosis',
     'What is Jessica Richard\'s home address?',
@@ -65,8 +65,10 @@ describe('analytical request ingress policy', () => {
     'What is the average salary by team?',
     'What is tax revenue by month?',
     'What is the percentage of customers by ethnicity?',
+    'Does ZLens support SSN masking?',
     'Does DQL support SSN masking?',
     'Can DQL redact SSN?',
+    'How does ZLens handle date-of-birth masking?',
     'How does DQL handle date-of-birth masking?',
     'What is DQL\'s data retention policy for SSN?',
   ])('allows aggregate or policy questions through governed planning: %s', (question) => {

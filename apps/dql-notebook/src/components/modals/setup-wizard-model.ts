@@ -77,7 +77,7 @@ export function onboardingErrorView(
       return {
         code: fields.code,
         title: 'dbt project not found',
-        message: 'Choose the folder that contains dbt_project.yml. DQL will read that project; it will not copy its schema.',
+        message: 'Choose the folder that contains dbt_project.yml. ZLens will read that project; it will not copy its schema.',
         nextActions: fields.nextActions.length > 0 ? fields.nextActions : ['Check the project path and retry.'],
         optional: false,
       };
@@ -85,7 +85,7 @@ export function onboardingErrorView(
       return {
         code: fields.code,
         title: 'dbt manifest.json is missing',
-        message: `DQL needs ${manifestPath || 'target/manifest.json'} to inspect dbt-owned models. Build the artifact, then retry without importing or copying dbt semantics.`,
+        message: `ZLens needs ${manifestPath || 'target/manifest.json'} to inspect dbt-owned models. Build the artifact, then retry without importing or copying dbt semantics.`,
         command: `cd ${JSON.stringify(location)} && dbt parse`,
         nextActions: fields.nextActions.length > 0
           ? fields.nextActions

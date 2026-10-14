@@ -3,11 +3,12 @@ import type { Server } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { DuckDBConnector, QueryExecutor, type ConnectionConfig, type QueryResult } from '@duckcodeailabs/dql-connectors';
+import { DuckDBConnector, QueryExecutor, type ConnectionConfig, type QueryResult } from '@zlens/connectors';
 import { startLocalServer } from '../local-runtime.js';
 import { HOSTED_STATEMENT_REFUSED, HOSTED_SYSTEM_RELATION_REFUSED, hostedStatementRefusal, isEngineRestrictionError, restrictedEngineConnection } from './engine-guard.js';
 import type { DqlHostHooks, DqlPrincipal } from './request-context.js';
 import { withHostQueryHooks, type DqlQueryContext } from './row-policy.js';
+import { readEnv } from '@zlens/core';
 
 /**
  * RFC 0010, with a host: a statement reaches the connection's tables and views, and nothing else the
@@ -153,7 +154,7 @@ describe('the statement check, with a host', () => {
   });
 });
 
-const connectorRoot = process.env.DQL_APP_DATASETS_DUCKDB_CONNECTOR_ROOT?.trim();
+const connectorRoot = readEnv('ZLENS_APP_DATASETS_DUCKDB_CONNECTOR_ROOT')?.trim();
 const withDuckDb = connectorRoot ? describe : describe.skip;
 
 withDuckDb('with a host, DuckDB reaches the database only (real DuckDB)', () => {
@@ -234,7 +235,7 @@ withDuckDb('with a host, DuckDB reaches the database only (real DuckDB)', () => 
     }
     const plain = await call({ sql: `SELECT * FROM read_text('${canaryFile}')` });
     expect(plain.status).toBe(403);
-    expect(plain.text).toContain('DQL did not run this statement');
+    expect(plain.text).toContain('ZLens did not run this statement');
     // Nothing was written or attached.
     expect(existsSync(written)).toBe(false);
     expect(readdirSync(outside).sort()).toEqual(['canary.csv']);

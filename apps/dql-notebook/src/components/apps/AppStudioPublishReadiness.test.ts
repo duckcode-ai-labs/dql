@@ -4,7 +4,7 @@ import {
   parseDashboardDocument,
   type AppBuildDraft,
   type AppBuildDraftOperation,
-} from '@duckcodeailabs/dql-core';
+} from '@zlens/core';
 import type { AppStudioBuildDraft, AppStudioDraftOperation, DashboardRunResponse } from '../../api/client';
 import {
   blockingPublicationReviewTasks,

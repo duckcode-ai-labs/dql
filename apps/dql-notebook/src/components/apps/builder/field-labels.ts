@@ -1,6 +1,6 @@
-import type { TileQuery } from '@duckcodeailabs/dql-core/apps/tile-query';
-import { QUICK_CALC_LABELS } from '@duckcodeailabs/dql-core/apps/tile-calcs';
-import { fieldKey, refName, type DashboardVizEncoding, type ShelfFieldRef } from '@duckcodeailabs/dql-core/apps/viz-encoding';
+import type { TileQuery } from '@zlens/core/apps/tile-query';
+import { QUICK_CALC_LABELS } from '@zlens/core/apps/tile-calcs';
+import { fieldKey, refName, type DashboardVizEncoding, type ShelfFieldRef } from '@zlens/core/apps/viz-encoding';
 import { humanize } from './studio-ui';
 
 /**

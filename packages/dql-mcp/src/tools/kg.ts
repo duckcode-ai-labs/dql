@@ -19,7 +19,7 @@ import {
   ensureMetadataCatalogFresh,
   reindexProject,
   type KGNodeKind,
-} from '@duckcodeailabs/dql-agent';
+} from '@zlens/agent';
 import { zodInputShapeForTool } from '../tool-schema.js';
 
 export const kgSearchInput = zodInputShapeForTool('kg_search');
@@ -149,7 +149,7 @@ export function feedbackRecord(
   if (!existsSync(path)) {
     return {
       ok: false,
-      error: 'KG not built — run `dql app reindex` first so feedback can be persisted.',
+      error: 'KG not built — run `zlens app reindex` first so feedback can be persisted.',
     };
   }
   const kg = new KGStore(path);

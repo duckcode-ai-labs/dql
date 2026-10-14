@@ -1,4 +1,4 @@
-import { renderSemanticBlockSource } from '@duckcodeailabs/dql-core/blocks';
+import { renderSemanticBlockSource } from '@zlens/core/blocks';
 
 export function buildNotebookSemanticBlock(metrics: string[], dimensions: string[]): string {
   const uniqueMetrics = Array.from(new Set(metrics.filter(Boolean)));
