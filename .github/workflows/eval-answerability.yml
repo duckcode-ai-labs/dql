@@ -29,7 +29,7 @@ name: Answerability (false-refusal gate)
 #
 # SKIPS CLEANLY until real provider cassettes exist. Replay never calls a live
 # model, so the suite can only pass once somebody has recorded it against a real
-# provider (DQL_EVAL_CASSETTE_MODE=record, which needs provider credentials) and committed the
+# provider (ZLENS_EVAL_CASSETTE_MODE=record, which needs provider credentials) and committed the
 # result. Until then every current prompt is a cassette miss and the job would
 # be red on every PR for a reason unrelated to the change. The first step
 # classifies the committed cassettes (scripts/eval-cassette-readiness.mjs); with
@@ -69,7 +69,7 @@ jobs:
             ready=true
             echo "::warning title=Answerability forced::running without provider-recorded cassettes ($reason); expect cassette misses"
           elif [ "$ready" != "true" ]; then
-            message="skipped: no provider credentials configured — $reason. Record the suite against a real provider (runtime started with DQL_EVAL_CASSETTE_DIR and DQL_EVAL_CASSETTE_MODE=record) and commit the cassettes to enable this gate."
+            message="skipped: no provider credentials configured — $reason. Record the suite against a real provider (runtime started with ZLENS_EVAL_CASSETTE_DIR and ZLENS_EVAL_CASSETTE_MODE=record) and commit the cassettes to enable this gate."
             echo "::notice title=Answerability gate skipped::$message"
             {
               echo "## Answerability (runtime-driven)"
