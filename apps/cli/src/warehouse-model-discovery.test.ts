@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import Database from 'better-sqlite3';
-import { normalizeWarehouseCatalog, warehouseRelationId, type DQLManifest, type WarehouseCatalogRelationV1 } from '@duckcodeailabs/dql-core';
+import { normalizeWarehouseCatalog, warehouseRelationId, type DQLManifest, type WarehouseCatalogRelationV1 } from '@zlens/core';
 import { cheapToRead, discoverWarehouseModel, inferSharedKeyJoins, observedJoinsFromQueries, queryHistorySql, validateWarehouseDiscovery, viewJoins, warehouseDiscoveryChanges } from './warehouse-model-discovery.js';
 
 const table = (schema: string, name: string, columns: string[], extra: Partial<WarehouseCatalogRelationV1> = {}): WarehouseCatalogRelationV1 => ({

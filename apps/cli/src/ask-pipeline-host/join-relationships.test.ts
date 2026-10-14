@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { joinKeyPairs } from '@duckcodeailabs/dql-agent';
+import { joinKeyPairs } from '@zlens/agent';
 import { businessIdentifierLine, businessIdentifiers, certifiedJoinViolations, classifySqlJoins, joinableRelations, ledgerJoins, markerTableLine, markerTables, modeledJoinPaths, sameRelation, sharedParentShortcuts, type ModelingRelationshipEdge } from './join-relationships.js';
 
 const certified: ModelingRelationshipEdge = {

@@ -1,7 +1,7 @@
 {
-  "name": "@duckcodeailabs/dql-openlineage",
+  "name": "@zlens/openlineage",
   "version": "1.17.3",
-  "description": "OpenLineage event emitter for DQL block and notebook runs.",
+  "description": "OpenLineage event emitter for ZLens block and notebook runs.",
   "license": "Apache-2.0",
   "type": "module",
   "repository": {

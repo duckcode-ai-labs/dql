@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { PanelFrame } from '@duckcodeailabs/dql-ui';
+import { PanelFrame } from '@zlens/ui';
 import {
   api,
   DqlApiError,

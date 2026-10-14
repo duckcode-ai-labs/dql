@@ -1,16 +1,16 @@
 /**
- * `dql compile` — Generate the DQL project manifest.
+ * `zlens compile` — Generate the ZLens project manifest.
  *
  * Scans all blocks, business views, notebooks, and semantic layer definitions,
  * resolves dependencies, builds lineage, and writes dql-manifest.json.
  *
  * Usage:
- *   dql compile [path]                        Compile project at path (default: .)
- *   dql compile --dbt-manifest <path>         Import dbt manifest.json as upstream
- *   dql compile --datalex-manifest <path>     Validate datalex_contract refs
- *   dql compile --dbt-hops <n>               Limit upstream dbt hops (default: unlimited)
- *   dql compile --out-dir <dir>               Write manifest to a specific directory
- *   dql compile --format json                 Output manifest to stdout (no file write)
+ *   zlens compile [path]                        Compile project at path (default: .)
+ *   zlens compile --dbt-manifest <path>         Import dbt manifest.json as upstream
+ *   zlens compile --datalex-manifest <path>     Validate datalex_contract refs
+ *   zlens compile --dbt-hops <n>               Limit upstream dbt hops (default: unlimited)
+ *   zlens compile --out-dir <dir>               Write manifest to a specific directory
+ *   zlens compile --format json                 Output manifest to stdout (no file write)
  *
  * Selective dbt import (automatic for projects > 200 models):
  *   Only imports the dbt models/sources that are reachable upstream from the
@@ -20,9 +20,9 @@
 
 import { writeFileSync, existsSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { buildManifest, collectInputFiles, resolveDataLexManifestPath, resolveDbtManifestPath, type DQLManifest } from '@duckcodeailabs/dql-core';
-import { ManifestCache, type TrackedFile } from '@duckcodeailabs/dql-project';
-import { ensureMetadataCatalogFresh, isAgentProjectIndexReady } from '@duckcodeailabs/dql-agent';
+import { buildManifest, collectInputFiles, resolveDataLexManifestPath, resolveDbtManifestPath, type DQLManifest } from '@zlens/core';
+import { ManifestCache, type TrackedFile } from '@zlens/project';
+import { ensureMetadataCatalogFresh, isAgentProjectIndexReady } from '@zlens/agent';
 import type { CLIFlags } from '../args.js';
 
 // APP-034 adds compile-time Dataset source/field drift diagnostics. Bump the
@@ -50,7 +50,7 @@ export function readCliDqlVersion(): string {
 }
 
 /**
- * The compile result is deliberately small: callers such as `dql sync dbt`
+ * The compile result is deliberately small: callers such as `zlens sync dbt`
  * need to know whether a cache hit also left the persisted retrieval snapshot
  * usable.  They must not infer that from the compiler cache alone because the
  * metadata/KG snapshot has an independent source-version contract.
@@ -114,7 +114,7 @@ export async function runCompile(
   const projectRoot = resolve(projectCandidates[0] ?? '.');
 
   if (!existsSync(join(projectRoot, 'dql.config.json'))) {
-    console.error('No DQL project found (missing dql.config.json). Run from a project root or pass a project path.');
+    console.error('No ZLens project found (missing dql.config.json). Run from a project root or pass a project path.');
     process.exitCode = 1;
     return;
   }
@@ -186,7 +186,7 @@ export async function runCompile(
   // A compiler-cache hit is only a full warm path when the manifest file was
   // left untouched AND the persisted metadata/KG snapshot already represents
   // the same source version.  Rewriting identical JSON changes its mtime,
-  // invalidates that version, and made `dql sync dbt` rebuild every index after
+  // invalidates that version, and made `zlens sync dbt` rebuild every index after
   // reporting a 3ms compile cache hit.
   const reusedPreparedAgentIndex = !noCache
     && cacheHit
@@ -211,10 +211,10 @@ export async function runCompile(
   const edgeCount = manifest.lineage.edges.length;
   const domainCount = manifest.lineage.domains.length;
 
-  console.log(`\n  DQL Compile — ${manifest.project}`);
+  console.log(`\n  ZLens Compile — ${manifest.project}`);
   console.log('  ' + '='.repeat(50));
   console.log('\n  Manifest:');
-  console.log('    dql-manifest.json is the dbt-like compiled artifact for this DQL project.');
+  console.log('    dql-manifest.json is the dbt-like compiled artifact for this ZLens project.');
   console.log('    It records blocks, terms, business views, notebooks, Apps, dashboards, semantic objects, sources, dbt imports, and lineage.');
   console.log(`\n  Scanned:`);
   console.log(`    ${blockCount} block(s)`);

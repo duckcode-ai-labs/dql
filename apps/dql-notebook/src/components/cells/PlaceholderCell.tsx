@@ -1,7 +1,7 @@
 import React from 'react';
 import { themes, type Theme } from '../../themes/notebook-theme';
 import type { Cell, ThemeMode } from '../../store/types';
-import { CellChrome } from '@duckcodeailabs/dql-ui';
+import { CellChrome } from '@zlens/ui';
 
 interface PlaceholderCellProps {
   cell: Cell;

@@ -16,8 +16,8 @@
  *   no RLS narrowing). This matches today's single-user behaviour.
  */
 
-import type { AppDocument, AppMember } from '@duckcodeailabs/dql-core';
-import { resolveRlsContext } from '@duckcodeailabs/dql-core';
+import type { AppDocument, AppMember } from '@zlens/core';
+import { resolveRlsContext } from '@zlens/core';
 
 export interface ActivePersona {
   /** Stable user id (typically email). */

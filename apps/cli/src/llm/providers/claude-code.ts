@@ -2,7 +2,7 @@ import { spawn } from 'node:child_process';
 import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { dqlMcpToolNamesForSurface } from '@duckcodeailabs/dql-agent';
+import { dqlMcpToolNamesForSurface } from '@zlens/agent';
 import type { AgentRunRequest, AgentRunner, AgentTurn, BlockProposal } from '../types.js';
 
 const CLAUDE_CODE_ALLOWED_TOOLS = dqlMcpToolNamesForSurface('claude_code').join(' ');
@@ -20,7 +20,7 @@ export const claudeCodeRunner: AgentRunner = {
       mcpConfigPath,
       JSON.stringify({
         mcpServers: {
-          dql: { command: 'dql', args: ['mcp'], cwd: req.projectRoot },
+          dql: { command: 'zlens', args: ['mcp'], cwd: req.projectRoot },
         },
       }),
     );

@@ -19,8 +19,8 @@ describe('context pack retention', () => {
 
   it('defaults to 7 days, 200 packs and 64 MB, and reads DQL_CONTEXT_PACK_* (ignoring nonsense)', () => {
     expect(contextPackRetention({})).toEqual(CONTEXT_PACK_RETENTION);
-    expect(contextPackRetention({ DQL_CONTEXT_PACK_DAYS: '2', DQL_CONTEXT_PACK_MAX: '50', DQL_CONTEXT_PACK_MAX_MB: '8' })).toEqual({ days: 2, max: 50, bytes: 8 * 1024 * 1024 });
-    expect(contextPackRetention({ DQL_CONTEXT_PACK_DAYS: '-1', DQL_CONTEXT_PACK_MAX: 'lots' })).toEqual(CONTEXT_PACK_RETENTION);
+    expect(contextPackRetention({ ZLENS_CONTEXT_PACK_DAYS: '2', ZLENS_CONTEXT_PACK_MAX: '50', ZLENS_CONTEXT_PACK_MAX_MB: '8' })).toEqual({ days: 2, max: 50, bytes: 8 * 1024 * 1024 });
+    expect(contextPackRetention({ ZLENS_CONTEXT_PACK_DAYS: '-1', ZLENS_CONTEXT_PACK_MAX: 'lots' })).toEqual(CONTEXT_PACK_RETENTION);
   });
 
   it('keeps at most the newest N, nothing older than the days, and no more than the bytes (the newest always)', () => {
@@ -39,8 +39,8 @@ describe('context pack retention', () => {
   });
 
   it('prunes by itself as questions are asked: 1,000 asks leave at most the bound', () => {
-    const before = process.env.DQL_CONTEXT_PACK_MAX;
-    process.env.DQL_CONTEXT_PACK_MAX = '50';
+    const before = process.env.ZLENS_CONTEXT_PACK_MAX;
+    process.env.ZLENS_CONTEXT_PACK_MAX = '50';
     try {
       for (let n = 0; n < 1000; n += 1) catalog.insertContextPack(pack(n, 200));
       expect(count()).toBeLessThanOrEqual(50 + 20);
@@ -52,8 +52,8 @@ describe('context pack retention', () => {
       }
       expect(count()).toBeLessThanOrEqual(50 + 20);
     } finally {
-      if (before === undefined) delete process.env.DQL_CONTEXT_PACK_MAX;
-      else process.env.DQL_CONTEXT_PACK_MAX = before;
+      if (before === undefined) delete process.env.ZLENS_CONTEXT_PACK_MAX;
+      else process.env.ZLENS_CONTEXT_PACK_MAX = before;
     }
   });
 });

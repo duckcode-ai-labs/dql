@@ -1,16 +1,16 @@
-# DQL Tutorials
+# ZLens Tutorials
 
 Hands-on walkthroughs that take you from a plain dbt project to certified
 blocks, dashboards in an App, agent answers, and a CI gate.
 
-Every tutorial works on **your own dbt repo**. The DQL repo stays
+Every tutorial works on **your own dbt repo**. The ZLens repo stays
 product-focused; the complete worked example lives in the separate
 [duckcode-ai/jaffle-shop-duckdb](https://github.com/duckcode-ai/jaffle-shop-duckdb)
 repo.
 
 ## Reading order
 
-1. **[01 — Getting started](./01-getting-started.md)** — add DQL to a dbt
+1. **[01 — Getting started](./01-getting-started.md)** — add ZLens to a dbt
    repo, sync the dbt DAG, open the notebook.
 2. **[02 — Authoring blocks](./02-authoring-blocks.md)** — write a certified
    block on top of a dbt model: SQL, metadata, tests, the certification gate.
@@ -19,31 +19,31 @@ repo.
 4. **[04 — Agentic analytics](./04-agentic-analytics.md)** — the knowledge
    graph, governed agent answers, the uncertified → certified promotion loop,
    and the MCP server.
-5. **[05 — CI and `dql verify`](./05-ci-and-verify.md)** — keep
+5. **[05 — CI and `zlens verify`](./05-ci-and-verify.md)** — keep
    `dql-manifest.json` reproducible and gate drift in CI.
 
 ## End-to-end Example
 
 Use
 [duckcode-ai/jaffle-shop-duckdb](https://github.com/duckcode-ai/jaffle-shop-duckdb)
-when you want the full DataLex + DQL flow with concrete files, screenshots, and
+when you want the full DataLex + ZLens flow with concrete files, screenshots, and
 video planning:
 
 - [Jaffle Shop tutorial](https://github.com/duckcode-ai/jaffle-shop-duckdb/blob/main/docs/tutorials/jaffle/README.md)
-- [DQL half of the tutorial](https://github.com/duckcode-ai/jaffle-shop-duckdb/blob/main/dql/TUTORIAL.md)
+- [ZLens half of the tutorial](https://github.com/duckcode-ai/jaffle-shop-duckdb/blob/main/dql/TUTORIAL.md)
 
 Stuck? See the [troubleshooting guide](../guides/troubleshooting.md).
 
 ## Mental model in one paragraph
 
-dbt models your warehouse; DQL governs what happens after. Analysts author
+dbt models your warehouse; ZLens governs what happens after. Analysts author
 **certified `.dql` blocks** (SQL + governance metadata + tests) on top of dbt
 models. **Apps** bundle dashboard pages and notebooks into a consumption
-surface for a domain. `dql compile` writes `dql-manifest.json`, which powers
+surface for a domain. `zlens compile` writes `dql-manifest.json`, which powers
 **lineage** (`source → dbt model → block → dashboard → App`), the local
 **knowledge graph**, and the **agent**: it retrieves certified blocks first;
 if nothing matches, an LLM proposes SQL marked *Uncertified* that analysts
-review and certify back into blocks. **`dql verify`** keeps the manifest in
+review and certify back into blocks. **`zlens verify`** keeps the manifest in
 lock-step with source so CI can gate changes.
 
 If you'd rather skim the architecture first, jump to

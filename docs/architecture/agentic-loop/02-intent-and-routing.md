@@ -3,7 +3,7 @@
 > `packages/dql-agent/src/intent-controller.ts` · `agent-run-engine.ts` (`selectRoute`) ·
 > `research-loop.ts`
 
-Before any LLM call, DQL **classifies** the question deterministically and picks a **route**. This is
+Before any LLM call, ZLens **classifies** the question deterministically and picks a **route**. This is
 what keeps a fast lookup fast and sends a genuine investigation deep — without making the user choose.
 
 ## Two-stage decision

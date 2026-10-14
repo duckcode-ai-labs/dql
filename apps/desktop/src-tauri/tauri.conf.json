@@ -1,10 +1,10 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "DQL",
+  "productName": "ZLens",
   "version": "1.0.4",
   "identifier": "ai.duckcode.dql",
   "build": {
-    "beforeDevCommand": "pnpm -F @duckcodeailabs/dql-notebook-app dev",
+    "beforeDevCommand": "pnpm -F @zlens/notebook-app dev",
     "beforeBuildCommand": "",
     "devUrl": "http://localhost:5173",
     "frontendDist": "../../dql-notebook/dist"
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "DQL",
+        "title": "ZLens",
         "width": 1440,
         "height": 900,
         "minWidth": 1024,
@@ -39,7 +39,7 @@
     "resources": [],
     "category": "DeveloperTool",
     "shortDescription": "Analytics notebooks on your dbt models.",
-    "longDescription": "DQL is a git-native, local-first analytics notebook + block studio that sits on top of dbt's semantic layer. Open source, Apache-2.0-licensed.",
+    "longDescription": "ZLens is a git-native, local-first analytics notebook + block studio that sits on top of dbt's semantic layer. Open source, Apache-2.0-licensed.",
     "copyright": "© 2026 DuckCode AI Labs",
     "publisher": "DuckCode AI Labs",
     "macOS": {

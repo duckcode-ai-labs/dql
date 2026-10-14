@@ -129,7 +129,7 @@ export function checkCanvasHtml(html: string, page?: { catalog?: StoryBindingCat
         out.push(token.text.replace(/<\/?\s*style/gi, ''));
       } else {
         if (stack.includes('dql-value') || stack.includes('dql-tile')) {
-          if (token.text.trim()) issues.push({ code: 'MALFORMED', message: '<dql-value> and <dql-tile> must be empty; DQL fills them.' });
+          if (token.text.trim()) issues.push({ code: 'MALFORMED', message: '<dql-value> and <dql-tile> must be empty; ZLens fills them.' });
           continue;
         }
         prose.push(token.text);

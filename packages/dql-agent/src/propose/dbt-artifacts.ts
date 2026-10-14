@@ -1,5 +1,5 @@
 /**
- * Read-only readers for dbt build artifacts used by `dql propose`.
+ * Read-only readers for dbt build artifacts used by `zlens propose`.
  *
  * These parse the raw JSON shapes that dbt writes to `target/`:
  *   - `manifest.json`        — models, sources, depends_on, tags, schema, description
@@ -8,8 +8,8 @@
  *   - `run_results.json`     — per-node execution records (used for run-frequency ranking)
  *
  * We deliberately do NOT reuse the manifest builder's `importDbtManifest`: that
- * function is private and tightly coupled to a full DQL project scan (it walks
- * the DQL-referenced anchor set). `dql propose` runs *before* a DQL layer
+ * function is private and tightly coupled to a full ZLens project scan (it walks
+ * the DQL-referenced anchor set). `zlens propose` runs *before* a DQL layer
  * exists, so it reads the dbt artifacts directly. The field shapes mirror those
  * the builder consumes, so the two stay aligned.
  */

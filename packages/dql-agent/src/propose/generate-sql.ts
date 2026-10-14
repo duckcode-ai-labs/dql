@@ -1,5 +1,5 @@
 /**
- * Deterministic business-block SQL generation for `dql propose` (Slice 2).
+ * Deterministic business-block SQL generation for `zlens propose` (Slice 2).
  *
  * Replaces the old `SELECT * FROM {{ ref(model) }}` passthrough with SQL that
  * reflects the model's business shape — still a SCAFFOLD the human refines, but

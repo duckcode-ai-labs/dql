@@ -289,7 +289,7 @@ export function GitPage() {
       }
       setRemoteUrlInput('');
       setRemoteFormOpen(false);
-      flash('ok', 'Remote saved. DQL stored the address only; it connects the first time you send changes.');
+      flash('ok', 'Remote saved. ZLens stored the address only; it connects the first time you send changes.');
       await refreshAll();
     } finally {
       setBusy(null);
@@ -360,7 +360,7 @@ export function GitPage() {
     if (sharedInfo) {
       const review = await runOp('request review', () => api.gitOpenReview({
         title,
-        body: 'Created from DQL Source Control. Review the governed analytics changes before merging.',
+        body: 'Created from ZLens Source Control. Review the governed analytics changes before merging.',
         base: sharedInfo.base,
       }));
       if (!review.ok) return;
@@ -373,7 +373,7 @@ export function GitPage() {
     const review = await runOp('request review', () => api.gitCreateReview({
       paths,
       title,
-      body: 'Created from DQL Source Control. Review the governed analytics changes before merging.',
+      body: 'Created from ZLens Source Control. Review the governed analytics changes before merging.',
       base: reviewBaseBranch(branchInfo.current),
     }));
     if (!review.ok) return;
@@ -2023,7 +2023,7 @@ function RemoteSetupBanner({ t, open, onOpen, onClose, value, onChange, onSubmit
             role={error ? 'alert' : undefined}
             style={{ width: '100%', fontSize: 10.5, lineHeight: 1.5, color: error ? t.error : t.textMuted }}
           >
-            {error ?? `Accepts ${REMOTE_URL_EXAMPLES}. DQL only saves the address; it does not connect until you send changes.`}
+            {error ?? `Accepts ${REMOTE_URL_EXAMPLES}. ZLens only saves the address; it does not connect until you send changes.`}
           </div>
         </form>
       )}

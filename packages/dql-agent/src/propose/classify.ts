@@ -1,5 +1,5 @@
 /**
- * Convention-agnostic, deterministic business-layer classifier for `dql propose`.
+ * Convention-agnostic, deterministic business-layer classifier for `zlens propose`.
  *
  * Real enterprise dbt repos (1k–10k models) are NOT organized like jaffle-shop:
  * naming conventions vary, folders vary, some teams lean entirely on `meta`. So

@@ -1,4 +1,4 @@
-import type { AnalyticalPeriodV2, AnalyticalQuestionFrameV2 } from '@duckcodeailabs/dql-core';
+import type { AnalyticalPeriodV2, AnalyticalQuestionFrameV2 } from '@zlens/core';
 
 /** Snapshot-bound freshness observation supplied by an authorized runtime. */
 export interface AnalyticalFreshnessObservationV1 {

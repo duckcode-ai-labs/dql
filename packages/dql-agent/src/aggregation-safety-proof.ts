@@ -7,7 +7,7 @@ import {
   type AggregationSafetyProofV1,
   type MetricCapabilityContract,
   type ResolvedRelationshipProofV1,
-} from '@duckcodeailabs/dql-core';
+} from '@zlens/core';
 import type { LocalContextPack, MetadataObject } from './metadata/catalog.js';
 import { aggregationIntegrityIssuesForSql } from './metadata/grain-ledger.js';
 import { resolvedRelationshipProofMatches } from './relationship-proof.js';

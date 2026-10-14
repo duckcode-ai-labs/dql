@@ -23,7 +23,7 @@ export interface PromoteResult {
  *
  *   ask  ->  no Tier-1 hit  ->  query_via_metadata writes a draft
  *        ->  human reviews / refines
- *        ->  dql certify --from-draft <path>
+ *        ->  zlens certify --from-draft <path>
  *        ->  next ask hits Tier-1 forever
  *
  * Behavior:
@@ -58,7 +58,7 @@ export function promoteFromDraft(
     return {
       ok: false,
       message:
-        `${draftPathInput} does not have status="draft". Use dql certify <path> (without --from-draft) to evaluate governance rules.`,
+        `${draftPathInput} does not have status="draft". Use zlens certify <path> (without --from-draft) to evaluate governance rules.`,
     };
   }
 
@@ -236,7 +236,7 @@ function renderDataLexManifestDiff(fields: {
     "tags": []
   }
 
-Then re-run \`dql compile\` to refresh dql-manifest.json. The DataLex compiler
+Then re-run \`zlens compile\` to refresh dql-manifest.json. The DataLex compiler
 will emit this entry automatically once the v1 manifest emitter ships;
 until then, hand-edit \`datalex-manifest.json\` (or its source YAML) so the
 DQL block's datalex_contract reference resolves.

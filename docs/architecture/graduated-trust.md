@@ -1,13 +1,13 @@
 # Graduated trust + the promotion loop
 
-DQL's wedge — _one question, one answer, fully traced_ — depends on certified
+ZLens's wedge — _one question, one answer, fully traced_ — depends on certified
 DQL artifacts. Blocks answer executable data questions; business terms and
 business views answer definition/context questions and help route to the right
 blocks. But real AI usage isn't strict-only: agents will ask questions for
 which no certified block exists yet, and refusing every such ask sends users
 to bypass the MCP and write SQL directly. That defeats the wedge.
 
-DQL's answer is **graduated trust**: three tiers the AI agent walks in
+ZLens's answer is **graduated trust**: three tiers the AI agent walks in
 priority order, with the trust label always visible to the human.
 
 ```mermaid
@@ -24,7 +24,7 @@ flowchart TD
     T3Out[refuse with reason]
 
     Review[human reviews + refines]
-    Promote["dql certify --from-draft"]
+    Promote["zlens certify --from-draft"]
     Done[next ask hits Tier 1 forever]
 
     Ask --> T1
@@ -90,7 +90,7 @@ queryViaMetadata({
 ```
 
 The agent contract: surface `uncertified: true` verbatim to the human, and
-mention the path forward — `dql certify --from-draft <path>`.
+mention the path forward — `zlens certify --from-draft <path>`.
 
 ## Tier 3 — refuse
 
@@ -110,7 +110,7 @@ workflow that turns ad-hoc AI proposals into certified contracts.
    `mcp call list_proposals --asked-at-least-times 3`.
 3. **Refine** — A human edits the SQL, names the contract, sets ownership.
    Standard git workflow — open a PR, request review.
-4. **Certify** — `dql certify --from-draft <path>` does the promotion:
+4. **Certify** — `zlens certify --from-draft <path>` does the promotion:
    - Moves `domains/<domain>/blocks/_drafts/<slug>.dql` →
      `domains/<domain>/blocks/<slug>.dql` in domain-first projects, or
      `blocks/_drafts/<slug>.dql` → `blocks/<domain>/<slug>.dql` in legacy
@@ -127,13 +127,13 @@ Example end-to-end:
 
 ```bash
 # Step 4 — promote a draft after review
-dql certify --from-draft domains/customer/blocks/_drafts/active_customers_by_quarter.dql \
+zlens certify --from-draft domains/customer/blocks/_drafts/active_customers_by_quarter.dql \
             --domain customer \
             --contract commerce.Customer.active_customers_by_quarter@1 \
             --owner growth@example.com
 
 # Step 5 — refresh the manifest so the new certified block is indexed
-dql compile
+zlens compile
 
 # Apply the patch the previous step printed to datalex-manifest.json
 # (or wait for the DataLex compiler to emit it once the v1 emitter ships).
@@ -144,7 +144,7 @@ dql compile
 The strategic line — language primitives stay OSS, shared multi-user state
 goes commercial — applies cleanly:
 
-- **OSS (in the box today):** Tier-2 capture, draft writer, `dql certify
+- **OSS (in the box today):** Tier-2 capture, draft writer, `zlens certify
   --from-draft`, `list_proposals`, single-user review. Uses git as the
   shared store.
 - **Commercial (later):** team review queue with assignments, RBAC, audit
@@ -165,7 +165,7 @@ and audit logs, that's the day they pay.
 | `query_via_metadata`              | Tier 2        | Only after Tier 1 returns no match                                                 |
 | `list_proposals`                  | review        | Surface the ranked draft queue for human triage                                    |
 | `suggest_block`                   | curated draft | Hand-shape a proposal that aggregates over many Tier-2 captures                    |
-| `certify`                         | governance    | Evaluate rules against a block (does NOT promote — see `dql certify --from-draft`) |
+| `certify`                         | governance    | Evaluate rules against a block (does NOT promote — see `zlens certify --from-draft`) |
 | `lineage_impact`                  | reasoning     | Trace upstream/downstream before changing a contract                               |
 | `list_metrics`, `list_dimensions` | semantic      | List dbt-semantic metrics + dimensions                                             |
 | `kg_search`                       | semantic      | FTS5 search across blocks, metrics, dashboards, apps                               |
@@ -173,5 +173,5 @@ and audit logs, that's the day they pay.
 
 The agent's instructions on session init explicitly document the priority:
 "Always try `query_via_block` first. Fall back to `query_via_metadata`. Use
-`list_proposals` to see what's queued. Use `dql certify --from-draft` to
+`list_proposals` to see what's queued. Use `zlens certify --from-draft` to
 close the loop."

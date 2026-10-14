@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { getDqlToolDefinition, type DqlToolName, type JsonSchema } from '@duckcodeailabs/dql-agent';
+import { getDqlToolDefinition, type DqlToolName, type JsonSchema } from '@zlens/agent';
 
 export function zodInputShapeForTool(name: DqlToolName): Record<string, z.ZodTypeAny> {
   return zodRawShapeFromJsonSchema(getDqlToolDefinition(name).inputSchema);

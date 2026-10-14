@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // What the app's entry point loads besides the reload: stand-ins, so the entry point itself runs here.
-vi.mock('@duckcodeailabs/dql-ui/styles', () => ({}));
+vi.mock('@zlens/ui/styles', () => ({}));
 vi.mock('./components/home/ask-run-link', () => ({ resolveAskRunLink: () => Promise.resolve() }));
 vi.mock('react-dom/client', () => ({ createRoot: () => ({ render: () => undefined }) }));
 vi.mock('./App', () => ({ App: () => null }));

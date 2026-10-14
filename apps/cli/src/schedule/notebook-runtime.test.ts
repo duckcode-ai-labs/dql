@@ -74,7 +74,7 @@ function fakeCron() {
 const pageTiles = { tiles: [{ tileId: 'order-lines-dataset-kpi', status: 'ok', tileType: 'dataset', result: { columns: [{ name: 'revenue' }], rows: [{ revenue: 145 }], rowCount: 1 } }] };
 const quiet = { log: () => undefined, error: () => undefined };
 
-describe('dql notebook runs App schedules and dql schedule runs through it', () => {
+describe('zlens notebook runs App schedules and zlens schedule runs through it', () => {
   it('announces a notebook in .dql/local and removes only its own descriptor', () => {
     const root = mkdtempSync(join(tmpdir(), 'dql-notebook-descriptor-'));
     roots.push(root);
@@ -120,10 +120,10 @@ describe('dql notebook runs App schedules and dql schedule runs through it', () 
 
   it('sends the server token to a notebook bound beyond loopback, and refuses to call it without one', async () => {
     const shared: RunningNotebook = { descriptor: descriptor({ host: '0.0.0.0', url: localRuntimeUrl('0.0.0.0', 3474) }), url: 'http://127.0.0.1:3474', loopback: false };
-    expect(() => notebookPageRunner(shared, { env: {} })).toThrow(/DQL_SERVER_TOKEN/);
+    expect(() => notebookPageRunner(shared, { env: {} })).toThrow(/ZLENS_SERVER_TOKEN/);
 
     const fetchImpl = vi.fn(async () => json(pageTiles));
-    await notebookPageRunner(shared, { env: { DQL_SERVER_TOKEN: 's3cret' }, fetchImpl: fetchImpl as unknown as typeof fetch })('commerce-pilot', 'overview');
+    await notebookPageRunner(shared, { env: { ZLENS_SERVER_TOKEN: 's3cret' }, fetchImpl: fetchImpl as unknown as typeof fetch })('commerce-pilot', 'overview');
     const [url, init] = fetchImpl.mock.calls[0] as unknown as [string, RequestInit];
     expect(url).toBe('http://127.0.0.1:3474/api/apps/commerce-pilot/dashboards/overview/run');
     expect((init.headers as Record<string, string>).Authorization).toBe('Bearer s3cret');
@@ -131,17 +131,17 @@ describe('dql notebook runs App schedules and dql schedule runs through it', () 
     // Loopback needs no token and is never sent one.
     const local: RunningNotebook = { descriptor: descriptor(), url: 'http://127.0.0.1:3474', loopback: true };
     const localFetch = vi.fn(async () => json(pageTiles));
-    await notebookPageRunner(local, { env: { DQL_SERVER_TOKEN: 's3cret' }, fetchImpl: localFetch as unknown as typeof fetch })('commerce-pilot', 'overview');
+    await notebookPageRunner(local, { env: { ZLENS_SERVER_TOKEN: 's3cret' }, fetchImpl: localFetch as unknown as typeof fetch })('commerce-pilot', 'overview');
     expect(((localFetch.mock.calls[0] as unknown as [string, RequestInit])[1].headers as Record<string, string>).Authorization).toBeUndefined();
 
     expect(localRuntimeUrl('::', 9)).toBe('http://[::1]:9');
     expect(localRuntimeUrl('192.168.1.20', 9)).toBe('http://192.168.1.20:9');
   });
 
-  it('dql schedule run picks --runtime-url first, then a running notebook, else its own runtime', async () => {
+  it('zlens schedule run picks --runtime-url first, then a running notebook, else its own runtime', async () => {
     const fetchImpl = vi.fn(async () => json(pageTiles));
     vi.stubGlobal('fetch', fetchImpl);
-    const remote = await resolveAppPageRoute('/nowhere', 'http://10.0.0.5:3474', { env: { DQL_SERVER_TOKEN: 't' } });
+    const remote = await resolveAppPageRoute('/nowhere', 'http://10.0.0.5:3474', { env: { ZLENS_SERVER_TOKEN: 't' } });
     expect(remote.via).toBe('http://10.0.0.5:3474');
     await remote.pageRunner!('a', 'b');
     expect(((fetchImpl.mock.calls[0] as unknown as [string, RequestInit])[1].headers as Record<string, string>).Authorization).toBe('Bearer t');
@@ -149,7 +149,7 @@ describe('dql notebook runs App schedules and dql schedule runs through it', () 
 
     const notebook: RunningNotebook = { descriptor: descriptor({ pid: 777 }), url: 'http://127.0.0.1:3474', loopback: true };
     const viaNotebook = await resolveAppPageRoute('/project', undefined, { find: async () => notebook });
-    expect(viaNotebook.via).toBe('dql notebook (pid 777) at http://127.0.0.1:3474');
+    expect(viaNotebook.via).toBe('zlens notebook (pid 777) at http://127.0.0.1:3474');
     expect(viaNotebook.pageRunner).toBeTypeOf('function');
 
     expect(await resolveAppPageRoute('/project', undefined, { find: async () => null })).toEqual({});
@@ -185,7 +185,7 @@ describe('dql notebook runs App schedules and dql schedule runs through it', () 
     scheduler.stop();
   });
 
-  it('dql schedule start leaves App schedules to a notebook that runs them, and never opens a runtime of its own', async () => {
+  it('zlens schedule start leaves App schedules to a notebook that runs them, and never opens a runtime of its own', async () => {
     const root = projectWithSchedules([{ id: 'daily', cron: '0 8 * * *', dashboard: 'overview', deliver: [] }]);
     const cron = fakeCron();
     const startRuntime = vi.fn();
@@ -199,13 +199,13 @@ describe('dql notebook runs App schedules and dql schedule runs through it', () 
       log: { log: (message: string) => logs.push(message), error: (message: string) => logs.push(message) },
     });
     cron.live()[0]!.fire();
-    await vi.waitFor(() => expect(logs).toContain('[schedule] commerce-pilot/daily is run by dql notebook (pid 99); skipped here'));
+    await vi.waitFor(() => expect(logs).toContain('[schedule] commerce-pilot/daily is run by zlens notebook (pid 99); skipped here'));
     expect(startRuntime).not.toHaveBeenCalled();
     expect(existsSync(join(root, '.dql/runs'))).toBe(false);
     await service.stop();
   });
 
-  it('dql schedule start runs pages through a notebook that has schedules off', async () => {
+  it('zlens schedule start runs pages through a notebook that has schedules off', async () => {
     const root = projectWithSchedules([{ id: 'daily', cron: '0 8 * * *', dashboard: 'overview', deliver: [] }]);
     const cron = fakeCron();
     const startRuntime = vi.fn();
@@ -227,7 +227,7 @@ describe('dql notebook runs App schedules and dql schedule runs through it', () 
     await service.stop();
   });
 
-  it('without a notebook, dql schedule start uses its own runtime and frees DuckDB between runs', async () => {
+  it('without a notebook, zlens schedule start uses its own runtime and frees DuckDB between runs', async () => {
     const root = projectWithSchedules([
       { id: 'daily', cron: '0 8 * * *', dashboard: 'overview', deliver: [] },
       { id: 'hourly', cron: '0 * * * *', dashboard: 'overview', deliver: [] },
@@ -272,7 +272,7 @@ describe('dql notebook runs App schedules and dql schedule runs through it', () 
       const found = await findRunningNotebook(root);
       expect(found?.url).toBe(runtime.url);
       const route = await resolveAppPageRoute(root, undefined);
-      expect(route.via).toBe(`dql notebook (pid ${process.pid}) at ${runtime.url}`);
+      expect(route.via).toBe(`zlens notebook (pid ${process.pid}) at ${runtime.url}`);
       // The route reaches the notebook's own page-run endpoint.
       await expect(route.pageRunner!('missing-app', 'overview')).rejects.toThrow(/missing-app|not found/i);
     } finally {

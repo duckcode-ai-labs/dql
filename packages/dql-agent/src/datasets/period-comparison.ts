@@ -22,7 +22,7 @@ import {
   type MetricCapabilityContract,
   type TileQuery,
   type TileQueryComparison,
-} from '@duckcodeailabs/dql-core';
+} from '@zlens/core';
 import {
   buildAnalyticalExecutionGraph,
   executeAnalyticalExecutionGraph,

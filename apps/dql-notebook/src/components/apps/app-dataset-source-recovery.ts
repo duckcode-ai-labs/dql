@@ -95,7 +95,7 @@ export function planDatasetSourceRecovery(
     return { ok: false, error: `${candidate.name || sourceId} does not expose a complete current Dataset revision and contract. Keep the saved binding pinned and reselect a compatible Dataset.` };
   }
   if (candidate.lifecycle !== 'certified' || candidate.trust !== 'certified' || candidate.eligibility?.projectPublish !== true) {
-    return { ok: false, error: `${candidate.name || sourceId} is currently ${candidate.lifecycle ?? 'not verified'} and cannot restore this certified Dataset binding. Review or replace it; DQL will not change the App source policy or certify it automatically.` };
+    return { ok: false, error: `${candidate.name || sourceId} is currently ${candidate.lifecycle ?? 'not verified'} and cannot restore this certified Dataset binding. Review or replace it; ZLens will not change the App source policy or certify it automatically.` };
   }
 
   const references = datasetTileReferences(draft, sourceId);

@@ -8,7 +8,7 @@ import { buildAnalysisQuestionPlan } from './analysis-planner.js';
 
 /**
  * Offline `wrong-grain` eval category, mirroring the route-assertion shape used
- * by the `dql agent eval` harness (apps/cli `runEval`). It runs each case
+ * by the `zlens agent eval` harness (apps/cli `runEval`). It runs each case
  * through `planAgentAnswer` and checks that the realized route matches the
  * expected route. Running it with the gate's verdict applied vs. ignored shows
  * that the grain gate is what improves grain-match precision — without needing a

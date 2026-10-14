@@ -1,4 +1,4 @@
-import type { DashboardVizStyle } from '@duckcodeailabs/dql-core/apps/viz-style';
+import type { DashboardVizStyle } from '@zlens/core/apps/viz-style';
 // v1.3.2 — three Luna themes (obsidian dark, paper warm light, white plain light).
 // `dark`/`light`/`midnight`/`arctic` kept as aliases so persisted state from
 // earlier v1.3 releases still loads; normalize in the reducer / App effect.
@@ -502,7 +502,7 @@ export interface Skill {
 }
 
 export interface SkillPathSettings {
-  /** Value stored in dql.config.json; relative paths resolve from the DQL project root. */
+  /** Value stored in dql.config.json; relative paths resolve from the ZLens project root. */
   path: string;
   resolvedPath: string;
   exists: boolean;

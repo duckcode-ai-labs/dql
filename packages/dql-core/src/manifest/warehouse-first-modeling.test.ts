@@ -135,7 +135,7 @@ describe('warehouse-first modeling (RFC 0007)', () => {
     expect(messages).toMatch(/exactly one of `dbt_model` or `relation`/);
     rmSync(join(projectRoot, WAREHOUSE_CATALOG_PATH));
     const missing = (buildManifest({ projectRoot }).diagnostics ?? []).map((item) => item.message).join('\n');
-    expect(missing).toMatch(/run `dql sync warehouse`/);
+    expect(missing).toMatch(/run `zlens sync warehouse`/);
   });
 
   it('a dbt-first project that authors `relation:` gets a clear message and no warehouse binding', () => {

@@ -1,7 +1,7 @@
 # Semantic layer
 
-The semantic layer is DQL's shared business vocabulary. It's a **superset**
-of dbt's MetricFlow — DQL imports dbt's semantic models as-is and lets you
+The semantic layer is ZLens's shared business vocabulary. It's a **superset**
+of dbt's MetricFlow — ZLens imports dbt's semantic models as-is and lets you
 extend them with DQL-local definitions.
 
 ## Object types
@@ -45,17 +45,17 @@ hierarchies:
 
 ## dbt import
 
-DQL reads `target/manifest.json` directly — see
+ZLens reads `target/manifest.json` directly — see
 [Import a dbt project](../guides/import-dbt.md). Imported metrics and
 dimensions appear in the **Semantic** panel alongside DQL-local ones.
 
 ## CLI
 
 ```bash
-dql semantic list                 # list everything
-dql semantic validate             # check all refs resolve
-dql semantic query 'revenue by segment in 2024'   # NL → SQL preview
-dql semantic pull                 # re-sync from dbt
+zlens semantic list                 # list everything
+zlens semantic validate             # check all refs resolve
+zlens semantic query 'revenue by segment in 2024'   # NL → SQL preview
+zlens semantic pull                 # re-sync from dbt
 ```
 
 ## Referencing from cells

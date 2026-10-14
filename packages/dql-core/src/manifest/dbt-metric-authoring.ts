@@ -35,10 +35,10 @@ export interface DbtMetricAuthoringInput {
     /** `avg` is accepted for `average`. */
     aggregation: string;
     column: string;
-    /** Written as `config.meta.domain`, which DQL reads as the metric's domain. */
+    /** Written as `config.meta.domain`, which ZLens reads as the metric's domain. */
     domain?: string;
     /**
-     * Other names people use for the metric. Written as `config.meta.synonyms` in the same patch, which DQL reads
+     * Other names people use for the metric. Written as `config.meta.synonyms` in the same patch, which ZLens reads
      * as aliases of the metric, so a question that uses one finds it.
      */
     synonyms?: string[];
@@ -208,7 +208,7 @@ export function previewDbtMetricPatch(
       // A file at that path that the scan did not load (unparsable, over 2 MB, or outside model-paths) may hold
       // the semantic model or other content. Writing a new file over it would destroy it, so refuse.
       if (!loaded.has(created.path) && existsSync(resolve(root, created.path))) {
-        issues.push(`${created.path} already exists but could not be read as dbt YAML (see warnings), so DQL will not overwrite it. Fix or move that file, or add the semantic model there by hand.`);
+        issues.push(`${created.path} already exists but could not be read as dbt YAML (see warnings), so ZLens will not overwrite it. Fix or move that file, or add the semantic model there by hand.`);
       }
     }
     if (!input.primaryEntity?.name || !input.primaryEntity.column) issues.push('A new semantic model needs a primary entity (name and key column).');
@@ -275,7 +275,7 @@ export function previewDbtMetricPatch(
     // metrics), so changing them here would silently change those metrics too.
     const users = changesMeaning ? metricsReferencing(metricName, all, manifest) : [];
     if (users.length) {
-      invalid([`The measure "${metricName}" is also used by ${users.map((name) => `"${name}"`).join(', ')}. Changing its aggregation or column would change ${users.length === 1 ? 'that metric' : 'those metrics'} too, so DQL will not do it. Add a new metric with its own measure instead, or edit the dependants in dbt first.`]);
+      invalid([`The measure "${metricName}" is also used by ${users.map((name) => `"${name}"`).join(', ')}. Changing its aggregation or column would change ${users.length === 1 ? 'that metric' : 'those metrics'} too, so ZLens will not do it. Add a new metric with its own measure instead, or edit the dependants in dbt first.`]);
     }
   }
   const measure: UnknownRecord = {
@@ -315,7 +315,7 @@ export function previewDbtMetricPatch(
     if (word && !synonyms.some((seen) => seen.toLowerCase() === word.toLowerCase())) synonyms.push(word);
   }
   const existingMeta = asRecord(asRecord(existingMetric.config).meta);
-  // dql.authored marks a metric written here: DQL reads it from the YAML until dbt parses it into the manifest.
+  // dql.authored marks a metric written here: ZLens reads it from the YAML until dbt parses it into the manifest.
   const meta: UnknownRecord = { ...existingMeta, ...(domain ? { domain } : {}), ...(synonyms.length ? { synonyms } : {}), dql: { ...asRecord(existingMeta.dql), authored: true } };
   const nextMetric: UnknownRecord = {
     ...existingMetric,

@@ -7,8 +7,8 @@ import type {
   QueryExecutor,
   SQLParamSpec,
   TableInfo,
-} from '@duckcodeailabs/dql-connectors';
-import { buildParamValues, normalizeSQLPlaceholders } from '@duckcodeailabs/dql-connectors';
+} from '@zlens/connectors';
+import { buildParamValues, normalizeSQLPlaceholders } from '@zlens/connectors';
 
 /**
  * A REAL warehouse for the golden harness, without a DuckDB binary.

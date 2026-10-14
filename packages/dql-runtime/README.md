@@ -1,4 +1,4 @@
-# `@duckcodeailabs/dql-runtime`
+# `@zlens/runtime`
 
 Browser runtime for compiled DQL output.
 
@@ -7,13 +7,13 @@ It includes query fetching, chart rendering helpers, table/KPI renderers, filter
 ## Install
 
 ```bash
-pnpm add @duckcodeailabs/dql-runtime
+pnpm add @zlens/runtime
 ```
 
 ## Example
 
 ```ts
-import { DataFetcher } from '@duckcodeailabs/dql-runtime';
+import { DataFetcher } from '@zlens/runtime';
 
 const fetcher = new DataFetcher('/api/query');
 

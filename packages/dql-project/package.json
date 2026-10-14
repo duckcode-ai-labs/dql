@@ -1,7 +1,7 @@
 {
-  "name": "@duckcodeailabs/dql-project",
+  "name": "@zlens/project",
   "version": "1.17.3",
-  "description": "DQL project and block registry primitives: block metadata, versions, sync, and storage adapters",
+  "description": "ZLens project and block registry primitives: block metadata, versions, sync, and storage adapters",
   "license": "Apache-2.0",
   "type": "module",
   "main": "./dist/index.js",
@@ -37,7 +37,7 @@
     "access": "public"
   },
   "dependencies": {
-    "@duckcodeailabs/dql-core": "workspace:*",
+    "@zlens/core": "workspace:*",
     "better-sqlite3": "^12.11.1"
   },
   "devDependencies": {

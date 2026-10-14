@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { PanelEmpty } from '@duckcodeailabs/dql-ui';
+import { PanelEmpty } from '@zlens/ui';
 import { Briefcase, Database, Monitor, type LucideIcon } from 'lucide-react';
 import type { Theme } from '../../themes/notebook-theme';
 import { api } from '../../api/client';
@@ -345,7 +345,7 @@ export function LineagePanel({ variant = 'sidebar' }: { variant?: 'sidebar' | 'p
       <div style={{ height: '100%', background: page ? t.sidebarBg : 'transparent', border: page ? `1px solid ${t.headerBorder}` : 'none', borderRadius: page ? 8 : 0 }}>
         <PanelEmpty
           title="No lineage data"
-          description="Run `dql compile` or add notebooks/blocks first."
+          description="Run `zlens compile` or add notebooks/blocks first."
         />
       </div>
     );

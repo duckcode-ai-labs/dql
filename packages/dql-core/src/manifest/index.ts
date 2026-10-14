@@ -1,4 +1,4 @@
-// Manifest — DQL project compilation artifact
+// Manifest — ZLens project compilation artifact
 
 export {
   buildManifest,

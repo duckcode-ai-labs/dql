@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { Bell, Trash2 } from 'lucide-react';
-import { figureLabel, type StoryBindingCatalog } from '@duckcodeailabs/dql-core/apps/story-bindings';
+import { figureLabel, type StoryBindingCatalog } from '@zlens/core/apps/story-bindings';
 import { api, type AppScheduleDeliveryV1, type PageMonitorScheduleV1 } from '../../api/client';
 import { ALERT_RULES, alertCondition, alertFigures, describeCondition, describeCron, describeDelivery, type AlertRule } from './page-alerts';
 
@@ -196,7 +196,7 @@ export function PageAlertsMenu({
             <button type="submit" className="dql-alerts-add" disabled={busy || !figures.length}>{busy ? 'Saving…' : 'Add alert'}</button>
           </form>
           {status ? <p className={`dql-alerts-status ${status.tone}`} role={status.tone === 'error' ? 'alert' : 'status'}>{status.text}</p> : null}
-          <p className="dql-alerts-note">Alerts are saved in the App's <code>dql.app.json</code> and checked by <code>dql schedule start</code>. Every alert reads the governed page run; none runs its own query.</p>
+          <p className="dql-alerts-note">Alerts are saved in the App's <code>dql.app.json</code> and checked by <code>zlens schedule start</code>. Every alert reads the governed page run; none runs its own query.</p>
         </div>
       ) : null}
     </div>

@@ -24,7 +24,7 @@
  */
 
 import { allowedRelationLookupFromTables, checkSqlReferences } from './sql-context-validation.js';
-import { analyzeSqlReferences } from '@duckcodeailabs/dql-core';
+import { analyzeSqlReferences } from '@zlens/core';
 import type { DbtArtifacts, DbtModelNode, DbtSourceNode } from '../propose/dbt-artifacts.js';
 
 /** A single grounded table the model is allowed to reference. */

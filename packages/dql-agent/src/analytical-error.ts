@@ -28,7 +28,7 @@
 export type AnalyticalErrorOrigin =
   /** The warehouse driver rejected or failed the statement. */
   | 'warehouse'
-  /** DQL could not compile/parse/bind its own block artifact. The warehouse is innocent. */
+  /** ZLens could not compile/parse/bind its own block artifact. The warehouse is innocent. */
   | 'dql_compilation'
   /** A governance gate deliberately refused before execution. */
   | 'governance_gate'
@@ -38,7 +38,7 @@ export type AnalyticalErrorOrigin =
   | 'ambiguity'
   /** The AI provider errored or was unavailable. */
   | 'provider'
-  /** DQL host/runtime defect (bug, misconfiguration). */
+  /** ZLens host/runtime defect (bug, misconfiguration). */
   | 'host';
 
 /** Where in the pipeline it happened. */
@@ -136,7 +136,7 @@ export function withAnalyticalErrorOriginSync<T>(
 
 /**
  * The user-facing headline for an origin. Deliberately says what DQL DID, not
- * just that something failed: "the warehouse rejected it" and "DQL stopped it
+ * just that something failed: "the warehouse rejected it" and "ZLens stopped it
  * before running" call for completely different user actions, and conflating
  * them is what sent people hunting for SQL bugs that did not exist.
  */
@@ -145,17 +145,17 @@ export function analyticalErrorHeadline(origin: AnalyticalErrorOrigin): string {
     case 'warehouse':
       return 'The warehouse rejected the query.';
     case 'dql_compilation':
-      return 'DQL could not turn this answer into a reusable block.';
+      return 'ZLens could not turn this answer into a reusable block.';
     case 'governance_gate':
-      return 'DQL stopped this query before running it.';
+      return 'ZLens stopped this query before running it.';
     case 'retrieval_gap':
-      return "DQL could not confirm this relation is in the inspected metadata.";
+      return "ZLens could not confirm this relation is in the inspected metadata.";
     case 'ambiguity':
       return 'One detail is missing before this can be answered.';
     case 'provider':
       return 'The AI provider failed.';
     case 'host':
-      return 'DQL hit an internal error.';
+      return 'ZLens hit an internal error.';
   }
 }
 

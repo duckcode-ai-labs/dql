@@ -55,11 +55,11 @@ const cliReference = readFileSync(join(ROOT, 'docs/reference/cli.md'), 'utf-8');
 const dispatchedCommands = [...cliSource.matchAll(/^\s+case "([a-z-]+)":$/gm)]
   .map((match) => match[1]);
 const undocumentedCommands = dispatchedCommands.filter((command) =>
-  !cliReference.includes(`dql ${command}`));
+  !cliReference.includes(`zlens ${command}`));
 
 if (undocumentedCommands.length) {
   console.error('CLI reference is missing dispatched top-level command(s):');
-  for (const command of undocumentedCommands) console.error(`  dql ${command}`);
+  for (const command of undocumentedCommands) console.error(`  zlens ${command}`);
   process.exit(1);
 }
 

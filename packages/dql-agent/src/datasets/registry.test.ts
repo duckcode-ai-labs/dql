@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { DatasetGrainProofV1, ManifestBlock, MetricCapabilityContract } from '@duckcodeailabs/dql-core';
+import type { DatasetGrainProofV1, ManifestBlock, MetricCapabilityContract } from '@zlens/core';
 import {
   datasetBindingAuthorityForManifestBlock,
   datasetBlockProofMaterial,

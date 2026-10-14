@@ -1012,7 +1012,7 @@ function convertSemanticModel(
   // `metric_time` is not declared on any semantic model — MetricFlow synthesizes
   // it from each measure's aggregate time dimension, and it is the name every
   // MetricFlow query uses for a time breakdown (`metric_time__day`,
-  // `metric_time__month`, ...). Because DQL only imported DECLARED dimensions it
+  // `metric_time__month`, ...). Because ZLens only imported DECLARED dimensions it
   // never existed here, so the agent could not select it, compatibility rejected
   // it as unknown, and any question that needed the standard time axis failed
   // with "metric_time__day not found".

@@ -118,7 +118,7 @@ export function SkillsPage({
       .catch((error: unknown) => {
         if (cancelled) return;
         setSkills([]);
-        setLoadError(error instanceof Error && error.message ? error.message : 'Could not load skills. Is the local DQL server running?');
+        setLoadError(error instanceof Error && error.message ? error.message : 'Could not load skills. Is the local ZLens server running?');
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -330,7 +330,7 @@ export function SkillsPage({
               </button>
             </div>
             <div style={{ fontSize: 10.5, lineHeight: 1.45, color: t.textMuted }}>
-              Relative paths start from the DQL project. If DQL is in a <code style={{ fontFamily: t.fontMono }}>/dql</code> folder inside your dbt repo, use <code style={{ fontFamily: t.fontMono }}>../skills</code>. Existing <code style={{ fontFamily: t.fontMono }}>.skill.md</code> and Markdown skill files are loaded in place and stay Git-owned by that repo.
+              Relative paths start from the ZLens project. If it is in a <code style={{ fontFamily: t.fontMono }}>/dql</code> folder inside your dbt repo, use <code style={{ fontFamily: t.fontMono }}>../skills</code>. Existing <code style={{ fontFamily: t.fontMono }}>.skill.md</code> and Markdown skill files are loaded in place and stay Git-owned by that repo.
             </div>
             {pathSettings?.resolvedPath ? <div style={{ fontSize: 10.5, color: t.textMuted, fontFamily: t.fontMono, overflowWrap: 'anywhere' }}>Resolved: {pathSettings.resolvedPath}</div> : null}
             {pathError ? <InlineNote t={t} tone="error">{pathError}</InlineNote> : null}

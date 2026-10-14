@@ -2,7 +2,7 @@ import type {
   MetricCapabilityContract,
   ResolvedRelationshipProofV1,
   SemanticAggregationCompilerReceiptV1,
-} from '@duckcodeailabs/dql-core';
+} from '@zlens/core';
 import type { LocalContextPack, MetadataObject } from './metadata/catalog.js';
 import type { ResolvedAnalyticalPlan } from './resolved-analytical-plan.js';
 

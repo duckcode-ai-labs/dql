@@ -1,7 +1,7 @@
 import { useMemo, type MouseEvent } from 'react';
-import { buildPivotGrid, type PivotGrid, type PivotHeader, type PivotLayout, type PivotRow } from '@duckcodeailabs/dql-core/apps/pivot';
-import { conditionalCell, conditionalStats, CONDITIONAL_TONE_LABELS, type DashboardConditionalFormat } from '@duckcodeailabs/dql-core/apps/conditional-format';
-import { escapeHtml } from '@duckcodeailabs/dql-core/apps/canvas-page';
+import { buildPivotGrid, type PivotGrid, type PivotHeader, type PivotLayout, type PivotRow } from '@zlens/core/apps/pivot';
+import { conditionalCell, conditionalStats, CONDITIONAL_TONE_LABELS, type DashboardConditionalFormat } from '@zlens/core/apps/conditional-format';
+import { escapeHtml } from '@zlens/core/apps/canvas-page';
 import type { QueryResult } from '../../store/types';
 import { themes, type ThemeMode } from '../../themes/notebook-theme';
 import { formatDisplayValue } from '../../utils/value-format';

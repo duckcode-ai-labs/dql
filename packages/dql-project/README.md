@@ -1,4 +1,4 @@
-# `@duckcodeailabs/dql-project`
+# `@zlens/project`
 
 Registry and project primitives for DQL blocks.
 
@@ -7,13 +7,13 @@ Use this package to store, search, version, and certify DQL blocks in memory or 
 ## Install
 
 ```bash
-pnpm add @duckcodeailabs/dql-project
+pnpm add @zlens/project
 ```
 
 ## Example
 
 ```ts
-import { MemoryStorage, RegistryClient } from '@duckcodeailabs/dql-project';
+import { MemoryStorage, RegistryClient } from '@zlens/project';
 
 const registry = new RegistryClient(new MemoryStorage());
 

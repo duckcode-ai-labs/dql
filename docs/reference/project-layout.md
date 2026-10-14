@@ -1,6 +1,6 @@
 # Project layout
 
-A DQL project is a local-first Git repo with a few conventional directories.
+A ZLens project is a local-first Git repo with a few conventional directories.
 Shared assets are plain files. The governed Hint Graph also uses plain files
 under selected `.dql/` subdirectories. Private App overlays, local indexes,
 saved layouts, and AI pins stay ignored.
@@ -46,10 +46,10 @@ the same Domain Model and manifest.
 The compiler scans both layouts and emits one manifest. Use:
 
 ```bash
-dql new domain customer
-dql new block --domain customer --pattern entity_profile "Customer Profile"
-dql new view --domain customer "Customer 360"
-dql migrate layout --to domain-first --dry-run
+zlens new domain customer
+zlens new block --domain customer --pattern entity_profile "Customer Profile"
+zlens new view --domain customer "Customer 360"
+zlens migrate layout --to domain-first --dry-run
 ```
 
 ```text
@@ -118,7 +118,7 @@ my-dql-project/
   New authoring keeps products in root `notebooks/` and `apps/` and records
   domain ownership/use through `ProductDomainContext`.
 - **`semantic-layer/`** — metrics and dimensions authored locally. When you
-  configure dbt artifacts, DQL reads MetricFlow semantics from
+  configure dbt artifacts, ZLens reads MetricFlow semantics from
   `target/semantic_manifest.json` and keeps generated cache files under `.dql/`.
 - **`skills/`** — shared Markdown/YAML-frontmatter agent guidance. New projects
   write here; `.dql/skills/` is read only for legacy migration compatibility.
@@ -137,7 +137,7 @@ my-dql-project/
   source of truth. Ask's context packs (the question and the vocabulary an
   answer was built from, for follow-ups and the run's trace) are kept bounded:
   the newest 200, none older than 7 days, at most 64 MB in all
-  (`DQL_CONTEXT_PACK_MAX`, `DQL_CONTEXT_PACK_DAYS`, `DQL_CONTEXT_PACK_MAX_MB`).
+  (`ZLENS_CONTEXT_PACK_MAX`, `ZLENS_CONTEXT_PACK_DAYS`, `ZLENS_CONTEXT_PACK_MAX_MB`).
   Space freed by older packs is reused; `VACUUM` shrinks the file.
 - **`.dql/imports/`** — local import review sessions. AI SQL imports follow
   `extract -> parameterize -> match/reuse -> validate -> review -> certify`.
@@ -147,12 +147,12 @@ my-dql-project/
   layout overrides, AI pins, and saved views.
 - **`.dql/local/agent-conversations.sqlite`** and
   **`.dql/local/agent-runs.sqlite`** — private project chat threads and bounded
-  execution history. They survive cache rebuilds and DQL upgrades, remain
+  execution history. They survive cache rebuilds and ZLens upgrades, remain
   outside Git, and can be removed explicitly when a user wants to clear local
   history.
 
 Do not add a broad `.dql/` rule to `.gitignore`: it hides the governed Hint
-Graph files. DQL scaffolds and notebook startup use granular ignores for
+Graph files. ZLens scaffolds and notebook startup use granular ignores for
 `cache/`, `local/`, `imports/`, runtime state, connectors, and credentials.
 
 ## App mental model
@@ -204,7 +204,7 @@ you add the saved draft/certified blocks from the App Build catalog.
 
 ## Working with dbt
 
-For an existing single dbt repo, keep DQL isolated under `dql/`:
+For an existing single dbt repo, keep ZLens isolated under `dql/`:
 
 ```text
 my-dbt-repo/
@@ -226,20 +226,20 @@ This is the recommended OSS path. The dbt project stays clean, while all DQL
 blocks, notebooks, Apps, imports, private state, and cache files live in one
 folder.
 
-The sibling layout keeps the DQL workspace next to dbt:
+The sibling layout keeps the ZLens workspace next to dbt:
 
 ```text
 my-team/
 ├─ dbt/                     # your dbt project (dbt_project.yml)
 │   └─ target/manifest.json # produced by `dbt parse` or `dbt build`
-└─ dql/                     # your DQL project
+└─ dql/                     # your ZLens project
     └─ dql.config.json      # dbt.projectDir: "../dbt"
 ```
 
-`dql init ./dql` detects the parent dbt project. `create-dql-app` and
-`dql init` also auto-detect common sibling layouts and wire the config for you.
-After `dbt build`, run `dql compile ./dql`, `dql sync dbt ./dql`, and
-`cd dql && dql agent reindex` to refresh lineage, cache status, and the agent
+`zlens init ./dql` detects the parent dbt project. `create-zlens-app` and
+`zlens init` also auto-detect common sibling layouts and wire the config for you.
+After `dbt build`, run `zlens compile ./dql`, `zlens sync dbt ./dql`, and
+`cd dql && zlens agent reindex` to refresh lineage, cache status, and the agent
 index.
 
 The lineage flow is:
@@ -263,7 +263,7 @@ legacy/global `blocks/**/*.dql`, `terms/**/*.dql`, `skills/**/*.skill.md`,
 AI pins, saved views, personal layout overrides, local SQLite/DuckDB files, and
 temporary generated artifacts.
 
-Use `dql promote notebook <path> --to shared`, `dql promote app <app-id> --to shared`,
-or `dql promote dashboard <app-id>/<dashboard-id> --to shared` to turn private
-work into clean shared source. Run `dql doctor git-hygiene` before committing to
+Use `zlens promote notebook <path> --to shared`, `zlens promote app <app-id> --to shared`,
+or `zlens promote dashboard <app-id>/<dashboard-id> --to shared` to turn private
+work into clean shared source. Run `zlens doctor git-hygiene` before committing to
 flag tracked files that violate this policy.

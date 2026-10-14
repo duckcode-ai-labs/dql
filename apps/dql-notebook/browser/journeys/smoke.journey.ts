@@ -1,7 +1,7 @@
 import { test, expect } from '../support/test';
 
 /**
- * Smoke journeys against the built `dql notebook` CLI on the jaffle-supply-chain
+ * Smoke journeys against the built `zlens notebook` CLI on the jaffle-supply-chain
  * fixture (seeded DuckDB, one added notebook and App). See ../global-setup.ts.
  */
 

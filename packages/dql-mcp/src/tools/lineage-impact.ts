@@ -3,7 +3,7 @@ import {
   queryCompleteLineagePaths,
   computeImpact,
   type ChangedBlock,
-} from '@duckcodeailabs/dql-core';
+} from '@zlens/core';
 import type { DQLContext } from '../context.js';
 import { zodInputShapeForTool } from '../tool-schema.js';
 
@@ -85,7 +85,7 @@ export function lineageImpact(
 
   // Re-cert impact: treat the focal block as changed and compute the
   // downstream invalidation + required re-cert list. Mirrors the
-  // `dql diff --impact` CLI gate, surfaced structurally for agents.
+  // `zlens diff --impact` CLI gate, surfaced structurally for agents.
   if (args.recert) {
     const changed: ChangedBlock = {
       name: result.focalNode.name,

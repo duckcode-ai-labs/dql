@@ -1,6 +1,6 @@
 import { existsSync, realpathSync } from 'node:fs';
 import { dirname, isAbsolute, resolve, sep } from 'node:path';
-import type { ConnectionConfig } from '@duckcodeailabs/dql-connectors';
+import type { ConnectionConfig } from '@zlens/connectors';
 import { lexStatement, type SqlToken } from './sql-lexicon.js';
 
 /**
@@ -13,7 +13,7 @@ import { lexStatement, type SqlToken } from './sql-lexicon.js';
  * connection is opened restricted (`restrictExternalAccess`: external access
  * off and settings locked, after the database itself is open). The second is
  * this statement check, for every engine, which refuses the same families
- * where DQL can see them in the statement's text: file readers and
+ * where ZLens can see them in the statement's text: file readers and
  * replacement scans, `getenv`, queries given as text, COPY, ATTACH, INSTALL,
  * LOAD, PRAGMA, SET and RESET, EXPORT and IMPORT DATABASE, and their
  * counterparts on other engines (`pg_read_file`, `LOAD DATA`, `INTO OUTFILE`,
@@ -40,10 +40,10 @@ import { lexStatement, type SqlToken } from './sql-lexicon.js';
  *
  * Without a host none of this applies.
  */
-export const HOSTED_STATEMENT_REFUSED = 'DQL did not run this statement: it reads a file, the server\'s environment or settings, or loads an extension, and DQL runs statements on the tables and views of the connection only. Ask about those tables instead; an admin can allow a folder of data files in the connection\'s settings (allowedDirectories).';
-export const HOSTED_STATEMENT_UNREADABLE = 'DQL could not read this statement closely enough to check what it reaches, so it did not run it.';
-export const HOSTED_READ_ONLY_REFUSED = 'DQL did not run this statement: here a statement only reads data, one at a time, and this one would change data, objects or settings, or holds more than one statement. Ask with one SELECT that reads what you need.';
-export const HOSTED_SYSTEM_RELATION_REFUSED = 'DQL did not run this statement: it reads the warehouse\'s own record of sessions, queries, users or settings, and here DQL reads the connection\'s data only. Ask about the data tables instead.';
+export const HOSTED_STATEMENT_REFUSED = 'ZLens did not run this statement: it reads a file, the server\'s environment or settings, or loads an extension, and ZLens runs statements on the tables and views of the connection only. Ask about those tables instead; an admin can allow a folder of data files in the connection\'s settings (allowedDirectories).';
+export const HOSTED_STATEMENT_UNREADABLE = 'ZLens could not read this statement closely enough to check what it reaches, so it did not run it.';
+export const HOSTED_READ_ONLY_REFUSED = 'ZLens did not run this statement: here a statement only reads data, one at a time, and this one would change data, objects or settings, or holds more than one statement. Ask with one SELECT that reads what you need.';
+export const HOSTED_SYSTEM_RELATION_REFUSED = 'ZLens did not run this statement: it reads the warehouse\'s own record of sessions, queries, users or settings, and here ZLens reads the connection\'s data only. Ask about the data tables instead.';
 
 /** DuckDB and file connections are opened with the engine restricted. */
 export function restrictedEngineConnection(config: ConnectionConfig): ConnectionConfig {
@@ -365,7 +365,7 @@ export interface HostedStatementOptions {
 }
 
 /**
- * Why DQL refuses this statement on a host's connection, or null. Plain text
+ * Why ZLens refuses this statement on a host's connection, or null. Plain text
  * for the person; nothing from the statement is repeated.
  */
 export function hostedStatementRefusal(sql: string, driver: string, allowedDirectories: readonly string[] = [], options: HostedStatementOptions = {}): string | null {

@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { describe, expect, it, vi } from 'vitest';
 import { runInit } from './init.js';
-import { loadSkills } from '@duckcodeailabs/dql-agent';
+import { loadSkills } from '@zlens/agent';
 
 const INIT_FLAGS = {
   check: false,
@@ -59,8 +59,8 @@ describe('runInit', () => {
       await runInit(projectDir, { ...INIT_FLAGS, format: 'text' });
 
       const output = spy.mock.calls.flat().join('\n');
-      expect(output).toContain('npx dql doctor');
-      expect(output).toContain('npx dql notebook');
+      expect(output).toContain('npx zlens doctor');
+      expect(output).toContain('npx zlens notebook');
     } finally {
       spy.mockRestore();
     }
@@ -97,7 +97,7 @@ describe('runInit', () => {
     expect(gitignore).toContain('**/.dql/cache/');
     expect(gitignore.split(/\r?\n/).map((line) => line.trim())).not.toContain('.dql/');
 
-    // `dql init` seeds the editable starter skills (spec 16).
+    // `zlens init` seeds the editable starter skills (spec 16).
     expect(loadSkills(projectDir).skills.map((skill) => skill.id).sort()).toEqual([
       'block-authoring',
       'domain-rules',

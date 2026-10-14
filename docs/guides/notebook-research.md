@@ -117,7 +117,7 @@ owners, source-cell ids and fingerprints, source-cell names, SQL text, evidence,
 research plans, and duplicate/reuse metadata. Multi-word searches behave like
 worklist search: terms can match across different fields, so `source123 scoring`
 can match a source fingerprint plus a question or certified-block match. If FTS5
-is not available, DQL falls back to the same token-based local text scan, so the
+is not available, ZLens falls back to the same token-based local text scan, so the
 workflow still works offline. The same search behavior applies to source
 coverage, including source-cell names, ids, fingerprints, and SQL text. The
 visible source list, counts, and next source-cell action all use the same
@@ -250,7 +250,7 @@ work rather than a missing source cell, so enterprise queues do not create false
 source-fix noise. The selected research dossier is preserved during that file
 handoff, so reviewers land in the owning notebook with the same question, SQL,
 review gate, and next action still active.
-Source-state filters are scoped to the currently open notebook because DQL can
+Source-state filters are scoped to the currently open notebook because ZLens can
 only compare source-cell fingerprints against cells loaded in that notebook.
 Switching to project scope or selecting a different notebook clears source
 filters; use notebook, domain, pattern, and next-action filters for project-wide
@@ -430,7 +430,7 @@ private AI pins
 temporary generated artifacts
 ```
 
-Use `dql promote notebook <path> --to shared` when a private notebook becomes a
+Use `zlens promote notebook <path> --to shared` when a private notebook becomes a
 team artifact. Promotion strips local-only run state before the file becomes
 shared source.
 

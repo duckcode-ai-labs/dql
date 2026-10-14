@@ -1,6 +1,6 @@
 # Release process
 
-DQL uses one version across OSS publishable packages. The current version is
+ZLens uses one version across OSS publishable packages. The current version is
 `1.17.3` (see `apps/cli/package.json`); the last git tag is `v1.14.3-rc.1`,
 because `1.13.5` to `1.17.3` were published by hand. The repository is
 `duckcode-ai-labs/dql`.
@@ -77,17 +77,17 @@ git push origin v1.7.0
    rights on the `@duckcodeailabs` scope:
 
 ```bash
-npm dist-tag add @duckcodeailabs/dql-cli@1.7.0-rc.1 next
-npm dist-tag ls @duckcodeailabs/dql-cli
+npm dist-tag add zlens@1.7.0-rc.1 next
+npm dist-tag ls zlens
 ```
 
    Repeat for each of the 19 packages (`npm dist-tag ls` shows the tags).
 8. Smoke the published packages:
 
 ```bash
-npx @duckcodeailabs/dql-cli@1.7.0 --version
-npx @duckcodeailabs/dql-cli@1.7.0 --help
-npx create-dql-app@1.7.0 --help
+npx zlens@1.7.0 --version
+npx zlens@1.7.0 --help
+npx create-zlens-app@1.7.0 --help
 ```
 
 Use the exact published prerelease version in the same commands for an RC. Do
@@ -99,11 +99,11 @@ For a release candidate (shown here with `1.14.3-rc.1`), record both
 independent facts:
 
 ```bash
-npx @duckcodeailabs/dql-cli@1.14.3-rc.1 --version
-npx @duckcodeailabs/dql-cli@1.14.3-rc.1 --help
-npx create-dql-app@1.14.3-rc.1 --help
-npm view @duckcodeailabs/dql-cli dist-tags.next
-npm view create-dql-app dist-tags.next
+npx zlens@1.14.3-rc.1 --version
+npx zlens@1.14.3-rc.1 --help
+npx create-zlens-app@1.14.3-rc.1 --help
+npm view zlens dist-tags.next
+npm view create-zlens-app dist-tags.next
 ```
 
 The first three commands prove the exact published artifacts. The last two
@@ -157,9 +157,9 @@ fallback does not make VS Code Marketplace publication automatic.
 
 | Artifact | Where |
 | --- | --- |
-| npm packages (19, with provenance) | `npmjs.com/org/duckcodeailabs`, plus `create-dql-app` and `dql-language-support` |
-| `create-dql-app` templates | npm tarball |
-| Notebook app assets | bundled inside `@duckcodeailabs/dql-cli` |
+| npm packages (19, with provenance) | `npmjs.com/org/zlens`, plus `zlens`, `create-zlens-app` and `dql-language-support` |
+| `create-zlens-app` templates | npm tarball |
+| Notebook app assets | bundled inside `zlens` |
 | VS Code extension | Marketplace |
 | Docs | `docs/` in this repo |
 

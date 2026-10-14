@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { parse } from '@duckcodeailabs/dql-core';
-import { buildExecutionPlan } from '@duckcodeailabs/dql-notebook';
+import { parse } from '@zlens/core';
+import { buildExecutionPlan } from '@zlens/notebook';
 import { planDatasetTilePromotion, type DatasetTilePromotionInput } from './dataset-tile-promotion.js';
 
 function input(overrides: Partial<DatasetTilePromotionInput> = {}): DatasetTilePromotionInput {

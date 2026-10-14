@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { DQLManifest } from '@duckcodeailabs/dql-core';
+import type { DQLManifest } from '@zlens/core';
 import { conceptDraftFromEvidence } from './concept-draft.js';
 
 const entity = (localId: string, domain: string, keys: string[], grain?: string) => ({ id: `${domain}::entity::${localId}`, localId, qualifiedId: `${domain}::entity::${localId}`, domain, dbtUniqueId: `model.${domain}.${localId}`, keys, grain, sourcePath: 'x', identityFingerprint: localId });

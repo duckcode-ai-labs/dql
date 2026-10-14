@@ -1,8 +1,8 @@
 # 01 — Getting started
 
-**Who this is for:** anyone adding DQL to a dbt project for the first time.
+**Who this is for:** anyone adding ZLens to a dbt project for the first time.
 
-**What you'll do:** add a DQL workspace to a dbt repo, sync the dbt DAG,
+**What you'll do:** add a ZLens workspace to a dbt repo, sync the dbt DAG,
 open the notebook, and see end-to-end lineage.
 
 **Time:** 10 minutes.
@@ -35,19 +35,19 @@ dbt parse         # or dbt build — either writes target/manifest.json
 
 ---
 
-## Step 2 — Scaffold the DQL workspace
+## Step 2 — Scaffold the ZLens workspace
 
 From the dbt repo root:
 
 ```bash
-npx create-dql-app@latest dql
+npx create-zlens-app@latest dql
 cd dql
 npm install
 ```
 
 > **You should see** `detected sibling dbt project at …` during scaffolding —
 > the generated `dql.config.json` is wired back to the parent dbt project.
-> DQL stays isolated under its own folder; your dbt files are untouched.
+> ZLens stays isolated under its own folder; your dbt files are untouched.
 
 Point the default connection at the dbt warehouse. For a local DuckDB file,
 edit `dql.config.json`:
@@ -133,7 +133,7 @@ Click **Lineage** in the activity bar.
 
 ## What you now have
 
-- A DQL workspace living inside a dbt repo (`./dql`), tracked in git
+- A ZLens workspace living inside a dbt repo (`./dql`), tracked in git
 - The dbt DAG imported into `dql-manifest.json`
 - A running local notebook querying the dbt warehouse
 - Lineage from sources through dbt models

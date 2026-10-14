@@ -12,6 +12,7 @@
  */
 
 import { createHash } from 'node:crypto';
+import { readEnv } from '@zlens/core';
 
 export interface EmbeddingProvider {
   /** Provider id, surfaced in diagnostics, e.g. "hashed-token-v1". */
@@ -365,19 +366,23 @@ export function resolveEmbeddingProvider(options: EmbeddingResolveOptions = {}):
 /**
  * Read embedding config from environment (local-first). Lets retrieval/matching
  * light up a real embedder without threading config through every call site.
- * `DQL_OLLAMA_EMBED_URL` / `DQL_OLLAMA_EMBED_MODEL` for Ollama; `DQL_OPENAI_API_KEY`
+ * `ZLENS_OLLAMA_EMBED_URL` / `ZLENS_OLLAMA_EMBED_MODEL` for Ollama; `ZLENS_OPENAI_API_KEY`
  * for an OpenAI-compatible endpoint. A general `OPENAI_API_KEY` is deliberately
  * ignored: answer-provider credentials are not implicit authorization to export
  * enterprise catalog text for retrieval. Absent ⇒ hashed default.
  */
 export function embeddingOptionsFromEnv(env: Record<string, string | undefined> = process.env): EmbeddingResolveOptions {
   const options: EmbeddingResolveOptions = {};
-  if (env.DQL_OLLAMA_EMBED_URL) {
-    options.ollamaEndpoint = env.DQL_OLLAMA_EMBED_URL;
-    if (env.DQL_OLLAMA_EMBED_MODEL) options.ollamaModel = env.DQL_OLLAMA_EMBED_MODEL;
-  } else if (env.DQL_OPENAI_API_KEY) {
-    options.openaiApiKey = env.DQL_OPENAI_API_KEY;
-    if (env.DQL_OPENAI_EMBED_MODEL) options.model = env.DQL_OPENAI_EMBED_MODEL;
+  const ollamaEndpoint = readEnv('ZLENS_OLLAMA_EMBED_URL', env);
+  const openaiApiKey = readEnv('ZLENS_OPENAI_API_KEY', env);
+  if (ollamaEndpoint) {
+    options.ollamaEndpoint = ollamaEndpoint;
+    const ollamaModel = readEnv('ZLENS_OLLAMA_EMBED_MODEL', env);
+    if (ollamaModel) options.ollamaModel = ollamaModel;
+  } else if (openaiApiKey) {
+    options.openaiApiKey = openaiApiKey;
+    const model = readEnv('ZLENS_OPENAI_EMBED_MODEL', env);
+    if (model) options.model = model;
   }
   return options;
 }
@@ -528,7 +533,7 @@ export function embeddingProviderFromIndexedId(
     if (!model) return undefined;
     return resolveEmbeddingProvider({
       ollamaEndpoint: options.ollamaEndpoint
-        ?? process.env.DQL_OLLAMA_EMBED_URL
+        ?? readEnv('ZLENS_OLLAMA_EMBED_URL')
         ?? 'http://127.0.0.1:11434',
       ollamaModel: model,
     });

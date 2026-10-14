@@ -139,7 +139,7 @@ export async function postMessages(
   //
   // Models retire sampling controls on their own schedule, and a rejected
   // OPTIONAL field should never cost a turn: `claude-sonnet-5` answers
-  // "`temperature` is deprecated for this model", and DQL sent temperature on
+  // "`temperature` is deprecated for this model", and ZLens sent temperature on
   // every dispatch, so every question that reached this transport failed with
   // "the AI provider could not complete this Ask step". Dropping the field the
   // error names is a smaller, more honest degradation than dropping the

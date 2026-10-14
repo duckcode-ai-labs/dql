@@ -1,4 +1,4 @@
-import type { TestResultSummary, TestAssertionResult } from '@duckcodeailabs/dql-project';
+import type { TestResultSummary, TestAssertionResult } from '@zlens/project';
 
 /**
  * A block test assertion parsed from DQL `tests { assert ... }` blocks.

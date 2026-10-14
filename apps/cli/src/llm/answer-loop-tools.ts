@@ -7,13 +7,13 @@ import {
   markProviderMetadataArray,
   type AgentToolDefinition,
   type GroundingExpansionResult,
-} from "@duckcodeailabs/dql-agent";
-import { DQLContext } from "@duckcodeailabs/dql-mcp";
+} from "@zlens/agent";
+import { DQLContext } from "@zlens/mcp";
 import { spawn } from "node:child_process";
 import { readdirSync, readFileSync, type Dirent } from "node:fs";
 import { join, relative } from "node:path";
 import { buildAgentTools } from "./tools.js";
-import { QueryExecutor } from "@duckcodeailabs/dql-connectors";
+import { QueryExecutor } from "@zlens/connectors";
 import { NotebookDatasetWorkspace } from "../notebook-datasets.js";
 
 /**

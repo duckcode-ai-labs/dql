@@ -47,7 +47,7 @@ export function DatasetSourceAuthoringDialog({
       format: candidate.format,
       currency: candidate.currency,
     });
-    setMessage(`${candidate.label} is a reviewable candidate. DQL will validate its dependencies and aggregation before source bytes can change.`);
+    setMessage(`${candidate.label} is a reviewable candidate. ZLens will validate its dependencies and aggregation before source bytes can change.`);
   };
 
   const preview = () => {
@@ -102,7 +102,7 @@ export function DatasetSourceAuthoringDialog({
           </div>
           <label className="dataset-source-expression"><span>Aggregate formula</span><textarea aria-label="Calculated measure expression" rows={3} value={draft.expression} disabled={disabled} onChange={(event) => setDraft((current) => ({ ...current, expression: event.target.value }))} placeholder="SUM(approved_field) - SUM(another_approved_field)" /></label>
           <small>Only DQL’s bounded aggregate grammar is accepted: approved physical fields inside supported aggregates, arithmetic, and <code>NULLIF(..., 0)</code>. The server rejects arbitrary SQL, windows, subqueries, unknown functions, row/aggregate mixing, stale sources, and invalid contracts.</small>
-          <small>Choosing additive is a declaration for review. It does not permit a rollup until DQL has current source and component evidence.</small>
+          <small>Choosing additive is a declaration for review. It does not permit a rollup until ZLens has current source and component evidence.</small>
         </section>
         {message ? <p className="dataset-source-authoring-message" role="status">{message}</p> : null}
       </div>

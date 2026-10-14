@@ -9,7 +9,7 @@ import {
   selectRoleBalancedMeaningCandidates,
   toAgentRetrievalEvidence,
   type AgentEvidenceCandidate,
-} from '@duckcodeailabs/dql-agent';
+} from '@zlens/agent';
 
 /**
  * The big-repo admission regression.

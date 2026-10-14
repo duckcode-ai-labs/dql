@@ -3,7 +3,7 @@
 > `apps/cli/src/local-runtime.ts` (route executors) · `packages/dql-agent/src/answer-loop.ts` ·
 > `research-loop.ts` · `app-planner.ts` · `kg/sqlite-fts.ts` (traversal)
 
-DQL acts through two layers: **route executors** (one per route, injected into the engine) and a set
+ZLens acts through two layers: **route executors** (one per route, injected into the engine) and a set
 of **read-only grounding tools** the executors compose. Everything the agent *acts* with is
 governed, read-only, and preview-bounded.
 

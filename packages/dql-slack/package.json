@@ -1,7 +1,7 @@
 {
-  "name": "@duckcodeailabs/dql-slack",
+  "name": "@zlens/slack",
   "version": "1.17.3",
-  "description": "DQL Slack front-end: slash-command bot that answers via the block-first agent loop",
+  "description": "ZLens Slack front-end: slash-command bot that answers via the block-first agent loop",
   "license": "Apache-2.0",
   "type": "module",
   "main": "./dist/index.js",
@@ -37,9 +37,9 @@
     "access": "public"
   },
   "dependencies": {
-    "@duckcodeailabs/dql-agent": "workspace:*",
-    "@duckcodeailabs/dql-core": "workspace:*",
-    "@duckcodeailabs/dql-project": "workspace:*"
+    "@zlens/agent": "workspace:*",
+    "@zlens/core": "workspace:*",
+    "@zlens/project": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

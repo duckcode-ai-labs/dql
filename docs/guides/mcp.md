@@ -1,6 +1,6 @@
-# Connect DQL to an AI agent (MCP)
+# Connect ZLens to an AI agent (MCP)
 
-DQL ships an [MCP](https://modelcontextprotocol.io) server that gives any
+ZLens ships an [MCP](https://modelcontextprotocol.io) server that gives any
 MCP-capable agent **governed** access to your analytics: it answers from
 certified blocks when they exactly fit the question and clearly flags anything
 it has to generate. Point
@@ -16,13 +16,13 @@ they use:
 | Tier | Tools | Behavior |
 |---|---|---|
 | **front door** | `inspect_dql_project`, `ask_dql` | Verifies the project, refreshes local metadata/indexes, and returns the safe route: certified block, generated SQL preview, research, or clarify. |
-| **governed generation** | `answer_question`, `build_block_from_prompt` | DQL generates for you. `answer_question` runs DQL's own governed cascade end-to-end and returns the executed answer + rows + canonical trust label + a reviewable draft — the same engine and trust guards as the DQL web UI. `build_block_from_prompt` drafts a reusable block from a natural-language prompt (never auto-certified). Both need the runtime (`dql serve`). |
+| **governed generation** | `answer_question`, `build_block_from_prompt` | ZLens generates for you. `answer_question` runs ZLens's own governed cascade end-to-end and returns the executed answer + rows + canonical trust label + a reviewable draft — the same engine and trust guards as the ZLens web UI. `build_block_from_prompt` drafts a reusable block from a natural-language prompt (never auto-certified). Both need the runtime (`zlens serve`). |
 | **1 — certified** | `query_via_block`, `search_blocks`, `get_block` | Serves only `status = "certified"` blocks when the block grain exactly answers the question. Safe to ship. |
-| **2 — proposed (BYOSQL)** | `query_via_metadata`, `list_proposals`, `suggest_block`, `build_dql_block` | You author the read-only SQL; DQL grounds, validates, runs a bounded preview, returns `uncertified: true`, and saves a draft under `domains/<domain>/blocks/_drafts/` (domain-first layout) or `blocks/_drafts/` for human review. |
+| **2 — proposed (BYOSQL)** | `query_via_metadata`, `list_proposals`, `suggest_block`, `build_dql_block` | You author the read-only SQL; ZLens grounds, validates, runs a bounded preview, returns `uncertified: true`, and saves a draft under `domains/<domain>/blocks/_drafts/` (domain-first layout) or `blocks/_drafts/` for human review. |
 | **Apps** | `build_dql_app` | Creates or plans an app draft using certified tiles first and review-only placeholders for missing evidence. |
 | **support** | `certify`, `lineage_impact`, `list_metrics`, `list_dimensions`, `kg_search`, `feedback_record` | Governance checks, lineage tracing, the semantic layer, and feedback. |
 
-**Two ways to answer.** `answer_question` / `build_block_from_prompt` let DQL
+**Two ways to answer.** `answer_question` / `build_block_from_prompt` let ZLens
 generate for you with full UI parity (use these by default). The BYOSQL path
 (`ask_dql` → inspect → `query_via_metadata` with your own `SELECT`) is for when
 the agent wants to author the SQL itself. Either way, the server's instructions
@@ -41,7 +41,7 @@ For external agents, the preferred call order is:
 ## App chat with SDK providers
 
 The notebook and app chat runtime can also attach trusted remote MCP servers
-when OpenAI or Anthropic is the active provider. DQL still exposes its own
+when OpenAI or Anthropic is the active provider. ZLens still exposes its own
 governed tools first: certified block search/execution, DQL manifest search,
 dbt/source metadata, semantic context, runtime schema inspection, bounded SQL
 preview, draft block creation, and certification checks.
@@ -73,7 +73,7 @@ remote MCP servers or OpenAI connectors:
 }
 ```
 
-`trusted: true` is required before DQL attaches a remote MCP server. Use
+`trusted: true` is required before ZLens attaches a remote MCP server. Use
 provider filtering when a server should only be available to one SDK. OpenAI
 uses the Responses API `mcp` tool for remote servers and connectors; Anthropic
 uses the Messages API MCP connector for remote HTTP/SSE servers.
@@ -83,7 +83,7 @@ uses the Messages API MCP connector for remote HTTP/SSE servers.
 A server marked `"use": ["knowledge"]` is a **knowledge source**: a
 read-only document store (Confluence, a wiki, a notes server) that Ask and
 Research may read to explain a question's terms, and cite under the answer.
-DQL reads it with its **own** MCP client — it does not hand the server to a
+ZLens reads it with its **own** MCP client — it does not hand the server to a
 provider's hosted connector — so it works with every model: Anthropic,
 OpenAI, Bedrock, Vertex, Ollama and the subscription CLIs.
 
@@ -113,7 +113,7 @@ OpenAI, Bedrock, Vertex, Ollama and the subscription CLIs.
 - **Transport.** Streamable HTTP (`url`, https; plain http only on this
   machine), or stdio (`command`, `args`) for a local server started in the
   project folder.
-- **Tools.** DQL calls exactly two tools: the server's search (default
+- **Tools.** ZLens calls exactly two tools: the server's search (default
   `search` with `query`) and its page read (default `fetch` with `id`).
   `knowledge.searchArgs` / `fetchArgs` add fixed arguments (for example a
   site id). `allowedTools` narrows further. Nothing else on the server is
@@ -121,7 +121,7 @@ OpenAI, Bedrock, Vertex, Ollama and the subscription CLIs.
 - **Read-only.** A server that marks its search or fetch tool as one that
   writes (`readOnlyHint: false` or `destructiveHint: true`) is refused.
 - **Tool gate.** Every search and page read runs through the same tool gate
-  as DQL's other agent tools (a host's `tools` hook sees each call with the
+  as ZLens's other agent tools (a host's `tools` hook sees each call with the
   person asking). A page can be read only if a search in the same answer
   returned it.
 - `trusted: true` is required, as for chat servers. `use` defaults to
@@ -163,18 +163,18 @@ back from a model off this machine, Research's steps say **Team documents
 not read**, as Ask's do.
 
 **Who reads what.** Without a host, the project file's servers and tokens
-are used, with the model rule above. When DQL runs inside a host that signs people in (RFC 0010), the
+are used, with the model rule above. When ZLens runs inside a host that signs people in (RFC 0010), the
 host's `knowledgeSources` hook decides, per person, with that person's own
 token; without that hook such a host gets no knowledge sources.
 
 ## Run the server
 
-From a DQL project folder:
+From a ZLens project folder:
 
 ```bash
-dql mcp                 # stdio (default) — for clients that spawn a child process
-dql mcp --http          # loopback HTTP on 127.0.0.1 with a bearer token
-dql mcp test            # verify manifest, metadata, agent index, and MCP readiness
+zlens mcp                 # stdio (default) — for clients that spawn a child process
+zlens mcp --http          # loopback HTTP on 127.0.0.1 with a bearer token
+zlens mcp test            # verify manifest, metadata, agent index, and MCP readiness
 ```
 
 Most desktop clients use **stdio** and launch the command for you — you just
@@ -184,20 +184,20 @@ instead of spawning a process (it prints `http://127.0.0.1:<port>/mcp` and an
 
 > **Governed generation needs the runtime.** Routing and BYOSQL planning work
 > from the MCP server alone, but `answer_question`, `build_block_from_prompt`,
-> and any bounded query execution proxy to the local DQL runtime. Run it
+> and any bounded query execution proxy to the local ZLens runtime. Run it
 > alongside the MCP server:
 >
 > ```bash
-> dql serve               # in your project folder (defaults to http://127.0.0.1:3474)
+> zlens serve               # in your project folder (defaults to http://127.0.0.1:3474)
 > ```
 >
-> `dql mcp test` reports whether the runtime is reachable (an advisory check —
+> `zlens mcp test` reports whether the runtime is reachable (an advisory check —
 > stdio routing still works without it). If a governed tool can't reach the
-> runtime it returns a clear "start `dql serve`" error instead of failing
+> runtime it returns a clear "start `zlens serve`" error instead of failing
 > silently. Point tools at a non-default runtime with the `serverUrl` argument
-> or the `DQL_RUNTIME_URL` env var.
+> or the `ZLENS_RUNTIME_URL` env var.
 
-> **Project path matters.** `dql mcp` resolves the project from its working
+> **Project path matters.** `zlens mcp` resolves the project from its working
 > directory. Clients that don't launch from your project folder (Claude
 > Desktop, Cursor, Codex) need the project path passed as the last argument —
 > shown below as `/abs/path/to/your/dql`.
@@ -206,20 +206,20 @@ instead of spawning a process (it prints `http://127.0.0.1:<port>/mcp` and an
 
 ## Claude Code
 
-Run from your DQL project folder:
+Run from your ZLens project folder:
 
 ```bash
-dql connect claude-code
+zlens connect claude-code
 ```
 
-This writes project-local `.mcp.json` and adds DQL guidance to `CLAUDE.md`.
+This writes project-local `.mcp.json` and adds ZLens guidance to `CLAUDE.md`.
 Open Claude Code in the same project and run `/mcp` to confirm the `dql` server
 is loaded. Then ask a data question — Claude routes through `ask_dql`, answers
 from certified blocks when the grain fits, and flags generated SQL as
 uncertified.
 
 Starter projects ignore `.mcp.json` because it can contain local machine paths.
-Commit `CLAUDE.md` only when you want to share the DQL agent guidance with the
+Commit `CLAUDE.md` only when you want to share the ZLens agent guidance with the
 team.
 
 ## Claude Desktop
@@ -231,7 +231,7 @@ Settings → Developer → **Edit Config** opens `claude_desktop_config.json`. A
   "mcpServers": {
     "dql": {
       "command": "npx",
-      "args": ["-y", "@duckcodeailabs/dql-cli", "mcp", "/abs/path/to/your/dql"]
+      "args": ["-y", "zlens", "mcp", "/abs/path/to/your/dql"]
     }
   }
 }
@@ -239,10 +239,10 @@ Settings → Developer → **Edit Config** opens `claude_desktop_config.json`. A
 
 Restart Claude Desktop; "dql" appears in the tools menu.
 
-Or let DQL write/update that config:
+Or let ZLens write/update that config:
 
 ```bash
-dql connect claude-desktop /abs/path/to/your/dql
+zlens connect claude-desktop /abs/path/to/your/dql
 ```
 
 ## Cursor
@@ -255,7 +255,7 @@ projects):
   "mcpServers": {
     "dql": {
       "command": "npx",
-      "args": ["-y", "@duckcodeailabs/dql-cli", "mcp", "/abs/path/to/your/dql"]
+      "args": ["-y", "zlens", "mcp", "/abs/path/to/your/dql"]
     }
   }
 }
@@ -266,7 +266,7 @@ Enable it under Cursor → Settings → MCP.
 Or generate the project config:
 
 ```bash
-dql connect cursor
+zlens connect cursor
 ```
 
 ## Codex (OpenAI Codex CLI)
@@ -276,28 +276,28 @@ Add to the trusted project's `.codex/config.toml`:
 ```toml
 [mcp_servers.dql]
 command = "npx"
-args = ["-y", "@duckcodeailabs/dql-cli", "mcp", "/abs/path/to/your/dql"]
+args = ["-y", "zlens", "mcp", "/abs/path/to/your/dql"]
 ```
 
-Or let DQL add the block and DQL guidance in `AGENTS.md`:
+Or let ZLens add the block and ZLens guidance in `AGENTS.md`:
 
 ```bash
-dql connect codex
+zlens connect codex
 ```
 
-Open the DQL project in Codex after connecting. If Codex asks whether to trust
+Open the ZLens project in Codex after connecting. If Codex asks whether to trust
 the project, trust it so the project-local MCP config is loaded.
 
 Starter projects ignore `.codex/` because it can contain local machine paths.
-Commit `AGENTS.md` only when you want to share the DQL agent guidance with the
+Commit `AGENTS.md` only when you want to share the ZLens agent guidance with the
 team.
 
 ## Configure all local clients
 
-From the DQL project folder:
+From the ZLens project folder:
 
 ```bash
-dql connect all
+zlens connect all
 ```
 
 This writes project config for Claude Code, Codex, and Cursor, and updates
@@ -307,7 +307,7 @@ want one client configured.
 After connecting any client, run:
 
 ```bash
-dql mcp test /abs/path/to/your/dql
+zlens mcp test /abs/path/to/your/dql
 ```
 
 ## Any other MCP client
@@ -316,11 +316,11 @@ The pattern is identical — a stdio server you launch with:
 
 ```
 command: npx
-args:    -y @duckcodeailabs/dql-cli mcp /abs/path/to/your/dql
+args:    -y zlens mcp /abs/path/to/your/dql
 ```
 
-If your DQL CLI is installed locally in the project, you can also use
-`node ./node_modules/@duckcodeailabs/dql-cli/dist/index.js mcp`.
+If your ZLens CLI is installed locally in the project, you can also use
+`node ./node_modules/zlens/dist/index.js mcp`.
 
 ---
 
@@ -330,17 +330,17 @@ Build the knowledge graph and start the runtime first (governed generation +
 execution proxy to it):
 
 ```bash
-dql agent reindex       # once, to build .dql/cache indexes
-dql serve               # leave running; governed tools call it
+zlens agent reindex       # once, to build .dql/cache indexes
+zlens serve               # leave running; governed tools call it
 ```
 
 Then, after wiring any client:
 
 **Ask a governed question** — *"What was our revenue last month?"* A certified
 block match → the agent answers from it and cites it (trust label
-**Certified**). No exact match, or a deeper/custom-grain question → DQL's
+**Certified**). No exact match, or a deeper/custom-grain question → ZLens's
 governed cascade generates and executes SQL, returns the rows flagged
-**Review-required**, and files a reviewable draft. With `answer_question` DQL
+**Review-required**, and files a reviewable draft. With `answer_question` ZLens
 does this for you end-to-end; with the BYOSQL path the agent authors the SQL and
 runs it through `query_via_metadata`.
 
@@ -350,10 +350,10 @@ outputs, SQL) as a **review-required** draft under `blocks/_drafts/` — never
 auto-certified — and returns the Certifier verdict. Review it, then:
 
 ```bash
-dql certify --from-draft blocks/_drafts/<slug>.dql
+zlens certify --from-draft blocks/_drafts/<slug>.dql
 ```
 
-Same governed engine, same trust labels as the DQL web UI — the answer you get
+Same governed engine, same trust labels as the ZLens web UI — the answer you get
 from an agent is the answer you'd get from the app.
 
 See [tutorial 04 — Agentic analytics](../tutorials/04-agentic-analytics.md) for

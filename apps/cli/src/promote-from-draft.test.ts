@@ -82,7 +82,7 @@ function writeDraftAt(
   );
 }
 
-describe('promoteFromDraft (dql certify --from-draft)', () => {
+describe('promoteFromDraft (zlens certify --from-draft)', () => {
   let tmp: string;
 
   beforeEach(() => {

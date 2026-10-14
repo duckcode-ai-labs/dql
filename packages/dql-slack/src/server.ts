@@ -21,10 +21,11 @@ import {
   pickProvider,
   type AgentAnswer,
   type ProviderName,
-} from '@duckcodeailabs/dql-agent';
+} from '@zlens/agent';
 import { verifySlackSignature } from './signature.js';
 import { formatAnswerForSlack } from './format.js';
 import { parseSlackAskScope, slackDomainDefaults, slackThreadId } from './scope.js';
+import { readEnv } from '@zlens/core';
 
 export interface SlackServerOptions {
   /** Project root for the agent KG + Skills. */
@@ -208,7 +209,7 @@ async function runDispatch(
     return formatAnswerForSlack(
       {
         kind: 'no_answer',
-        text: `Lineage rendering in Slack is coming soon. For now run \`dql lineage --block ${arg}\` from the CLI.`,
+        text: `Lineage rendering in Slack is coming soon. For now run \`zlens lineage --block ${arg}\` from the CLI.`,
         citations: [],
         considered: [],
       },
@@ -216,10 +217,10 @@ async function runDispatch(
     );
   }
 
-  // Default: ask. The running DQL runtime owns the answer (routing, the V2
+  // Default: ask. The running ZLens runtime owns the answer (routing, the V2
   // lane, the gates, trust); the bot is a thin transport to it, exactly as the
   // MCP server is.
-  const scope = parseSlackAskScope(arg, { channelId, defaults: slackDomainDefaults(process.env.DQL_SLACK_DOMAIN_DEFAULTS) });
+  const scope = parseSlackAskScope(arg, { channelId, defaults: slackDomainDefaults(readEnv('ZLENS_SLACK_DOMAIN_DEFAULTS')) });
   const result = await askRuntime(scope.question, userName, {
     ...(scope.domain ? { domain: scope.domain } : {}),
     ...(scope.purpose ? { purpose: scope.purpose } : {}),
@@ -231,7 +232,7 @@ async function runDispatch(
 /** POST one question to the local runtime and adapt the run for the formatter. */
 async function askRuntime(question: string, userName: string, scope: { domain?: string; purpose?: string; threadId?: string } = {}): Promise<AgentAnswer> {
   const workspaceContext = { ...(scope.domain ? { domain: scope.domain } : {}), ...(scope.purpose ? { purpose: scope.purpose } : {}) };
-  const base = (process.env.DQL_RUNTIME_URL ?? 'http://127.0.0.1:3474').replace(/\/$/, '');
+  const base = (readEnv('ZLENS_RUNTIME_URL') ?? 'http://127.0.0.1:3474').replace(/\/$/, '');
   let response: Response;
   try {
     response = await fetch(`${base}/api/agent-runs`, {
@@ -246,13 +247,13 @@ async function askRuntime(question: string, userName: string, scope: { domain?: 
   } catch (error) {
     return {
       kind: 'no_answer',
-      text: `The DQL runtime at ${base} is not reachable (${(error as Error).message}). Start it with \`dql serve\` or set DQL_RUNTIME_URL.`,
+      text: `The ZLens runtime at ${base} is not reachable (${(error as Error).message}). Start it with \`zlens serve\` or set ZLENS_RUNTIME_URL.`,
       citations: [],
       considered: [],
     };
   }
   if (!response.ok) {
-    return { kind: 'no_answer', text: `DQL runtime returned ${response.status}.`, citations: [], considered: [] };
+    return { kind: 'no_answer', text: `ZLens runtime returned ${response.status}.`, citations: [], considered: [] };
   }
   const payload = (await response.json().catch(() => ({}))) as {
     run?: { status?: string; trustState?: string; answer?: string; summary?: string; artifacts?: Array<{ payload?: { sql?: string; proposedSql?: string; dqlArtifact?: { source?: string } } }> };

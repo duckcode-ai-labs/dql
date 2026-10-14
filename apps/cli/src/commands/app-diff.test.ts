@@ -31,7 +31,7 @@ const edit = (path: string, change: (json: any) => void) => {
   writeFileSync(path, `${JSON.stringify(json, null, 2)}\n`);
 };
 
-describe('dql app diff (RFC 0008 step 10)', () => {
+describe('zlens app diff (RFC 0008 step 10)', () => {
   it('reviews working-tree changes to pages and alerts against HEAD', () => {
     const { repo, project } = repository();
     edit(pagePath(project), (page) => {

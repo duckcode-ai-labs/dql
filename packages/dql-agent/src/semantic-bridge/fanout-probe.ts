@@ -45,7 +45,7 @@ export async function probeSemanticJoinFanout(
       return {
         status: 'blocked',
         code: 'SEMANTIC_FANOUT_PROBE_UNPARSEABLE',
-        message: 'DQL did not execute this governed semantic answer because its join-safety probe did not return verifiable row counts. Check the declared relationship or run the metric through MetricFlow / dbt Cloud, then retry.',
+        message: 'ZLens did not execute this governed semantic answer because its join-safety probe did not return verifiable row counts. Check the declared relationship or run the metric through MetricFlow / dbt Cloud, then retry.',
       };
     }
     if (counts.joined <= counts.base) return { status: 'safe' };
@@ -66,7 +66,7 @@ export async function probeSemanticJoinFanout(
     return {
       status: 'blocked',
       code: 'SEMANTIC_FANOUT_PROBE_ERROR',
-      message: 'DQL did not execute this governed semantic answer because it could not verify join fanout before aggregation. Check the declared relationship or run the metric through MetricFlow / dbt Cloud, then retry.',
+      message: 'ZLens did not execute this governed semantic answer because it could not verify join fanout before aggregation. Check the declared relationship or run the metric through MetricFlow / dbt Cloud, then retry.',
     };
   }
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { DatasetDescriptor } from '@duckcodeailabs/dql-core/datasets/descriptor';
+import type { DatasetDescriptor } from '@zlens/core/datasets/descriptor';
 import type { AppBlockRecommendation, AppStudioBuildDraft, AppStudioDraftOperation } from '../../api/client';
 import {
   planDatasetSourceRebind,

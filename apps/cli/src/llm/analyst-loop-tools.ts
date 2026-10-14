@@ -1,9 +1,9 @@
-import type { AgentToolDefinition, AnswerLoopInput } from '@duckcodeailabs/dql-agent';
+import type { AgentToolDefinition, AnswerLoopInput } from '@zlens/agent';
 import {
   buildPreviewQueryTool,
   buildSearchValuesTool,
   buildSemanticStageTools,
-} from '@duckcodeailabs/dql-agent';
+} from '@zlens/agent';
 
 /**
  * The tools the analyst loop may call.

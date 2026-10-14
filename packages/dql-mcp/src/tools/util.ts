@@ -1,5 +1,5 @@
-import type { ManifestBlock } from '@duckcodeailabs/dql-core';
-import type { BlockRecord, BlockStatus } from '@duckcodeailabs/dql-project';
+import type { ManifestBlock } from '@zlens/core';
+import type { BlockRecord, BlockStatus } from '@zlens/project';
 
 /**
  * Adapt a ManifestBlock (what the compiler produces) into a BlockRecord

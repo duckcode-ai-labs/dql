@@ -21,7 +21,7 @@ import {
   type SnowflakeQueryExecutor,
   resolveRepoSource,
   semanticDimensionReference,
-} from '@duckcodeailabs/dql-core';
+} from '@zlens/core';
 
 export interface SemanticImportManifestObject {
   id: string;
@@ -215,7 +215,7 @@ export function syncSemanticImport(opts: {
 }): Promise<SemanticImportResult> {
   const manifest = loadSemanticImportManifest(opts.targetProjectRoot);
   if (!manifest) {
-    throw new Error('No semantic import manifest found. Run `dql semantic import <provider>` first.');
+    throw new Error('No semantic import manifest found. Run `zlens semantic import <provider>` first.');
   }
   const sourceConfig: SemanticLayerProviderConfig = {
     provider: manifest.provider,
@@ -849,7 +849,7 @@ export async function computeSyncDiff(opts: {
 }): Promise<SemanticSyncDiff> {
   const manifest = loadSemanticImportManifest(opts.targetProjectRoot);
   if (!manifest) {
-    throw new Error('No semantic import manifest found. Run `dql semantic import <provider>` first.');
+    throw new Error('No semantic import manifest found. Run `zlens semantic import <provider>` first.');
   }
 
   const sourceConfig: SemanticLayerProviderConfig = {

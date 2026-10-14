@@ -4,7 +4,7 @@ import { dirname, join } from 'node:path';
 
 /**
  * Guard against the class of silent shipping-config bug that broke `npm i -g
- * @duckcodeailabs/dql-cli@latest` for every user on Node 23/24: a too-tight
+ * @zlens/cli@latest` for every user on Node 23/24: a too-tight
  * `engines` cap plus a native dependency (better-sqlite3) old enough to lack
  * prebuilt binaries for their Node. These are invisible to normal unit tests, so
  * assert them here.
@@ -64,13 +64,15 @@ describe('release manifests stay installable on current Node', () => {
     expect(offenders).toEqual([]);
   });
 
-  it('publishes the dql executable contract (E2E-005)', () => {
-    const cli = manifests.find((manifest) => manifest.name === '@duckcodeailabs/dql-cli');
+  it('publishes the zlens executable and the dql alias (E2E-005)', () => {
+    const cli = manifests.find((manifest) => manifest.name === '@zlens/cli');
     expect(cli).toBeDefined();
-    expect(cli?.pkg.bin).toEqual({ dql: './dist/index.js' });
+    expect(cli?.pkg.bin).toEqual({ zlens: './dist/index.js', dql: './dist/dql-alias.js' });
     expect(cli?.pkg.files).toContain('dist');
 
-    const sourceEntry = readFileSync(join(dirname(cli!.path), 'src', 'index.ts'), 'utf-8');
-    expect(sourceEntry.startsWith('#!/usr/bin/env node\n')).toBe(true);
+    for (const entry of ['index.ts', 'dql-alias.ts']) {
+      const source = readFileSync(join(dirname(cli!.path), 'src', entry), 'utf-8');
+      expect(source.startsWith('#!/usr/bin/env node\n')).toBe(true);
+    }
   });
 });

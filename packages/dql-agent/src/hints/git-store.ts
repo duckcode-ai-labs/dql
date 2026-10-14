@@ -27,7 +27,7 @@ import {
   writeFileSync,
 } from 'node:fs';
 import * as yaml from 'js-yaml';
-import { loadProjectConfig } from '@duckcodeailabs/dql-core';
+import { loadProjectConfig } from '@zlens/core';
 import { HintStore } from './store.js';
 import type {
   CorrectionTrace,
@@ -110,9 +110,9 @@ export interface RecordCorrectionTraceResult {
   hint: Hint;
 }
 
-/** An id DQL made (`trace_…`, `hint_…`): one file name in its folder, never a path. */
+/** An id ZLens made (`trace_…`, `hint_…`): one file name in its folder, never a path. */
 function fileId(id: string): string {
-  if (typeof id !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9_.:-]{0,199}$/.test(id) || id.includes('..')) throw new Error('Not an id DQL made.');
+  if (typeof id !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9_.:-]{0,199}$/.test(id) || id.includes('..')) throw new Error('Not an id ZLens made.');
   return id;
 }
 

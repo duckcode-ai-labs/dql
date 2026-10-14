@@ -210,13 +210,13 @@ function StoreStatusCard({ status, loading, error, t }: { status?: AskTraceStore
         ? 'Checking local trace recording…'
         : 'Local trace recording is unavailable.';
   const detail = error
-    ? 'Check that the local DQL runtime is running, then refresh. Existing Ask results remain available.'
+    ? 'Check that the local ZLens runtime is running, then refresh. Existing Ask results remain available.'
     : status?.available && status.recordingEnabled
       ? 'Traces are local and redacted. Full prompts, SQL, rows, provider responses, credentials, and file paths are not retained here.'
       : status?.reason === 'disabled'
         ? 'Enable local Ask trace recording in the project runtime, then run a new Ask.'
         : status?.reason === 'unsupported_schema'
-          ? 'Rebuild the local runtime or trace index to match this DQL version, then retry.'
+          ? 'Rebuild the local runtime or trace index to match this ZLens version, then retry.'
           : 'The runtime did not report a usable local trace store.';
   return (
     <section role={unavailable ? 'alert' : 'status'} style={{ display: 'flex', gap: 10, padding: '11px 13px', borderRadius: 10, border: `1px solid ${unavailable ? `${t.warning}55` : `${t.accent}33`}`, background: unavailable ? `${t.warning}0d` : `${t.accent}09` }}>

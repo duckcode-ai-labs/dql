@@ -6,7 +6,7 @@ import {
   warehouseRelationId,
   type TableDatasetProposal,
   type TableProfile,
-} from '@duckcodeailabs/dql-core';
+} from '@zlens/core';
 
 /**
  * Start from a table (RFC 0009, "15-minute first page"): the server side.
@@ -100,7 +100,7 @@ export async function listWarehouseTables(input: { projectRoot: string; driver: 
 export async function draftTableDataset(input: { table: WarehouseTableSummary; driver: string; run: RunSql }): Promise<{ proposal: TableDatasetProposal; rows: number }> {
   const proposal = proposeTableDataset({ table: input.table.name, relation: input.table.relation, columns: input.table.columns, ...(input.table.primaryKey ? { primaryKey: input.table.primaryKey } : {}) });
   if (!proposal.fields.length) {
-    throw new TableDatasetError('TABLE_HAS_NO_COLUMNS', `${input.table.name} has no columns DQL can read by name.`);
+    throw new TableDatasetError('TABLE_HAS_NO_COLUMNS', `${input.table.name} has no columns ZLens can read by name.`);
   }
   const profile = await profileTable({ relation: input.table.relation, columns: proposal.keyCandidates, driver: input.driver, run: input.run });
   return { proposal: applyTableProfile(proposal, profile, input.table.name), rows: profile.rows };

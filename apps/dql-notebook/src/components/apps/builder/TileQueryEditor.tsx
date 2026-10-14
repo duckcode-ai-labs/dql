@@ -4,12 +4,12 @@ import type {
   DatasetDescriptor,
   DatasetMeasureField,
   DatasetPhysicalField,
-} from '@duckcodeailabs/dql-core/datasets/descriptor';
+} from '@zlens/core/datasets/descriptor';
 import {
   tileQueryOutputAliases,
   type TileFilterOperator,
   type TileQuery,
-} from '@duckcodeailabs/dql-core/apps/tile-query';
+} from '@zlens/core/apps/tile-query';
 import {
   buildDatasetComparison,
   datasetComparisonDraftFromQuery,
@@ -238,7 +238,7 @@ export function TileQueryEditor({
         <div className="dataset-measure-list">
           {fields.measures.map((measure) => {
             const suggested = measure.status !== 'approved';
-            return <label key={measure.qualifiedId} className={suggested ? 'is-suggested' : undefined} title={suggested ? 'Suggested by DQL and not yet reviewed. Approve it in the Dataset definition to use it.' : undefined}>
+            return <label key={measure.qualifiedId} className={suggested ? 'is-suggested' : undefined} title={suggested ? 'Suggested by ZLens and not yet reviewed. Approve it in the Dataset definition to use it.' : undefined}>
               <input type="checkbox" checked={selectedMeasures.has(measure.name) || selectedMeasures.has(measure.qualifiedId)} disabled={disabled || suggested} onChange={() => toggleMeasure(measure)} />
               <span><strong>{humanize(measure.name)}</strong><small>{measure.aggregation.replace(/_/g, ' ')}{measure.format?.kind ? ` · ${measure.format.kind}` : ''}</small></span>
               {suggested ? <em className="dataset-field-badge">Suggested · needs review</em> : null}
@@ -307,7 +307,7 @@ export function TileQueryEditor({
         {query.comparison ? <small className="dataset-comparison-summary">Applied: {datasetComparisonSummary(query.comparison)}</small> : null}
       </fieldset>
     </> : <fieldset className="dataset-detail-columns"><legend>Row detail columns</legend>
-      <small>Live source rows, ordered by the Dataset key. DQL rechecks the key on every run.</small>
+      <small>Live source rows, ordered by the Dataset key. ZLens rechecks the key on every run.</small>
       <div>{fields.filterable.map((field) => <label key={field.qualifiedId}><input type="checkbox" checked={(query.detailColumns ?? []).includes(field.name)} disabled={disabled} onChange={() => toggleDetailColumn(field)} /><span>{humanize(field.name)}</span><em>{field.role}</em></label>)}</div>
       <label className="dataset-detail-limit"><span>Maximum rows</span><input type="number" min={1} max={10000} value={typeof query.limit === 'number' ? query.limit : 100} disabled={disabled} onChange={(event) => change({ ...query, limit: Number(event.target.value) })} /></label>
     </fieldset>}

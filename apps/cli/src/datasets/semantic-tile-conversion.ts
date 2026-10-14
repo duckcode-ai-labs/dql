@@ -12,7 +12,7 @@ import {
   type SemanticTileConversionProvenanceV1,
   type TileFilterOperator,
   type TileQuery,
-} from '@duckcodeailabs/dql-core';
+} from '@zlens/core';
 
 /**
  * The conversion planner deliberately accepts a narrow, server-resolved
@@ -66,7 +66,7 @@ export function planSemanticTileConversion(input: {
     return refusal('legacy_semantic_snapshot_stale', 'The legacy semantic snapshot no longer matches the current governed Dataset source. Run a fresh legacy preview or keep the original tile.');
   }
   if (!semantic.definitionFingerprint.trim() || !semantic.id.trim()) {
-    return refusal('legacy_semantic_identity_incomplete', 'This legacy semantic tile has no complete immutable definition identity, so DQL cannot convert it safely.');
+    return refusal('legacy_semantic_identity_incomplete', 'This legacy semantic tile has no complete immutable definition identity, so ZLens cannot convert it safely.');
   }
   const model = input.source.semanticModelName.trim();
   if (!model || !semantic.semanticModelRefs.length || semantic.semanticModelRefs.length !== 1 || semantic.semanticModelRefs[0] !== model) {
@@ -82,7 +82,7 @@ export function planSemanticTileConversion(input: {
     return refusal('legacy_semantic_intent_unsupported', 'This legacy semantic tile has dashboard filter or parameter bindings that the current Dataset conversion cannot represent exactly.');
   }
   if (semantic.dimensions?.length && semantic.limit === undefined) {
-    return refusal('legacy_semantic_intent_unsupported', 'A grouped legacy semantic tile needs an explicit result limit before DQL can prove an exact bounded conversion.');
+    return refusal('legacy_semantic_intent_unsupported', 'A grouped legacy semantic tile needs an explicit result limit before ZLens can prove an exact bounded conversion.');
   }
 
   const measures = semantic.metrics.flatMap((metric, index) => {

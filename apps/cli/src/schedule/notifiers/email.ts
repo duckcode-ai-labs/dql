@@ -1,4 +1,5 @@
 import type { Notifier, NotifierPayload } from '../types.js';
+import { readEnv } from '@zlens/core';
 
 export function createEmailNotifier(): Notifier {
   return {
@@ -7,8 +8,8 @@ export function createEmailNotifier(): Notifier {
       if (recipients.length === 0) {
         return { delivered: false, error: 'no email recipients provided' };
       }
-      const smtpUrl = process.env.DQL_SMTP_URL;
-      const from = process.env.DQL_SMTP_FROM ?? 'dql@localhost';
+      const smtpUrl = readEnv('ZLENS_SMTP_URL');
+      const from = readEnv('ZLENS_SMTP_FROM') ?? 'dql@localhost';
 
       const subject = buildSubject(payload);
       // Digest runs deliver the rendered HTML + markdown sibling as the email
@@ -17,12 +18,12 @@ export function createEmailNotifier(): Notifier {
       const htmlBody = payload.html;
 
       if (!smtpUrl) {
-        console.log(`[dql schedule] email stub — no DQL_SMTP_URL set`);
+        console.log(`[zlens schedule] email stub — no ZLENS_SMTP_URL set`);
         console.log(`  to: ${recipients.join(', ')}`);
         console.log(`  subject: ${subject}`);
         if (htmlBody) console.log(`  html: ${htmlBody.length} chars`);
         console.log(textBody);
-        return { delivered: false, error: 'DQL_SMTP_URL not set (stub mode)' };
+        return { delivered: false, error: 'ZLENS_SMTP_URL not set (stub mode)' };
       }
 
       try {

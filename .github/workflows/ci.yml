@@ -31,11 +31,11 @@ jobs:
       # --continue: Turbo otherwise stops every other package's tests at the
       # first failing package, so one failure hides the next. The job still
       # fails if any package fails.
-      # DQL_AGENT_TEST_LANE=ordinary: dql-agent runs only its ordinary lane
+      # ZLENS_AGENT_TEST_LANE=ordinary: dql-agent runs only its ordinary lane
       # here; its heavy lane runs in the next step (see there).
       - run: pnpm test -- --continue
         env:
-          DQL_AGENT_TEST_LANE: ordinary
+          ZLENS_AGENT_TEST_LANE: ordinary
       # The dql-agent heavy lane (catalog.test.ts, project-state.test.ts)
       # builds 4,000-model indexes and asserts a wall-clock retrieval bound
       # (PERF-001/PERF-002). Inside `pnpm test` it shared the runner with the
@@ -44,12 +44,12 @@ jobs:
       # step above failed, so one red run reports both.
       - name: dql-agent heavy lane (alone)
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}
-        run: pnpm --filter @duckcodeailabs/dql-agent run test:heavy
+        run: pnpm --filter @zlens/agent run test:heavy
 
-  # --- create-dql-app smoke test ---
+  # --- create-zlens-app smoke test ---
   # Guards the "5 minutes to first dashboard" demo gate.
   scaffold-smoke:
-    name: create-dql-app smoke
+    name: create-zlens-app smoke
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -61,7 +61,7 @@ jobs:
   # --- Docker quickstart: the documented `docker compose up` must start ---
   # Builds the image from the compose file and checks /api/health with the
   # server token the quickstart tells users to set. A non-loopback binding
-  # without DQL_SERVER_TOKEN makes the container exit, so this fails if the
+  # without ZLENS_SERVER_TOKEN makes the container exit, so this fails if the
   # compose file or the docs drift from the runtime.
   docker-image:
     name: docker image health
@@ -70,7 +70,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: build and start with docker compose
         env:
-          DQL_SERVER_TOKEN: ci-health-check-token
+          ZLENS_SERVER_TOKEN: ci-health-check-token
         run: docker compose up -d --build notebook
       - name: wait for /api/health
         run: |
@@ -87,12 +87,12 @@ jobs:
       - name: container logs
         if: ${{ failure() }}
         env:
-          DQL_SERVER_TOKEN: ci-health-check-token
+          ZLENS_SERVER_TOKEN: ci-health-check-token
         run: docker compose logs notebook
       - name: stop
         if: ${{ always() }}
         env:
-          DQL_SERVER_TOKEN: ci-health-check-token
+          ZLENS_SERVER_TOKEN: ci-health-check-token
         run: docker compose down
 
   # --- docs: verify every relative markdown link under docs/ resolves ---
@@ -107,11 +107,11 @@ jobs:
       - name: check relative links in docs/
         run: node scripts/check-doc-links.mjs
 
-  # --- dql fmt --check across the repo ---
+  # --- zlens fmt --check across the repo ---
   # Gates canonical .dql serialization — catches whitespace churn before
   # it reaches main.
   format-check:
-    name: dql fmt --check
+    name: zlens fmt --check
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -122,7 +122,7 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
-      - name: dql fmt --check
+      - name: zlens fmt --check
         run: |
           set -e
           shopt -s globstar nullglob
@@ -147,7 +147,7 @@ jobs:
 
   # --- Golden answer-routing eval ---
   # CI-safe W4.1 gate: deterministic router eval over certified, generated, and
-  # safe-refusal cases. Deeper `dql agent eval --execute` suites can run in
+  # safe-refusal cases. Deeper `zlens agent eval --execute` suites can run in
   # credentialed/project CI, but this keeps every PR honest without live AI keys.
   golden-eval:
     name: golden eval (router)
@@ -161,7 +161,7 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
-      - name: dql eval golden fixtures
+      - name: zlens eval golden fixtures
         run: |
           node apps/cli/dist/index.js eval apps/cli/test/fixtures/lineage-app \
             --format json \
@@ -193,10 +193,10 @@ jobs:
       - name: generate 4,000-model synthetic dbt project
         run: node scripts/bench/gen-dbt-project.mjs --models 4000 --out /tmp/stress
       - name: run benchmark (gates cold <30s, warm <2s)
-        run: DQL_CLI="node $PWD/apps/cli/dist/index.js" node scripts/bench/run-bench.mjs /tmp/stress
+        run: ZLENS_CLI="node $PWD/apps/cli/dist/index.js" node scripts/bench/run-bench.mjs /tmp/stress
 
   # --- Real-browser E2E (notebook smoke journeys) ---
-  # Drives the BUILT `dql notebook` CLI in headless Chromium on every PR and
+  # Drives the BUILT `zlens notebook` CLI in headless Chromium on every PR and
   # push (AGENTS.md: Vite-only proof is not acceptance). The suite's global
   # setup seeds a temp copy of the jaffle fixture and starts the server with
   # cassette replay, so no live model is ever called.
@@ -212,8 +212,8 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
-      - run: pnpm -F @duckcodeailabs/dql-notebook-app exec playwright install --with-deps chromium
-      - run: pnpm -F @duckcodeailabs/dql-notebook-app test:e2e
+      - run: pnpm -F @zlens/notebook-app exec playwright install --with-deps chromium
+      - run: pnpm -F @zlens/notebook-app test:e2e
         env:
           CI: "true"
           E2E_SKIP_BUILD: "1"

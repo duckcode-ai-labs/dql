@@ -17,12 +17,12 @@
  *
  * A page's published editions (scheduled runs) are kept apart, with no
  * figures: only when the last one ran and a fingerprint of what it showed,
- * so DQL can tell a new edition from a repeat.
+ * so ZLens can tell a new edition from a repeat.
  */
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { bindingCaption, figureLabel, formatStoryValue, type StoryBinding, type StoryBindingCatalog } from '@duckcodeailabs/dql-core';
+import { bindingCaption, figureLabel, formatStoryValue, type StoryBinding, type StoryBindingCatalog } from '@zlens/core';
 import type { DqlFollow, DqlPrincipal } from '../host/request-context.js';
 
 export interface HomeFigure {

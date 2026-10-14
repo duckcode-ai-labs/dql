@@ -3,7 +3,7 @@ import type { Server } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import type { ConnectionConfig, QueryExecutor, QueryResult } from '@duckcodeailabs/dql-connectors';
+import type { ConnectionConfig, QueryExecutor, QueryResult } from '@zlens/connectors';
 import { EXPORT_MAX_ROWS, startLocalServer } from '../local-runtime.js';
 
 /** A file from an export is the whole result (up to a maximum), never the screen's first 500 rows without a word. */

@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { tmpdir } from 'node:os';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
-import { DataLexContractRegistry } from '@duckcodeailabs/dql-core';
+import { DataLexContractRegistry } from '@zlens/core';
 
 import { buildDataLexJoinGuidance, queryViaMetadata } from '../query-via-metadata.js';
 import { makeCtx } from './_helpers.js';

@@ -11,8 +11,8 @@ import {
   type DatasetPhysicalField,
   type ManifestBlock,
   type MetricCapabilityContract,
-} from '@duckcodeailabs/dql-core';
-import { parseDatasetAggregateExpression } from '@duckcodeailabs/dql-core/datasets/aggregate-expression.node';
+} from '@zlens/core';
+import { parseDatasetAggregateExpression } from '@zlens/core/datasets/aggregate-expression.node';
 
 /** Optional reviewed portable proof registry retained for source compatibility. */
 export const DATASET_PROOF_RELATIVE_PATH = 'datasets/proofs.json';

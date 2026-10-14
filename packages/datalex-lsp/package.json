@@ -1,5 +1,5 @@
 {
-  "name": "@duckcodeailabs/datalex-lsp",
+  "name": "@zlens/datalex-lsp",
   "version": "0.2.0",
   "description": "DataLex Language Server Protocol implementation — schema-aware diagnostics for *.model.yaml files",
   "license": "Apache-2.0",

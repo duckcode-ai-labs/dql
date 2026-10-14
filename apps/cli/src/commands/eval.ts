@@ -1,5 +1,5 @@
 /**
- * `dql eval` — Routing-accuracy harness for the DQL answer agent.
+ * `zlens eval` — Routing-accuracy harness for the DQL answer agent.
  *
  * Replays a golden set of questions through the EXISTING agent router
  * (`planAgentAnswer`) and scores how well DQL routes each question:
@@ -18,12 +18,12 @@
  * warehouse and never changes routing, the manifest schema, or the DQL language.
  *
  * Usage:
- *   dql eval [path]                          Replay the golden set, print a report
- *   dql eval [path] --format json            Emit a machine-readable JSON report
- *   dql eval [path] --min-route-accuracy 0.9 Fail (exit 1) below this route accuracy
- *   dql eval [path] --min-refusal 0.8        Fail (exit 1) below this refusal recall
- *   dql eval [path] --min-answer-rate 0.9    Fail below answer rate on answerable cases
- *   dql eval [path] --no-examples            Skip manifest block examples (yaml only)
+ *   zlens eval [path]                          Replay the golden set, print a report
+ *   zlens eval [path] --format json            Emit a machine-readable JSON report
+ *   zlens eval [path] --min-route-accuracy 0.9 Fail (exit 1) below this route accuracy
+ *   zlens eval [path] --min-refusal 0.8        Fail (exit 1) below this refusal recall
+ *   zlens eval [path] --min-answer-rate 0.9    Fail below answer rate on answerable cases
+ *   zlens eval [path] --no-examples            Skip manifest block examples (yaml only)
  */
 
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -34,8 +34,8 @@ import {
   resolveDbtManifestPath,
   type DQLManifest,
   type ManifestBlock,
-} from '@duckcodeailabs/dql-core';
-import { planAgentAnswer, type PlanAgentAnswerResult } from '@duckcodeailabs/dql-agent';
+} from '@zlens/core';
+import { planAgentAnswer, type PlanAgentAnswerResult } from '@zlens/agent';
 import type { CLIFlags } from '../args.js';
 
 /** Spec-facing route labels. The router speaks certified/generated_sql/research/clarify. */
@@ -763,7 +763,7 @@ function formatCountAndShare(count: number, total: number): string {
   return `${count} (${share})`;
 }
 
-const GOLDEN_TEMPLATE = `# DQL golden eval set — replayed by \`dql eval\` through the real agent router.
+const GOLDEN_TEMPLATE = `# DQL golden eval set — replayed by \`zlens eval\` through the real agent router.
 # No warehouse queries, no LLM calls: routing, block selection, and question-plan
 # shape are scored deterministically, so this file is CI-gateable.
 #
@@ -818,7 +818,7 @@ function writeGoldenTemplate(projectRoot: string): void {
   }
   mkdirSync(evalDir, { recursive: true });
   writeFileSync(target, GOLDEN_TEMPLATE, 'utf-8');
-  console.log('Wrote eval/golden.yaml — uncomment and adapt the sample cases, then run `dql eval`.');
+  console.log('Wrote eval/golden.yaml — uncomment and adapt the sample cases, then run `zlens eval`.');
 }
 
 export async function runEval(
@@ -832,7 +832,7 @@ export async function runEval(
 
   if (!existsSync(join(projectRoot, 'dql.config.json'))) {
     console.error(
-      'No DQL project found (missing dql.config.json). Run from a project root or pass a project path.',
+      'No ZLens project found (missing dql.config.json). Run from a project root or pass a project path.',
     );
     process.exitCode = 1;
     return;
@@ -870,13 +870,13 @@ export async function runEval(
 function printReport(report: EvalReport): void {
   const { results, scores, distributions } = report;
 
-  console.log('\n  DQL Eval — routing accuracy');
+  console.log('\n  ZLens Eval — routing accuracy');
   console.log('  ' + '='.repeat(50));
 
   if (results.length === 0) {
     console.log('\n  No eval cases found.');
     console.log('  Add `examples = [{ question = "..." }]` to certified blocks,');
-    console.log('  or create eval/*.yaml cases, then run `dql compile` and retry.\n');
+    console.log('  or create eval/*.yaml cases, then run `zlens compile` and retry.\n');
     return;
   }
 

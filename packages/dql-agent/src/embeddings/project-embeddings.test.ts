@@ -40,12 +40,12 @@ describe('project embedding provider', () => {
 
   it('prefers an explicit project setting over the environment', () => {
     const root = project({ ai: { embeddings: { provider: 'ollama', endpoint: 'http://project:11434', model: 'project-model' } } });
-    const provider = projectEmbeddingProvider(root, { DQL_OLLAMA_EMBED_URL: 'http://env:11434', DQL_OLLAMA_EMBED_MODEL: 'env-model' });
+    const provider = projectEmbeddingProvider(root, { ZLENS_OLLAMA_EMBED_URL: 'http://env:11434', ZLENS_OLLAMA_EMBED_MODEL: 'env-model' });
     expect(provider.id).toContain('project-model');
   });
 
   it('still honours the environment when the project says nothing', () => {
-    const provider = projectEmbeddingProvider(project(), { DQL_OLLAMA_EMBED_URL: 'http://env:11434', DQL_OLLAMA_EMBED_MODEL: 'env-model' });
+    const provider = projectEmbeddingProvider(project(), { ZLENS_OLLAMA_EMBED_URL: 'http://env:11434', ZLENS_OLLAMA_EMBED_MODEL: 'env-model' });
     expect(provider.id).toContain('env-model');
   });
 

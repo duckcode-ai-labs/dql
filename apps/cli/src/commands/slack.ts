@@ -1,7 +1,7 @@
 /**
- * `dql slack serve` — boot the Slack slash-command bot.
+ * `zlens slack serve` — boot the Slack slash-command bot.
  *
- *   dql slack serve [--port 3479] [--provider claude|openai|gemini|ollama]
+ *   zlens slack serve [--port 3479] [--provider claude|openai|gemini|ollama]
  *
  * Reads `SLACK_SIGNING_SECRET` (required) + `SLACK_BOT_TOKEN` (optional, only
  * needed for outbound posts beyond response_url replies). The bot answers
@@ -18,20 +18,20 @@ export async function runSlack(
   flags: CLIFlags,
 ): Promise<void> {
   if (sub !== 'serve') {
-    throw new Error('Usage: dql slack serve [--port 3479] [--provider claude|openai|gemini|ollama]');
+    throw new Error('Usage: zlens slack serve [--port 3479] [--provider claude|openai|gemini|ollama]');
   }
   const projectRoot = findProjectRoot(process.cwd());
   const signingSecret = process.env.SLACK_SIGNING_SECRET;
   if (!signingSecret) {
     throw new Error(
-      'SLACK_SIGNING_SECRET is required. Set it in your environment before running `dql slack serve`.',
+      'SLACK_SIGNING_SECRET is required. Set it in your environment before running `zlens slack serve`.',
     );
   }
   const port = parsePort((flags as unknown as { port?: number | string | null }).port);
   const provider = (flags as { provider?: string }).provider as
     | 'claude' | 'openai' | 'gemini' | 'ollama' | undefined;
 
-  const { startSlackServer } = await import('@duckcodeailabs/dql-slack');
+  const { startSlackServer } = await import('@zlens/slack');
   const server = await startSlackServer({
     projectRoot,
     signingSecret,

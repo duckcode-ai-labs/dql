@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { checkCanvasHtml } from '@duckcodeailabs/dql-core/apps/canvas-page';
-import type { StoryBindingCatalog } from '@duckcodeailabs/dql-core/apps/story-bindings';
+import { checkCanvasHtml } from '@zlens/core/apps/canvas-page';
+import type { StoryBindingCatalog } from '@zlens/core/apps/story-bindings';
 import type { DashboardCanvasV1 } from '../../../api/client';
 import type { CanvasFrameEditing } from '../CanvasPageFrame';
 import { CanvasLayoutSurface } from './CanvasLayoutSurface';

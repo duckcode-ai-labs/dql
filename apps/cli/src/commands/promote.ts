@@ -8,7 +8,7 @@ import {
   loadDashboardDocument,
   parseAppDocument,
   parseDashboardDocument,
-} from '@duckcodeailabs/dql-core';
+} from '@zlens/core';
 import type { CLIFlags } from '../args.js';
 import { findProjectRoot } from '../local-runtime.js';
 
@@ -16,14 +16,14 @@ type PromotionKind = 'notebook' | 'app' | 'dashboard';
 
 export async function runPromote(kind: string | null, rest: string[], flags: CLIFlags): Promise<void> {
   if (kind !== 'notebook' && kind !== 'app' && kind !== 'dashboard') {
-    throw new Error('Usage: dql promote <notebook|app|dashboard> <path-or-id> --to shared');
+    throw new Error('Usage: zlens promote <notebook|app|dashboard> <path-or-id> --to shared');
   }
   if (flags.to !== 'shared') {
     throw new Error('Promotion currently supports only --to shared');
   }
   const target = rest[0];
   if (!target) {
-    throw new Error(`Usage: dql promote ${kind} <path-or-id> --to shared`);
+    throw new Error(`Usage: zlens promote ${kind} <path-or-id> --to shared`);
   }
   const projectRoot = findProjectRoot(process.cwd());
   const result = promoteArtifact(projectRoot, kind, target);
@@ -94,7 +94,7 @@ function promoteApp(projectRoot: string, appId: string) {
 function promoteDashboard(projectRoot: string, target: string) {
   const [appId, dashboardId] = target.split('/');
   if (!appId || !dashboardId) {
-    throw new Error('Usage: dql promote dashboard <app-id>/<dashboard-id> --to shared');
+    throw new Error('Usage: zlens promote dashboard <app-id>/<dashboard-id> --to shared');
   }
   const dashboardPath = resolveDashboardPath(projectRoot, appId, dashboardId);
   const source = readFileSync(dashboardPath, 'utf-8');
@@ -202,7 +202,7 @@ const LOCAL_ONLY_KEYS = new Set([
 function resolveProjectPath(projectRoot: string, target: string): string {
   const abs = resolve(target);
   if (abs === projectRoot || abs.startsWith(`${projectRoot}/`)) return abs;
-  if (isAbsolute(target)) throw new Error(`Path is outside this DQL project: ${target}`);
+  if (isAbsolute(target)) throw new Error(`Path is outside this ZLens project: ${target}`);
   return join(projectRoot, target);
 }
 

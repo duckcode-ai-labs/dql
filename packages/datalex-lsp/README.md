@@ -1,8 +1,8 @@
-# `@duckcodeailabs/datalex-lsp`
+# `@zlens/datalex-lsp`
 
 Language Server Protocol implementation for DataLex `*.model.yaml`,
 `*.diagram.yaml`, and `*.relationship.yaml` files. Pairs with the existing
-[`@duckcodeailabs/dql-lsp`](../dql-lsp) so both halves of the
+[`@zlens/dql-lsp`](../dql-lsp) so both halves of the
 [manifest-spec](https://github.com/duckcode-ai/manifest-spec) interop pattern
 have schema-aware diagnostics in editors.
 
@@ -26,7 +26,7 @@ have schema-aware diagnostics in editors.
 ## Install
 
 ```bash
-npm install -g @duckcodeailabs/datalex-lsp
+npm install -g @zlens/datalex-lsp
 ```
 
 Then point your editor at the `datalex-lsp` binary.

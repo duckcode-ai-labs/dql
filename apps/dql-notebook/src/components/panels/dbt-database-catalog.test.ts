@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { DbtNodeAuthoringDetail } from '@duckcodeailabs/dql-core';
+import type { DbtNodeAuthoringDetail } from '@zlens/core';
 import {
   databaseObjectDisplayName,
   databaseObjectNamespace,

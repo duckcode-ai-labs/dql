@@ -3,15 +3,15 @@ import type { Server } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createAnalyticalFailure } from '@duckcodeailabs/dql-agent';
-import type { QueryExecutor } from '@duckcodeailabs/dql-connectors';
+import { createAnalyticalFailure } from '@zlens/agent';
+import type { QueryExecutor } from '@zlens/connectors';
 import { startLocalServer } from '../local-runtime.js';
 import { saveProviderSettings } from '../settings/provider-settings.js';
 import type { DqlPrincipal } from './request-context.js';
 
 /**
  * RFC 0010 HH-14 on the repair route: an answer repaired after a failed run is review-required, so a person the host
- * keeps needs-review figures from gets the repaired run without its values, and DQL stores it that way, as it does an
+ * keeps needs-review figures from gets the repaired run without its values, and ZLens stores it that way, as it does an
  * Ask answer. With figures shown, the repaired rows are there (the control).
  */
 const priya: DqlPrincipal = { id: 'u-priya', kind: 'person', email: 'priya@harbor.example', source: 'host' };

@@ -5,10 +5,10 @@ type OwnedRecord = { id: string; ownerId?: string };
 /**
  * Answers belong to the person who asked (RFC 0010). With a host, every run a
  * signed-in person starts records them as its owner, and reading a run
- * someone else asked answers "not found" wherever DQL reads it: the run
+ * someone else asked answers "not found" wherever ZLens reads it: the run
  * routes, traces, repair, follow-ups and Research. A host person also cannot
  * see runs recorded before the host (they have no owner). A request the host
- * names no one for (`null`) reads none. Without a host (`dql notebook`)
+ * names no one for (`null`) reads none. Without a host (`zlens notebook`)
  * nothing changes.
  */
 export function withRunOwnership<T extends object>(store: T, ownerOf: () => RecordOwner): T {

@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { dirname, join } from 'node:path';
-import type { DqlArtifactFilter, DqlArtifactOrderBy, DqlArtifactReference } from '@duckcodeailabs/dql-core';
+import type { DqlArtifactFilter, DqlArtifactOrderBy, DqlArtifactReference } from '@zlens/core';
 import { resolveLocalOwner } from './identity.js';
 
 export type GeneratedDraftSourceDqlArtifact = DqlArtifactReference;
@@ -322,7 +322,7 @@ function renderGeneratedDraft(rec: GeneratedDraftRecord, draftPath: string): str
     // and contract ownership before promotion.
     //
     // Promotion path:
-    //   dql certify --from-draft ${draftPath} \\
+    //   zlens certify --from-draft ${draftPath} \\
     //               --domain ${rec.proposedDomain ?? 'misc'} \\
     //               --contract ${rec.proposedContractId}@1 \\
     //               --owner you@example.com

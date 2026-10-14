@@ -27,7 +27,7 @@ import {
 } from './catalog.js';
 import { buildAnalysisQuestionPlan } from './analysis-planner.js';
 import { buildBlockBusinessFingerprint, buildBlockSqlFingerprints } from './block-fingerprints.js';
-import { resolveSemanticLayerWithDiagnostics, SemanticLayer, type DQLManifest } from '@duckcodeailabs/dql-core';
+import { resolveSemanticLayerWithDiagnostics, SemanticLayer, type DQLManifest } from '@zlens/core';
 import { recordCorrectionTrace, reviewHint } from '../hints/git-store.js';
 import { HashedTokenEmbeddingProvider } from '../embeddings/provider.js';
 import { defaultKgPath, reindexProject } from '../index.js';

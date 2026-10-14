@@ -8,5 +8,5 @@
  * environment variable read at module load, so this file sets it and imports
  * the harness.
  */
-process.env.DQL_ASK_GOLDEN_FIXTURE = 'office-golden';
+process.env.ZLENS_ASK_GOLDEN_FIXTURE = 'office-golden';
 await import('./ask-golden.test.js');

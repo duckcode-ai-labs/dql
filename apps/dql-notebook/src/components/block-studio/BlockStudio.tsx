@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { useQuery } from '@tanstack/react-query';
-import { renderSemanticBlockSource } from '@duckcodeailabs/dql-core/blocks';
+import { renderSemanticBlockSource } from '@zlens/core/blocks';
 import { AlertTriangle, Blocks, Bot, CheckCircle2, CheckSquare, ChevronLeft, ChevronRight, Code2, Database, FileInput, Loader2, MoreHorizontal, PanelRightOpen, Pencil, Play, Plus, Search, ShieldCheck, Sparkles, Square, Trash2, X, type LucideIcon } from 'lucide-react';
 import { hostReadOnly, readOnlyReason, useHostUi } from '../../host/host-ui';
 import { api, DqlApiError, type BlockCertificationOperationResult } from '../../api/client';
@@ -911,9 +911,9 @@ export function BlockStudio() {
       }
       if (certificationAssessment?.ok) {
         setCertificationResult(null);
-        setRepairNotice(`${repaired.repairMode === 'ai' ? 'AI repaired' : 'DQL repaired'} the draft, and every certification check now passes. Review the changes, then click Certify.`);
+        setRepairNotice(`${repaired.repairMode === 'ai' ? 'AI repaired' : 'ZLens repaired'} the draft, and every certification check now passes. Review the changes, then click Certify.`);
       } else {
-        setRepairNotice(`${repaired.repairMode === 'ai' ? 'AI fixed' : 'DQL fixed'} the draft and the corrected block ran successfully. Review the changes, then save the draft.`);
+        setRepairNotice(`${repaired.repairMode === 'ai' ? 'AI fixed' : 'ZLens fixed'} the draft and the corrected block ran successfully. Review the changes, then save the draft.`);
       }
       setEditorMode('source');
       setResultTab('results');
@@ -2114,7 +2114,7 @@ export function BlockStudio() {
               onInsertDql={(payload) => { void addGeneratedDqlToBlockStudio(payload); }}
               answerFirstCards
               insertDqlActionLabel="Add to Block Studio"
-              emptyHint="Describe the governed block you need. DQL checks certified blocks and semantic metrics before creating a review-required draft."
+              emptyHint="Describe the governed block you need. ZLens checks certified blocks and semantic metrics before creating a review-required draft."
               examplePrompts={[
                 { label: 'Build from business question', prompt: 'Build a reusable governed DQL block for this business question: ' },
                 { label: 'Find reusable blocks', prompt: 'Which certified DQL blocks already answer this analysis, and what should be reused instead of duplicated?' },
@@ -2446,7 +2446,7 @@ function BlockIdentityDialog({
       <div style={{ width: 420, maxWidth: '100%', display: 'grid', gap: 14, padding: 18, borderRadius: 10, border: `1px solid ${t.headerBorder}`, background: t.cellBg, boxShadow: '0 24px 70px rgba(0,0,0,.35)' }}>
         <div>
           <div style={{ fontSize: 15, fontWeight: 850, color: t.textPrimary }}>Save governed block</div>
-          <div style={{ marginTop: 4, fontSize: 11, lineHeight: 1.45, color: t.textMuted }}>Name and owner are required. DQL will run the local governance checks and certify the block when they pass; otherwise it remains a draft with blockers.</div>
+          <div style={{ marginTop: 4, fontSize: 11, lineHeight: 1.45, color: t.textMuted }}>Name and owner are required. ZLens will run the local governance checks and certify the block when they pass; otherwise it remains a draft with blockers.</div>
         </div>
         <FieldLabel label="Block name" t={t}><input autoFocus value={name} onChange={(event) => setName(event.target.value)} style={importInputStyle(t)} /></FieldLabel>
         <FieldLabel label="Owner" t={t}><input value={owner} onChange={(event) => setOwner(event.target.value)} placeholder="analytics@company.com or team name" style={importInputStyle(t)} /></FieldLabel>
@@ -2592,7 +2592,7 @@ export function BlockStudioStartPage({
         <div>
           <div style={{ fontSize: 20, fontWeight: 800, color: t.textPrimary, fontFamily: t.font }}>Create DQL blocks</div>
           <div style={{ fontSize: 12, color: t.textMuted, lineHeight: 1.45, marginTop: 5, maxWidth: 560, fontFamily: t.font }}>
-            Start from SQL you already have, or describe the business asset you want DQL to build from project context.
+            Start from SQL you already have, or describe the business asset you want ZLens to build from project context.
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '7px 10px', border: `1px solid ${dbtReady ? '#2ea04340' : t.headerBorder}`, borderRadius: 8, background: dbtReady ? '#2ea0430d' : t.cellBg }}>
@@ -2606,7 +2606,7 @@ export function BlockStudioStartPage({
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 10 }}>
         <PrimaryStartAction
           title="Ask AI"
-          detail="Describe the business asset you need. DQL uses this domain's blocks, models, and semantic metrics to draft it."
+          detail="Describe the business asset you need. ZLens uses this domain's blocks, models, and semantic metrics to draft it."
           label="Describe block"
           Icon={Bot}
           onClick={onBuildDql}
@@ -2615,7 +2615,7 @@ export function BlockStudioStartPage({
         {onImport && (
           <PrimaryStartAction
             title="Import SQL"
-            detail="Paste scripts, upload files, or point at a folder. DQL analyzes candidates without writing block files until you save."
+            detail="Paste scripts, upload files, or point at a folder. ZLens analyzes candidates without writing block files until you save."
             label="Start import"
             Icon={FileInput}
             onClick={onImport}
@@ -2956,7 +2956,7 @@ function VisualParameterEditor({
         <div style={{ fontSize: 11, color: t.textMuted, lineHeight: 1.45 }}>
           Add a values-only input once, then reuse this block for a different period, region, customer set, or limit.
           {kind === 'custom'
-            ? <> Use <code>{'${parameter_name}'}</code> in SQL where the value belongs; DQL always binds it safely.</>
+            ? <> Use <code>{'${parameter_name}'}</code> in SQL where the value belongs; ZLens always binds it safely.</>
             : ' Choose a semantic field above as a filter to create its governed parameter binding.'}
         </div>
         {parameters.length > 0 && (
@@ -4854,7 +4854,7 @@ function SmartImportOverview({
     const detail = counts.attention > 0
       ? 'Ready candidates remain in this session. Fix the exceptions in advanced details before saving.'
       : counts.processing > 0
-        ? 'DQL is previewing SQL and keeping generated drafts saved.'
+        ? 'ZLens is previewing SQL and keeping generated drafts saved.'
         : counts.ready > 0
           ? 'Generated DQL drafts are saved under blocks/_drafts or domains/<domain>/blocks/_drafts. Open a candidate to review, preview, and certify.'
           : 'Certified blocks are saved in the canonical blocks folder.';
@@ -5316,7 +5316,7 @@ function ImportStep({ index, active, complete, title, detail, t }: { index: numb
 function ImportGuide({ t }: { t: Theme }) {
   const items = [
     ['1', 'Add SQL', 'Paste SQL, upload files, or point to an enterprise SQL folder.'],
-    ['2', 'Generate drafts', 'DQL analyzes statements, project metadata, tables, and business context.'],
+    ['2', 'Generate drafts', 'ZLens analyzes statements, project metadata, tables, and business context.'],
     ['3', 'Review and certify', 'Preview results, edit metadata, then certify the governed block.'],
   ];
   return (
@@ -6244,7 +6244,7 @@ function HistoryPanel({
     const text = status === 'not_a_repo'
       ? 'This project is not a Git repository yet, so blocks have no version history. Set up Git from Source control.'
       : status === 'git_unavailable'
-        ? (message ?? 'Git is not installed or is not on the PATH of the DQL server, so version history is unavailable.')
+        ? (message ?? 'Git is not installed or is not on the PATH of the ZLens server, so version history is unavailable.')
         : status === 'error'
           ? `Version history could not be loaded: ${message ?? 'unknown error'}`
           : 'No commits include this block yet. Commit it from Source control to start its history.';

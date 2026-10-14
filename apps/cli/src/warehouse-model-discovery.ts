@@ -1,5 +1,5 @@
 /**
- * Draft a model from the warehouse itself (RFC 0007, `dql model discover` in
+ * Draft a model from the warehouse itself (RFC 0007, `zlens model discover` in
  * warehouse-first and hybrid modeling).
  *
  * The warehouse catalog snapshot already holds what a person would use to
@@ -21,8 +21,8 @@ import {
   type ModelingAuthoringChange,
   type WarehouseCatalogRelationV1,
   type WarehouseCatalogSnapshotV1,
-} from '@duckcodeailabs/dql-core';
-import { profileRelationshipOnWarehouse, suggestRelationshipKeys } from '@duckcodeailabs/dql-agent';
+} from '@zlens/core';
+import { profileRelationshipOnWarehouse, suggestRelationshipKeys } from '@zlens/agent';
 
 export type RelationshipEvidenceSource = 'declared_foreign_key' | 'view_join' | 'query_history' | 'shared_key' | 'named_for_table' | 'same_name';
 

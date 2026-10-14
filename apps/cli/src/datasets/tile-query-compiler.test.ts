@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { DatasetAggregateComponentProofV1, DatasetDescriptor, TileQuery } from '@duckcodeailabs/dql-core';
+import type { DatasetAggregateComponentProofV1, DatasetDescriptor, TileQuery } from '@zlens/core';
 import { DATASET_TILE_DIALECTS, TileQueryCompilationError, compileDatasetTileQuery } from './tile-query-compiler.js';
 
 /**

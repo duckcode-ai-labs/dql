@@ -20,7 +20,7 @@ test('seeds through an explicit disposable connector root', () => {
       const fs = require('node:fs');
       class Database {
         constructor(path) { this.path = path; fs.writeFileSync(path, 'fake duckdb'); }
-        connect() { return { run(sql, done) { if (process.env.DQL_TEST_SEED_SQL_LOG) fs.appendFileSync(process.env.DQL_TEST_SEED_SQL_LOG, sql + '\\n'); done(null); }, close(done) { done(null); } }; }
+        connect() { return { run(sql, done) { if ((process.env.ZLENS_TEST_SEED_SQL_LOG ?? process.env.DQL_TEST_SEED_SQL_LOG)) fs.appendFileSync((process.env.ZLENS_TEST_SEED_SQL_LOG ?? process.env.DQL_TEST_SEED_SQL_LOG), sql + '\\n'); done(null); }, close(done) { done(null); } }; }
         close(done) { done(null); }
       }
       module.exports = { Database };
@@ -31,7 +31,7 @@ test('seeds through an explicit disposable connector root', () => {
     const result = spawnSync(process.execPath, [seedScript, '--connector-root', root, '--out', out], {
       cwd: repoRoot,
       encoding: 'utf8',
-      env: { ...process.env, DQL_TEST_SEED_SQL_LOG: sqlLog },
+      env: { ...process.env, ZLENS_TEST_SEED_SQL_LOG: sqlLog },
     });
     assert.equal(result.status, 0, result.stderr);
     assert.match(result.stdout, /Seeded 4 tables/);
@@ -75,10 +75,10 @@ test('does not resolve DuckDB from a parent of an explicit connector root', () =
   }
 });
 
-const integrationConnectorRoot = process.env.DQL_TEST_DUCKDB_CONNECTOR_ROOT;
+const integrationConnectorRoot = (process.env.ZLENS_TEST_DUCKDB_CONNECTOR_ROOT ?? process.env.DQL_TEST_DUCKDB_CONNECTOR_ROOT);
 
 test('seeds the manifest-qualified DuckDB catalog and schema with the pinned connector root', {
-  skip: integrationConnectorRoot ? false : 'set DQL_TEST_DUCKDB_CONNECTOR_ROOT to the pinned disposable DuckDB root',
+  skip: integrationConnectorRoot ? false : 'set ZLENS_TEST_DUCKDB_CONNECTOR_ROOT to the pinned disposable DuckDB root',
 }, async () => {
   const root = mkdtempSync(join(tmpdir(), 'dql-seed-qualified-'));
   try {

@@ -37,7 +37,7 @@ interface IndexedContract {
 
 /**
  * Loads a DataLex manifest into an indexed contract lookup. One registry
- * instance per DQL project. Re-create or call `reload()` between
+ * instance per ZLens project. Re-create or call `reload()` between
  * compilation runs if the manifest changes on disk.
  */
 export class DataLexContractRegistry {

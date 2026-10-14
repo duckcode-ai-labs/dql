@@ -2,11 +2,12 @@
 set -eu
 
 log() {
-  printf '[dql-docker] %s\n' "$*"
+  printf '[zlens-docker] %s\n' "$*"
 }
 
-workspace="${DQL_PROJECT_ROOT:-${DQL_WORKSPACE:-/workspace}}"
-demo_root="${DQL_DEMO_ROOT:-$workspace/.dql/docker-starter/dql-starter}"
+# ZLENS_* first, then the old DQL_* names.
+workspace="${ZLENS_PROJECT_ROOT:-${DQL_PROJECT_ROOT:-${ZLENS_WORKSPACE:-${DQL_WORKSPACE:-/workspace}}}}"
+demo_root="${ZLENS_DEMO_ROOT:-${DQL_DEMO_ROOT:-$workspace/.dql/docker-starter/dql-starter}}"
 template_root="/opt/dql/templates/starter"
 
 is_dql_source_repo() {
@@ -26,14 +27,14 @@ ensure_demo_project() {
     exit 1
   fi
 
-  log "No DQL project found at $workspace."
+  log "No ZLens project found at $workspace."
   log "Creating a starter project at $demo_root."
-  log "Tip: to try DQL on a sample dbt project, clone"
+  log "Tip: to try ZLens on a sample dbt project, clone"
   log "  https://github.com/duckcode-ai/jaffle-shop-duckdb"
   log "and run docker compose from inside it."
   mkdir -p "$demo_root"
   cp -R "$template_root/." "$demo_root/"
-  # Resolve scaffold placeholders the same way create-dql-app would.
+  # Resolve scaffold placeholders the same way create-zlens-app would.
   find "$demo_root" -type f -exec sed -i \
     -e 's/{{PROJECT_NAME}}/dql-starter/g' \
     -e 's/{{DBT_DETECTED}}/false/g' \
@@ -58,7 +59,7 @@ maybe_use_demo_project() {
   cd "$workspace"
 }
 
-if [ "${1:-}" = "dql" ]; then
+if [ "${1:-}" = "zlens" ] || [ "${1:-}" = "dql" ]; then
   case "${2:-}" in
     notebook|slack|compile|app|agent|verify|schedule|mcp|lineage)
       maybe_use_demo_project

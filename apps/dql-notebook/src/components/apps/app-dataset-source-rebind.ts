@@ -1,12 +1,12 @@
 import {
   datasetPhysicalField,
   type DatasetDescriptor,
-} from '@duckcodeailabs/dql-core/datasets/descriptor';
+} from '@zlens/core/datasets/descriptor';
 import {
   datasetTileVisualizationCompatibility,
   tileQueryOutputAliases,
   validateTileQuery,
-} from '@duckcodeailabs/dql-core/apps/tile-query';
+} from '@zlens/core/apps/tile-query';
 import type {
   AppBlockRecommendation,
   AppStudioBuildDraft,

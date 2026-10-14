@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 
-import type { ColumnMeta, QueryResult, Row } from '@duckcodeailabs/dql-connectors';
-import type { EquivalenceProofV1 } from '@duckcodeailabs/dql-core';
+import type { ColumnMeta, QueryResult, Row } from '@zlens/connectors';
+import type { EquivalenceProofV1 } from '@zlens/core';
 
 export type DatasetEquivalenceFailureCode =
   | 'equivalence_identity_unavailable'
@@ -89,7 +89,7 @@ export async function proveDatasetResultEquivalence(input: DatasetEquivalenceInp
     try {
       scope = await input.openReadScope();
     } catch (error) {
-      return failure('equivalence_read_scope_unavailable', `DQL could not open one shared read scope for equivalence: ${messageOf(error)}`);
+      return failure('equivalence_read_scope_unavailable', `ZLens could not open one shared read scope for equivalence: ${messageOf(error)}`);
     }
     throwIfAborted(input.signal);
     const context: DatasetEquivalenceExecutionContext = { readScope: scope, cacheMode: 'bypass', signal: input.signal };
@@ -102,14 +102,14 @@ export async function proveDatasetResultEquivalence(input: DatasetEquivalenceInp
       ]);
     } catch (error) {
       if (input.signal?.aborted) return failure('equivalence_execution_failed', 'The equivalence proof was cancelled before both candidates settled.');
-      return failure('equivalence_execution_failed', `DQL could not execute both candidates in the shared read scope: ${messageOf(error)}`);
+      return failure('equivalence_execution_failed', `ZLens could not execute both candidates in the shared read scope: ${messageOf(error)}`);
     }
     throwIfAborted(input.signal);
     requireComplete(dataset, 'Dataset');
     requireComplete(candidate, 'candidate block or semantic tile');
     const after = await requiredIdentity(input.resolveIdentity);
     if (fingerprintIdentity(before) !== fingerprintIdentity(after)) {
-      return failure('equivalence_identity_drift', 'The source, target, policy, or execution contract changed while DQL was proving equivalence. Run a fresh preview.');
+      return failure('equivalence_identity_drift', 'The source, target, policy, or execution contract changed while ZLens was proving equivalence. Run a fresh preview.');
     }
     const comparison = compareResults(dataset.result, candidate.result, input.ordering);
     if (!comparison.equal) return failure(comparison.code, comparison.message);
@@ -132,7 +132,7 @@ export async function proveDatasetResultEquivalence(input: DatasetEquivalenceInp
   } catch (error) {
     if (error instanceof DatasetEquivalenceFailure) return failure(error.code, error.message);
     if (input.signal?.aborted) return failure('equivalence_execution_failed', 'The equivalence proof was cancelled.');
-    return failure('equivalence_execution_failed', `DQL could not prove equivalence: ${messageOf(error)}`);
+    return failure('equivalence_execution_failed', `ZLens could not prove equivalence: ${messageOf(error)}`);
   } finally {
     if (scope) {
       try {
@@ -148,7 +148,7 @@ export async function proveDatasetResultEquivalence(input: DatasetEquivalenceInp
 function requiredIdentity(resolveIdentity: DatasetEquivalenceInput['resolveIdentity']): Promise<DatasetEquivalenceIdentity> {
   return resolveIdentity().then((identity) => {
     if (!identity || Object.values(identity).some((value) => !value || !value.trim())) {
-      throw new DatasetEquivalenceFailure('equivalence_identity_unavailable', 'DQL cannot prove equivalence because the current source, target, policy, or compiler identity is unavailable.');
+      throw new DatasetEquivalenceFailure('equivalence_identity_unavailable', 'ZLens cannot prove equivalence because the current source, target, policy, or compiler identity is unavailable.');
     }
     return identity;
   });
@@ -156,7 +156,7 @@ function requiredIdentity(resolveIdentity: DatasetEquivalenceInput['resolveIdent
 
 function requireComplete(execution: DatasetEquivalenceExecution, label: string): void {
   if (!execution.complete || execution.cancelled || execution.result.truncated || execution.result.rowCount !== execution.result.rows.length) {
-    throw new DatasetEquivalenceFailure('equivalence_result_incomplete', `The ${label} result was incomplete, truncated, cancelled, or row-capped, so DQL cannot prove exact equivalence.`);
+    throw new DatasetEquivalenceFailure('equivalence_result_incomplete', `The ${label} result was incomplete, truncated, cancelled, or row-capped, so ZLens cannot prove exact equivalence.`);
   }
   if (!execution.receiptId.trim() || !execution.receiptFingerprint.trim()) {
     throw new DatasetEquivalenceFailure('equivalence_result_incomplete', `The ${label} result has no current execution receipt.`);
@@ -180,7 +180,7 @@ function compareResults(left: QueryResult, right: QueryResult, ordering: 'ordere
     rightRows = right.rows.map((row) => canonicalRow(row, right.columns));
   } catch (error) {
     if (error instanceof DatasetEquivalenceFailure) return { equal: false, code: error.code, message: error.message };
-    return { equal: false, code: 'equivalence_value_unsupported', message: `DQL cannot exactly compare the result values: ${messageOf(error)}` };
+    return { equal: false, code: 'equivalence_value_unsupported', message: `ZLens cannot exactly compare the result values: ${messageOf(error)}` };
   }
   if (ordering === 'multiset') {
     leftRows.sort();
@@ -229,7 +229,7 @@ function canonicalValue(value: unknown, type: string): string {
   if (value === null) return 'null';
   if (value === undefined) throw new DatasetEquivalenceFailure('equivalence_value_unsupported', 'DQL distinguishes a missing result value from SQL NULL.');
   if (type === 'decimal') {
-    if (typeof value === 'number') throw new DatasetEquivalenceFailure('equivalence_lossy_decimal', 'A DECIMAL result arrived as a JavaScript number, so DQL cannot prove exact decimal equivalence.');
+    if (typeof value === 'number') throw new DatasetEquivalenceFailure('equivalence_lossy_decimal', 'A DECIMAL result arrived as a JavaScript number, so ZLens cannot prove exact decimal equivalence.');
     if (typeof value === 'bigint') return `decimal:${value.toString()}`;
     if (typeof value === 'string' && /^[-+]?(?:\d+\.\d+|\d+|\.\d+)$/.test(value)) return `decimal:${value}`;
     throw new DatasetEquivalenceFailure('equivalence_value_unsupported', 'A DECIMAL result did not retain an exact string or bigint representation.');
@@ -258,7 +258,7 @@ function canonicalValue(value: unknown, type: string): string {
   }
   if (typeof value === 'string') return `string:${value}`;
   if (typeof value === 'boolean') return value ? 'boolean:true' : 'boolean:false';
-  throw new DatasetEquivalenceFailure('equivalence_value_unsupported', `DQL cannot exactly compare ${typeof value} output values.`);
+  throw new DatasetEquivalenceFailure('equivalence_value_unsupported', `ZLens cannot exactly compare ${typeof value} output values.`);
 }
 
 function fingerprint(value: string): string {

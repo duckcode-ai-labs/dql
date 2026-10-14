@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { AgentProvider } from '@duckcodeailabs/dql-agent';
+import type { AgentProvider } from '@zlens/agent';
 import { createFailoverProvider, isFailoverEligibleProviderError } from './failover-provider.js';
 
 /**

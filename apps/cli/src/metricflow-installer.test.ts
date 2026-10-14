@@ -12,7 +12,7 @@ import {
 import { managedMetricFlowBin, managedMetricFlowRuntimeRoot } from './metricflow.js';
 
 describe('managed MetricFlow installer', () => {
-  it('maps supported DQL connection drivers to dbt adapter extras', () => {
+  it('maps supported ZLens connection drivers to dbt adapter extras', () => {
     expect(metricFlowAdapterForDriver('file')).toBe('duckdb');
     expect(metricFlowAdapterForDriver('postgresql')).toBe('postgres');
     expect(metricFlowAdapterForDriver('snowflake')).toBe('snowflake');

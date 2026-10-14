@@ -18,7 +18,7 @@ import {
   readAppMonitors,
   type AppMonitor,
   type AppScheduleDelivery,
-} from '@duckcodeailabs/dql-core';
+} from '@zlens/core';
 import { readDigestState } from './app-digest.js';
 
 export const DEFAULT_ALERT_CRON = '0 8 * * *';

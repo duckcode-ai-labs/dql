@@ -1,19 +1,20 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import type { InvariantResult } from '@duckcodeailabs/dql-governance';
+import type { InvariantResult } from '@zlens/governance';
 import {
   buildAnalysisQuestionPlan,
   grainMatches,
   requestedGrainFromPlan,
   type MetadataObject,
-} from '@duckcodeailabs/dql-agent';
+} from '@zlens/agent';
 import {
   composeEffectiveTrust,
   TRUST_QUALIFIER_INVARIANT_VIOLATED,
   type DataStateLike,
-} from '@duckcodeailabs/dql-core';
+} from '@zlens/core';
 import type { DQLContext } from '../context.js';
 import { zodInputShapeForTool } from '../tool-schema.js';
+import { readEnv } from '@zlens/core';
 
 const DEFAULT_QUERY_VIA_BLOCK_ROW_LIMIT = 200;
 
@@ -76,7 +77,7 @@ export async function queryViaBlock(
     }
   }
 
-  const base = args.serverUrl ?? process.env.DQL_RUNTIME_URL ?? 'http://127.0.0.1:3474';
+  const base = args.serverUrl ?? readEnv('ZLENS_RUNTIME_URL') ?? 'http://127.0.0.1:3474';
   const url = `${base.replace(/\/$/, '')}/api/notebook/execute`;
   let source: string;
   try {
@@ -105,7 +106,7 @@ export async function queryViaBlock(
     });
   } catch (err) {
     return {
-      error: `Could not reach DQL runtime at ${base}. Start it with \`dql serve\` in ${ctx.projectRoot}. (${err instanceof Error ? err.message : String(err)})`,
+      error: `Could not reach ZLens runtime at ${base}. Start it with \`zlens serve\` in ${ctx.projectRoot}. (${err instanceof Error ? err.message : String(err)})`,
     };
   }
 

@@ -12,7 +12,7 @@ import { fileURLToPath } from 'node:url';
  *   3. add one notebook and one App (the fixture has none);
  *   4. start `node apps/cli/dist/index.js notebook` on a free port, with
  *      cassette replay, and wait for /api/health.
- * The server URL is passed to the journeys in DQL_E2E_BASE_URL. The returned
+ * The server URL is passed to the journeys in ZLENS_E2E_BASE_URL. The returned
  * function stops the server and deletes the temp dir.
  */
 
@@ -127,12 +127,12 @@ async function waitForHealth(baseUrl: string, server: ChildProcess, logPath: str
     await new Promise((r) => setTimeout(r, 500));
   }
   const log = existsSync(logPath) ? readFileSync(logPath, 'utf8') : '(no server log)';
-  throw new Error(`dql notebook did not become healthy at ${baseUrl}/api/health:\n${log}`);
+  throw new Error(`zlens notebook did not become healthy at ${baseUrl}/api/health:\n${log}`);
 }
 
 export default async function globalSetup(): Promise<() => Promise<void>> {
   if (process.env.E2E_SKIP_BUILD !== '1') {
-    run('pnpm', ['exec', 'turbo', 'run', 'build', '--filter=@duckcodeailabs/dql-cli...']);
+    run('pnpm', ['exec', 'turbo', 'run', 'build', '--filter=zlens...']);
   }
   if (!existsSync(cliEntry)) throw new Error(`Built CLI not found at ${cliEntry}; build it first.`);
 
@@ -150,10 +150,10 @@ export default async function globalSetup(): Promise<() => Promise<void>> {
     env: {
       ...process.env,
       // Replay recorded model responses; a miss is an error and never reaches a live model.
-      DQL_EVAL_CASSETTE_DIR: join(projectDir, 'test-cassettes', 'answerability'),
-      DQL_EVAL_CASSETTE_MODE: 'replay',
+      ZLENS_EVAL_CASSETTE_DIR: join(projectDir, 'test-cassettes', 'answerability'),
+      ZLENS_EVAL_CASSETTE_MODE: 'replay',
       // Native semantic engine only, so a developer's own `mf` cannot change the run.
-      DQL_METRICFLOW_BIN: join(workDir, 'no-metricflow', 'mf'),
+      ZLENS_METRICFLOW_BIN: join(workDir, 'no-metricflow', 'mf'),
     },
   });
 
@@ -185,6 +185,6 @@ export default async function globalSetup(): Promise<() => Promise<void>> {
     await stop();
     throw error;
   }
-  process.env.DQL_E2E_BASE_URL = baseUrl;
+  process.env.ZLENS_E2E_BASE_URL = baseUrl;
   return stop;
 }

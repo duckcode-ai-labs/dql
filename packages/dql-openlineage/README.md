@@ -1,17 +1,17 @@
-# @duckcodeailabs/dql-openlineage
+# @zlens/openlineage
 
 OpenLineage event emitter for DQL block and notebook runs.
 
 ## Install
 
 ```bash
-npm i @duckcodeailabs/dql-openlineage
+npm i @zlens/openlineage
 ```
 
 ## Usage
 
 ```ts
-import { createEmitter } from '@duckcodeailabs/dql-openlineage';
+import { createEmitter } from '@zlens/openlineage';
 
 const emitter = createEmitter({
   url: process.env.OPENLINEAGE_URL,      // http://marquez.internal:5000/api/v1/lineage
@@ -42,7 +42,7 @@ Resolves from, in order:
 Hard opt-out:
 
 ```bash
-export DQL_OPENLINEAGE_DISABLED=1
+export ZLENS_OPENLINEAGE_DISABLED=1
 ```
 
 ## Error policy
@@ -59,12 +59,12 @@ See [docs/architecture/openlineage.md](../../docs/architecture/openlineage.md).
 ## Project snapshot from a compiled manifest
 
 Phase 3.2 of the OSS plan: hydrate a Marquez (or any OL receiver) with the
-full lineage graph of a DQL project in one pass — dbt sources → dbt models →
+full lineage graph of a ZLens project in one pass — dbt sources → dbt models →
 DataLex contracts → DQL blocks → apps.
 
 ```ts
-import { buildManifest } from '@duckcodeailabs/dql-core';
-import { createEmitter, emitProjectSnapshot } from '@duckcodeailabs/dql-openlineage';
+import { buildManifest } from '@zlens/core';
+import { createEmitter, emitProjectSnapshot } from '@zlens/openlineage';
 
 const manifest = buildManifest({ projectRoot: '.' });
 
@@ -109,14 +109,14 @@ git clone https://github.com/MarquezProject/marquez.git
 cd marquez && ./docker/up.sh
 ```
 
-Then in your DQL project:
+Then in your ZLens project:
 
 ```bash
 export OPENLINEAGE_URL=http://localhost:5000/api/v1/lineage
 export OPENLINEAGE_NAMESPACE=jaffle-shop
 node -e "
-  import('@duckcodeailabs/dql-core').then(async ({ buildManifest }) => {
-    const { createEmitter, emitProjectSnapshot } = await import('@duckcodeailabs/dql-openlineage');
+  import('@zlens/core').then(async ({ buildManifest }) => {
+    const { createEmitter, emitProjectSnapshot } = await import('@zlens/openlineage');
     const manifest = buildManifest({ projectRoot: '.' });
     const emitter = createEmitter();   // picks up OPENLINEAGE_URL from env
     const { emitted } = await emitProjectSnapshot(emitter, manifest);

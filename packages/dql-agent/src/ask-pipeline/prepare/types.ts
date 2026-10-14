@@ -1,4 +1,4 @@
-import type { ManifestRelationshipValidationEvidence } from '@duckcodeailabs/dql-core';
+import type { ManifestRelationshipValidationEvidence } from '@zlens/core';
 import type { AnalyticalIntentV1 } from '../intent.js';
 import type { VocabularyIndex } from '../vocabulary.js';
 

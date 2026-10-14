@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // The single-user product (no host) before and after a change.
 //
-// Starts two `dql notebook` servers, one from each built CLI, on two identical copies of one scratch project, sends
+// Starts two `zlens notebook` servers, one from each built CLI, on two identical copies of one scratch project, sends
 // both the same scripted golden paths (notebook, Ask without a model, Apps / App Studio / Show Me / pivots, Block
 // Studio certify / deprecate / replacedBy, git panel, connectors, export, request-chosen connections, files by path,
 // fonts, MCP over stdio) and diffs status codes and key response fields after normalising run-specific values (ids,
@@ -9,7 +9,7 @@
 //
 // usage: node standalone-diff.mjs --baseline <repo with built CLI> --candidate <repo with built CLI> --out <dir>
 //          [--port-a 9281] [--port-b 9282] [--pg-port 9290] [--keep]
-// env:   DQL_APP_DATASETS_DUCKDB_CONNECTOR_ROOT (pinned duckdb driver), HOST_CHECK_PG_NODE_MODULES (a node_modules holding
+// env:   ZLENS_APP_DATASETS_DUCKDB_CONNECTOR_ROOT (pinned duckdb driver), HOST_CHECK_PG_NODE_MODULES (a node_modules holding
 //        `pg`, optional), HOST_CHECK_NETWORK_LOG=1 (optional: both servers and the MCP clients load the CLI's own
 //        recorder, apps/cli/scripts/network-log.cjs, and each writes the lookups and connections it starts off this
 //        machine to netlog-<label>.jsonl in the output folder)
@@ -26,8 +26,8 @@ const out = resolve(args.out);
 const portA = Number(args['port-a'] ?? 9281);
 const portB = Number(args['port-b'] ?? 9282);
 const pgPort = Number(args['pg-port'] ?? 9290);
-const connectorRoot = process.env.DQL_APP_DATASETS_DUCKDB_CONNECTOR_ROOT;
-if (!connectorRoot) throw new Error('Set DQL_APP_DATASETS_DUCKDB_CONNECTOR_ROOT');
+const connectorRoot = (process.env.ZLENS_APP_DATASETS_DUCKDB_CONNECTOR_ROOT ?? process.env.DQL_APP_DATASETS_DUCKDB_CONNECTOR_ROOT);
+if (!connectorRoot) throw new Error('Set ZLENS_APP_DATASETS_DUCKDB_CONNECTOR_ROOT');
 mkdirSync(out, { recursive: true });
 
 const scratch = mkdtempSync(join(tmpdir(), 'standalone-diff-'));
@@ -84,11 +84,13 @@ async function main() {
   // ── Two servers, the same environment: no version check, npm offline against a loopback registry.
   const env = (netlog) => ({
     ...process.env,
+    ZLENS_DISABLE_VERSION_CHECK: '1',
+    // The candidate may predate the ZLENS_ names, so its children get both spellings.
     DQL_DISABLE_VERSION_CHECK: '1',
     npm_config_offline: 'true',
     npm_config_registry: 'http://127.0.0.1:9/',
     DBT_PROFILES_DIR: join(scratch, 'no-dbt-profiles'),
-    ...(process.env.HOST_CHECK_NETWORK_LOG ? { NODE_OPTIONS: `--require ${join(candidateRepo, 'apps/cli/scripts/network-log.cjs')}`, DQL_NETWORK_LOG: netlog } : {}),
+    ...(process.env.HOST_CHECK_NETWORK_LOG ? { NODE_OPTIONS: `--require ${join(candidateRepo, 'apps/cli/scripts/network-log.cjs')}`, ZLENS_NETWORK_LOG: netlog, DQL_NETWORK_LOG: netlog } : {}),
   });
   const start = (repo, dir, port, label) => {
     const child = spawn(process.execPath, [join(repo, 'apps/cli/dist/index.js'), 'notebook', dir, '--port', String(port), '--no-open', '--no-schedules'], { cwd: dir, env: env(join(out, `netlog-${label}.jsonl`)), stdio: ['ignore', 'pipe', 'pipe'] });

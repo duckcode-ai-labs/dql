@@ -5,22 +5,22 @@ import type {
   QueryExecutionOptions,
   QueryExecutor,
   QueryPurpose,
-} from '@duckcodeailabs/dql-connectors';
-import { classifyWarehouseError, hostedWarehouseError, warehouseDiagnosis } from '@duckcodeailabs/dql-agent';
-import { analyzeSqlReferences, extractTablesFromSql } from '@duckcodeailabs/dql-core';
+} from '@zlens/connectors';
+import { classifyWarehouseError, hostedWarehouseError, warehouseDiagnosis } from '@zlens/agent';
+import { analyzeSqlReferences, extractTablesFromSql } from '@zlens/core';
 import { currentDestination, currentPrincipal, currentRequestContext, type DqlDestination, type DqlPrincipal, type DqlStatementObserver } from './request-context.js';
 import { HOSTED_STATEMENT_REFUSED, hostedStatementRefusal, isEngineRestrictionError, restrictedEngineConnection } from './engine-guard.js';
 import type { DqlAction } from './route-actions.js';
 import { newReference } from './plain-errors.js';
 
 /**
- * ONE QUERY PATH (RFC 0010, slice HH-3). Every statement DQL sends to a
+ * ONE QUERY PATH (RFC 0010, slice HH-3). Every statement ZLens sends to a
  * warehouse — a certified Dataset, a page tile, AI-written SQL, a notebook
  * cell, a proof — goes through the server's one executor. When a host
  * supplies `rowPolicy`, that executor asks it about each statement first and
  * runs what it returns: the same SQL, a narrowed rewrite, or nothing.
  *
- * The policy sees who is asking (null for work DQL starts on its own, such
+ * The policy sees who is asking (null for work ZLens starts on its own, such
  * as a startup catalog sync), the SQL and its values, the tables it reads
  * (best effort), the connection, and whether it reads data or only schema.
  * Rewrites must keep the placeholder style of the SQL they receive.
@@ -51,7 +51,7 @@ export interface DqlQueryContext {
 /**
  * A check on the result before anyone (the person or a model) gets it: the
  * host's statement carries each group's row count in `column`; when any row's
- * count is below `minimum` (or is not a count), DQL refuses with `refusal` and
+ * count is below `minimum` (or is not a count), ZLens refuses with `refusal` and
  * hands over no row. The column is removed from what passes.
  */
 export interface DqlGroupRowsCheck {
@@ -71,7 +71,7 @@ export type DqlRowPolicy = (query: DqlQueryContext) => Promise<DqlRowPolicyResul
  * credentials, Redshift identity propagation), a per-person role, or a
  * different target. The warehouse's own row and column rules then apply.
  * Refusing — for example an expired token — stops the query with "reconnect";
- * DQL never retries with the service credential. Connections are pooled by
+ * ZLens never retries with the service credential. Connections are pooled by
  * their full settings, so each person's credentials get their own connection.
  */
 export interface DqlCredentialsContext {
@@ -86,8 +86,8 @@ export type DqlCredentialsResult = { connection: Partial<ConnectionConfig> } | {
 
 export type DqlCredentialsHook = (input: DqlCredentialsContext) => Promise<DqlCredentialsResult> | DqlCredentialsResult;
 
-const CREDENTIALS_UNREADABLE = 'DQL could not get your warehouse sign-in. Reconnect and try again.';
-const POLICY_UNREADABLE = 'DQL could not check what you may see, so it did not run this query.';
+const CREDENTIALS_UNREADABLE = 'ZLens could not get your warehouse sign-in. Reconnect and try again.';
+const POLICY_UNREADABLE = 'ZLens could not check what you may see, so it did not run this query.';
 
 /** A hook's answer that is an object (not null, not a list, not a string or number). */
 function isAnswerObject(value: unknown): value is Record<string, unknown> {
@@ -150,7 +150,7 @@ export function relationsOf(sql: string, dialect: string): string[] {
 /**
  * Every table a run's values came from, from each statement's SQL as DQL
  * wrote it (before any host rewrite), or undefined when one statement is
- * missing or names no table DQL can see — then nobody can say where all the
+ * missing or names no table ZLens can see — then nobody can say where all the
  * values came from.
  */
 export function relationsOfStatements(statements: Array<string | undefined>, dialect: string): string[] | undefined {

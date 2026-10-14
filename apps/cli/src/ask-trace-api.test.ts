@@ -23,8 +23,8 @@ import {
   type AgentRunRequest,
   type AgentRun,
   type AgentRunExecutors,
-} from '@duckcodeailabs/dql-agent';
-import type { ConnectionConfig, QueryExecutor } from '@duckcodeailabs/dql-connectors';
+} from '@zlens/agent';
+import type { ConnectionConfig, QueryExecutor } from '@zlens/connectors';
 import {
   CLI_ASK_TRACE_CAPABILITY_TTL_MS,
   askTraceQuestionPreview,
@@ -33,6 +33,7 @@ import {
   startLocalServer,
 } from './local-runtime.js';
 import { runCanonicalCliAsk } from './commands/agent.js';
+import { readEnv } from '@zlens/core';
 
 const directories: string[] = [];
 const servers: Server[] = [];
@@ -646,10 +647,10 @@ describe('local Ask trace API errors (OBS-009)', () => {
 
 });
 
-describe.skipIf(process.env.DQL_RUN_ASK_TRACE_PERF !== '1')('Ask trace producer CPU budget (OBS-010)', () => {
+describe.skipIf(readEnv('ZLENS_RUN_ASK_TRACE_PERF') !== '1')('Ask trace producer CPU budget (OBS-010)', () => {
   it('keeps the paired no-provider/no-warehouse CPU overhead at or below two percent', async () => {
     const base = await start(project());
-    const previous = process.env.DQL_ASK_OBSERVABILITY;
+    const previous = process.env.ZLENS_ASK_OBSERVABILITY;
     const samplesPerMode = 240;
     const warmupPerMode = 24;
     const request = async () => {
@@ -667,8 +668,8 @@ describe.skipIf(process.env.DQL_RUN_ASK_TRACE_PERF !== '1')('Ask trace producer 
       return body;
     };
     const measure = async (enabled: boolean, count: number) => {
-      if (enabled) delete process.env.DQL_ASK_OBSERVABILITY;
-      else process.env.DQL_ASK_OBSERVABILITY = 'off';
+      if (enabled) delete process.env.ZLENS_ASK_OBSERVABILITY;
+      else process.env.ZLENS_ASK_OBSERVABILITY = 'off';
       const before = process.cpuUsage();
       const wallStarted = performance.now();
       let traces = 0;
@@ -703,7 +704,7 @@ describe.skipIf(process.env.DQL_RUN_ASK_TRACE_PERF !== '1')('Ask trace producer 
         : undefined;
       const traceShape = `spans=${latestTrace?.spans?.length ?? 0}; candidates=${latestTrace?.candidateDecisions?.length ?? 0}`;
 
-      if (process.env.DQL_ASK_TRACE_PERF_REPORT === '1') {
+      if (readEnv('ZLENS_ASK_TRACE_PERF_REPORT') === '1') {
         console.info(
           `[OBS-010] off=${disabled.cpuMsPerAsk.toFixed(3)}ms CPU/Ask; on=${enabled.cpuMsPerAsk.toFixed(3)}ms CPU/Ask; relative=${(relativeCpuOverhead * 100).toFixed(2)}%; wall delta=${wallOverheadMs.toFixed(3)}ms; ${traceShape}`,
         );
@@ -718,8 +719,8 @@ describe.skipIf(process.env.DQL_RUN_ASK_TRACE_PERF !== '1')('Ask trace producer 
       expect(wallOverheadMs, `off=${disabled.wallMsPerAsk.toFixed(3)}ms/Ask; on=${enabled.wallMsPerAsk.toFixed(3)}ms/Ask`)
         .toBeLessThanOrEqual(10);
     } finally {
-      if (previous === undefined) delete process.env.DQL_ASK_OBSERVABILITY;
-      else process.env.DQL_ASK_OBSERVABILITY = previous;
+      if (previous === undefined) delete process.env.ZLENS_ASK_OBSERVABILITY;
+      else process.env.ZLENS_ASK_OBSERVABILITY = previous;
     }
   });
 });

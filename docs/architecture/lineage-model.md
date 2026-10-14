@@ -1,6 +1,6 @@
 # Lineage model
 
-DQL's lineage graph answers three questions:
+ZLens's lineage graph answers three questions:
 
 1. **What depends on this?** (impact analysis — downstream)
 2. **Where did this come from?** (trust chain — upstream)
@@ -59,27 +59,27 @@ Warm rebuild on a 4,000-model project is under 2s.
 ## CLI surface
 
 ```bash
-dql lineage summary
-dql lineage --term Customer           # term -> block/view impact
-dql lineage --business-360 Customer   # definition, composition, sources, consumers, gaps
-dql lineage --business "Customer 360" # business composition and technical backing
-dql lineage impact customers          # downstream of `customers`
-dql lineage trust-chain revenue_q4    # upstream of a block
-dql lineage cross-domain              # edges that cross domain boundaries
+zlens lineage summary
+zlens lineage --term Customer           # term -> block/view impact
+zlens lineage --business-360 Customer   # definition, composition, sources, consumers, gaps
+zlens lineage --business "Customer 360" # business composition and technical backing
+zlens lineage impact customers          # downstream of `customers`
+zlens lineage trust-chain revenue_q4    # upstream of a block
+zlens lineage cross-domain              # edges that cross domain boundaries
 ```
 
 ## Business 360
 
-`dql lineage --business-360 <node>` builds a business-first snapshot from the
+`zlens lineage --business-360 <node>` builds a business-first snapshot from the
 same local graph. It works for terms, blocks, business views, dashboards, Apps,
 and notebooks.
 
-For a `term`, DQL first follows outgoing `defines` edges to the blocks and
+For a `term`, ZLens first follows outgoing `defines` edges to the blocks and
 business views that implement the term. It then traces upstream to source
 tables, dbt sources, and dbt models, and traces downstream to dashboards, Apps,
 notebooks, nested business views, and blocks.
 
-For a `business_view`, DQL shows the included blocks or nested views, then
+For a `business_view`, ZLens shows the included blocks or nested views, then
 uses those included artifacts to find technical sources and consumption. This
 keeps the answer useful even when a dashboard consumes the composed block
 directly rather than the view node itself.

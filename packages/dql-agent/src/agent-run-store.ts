@@ -13,7 +13,7 @@ import { canonicalJson, sha256 } from './ask-observability/utils.js';
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, renameSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { normalizeProviderEgressReceiptV1 } from '@duckcodeailabs/dql-core';
+import { normalizeProviderEgressReceiptV1 } from '@zlens/core';
 import type {
   AgentRun,
   AgentRunArtifact,
@@ -34,13 +34,14 @@ import type {
   EvidenceCandidateRoleV1,
   EvidenceRoleCoverageStateV1,
 } from './analytical-orchestration.js';
+import { readEnv } from '@zlens/core';
 
 export interface SqliteAgentRunStoreOptions {
   /** Path of the .sqlite file (created on first use). */
   path: string;
   /** Legacy agent-runs.json to import once and rename to *.migrated. */
   legacyJsonPath?: string;
-  /** Maximum retained runs (oldest pruned on write). Env DQL_AGENT_RUN_RETENTION overrides. */
+  /** Maximum retained runs (oldest pruned on write). Env ZLENS_AGENT_RUN_RETENTION overrides. */
   maxRuns?: number;
   /** Newest N runs keep their full event stream; older runs are compacted. */
   fullPayloadRuns?: number;
@@ -66,7 +67,7 @@ const ANALYTICAL_TASK_OUTCOME_TRUST_STATES: ReadonlySet<AnalyticalTaskOutcomeTru
 ]);
 
 export function resolveAgentRunRetention(env: NodeJS.ProcessEnv = process.env): number {
-  const configured = Number(env.DQL_AGENT_RUN_RETENTION);
+  const configured = Number(readEnv('ZLENS_AGENT_RUN_RETENTION', env));
   if (!Number.isFinite(configured) || configured <= 0) return DEFAULT_MAX_RUNS;
   return Math.max(20, Math.min(5_000, Math.floor(configured)));
 }
@@ -633,7 +634,7 @@ function interruptedRuntimeReceiptV5(
       : 'The Ask runtime was interrupted before its final result was accepted.',
     why: cancelled
       ? 'The local run was cancelled before finalization.'
-      : 'The local DQL runtime restarted before finalization.',
+      : 'The local ZLens runtime restarted before finalization.',
     impact: 'No executable data answer was accepted for this run.',
     nextAction: cancelled ? 'none' as const : 'retry_same_plan' as const,
     ...(state.resolvedPlan?.compiler ? { selectedCompiler: state.resolvedPlan.compiler } : {}),
@@ -842,8 +843,8 @@ export function interruptedAgentRun(progress: AgentRunProgressV1, completedAt: s
     message: userCancelled
       ? 'Stopped by user.'
       : retainedIndependentResult
-        ? 'The local DQL runtime restarted before this agent run completed. Completed independent task results remain available for inspection.'
-        : 'The local DQL runtime restarted before this agent run completed. No result was accepted.',
+        ? 'The local ZLens runtime restarted before this agent run completed. Completed independent task results remain available for inspection.'
+        : 'The local ZLens runtime restarted before this agent run completed. No result was accepted.',
     recoverable: !userCancelled,
     safeActions: userCancelled ? [] : ['retry_same_request'],
   };

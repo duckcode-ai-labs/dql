@@ -3,7 +3,7 @@ import { HostAnswerActions } from './HostAnswerActions';
 import { CitedDocuments, appliedListStyle, appliedTagStyle } from './CitedDocuments';
 import { hostAllows, hostReader, hostRefusal, useHostPage, useHostUi } from '../../host/host-ui';
 import { createPortal } from 'react-dom';
-import { normalizeDqlArtifactReference } from '@duckcodeailabs/dql-core/artifacts';
+import { normalizeDqlArtifactReference } from '@zlens/core/artifacts';
 import {
   ArrowRight,
   ArrowUp,
@@ -1910,7 +1910,7 @@ export function longRunGuidanceFor(
   if (!route && elapsedSeconds < 24 && !hasRepair) {
     return {
       title: 'Still resolving the governed evidence',
-      detail: 'The bounded request is still selecting its answer path. DQL will stop at the normal deadline instead of silently switching to a longer workflow.',
+      detail: 'The bounded request is still selecting its answer path. ZLens will stop at the normal deadline instead of silently switching to a longer workflow.',
     };
   }
   if (route === 'research') {
@@ -1921,7 +1921,7 @@ export function longRunGuidanceFor(
   }
   return {
     title: hasRepair ? 'Applying one bounded query repair' : 'Finishing the bounded query path',
-    detail: 'DQL is compiling or running the selected governed path. An ordinary lookup stops at its deadline instead of silently restarting as Research.',
+    detail: 'ZLens is compiling or running the selected governed path. An ordinary lookup stops at its deadline instead of silently restarting as Research.',
   };
 }
 
@@ -5243,7 +5243,7 @@ function defaultAppName(question: string): string {
 export function askAppWriteErrorMessage(error: unknown, fallback: string): string {
   const message = error instanceof Error ? error.message.trim() : '';
   if ((error instanceof DqlApiError && error.status === 405) || /method not allowed/i.test(message)) {
-    return 'This Notebook server is older than the App Studio shown in your browser. Restart dql notebook, reload this page, and try again. No Project files were published.';
+    return 'This Notebook server is older than the App Studio shown in your browser. Restart zlens notebook, reload this page, and try again. No Project files were published.';
   }
   return message || fallback;
 }
@@ -5625,7 +5625,7 @@ function AddToAppMenu({
 export function trustExplainer(run: AgentRun): string | null {
   if (run.status === 'cancelled' || run.stopReason === 'cancelled' || run.route === 'cancelled') return 'Stopped by user. No result was accepted.';
   if (run.trustState === 'review_required' && run.route === 'semantic_answer') {
-    return 'Review required: DQL inferred the semantic grouping for the requested dimension. Verify this business mapping before reuse.';
+    return 'Review required: ZLens inferred the semantic grouping for the requested dimension. Verify this business mapping before reuse.';
   }
   if (run.trustState === 'certified') return 'Answered from a certified block.';
   if (run.route === 'dql_block_draft') return 'Prepared an ownerless review draft. Add it to Block Studio when you are ready to save it.';
@@ -5644,9 +5644,9 @@ export function trustExplainer(run: AgentRun): string | null {
     }
     const executionError = payloads.find((payload) => typeof payload.executionError === 'string')?.executionError;
     if (typeof executionError === 'string' && executionError.trim()) {
-      return 'Exploratory · DBT-grounded. DQL prepared a review-required query, but its bounded execution failed. Inspect the error and DQL artifact before reuse.';
+      return 'Exploratory · DBT-grounded. ZLens prepared a review-required query, but its bounded execution failed. Inspect the error and DQL artifact before reuse.';
     }
-    return 'Exploratory · DBT-grounded. DQL prepared a review-required query, but it has not executed yet.';
+    return 'Exploratory · DBT-grounded. ZLens prepared a review-required query, but it has not executed yet.';
   }
   // Authoring routes produce a source proposal, not an answer. Telling the user
   // to "save it as a block" there is both wrong and the reason Modeling AI still
@@ -7421,23 +7421,23 @@ const ASK_FAILURE_PRESENTATION: Record<string, { title: string; hint: string }> 
   },
   execution: {
     title: 'The selected query did not complete',
-    hint: 'DQL froze the selected plan and began execution, but the current connection could not complete it. Review the connection or warehouse state, then retry.',
+    hint: 'ZLens froze the selected plan and began execution, but the current connection could not complete it. Review the connection or warehouse state, then retry.',
   },
   dql_compilation: {
-    title: 'DQL could not build a reusable block',
+    title: 'ZLens could not build a reusable block',
     hint: 'The query itself is fine \u2014 only saving this answer as a block is affected.',
   },
   governance_gate: {
-    title: 'DQL stopped this before running it',
+    title: 'ZLens stopped this before running it',
     hint: 'A governance check refused the query, so it never reached the warehouse.',
   },
   retrieval_gap: {
-    title: 'DQL could not confirm this data exists',
+    title: 'ZLens could not confirm this data exists',
     hint: 'The relation was not in the inspected metadata. Refreshing the connection scope usually resolves it.',
   },
   ambiguity: {
     title: 'One detail is missing',
-    hint: 'Answer the question above and DQL will continue.',
+    hint: 'Answer the question above and ZLens will continue.',
   },
   provider: {
     title: 'The AI provider failed',
@@ -7448,8 +7448,8 @@ const ASK_FAILURE_PRESENTATION: Record<string, { title: string; hint: string }> 
     hint: 'Nothing was run. Ask stopped its own planning loop before another provider call; narrow the metric or dimension and retry.',
   },
   host: {
-    title: 'DQL hit an internal error',
-    hint: 'This is a defect in DQL. The detail below is what to report.',
+    title: 'ZLens hit an internal error',
+    hint: 'This is a defect in ZLens. The detail below is what to report.',
   },
   modeling_gap: {
     title: 'Nothing in this project answers this question',
@@ -7461,10 +7461,10 @@ const ASK_FAILURE_PRESENTATION: Record<string, { title: string; hint: string }> 
   },
   proof_integrity: {
     title: 'Not executed: exact semantic proof was not established',
-    hint: 'DQL could not establish the exact metric, requested grain, join keys, and fanout proof. Warehouse success cannot create that authority.',
+    hint: 'ZLens could not establish the exact metric, requested grain, join keys, and fanout proof. Warehouse success cannot create that authority.',
   },
   identity_integrity: {
-    title: 'DQL found an internal identity or target-binding defect',
+    title: 'ZLens found an internal identity or target-binding defect',
     hint: 'No query ran. This is an orchestration integrity defect, not missing business modeling.',
   },
   policy: {
@@ -7473,15 +7473,15 @@ const ASK_FAILURE_PRESENTATION: Record<string, { title: string; hint: string }> 
   },
   result_contract: {
     title: 'The warehouse result did not match the frozen plan',
-    hint: 'The query ran, but DQL rejected the returned columns, types, grain, or row bound.',
+    hint: 'The query ran, but ZLens rejected the returned columns, types, grain, or row bound.',
   },
   compile: {
-    title: 'DQL could not compile the frozen plan',
+    title: 'ZLens could not compile the frozen plan',
     hint: 'The query did not reach the warehouse. Review the exact plan binding and compiler diagnostic.',
   },
   timeout: {
     title: 'This run reached its hard deadline',
-    hint: 'DQL stopped the run at its request-owned deadline and did not accept a later result.',
+    hint: 'ZLens stopped the run at its request-owned deadline and did not accept a later result.',
   },
   cancel: {
     title: 'This run was cancelled',
@@ -7711,7 +7711,7 @@ function terminalRelationshipGapDetail(run: AgentRun): string | undefined {
     routeGap,
   ];
   if (!candidates.some((gap) => gap?.code === 'MISSING_RELATIONSHIP')) return undefined;
-  return 'This Ask needs a certified relationship or approved allocation proof before it can run. DQL did not infer a relationship or execute a query.';
+  return 'This Ask needs a certified relationship or approved allocation proof before it can run. ZLens did not infer a relationship or execute a query.';
 }
 
 /** Defensive compatibility for persisted runs produced before router

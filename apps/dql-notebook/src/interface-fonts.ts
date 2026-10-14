@@ -10,7 +10,7 @@
  * the font request waits for a free thread and every thread waits on the page (seen in CI, 4 cores, Chromium 136).
  *
  * Loading both files as the app starts takes the stand-in out of layout: once a file is loaded, Chromium lays out
- * with it directly. The files are small (under 80 kB each) and served by DQL itself.
+ * with it directly. The files are small (under 80 kB each) and served by ZLens itself.
  */
 
 /** One character from each of Inter's files: "A" (Latin) and "Ā" U+0100 (Latin Extended). */

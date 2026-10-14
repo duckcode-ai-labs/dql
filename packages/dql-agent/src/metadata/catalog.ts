@@ -46,7 +46,7 @@ import {
   type DatasetDescriptor,
   normalizeMetricCapabilityContract,
   type MetricCapabilityContract,
-} from "@duckcodeailabs/dql-core";
+} from "@zlens/core";
 import { buildKGFromManifest, buildKGFromSemanticLayer, declaredDomainIds } from "../kg/build.js";
 import type { KGEdge, KGNode } from "../kg/types.js";
 import {
@@ -113,6 +113,7 @@ import {
   type SemanticDatasetFieldProjection,
   type SemanticDatasetMeasureProjection,
 } from '../datasets/index.js';
+import { readEnv } from '@zlens/core';
 
 export { applyContextPackCompatibility, toAgentRetrievalEvidence } from './meaning-evidence.js';
 
@@ -1182,7 +1183,7 @@ export function readIndexedKnowledge360(projectRoot: string, identity: string) {
 
 /**
  * In-flight vector upgrades, so a caller that needs semantic retrieval right
- * away (tests, `dql compile`) can await one instead of racing it.
+ * away (tests, `zlens compile`) can await one instead of racing it.
  */
 const pendingVectorUpgrades = new Map<string, Promise<void>>();
 
@@ -1794,7 +1795,7 @@ export async function buildLocalContextPack(
         ).catch(() => undefined),
       )
       : rankedObjects;
-    if (process.env.DQL_ORCHESTRATOR_TRACE && request.rerankCandidates) {
+    if (readEnv('ZLENS_ORCHESTRATOR_TRACE') && request.rerankCandidates) {
       const moved = rerankedObjects.findIndex((object, position) =>
         object.objectKey !== rankedObjects[position]?.objectKey);
       console.warn(`[dql] rerank: ${moved < 0 ? 'no change' : `reordered from position ${moved}`} over ${Math.min(40, rankedObjects.length)} candidates`);
@@ -2284,7 +2285,7 @@ export function buildMetadataSnapshot(
   addBlockDependencyEdges(manifest, edges);
   addBlockOutputLineageObjects(manifest, objects, edges);
   addCertifiedBlockAnalyticalCapabilities(objects);
-  // Manifest v3 is the unified DQL runtime. DataLex is migration input only;
+  // Manifest v3 is the unified ZLens runtime. DataLex is migration input only;
   // retaining it here would reintroduce a second analytical source of truth.
   if (manifest.manifestVersion !== 3) {
     addDataLexManifestObjects(projectRoot, manifest, objects, edges, diagnostics);
@@ -2920,7 +2921,7 @@ function metadataRoute(item: MetadataObject): ManifestCrossDomainRoute | null {
  * hundreds of kilobytes to `.dql/cache/metadata.sqlite` for good. Newest
  * first, the cache keeps packs younger than `days`, at most `max` of them,
  * and at most `bytes` of payload (the newest is always kept).
- * DQL_CONTEXT_PACK_DAYS, DQL_CONTEXT_PACK_MAX and DQL_CONTEXT_PACK_MAX_MB
+ * ZLENS_CONTEXT_PACK_DAYS, ZLENS_CONTEXT_PACK_MAX and ZLENS_CONTEXT_PACK_MAX_MB
  * change the defaults (7 days, 200 packs, 64 MB).
  */
 export interface ContextPackRetention { days: number; max: number; bytes: number }
@@ -2933,9 +2934,9 @@ export function contextPackRetention(env: NodeJS.ProcessEnv = process.env): Cont
     return value?.trim() && Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
   };
   return {
-    days: positive(env.DQL_CONTEXT_PACK_DAYS, CONTEXT_PACK_RETENTION.days),
-    max: Math.floor(positive(env.DQL_CONTEXT_PACK_MAX, CONTEXT_PACK_RETENTION.max)),
-    bytes: Math.floor(positive(env.DQL_CONTEXT_PACK_MAX_MB, CONTEXT_PACK_RETENTION.bytes / (1024 * 1024)) * 1024 * 1024),
+    days: positive(readEnv('ZLENS_CONTEXT_PACK_DAYS', env), CONTEXT_PACK_RETENTION.days),
+    max: Math.floor(positive(readEnv('ZLENS_CONTEXT_PACK_MAX', env), CONTEXT_PACK_RETENTION.max)),
+    bytes: Math.floor(positive(readEnv('ZLENS_CONTEXT_PACK_MAX_MB', env), CONTEXT_PACK_RETENTION.bytes / (1024 * 1024)) * 1024 * 1024),
   };
 }
 
@@ -5606,7 +5607,7 @@ function addSemanticDatasetSourceObject(
 /** DQL semantic providers may declare richer display kinds; Dataset M1 carries the safely renderable subset. */
 function datasetFormatForSemanticMetric(
   value: { kind: string; currency?: string; decimals?: number } | undefined,
-): import('@duckcodeailabs/dql-core').DatasetMeasureField['format'] | undefined {
+): import('@zlens/core').DatasetMeasureField['format'] | undefined {
   if (!value || !['number', 'currency', 'percent'].includes(value.kind)) return undefined;
   return {
     kind: value.kind as 'number' | 'currency' | 'percent',
@@ -6364,7 +6365,7 @@ async function planContextPackRoute(input: {
     return {
       route: 'conflict',
       intent,
-      reason: `Two certified ${routeConflict.objectType}s claim "${routeConflict.concept}" but disagree (${routeConflict.reason}). DQL refuses to guess which is authoritative.`,
+      reason: `Two certified ${routeConflict.objectType}s claim "${routeConflict.concept}" but disagree (${routeConflict.reason}). ZLens refuses to guess which is authoritative.`,
       trustLabel: 'conflict',
       reviewStatus: 'conflict',
       selectedEvidence: selectedEvidenceForConflict,
@@ -6615,7 +6616,7 @@ async function planContextPackRoute(input: {
       return clarifyDecision(intent, input.trustLabel, selectedEvidence, [{
         kind: 'metadata',
         severity: 'blocking',
-        message: 'No local metadata matched this trust question. Re-run dql compile or connect the relevant DQL/dbt project before reviewing trust.',
+        message: 'No local metadata matched this trust question. Re-run zlens compile or connect the relevant DQL/dbt project before reviewing trust.',
       }]);
     }
     return {
@@ -6869,7 +6870,7 @@ function clarifyDecision(
   return {
     route: 'clarify',
     intent,
-    reason: 'DQL needs one more business or metadata detail before it can safely generate SQL.',
+    reason: 'ZLens needs one more business or metadata detail before it can safely generate SQL.',
     trustLabel,
     reviewStatus: 'none',
     selectedEvidence,
@@ -7094,7 +7095,7 @@ function buildMissingContext(
     missing.push({
       kind: 'baseline',
       severity: 'blocking',
-      message: 'No comparable time/baseline field or selected tile history was found, so DQL needs the baseline period before explaining what changed.',
+      message: 'No comparable time/baseline field or selected tile history was found, so ZLens needs the baseline period before explaining what changed.',
     });
   }
   if ((intent === 'definition_lookup' || intent === 'trust_gap_review') && objects.length === 0) {

@@ -7,8 +7,8 @@ import {
   type ExpressionNode,
   type NamedArgNode,
   type SemanticLayer,
-} from '@duckcodeailabs/dql-core';
-import type { SQLParamSpec } from '@duckcodeailabs/dql-connectors';
+} from '@zlens/core';
+import type { SQLParamSpec } from '@zlens/connectors';
 import type { NotebookCell, NotebookChartConfig } from './document.js';
 import { resolveSemanticRefs, hasSemanticRefs } from './semantic-refs.js';
 
@@ -74,7 +74,7 @@ export function buildExecutionPlan(
   const block = program.statements.find((statement) => statement.kind === NodeKind.BlockDecl) as BlockDeclNode | undefined;
 
   if (!block) {
-    throw new Error('DQL notebook cells must contain a block declaration.');
+    throw new Error('ZLens notebook cells must contain a block declaration.');
   }
 
   // Semantic blocks: compose SQL from the semantic layer
@@ -93,7 +93,7 @@ export function buildExecutionPlan(
     throw new Error(`Unsupported block type "${block.blockType}". Only "custom" and "semantic" blocks can run in the notebook.`);
   }
   if (!block.query) {
-    throw new Error('DQL notebook block is missing a query field.');
+    throw new Error('ZLens notebook block is missing a query field.');
   }
 
   const processed = applyRLSDecorators(
@@ -253,7 +253,7 @@ function buildSemanticPlan(
       const metric = semanticLayer.getMetric(name);
       if (!metric) return `metric "${name}" is not defined in the semantic layer`;
       const kind = metric.metricType || metric.type || 'metric';
-      return `metric "${name}" exists but is a ${kind} metric DQL cannot compose natively — run it through a full semantic runtime (dbt Cloud Semantic Layer or local MetricFlow)`;
+      return `metric "${name}" exists but is a ${kind} metric ZLens cannot compose natively — run it through a full semantic runtime (dbt Cloud Semantic Layer or local MetricFlow)`;
     }).filter((reason): reason is string => Boolean(reason));
     throw new Error(
       reasons.length > 0

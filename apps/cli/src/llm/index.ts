@@ -16,7 +16,7 @@ export {
 
 /**
  * Registry of available LLM providers. Notebook and App chat default to the
- * Settings-resolved DQL agent providers. Claude Agent SDK / Claude Code remain
+ * Settings-resolved ZLens agent providers. Claude Agent SDK / Claude Code remain
  * explicit experimental runners for MCP-oriented workflows.
  */
 const RUNNERS: Record<ProviderId, AgentRunner> = {

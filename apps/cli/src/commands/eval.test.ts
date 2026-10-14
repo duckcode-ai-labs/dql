@@ -7,8 +7,8 @@ import { tmpdir } from 'node:os';
 // Resolve fixtures relative to this test file, not process.cwd(), so the suite
 // passes whether vitest runs from the repo root or the apps/cli package dir.
 const FIXTURES_ROOT = join(dirname(fileURLToPath(import.meta.url)), '../../test/fixtures');
-import type { DQLManifest } from '@duckcodeailabs/dql-core';
-import { planAgentAnswer, type PlanAgentAnswerResult } from '@duckcodeailabs/dql-agent';
+import type { DQLManifest } from '@zlens/core';
+import { planAgentAnswer, type PlanAgentAnswerResult } from '@zlens/agent';
 import {
   collectEvalCases,
   computeDistributions,

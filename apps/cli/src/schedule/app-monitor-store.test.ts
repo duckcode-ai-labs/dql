@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
-import { loadAppDocument } from '@duckcodeailabs/dql-core';
+import { loadAppDocument } from '@zlens/core';
 import { addPageMonitor, listPageMonitors, MonitorStoreError, removePageMonitor } from './app-monitor-store.js';
 
 const FIXTURE = fileURLToPath(new URL('../../test/fixtures/app-datasets-pilot', import.meta.url));

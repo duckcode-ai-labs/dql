@@ -20,6 +20,7 @@ import type { KGNode } from './kg/types.js';
 import { authorityIdentitiesForKGNode } from './semantic-identities.js';
 import type { PlanBlock } from './app-planner.js';
 import type { ResolvedAnalyticalPlan } from './resolved-analytical-plan.js';
+import { readEnv } from '@zlens/core';
 
 /** One ReAct step: a thought, the asset-bound action, and what observing it tells us. */
 export interface ResearchStep {
@@ -68,7 +69,7 @@ export interface ResearchBudget {
   repairs: 1;
   narratorCalls: 1;
   /**
-   * Scaled by `DQL_AGENT_DEADLINE_SCALE`, like every other agent deadline. Was
+   * Scaled by `ZLENS_AGENT_DEADLINE_SCALE`, like every other agent deadline. Was
    * the literal `120_000`, which a local model exceeds during planning alone.
    */
   wallClockMs: number;
@@ -79,7 +80,7 @@ export interface ResearchBudget {
  *
  * 120s assumes a hosted model. A local 27B needs ~2 minutes for the planning
  * call alone, so an unscaled budget is exceeded before the first branch runs —
- * the same reason `DQL_AGENT_DEADLINE_SCALE` exists for the Ask path. Scaling
+ * the same reason `ZLENS_AGENT_DEADLINE_SCALE` exists for the Ask path. Scaling
  * here keeps ONE knob rather than adding a second authority.
  */
 export function researchWallClockMs(): number {
@@ -371,7 +372,7 @@ export async function planResearch(input: {
         },
       ))
       : [];
-    if (process.env.DQL_ORCHESTRATOR_TRACE) {
+    if (readEnv('ZLENS_ORCHESTRATOR_TRACE')) {
       console.warn(hypothesisSteps.length > 0
         ? `[dql] research plan: ${hypothesisSteps.length} hypotheses — ${hypothesisSteps.map((step) => step.thought).join(' | ').slice(0, 220)}`
         : `[dql] research plan: deterministic template (${steps.length} steps) — provider=${Boolean(input.provider)} metrics=${input.metrics.length} blocks=${input.blocks.length}`);

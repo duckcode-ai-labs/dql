@@ -1,5 +1,5 @@
 /** Compatibility wrapper around the unified manifest-v3 analytical policy service. */
-import type { DQLManifest } from '@duckcodeailabs/dql-core';
+import type { DQLManifest } from '@zlens/core';
 import type { DomainContextEnvelope } from '../domain-context.js';
 import {
   validateAnalyticalSql,

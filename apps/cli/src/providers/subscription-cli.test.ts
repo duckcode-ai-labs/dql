@@ -10,14 +10,15 @@ import {
   parseCodexFinalMessage,
   resolveSubscriptionCliTimeoutMs,
 } from './subscription-cli.js';
+import { readEnv } from '@zlens/core';
 
 describe('subscription CLI timeout', () => {
   it('keeps a hard deadline even when the caller also supplies cancellation', () => {
     expect(resolveSubscriptionCliTimeoutMs({})).toBe(90_000);
-    expect(resolveSubscriptionCliTimeoutMs({ DQL_SUBSCRIPTION_CLI_TIMEOUT_MS: '15000' })).toBe(15_000);
-    expect(resolveSubscriptionCliTimeoutMs({ DQL_SUBSCRIPTION_CLI_TIMEOUT_MS: '1000' })).toBe(5_000);
-    expect(resolveSubscriptionCliTimeoutMs({ DQL_SUBSCRIPTION_CLI_TIMEOUT_MS: '900000' })).toBe(300_000);
-    expect(resolveSubscriptionCliTimeoutMs({ DQL_SUBSCRIPTION_CLI_TIMEOUT_MS: 'invalid' })).toBe(90_000);
+    expect(resolveSubscriptionCliTimeoutMs({ ZLENS_SUBSCRIPTION_CLI_TIMEOUT_MS: '15000' })).toBe(15_000);
+    expect(resolveSubscriptionCliTimeoutMs({ ZLENS_SUBSCRIPTION_CLI_TIMEOUT_MS: '1000' })).toBe(5_000);
+    expect(resolveSubscriptionCliTimeoutMs({ ZLENS_SUBSCRIPTION_CLI_TIMEOUT_MS: '900000' })).toBe(300_000);
+    expect(resolveSubscriptionCliTimeoutMs({ ZLENS_SUBSCRIPTION_CLI_TIMEOUT_MS: 'invalid' })).toBe(90_000);
   });
 });
 
@@ -114,7 +115,7 @@ describe('a CLI exit is classified: quota waits, authentication needs re-login, 
     const refresh = 'refresh-value-0123456789';
     const basic = 'dXNlcjpzZWNyZXQ=';
     const custom = 'custom-scheme-credential-0123456789';
-    const previousDebug = process.env.DQL_DEBUG_PROVIDER_CLI;
+    const previousDebug = process.env.ZLENS_DEBUG_PROVIDER_CLI;
     const logged: unknown[][] = [];
     const originalError = console.error;
     const provider = new ClaudeCodeCliProvider({
@@ -125,7 +126,7 @@ describe('a CLI exit is classified: quota waits, authentication needs re-login, 
         stdout: JSON.stringify({ is_error: true, result: `Request failed Authorization: Basic ${basic}; Authorization:Bearer ${bearer}; payload={"access_token":"${access}"}` }),
       }),
     });
-    process.env.DQL_DEBUG_PROVIDER_CLI = '1';
+    process.env.ZLENS_DEBUG_PROVIDER_CLI = '1';
     console.error = (...args: unknown[]) => { logged.push(args); };
     try {
       const error = await provider.generate([{ role: 'user', content: 'hi' }]).then(
@@ -139,8 +140,8 @@ describe('a CLI exit is classified: quota waits, authentication needs re-login, 
       for (const secret of [basic, custom, bearer, access, refresh]) expect(debug).not.toContain(secret);
     } finally {
       console.error = originalError;
-      if (previousDebug === undefined) delete process.env.DQL_DEBUG_PROVIDER_CLI;
-      else process.env.DQL_DEBUG_PROVIDER_CLI = previousDebug;
+      if (previousDebug === undefined) delete process.env.ZLENS_DEBUG_PROVIDER_CLI;
+      else process.env.ZLENS_DEBUG_PROVIDER_CLI = previousDebug;
     }
   });
 });
@@ -150,8 +151,8 @@ describe('a CLI timeout is a typed provider error', () => {
     const error = new ProviderTimeoutError(60_000);
     expect(error.code).toBe('provider_timeout');
     expect(error.message).toBe('The AI model did not respond within 60 seconds.');
-    expect(error.message).not.toContain('DQL_SUBSCRIPTION_CLI_TIMEOUT_MS');
-    expect(error.detail).toContain('DQL_SUBSCRIPTION_CLI_TIMEOUT_MS');
+    expect(error.message).not.toContain('ZLENS_SUBSCRIPTION_CLI_TIMEOUT_MS');
+    expect(error.detail).toContain('ZLENS_SUBSCRIPTION_CLI_TIMEOUT_MS');
     expect(error).toBeInstanceOf(Error);
   });
 });
@@ -229,9 +230,9 @@ describe('parseCodexFinalMessage', () => {
 
 // ── Live tests (opt-in) ────────────────────────────────────────────────────────
 // Real subscription round-trips cost money and require a logged-in CLI, so they only
-// run with DQL_TEST_LIVE_CLI=1. They prove the provider works end-to-end.
+// run with ZLENS_TEST_LIVE_CLI=1. They prove the provider works end-to-end.
 const hasClaude = spawnSync('claude', ['--version'], { stdio: 'ignore' }).status === 0;
-const liveClaude = process.env.DQL_TEST_LIVE_CLI === '1' && hasClaude;
+const liveClaude = readEnv('ZLENS_TEST_LIVE_CLI') === '1' && hasClaude;
 
 describe.runIf(liveClaude)('ClaudeCodeCliProvider (live)', () => {
   it('detects an installed, logged-in Claude subscription', async () => {
@@ -252,7 +253,7 @@ describe.runIf(liveClaude)('ClaudeCodeCliProvider (live)', () => {
 });
 
 const hasCodex = spawnSync('codex', ['--version'], { stdio: 'ignore' }).status === 0;
-describe.runIf(process.env.DQL_TEST_LIVE_CLI === '1' && hasCodex)('CodexCliProvider (live)', () => {
+describe.runIf(readEnv('ZLENS_TEST_LIVE_CLI') === '1' && hasCodex)('CodexCliProvider (live)', () => {
   it('detects an installed Codex CLI', async () => {
     const status = await CodexCliProvider.detect();
     expect(status.installed).toBe(true);

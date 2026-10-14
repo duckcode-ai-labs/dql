@@ -38,4 +38,4 @@ await build({
   platform: 'browser',
 });
 
-console.log('[DQL Runtime] Build complete');
+console.log('[ZLens Runtime] Build complete');

@@ -1,5 +1,5 @@
 /**
- * `dql verify` — prove the on-disk manifest is reproducible from source.
+ * `zlens verify` — prove the on-disk manifest is reproducible from source.
  *
  * Recompiles the manifest in-memory and diffs it against `dql-manifest.json`.
  * Returns a non-zero exit code (and prints a diff summary) on drift. Used by
@@ -9,7 +9,7 @@
 
 import { existsSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { buildManifest, resolveDataLexManifestPath, resolveDbtManifestPath, type DQLManifest } from '@duckcodeailabs/dql-core';
+import { buildManifest, resolveDataLexManifestPath, resolveDbtManifestPath, type DQLManifest } from '@zlens/core';
 import type { CLIFlags } from '../args.js';
 
 export async function runVerify(
@@ -41,7 +41,7 @@ export async function runVerify(
   const projectRoot = resolve(filteredCandidates[0] ?? '.');
   const manifestPath = join(projectRoot, 'dql-manifest.json');
   if (!existsSync(manifestPath)) {
-    throw new Error(`dql-manifest.json not found at ${manifestPath}. Run \`dql compile\` first.`);
+    throw new Error(`dql-manifest.json not found at ${manifestPath}. Run \`zlens compile\` first.`);
   }
 
   let dqlVersion = '0.6.0';
@@ -79,7 +79,7 @@ export async function runVerify(
   } else {
     console.error(`  ✗ Manifest drift detected:`);
     for (const item of drift) console.error(`    - ${item}`);
-    console.error('\n  Run `dql compile` to regenerate, then commit.');
+    console.error('\n  Run `zlens compile` to regenerate, then commit.');
   }
   process.exit(1);
 }

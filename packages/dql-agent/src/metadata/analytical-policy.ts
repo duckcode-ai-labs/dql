@@ -6,7 +6,7 @@ import {
   type DQLManifest,
   type ManifestModelEntity,
   type ManifestModelRelationship,
-} from '@duckcodeailabs/dql-core';
+} from '@zlens/core';
 import type { DomainContextEnvelope } from '../domain-context.js';
 
 export type AnalyticalPolicyCode =
@@ -206,7 +206,7 @@ export function planAnalyticalPath(manifest: DQLManifest, request: AnalyticalPat
   const directlyRelevant = relationships.filter((relationship) => entities.includes(relationship.from) || entities.includes(relationship.to));
   const attribution = directlyRelevant.find((relationship) => relationship.fanout === 'attribution_required'
     && entities.includes(relationship.from) && entities.includes(relationship.to));
-  if (attribution) return blocked('attribution_policy_required', entities, [attribution], `Relationship "${attribution.id}" requires an attribution policy or allocation policy before DQL can join these entities.`);
+  if (attribution) return blocked('attribution_policy_required', entities, [attribution], `Relationship "${attribution.id}" requires an attribution policy or allocation policy before ZLens can join these entities.`);
 
   const tierOf = relationshipTierResolver(manifest);
 
@@ -453,7 +453,7 @@ export function validateAnalyticalSql(
 ): AnalyticalPathPlan {
   if (manifest.manifestVersion !== 3 || !manifest.modeling || !manifest.dbtProvenance) return allowed([], []);
   const analysis = analyzeSqlReferences(sql, dialect);
-  if (!analysis.parsed) return blocked('unplanned_join', [], [], `DQL could not parse generated SQL for analytical policy validation: ${analysis.error ?? 'unknown parse error'}`);
+  if (!analysis.parsed) return blocked('unplanned_join', [], [], `ZLens could not parse generated SQL for analytical policy validation: ${analysis.error ?? 'unknown parse error'}`);
   const relationEntities = new Map<string, { key: string; entity: ManifestModelEntity }>();
   for (const relation of analysis.tables) {
     const entity = entityForRelation(relation, manifest);

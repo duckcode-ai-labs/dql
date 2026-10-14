@@ -390,7 +390,7 @@ export function ResearchPanel({
               <Workflow size={24} />
               <span>Preparing business memo</span>
               <h2>Writing business memo...</h2>
-              <p>DQL is opening a scoped memo for "{pendingAnalysisTitle}". The previous memo stays in history while this answer is built from the typed context, active filters, certified block evidence, and preview proof.</p>
+              <p>ZLens is opening a scoped memo for "{pendingAnalysisTitle}". The previous memo stays in history while this answer is built from the typed context, active filters, certified block evidence, and preview proof.</p>
               <div className="dql-app-research-creating-steps">
                 <small>Reading current filters</small>
                 <small>Checking certified block context</small>
@@ -531,7 +531,7 @@ export function ResearchPanel({
                 <Workflow size={22} />
                 <span>Preparing business memo</span>
                 <h2>Writing business memo...</h2>
-                <p>{pendingAnalysisTitle ? `DQL is opening a scoped memo for "${pendingAnalysisTitle}".` : 'DQL is using the Copilot context, active filters, certified block evidence, and any available preview proof to create the main-canvas memo.'}</p>
+                <p>{pendingAnalysisTitle ? `ZLens is opening a scoped memo for "${pendingAnalysisTitle}".` : 'ZLens is using the Copilot context, active filters, certified block evidence, and any available preview proof to create the main-canvas memo.'}</p>
               </div>
             ) : (
               <EmptyPanel title="Start analysis from Copilot." detail="Ask a follow-up, add context, then review the analysis here." />
@@ -622,7 +622,7 @@ function buildResearchReport(investigation: LocalAppInvestigation) {
   const title = researchReportDisplayTitle(investigation, contextQuestion, actionMode, sourceName);
   const scope = researchReportScopeLine(reportType, contextQuestion, sourceName, activeFilters);
   const summary = investigation.summary?.trim()
-    || `DQL wrote review-required analysis for ${sourceName}: ${investigation.question}. The selected app result is available, but this analysis still needs human review before it becomes governed business logic.`;
+    || `ZLens wrote review-required analysis for ${sourceName}: ${investigation.question}. The selected app result is available, but this analysis still needs human review before it becomes governed business logic.`;
   const recommendation = investigation.recommendation?.trim()
     || 'Use this as analyst-reviewed analysis first. Confirm the metric grain, filters, source tables, and caveats before adding it to the app or drafting a reusable DQL block.';
   const keyNumbers = [

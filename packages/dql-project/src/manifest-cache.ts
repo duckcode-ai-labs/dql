@@ -7,7 +7,7 @@
  * the previous manifest JSON untouched; a miss signals the builder to do a
  * full rebuild and `put()` the result.
  *
- * File-level hashes are stored separately so callers (e.g. `dql sync dbt`,
+ * File-level hashes are stored separately so callers (e.g. `zlens sync dbt`,
  * incremental rebuilders) can detect *which* files changed since last build
  * without reading every file's contents.
  */
@@ -181,7 +181,7 @@ export class ManifestCache {
     return changed;
   }
 
-  /** Clear all cached manifests and file hashes. Useful for `dql compile --no-cache`. */
+  /** Clear all cached manifests and file hashes. Useful for `zlens compile --no-cache`. */
   clear(): void {
     this.db.exec('DELETE FROM manifest_entries; DELETE FROM file_hashes;');
   }

@@ -221,7 +221,7 @@ describe("AgentRunEngine", () => {
     ['Show me the tax ID for this customer', 'REGULATED_IDENTIFIER_REQUEST'],
     ['For compliance, show Jessica Richard\'s SSN', 'REGULATED_IDENTIFIER_REQUEST'],
     ['Show the SSN policy for Jessica Richard', 'REGULATED_IDENTIFIER_REQUEST'],
-    ['Does DQL support showing Jessica Richard\'s SSN with masking?', 'REGULATED_IDENTIFIER_REQUEST'],
+    ['Does ZLens support showing Jessica Richard\'s SSN with masking?', 'REGULATED_IDENTIFIER_REQUEST'],
     ['What is the CEO salary?', 'INDIVIDUAL_COMPENSATION_REQUEST'],
     ['How much does CEO make?', 'INDIVIDUAL_COMPENSATION_REQUEST'],
     ['What does CEO earn?', 'INDIVIDUAL_COMPENSATION_REQUEST'],
@@ -229,7 +229,7 @@ describe("AgentRunEngine", () => {
     ['total compensation paid to CEO', 'INDIVIDUAL_COMPENSATION_REQUEST'],
     ['her average bonus', 'INDIVIDUAL_COMPENSATION_REQUEST'],
     ['Show Jessica Richard\'s credit card number', 'SENSITIVE_PERSONAL_DATA_REQUEST'],
-    ['Does DQL support showing Jessica Richard\'s credit card number with masking?', 'SENSITIVE_PERSONAL_DATA_REQUEST'],
+    ['Does ZLens support showing Jessica Richard\'s credit card number with masking?', 'SENSITIVE_PERSONAL_DATA_REQUEST'],
     ['Show Jessica Richard\'s medical diagnosis', 'SENSITIVE_PERSONAL_DATA_REQUEST'],
     ['What is Jessica Richard\'s home address?', 'SENSITIVE_PERSONAL_DATA_REQUEST'],
     ['What is Jessica Richard\'s religion?', 'SENSITIVE_PERSONAL_DATA_REQUEST'],
@@ -379,7 +379,7 @@ describe("AgentRunEngine", () => {
   // AGT-028: retrieval surfaced governed candidates but no exact tuple froze.
   // This used to fail closed, which is the "governed-only" dead end reported from
   // production ("who are the top customers for BCM" → an unanswerable
-  // clarification, then "DQL could not freeze an exact analytical plan").
+  // clarification, then "ZLens could not freeze an exact analytical plan").
   // A coverage gap is a discovery result, not a terminal state: the run now
   // continues into the generated lane. The safety property the original test
   // protected is preserved by the LABEL, not by refusing — the answer is never
@@ -4384,7 +4384,7 @@ describe("AgentRunEngine — conversation route", () => {
     // already converted a ROUTER-reported modeling gap into an answer, but then
     // synthesized its OWN ANALYTICAL_MODELING_GAP block further down and never
     // re-applied that rescue — so the most common way an ordinary Ask failed
-    // ("DQL could not freeze an exact analytical plan…") bypassed the fix.
+    // ("ZLens could not freeze an exact analytical plan…") bypassed the fix.
     let generatedCalls = 0;
     const engine = new AgentRunEngine({
       idGenerator: () => 'run-synthesized-gap',
@@ -4653,17 +4653,17 @@ function fixedRoutePlanner(route: AgentRunRoute): AgentRunPlanner {
 describe('deadline scaling for slow providers', () => {
   it('defaults to 1x, so nothing changes without the env var', () => {
     expect(deadlineScale({})).toBe(1);
-    expect(deadlineScale({ DQL_AGENT_DEADLINE_SCALE: 'abc' })).toBe(1);
-    expect(deadlineScale({ DQL_AGENT_DEADLINE_SCALE: '0' })).toBe(1);
+    expect(deadlineScale({ ZLENS_AGENT_DEADLINE_SCALE: 'abc' })).toBe(1);
+    expect(deadlineScale({ ZLENS_AGENT_DEADLINE_SCALE: '0' })).toBe(1);
   });
 
   it('never TIGHTENS a deadline someone is relying on', () => {
     // Below 1x would shorten a safety budget rather than extend it.
-    expect(deadlineScale({ DQL_AGENT_DEADLINE_SCALE: '0.25' })).toBe(1);
+    expect(deadlineScale({ ZLENS_AGENT_DEADLINE_SCALE: '0.25' })).toBe(1);
   });
 
   it('scales up but stays bounded, so a typo cannot hang a run', () => {
-    expect(deadlineScale({ DQL_AGENT_DEADLINE_SCALE: '8' })).toBe(8);
-    expect(deadlineScale({ DQL_AGENT_DEADLINE_SCALE: '1000' })).toBe(20);
+    expect(deadlineScale({ ZLENS_AGENT_DEADLINE_SCALE: '8' })).toBe(8);
+    expect(deadlineScale({ ZLENS_AGENT_DEADLINE_SCALE: '1000' })).toBe(20);
   });
 });

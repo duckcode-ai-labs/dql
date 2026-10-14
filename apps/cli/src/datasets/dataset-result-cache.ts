@@ -4,7 +4,7 @@ import { dirname } from 'node:path';
 import { existsSync, mkdirSync } from 'node:fs';
 import type Database from 'better-sqlite3';
 
-import type { DatasetCacheDeliveryReceiptV1 } from '@duckcodeailabs/dql-core';
+import type { DatasetCacheDeliveryReceiptV1 } from '@zlens/core';
 
 const require = createRequire(import.meta.url);
 let databaseCtor: typeof Database | null = null;

@@ -8,12 +8,12 @@ import { HostHookTimeoutError } from './hook-deadline.js';
 export type { DqlAction, DqlResource, DqlRouteAction } from './route-actions.js';
 
 /**
- * WHO IS ASKING (RFC 0010, slice HH-1). A program that embeds DQL can tell
- * the server who made each request; DQL then takes every "who did this"
+ * WHO IS ASKING (RFC 0010, slice HH-1). A program that embeds ZLens can tell
+ * the server who made each request; ZLens then takes every "who did this"
  * record — a review, a correction's author, the owner of new content — from
  * that person instead of from the request body or this machine's git user.
  *
- * With no host hooks nothing here is used: `dql notebook` keeps its one
+ * With no host hooks nothing here is used: `zlens notebook` keeps its one
  * local owner and behaves exactly as before.
  */
 export interface DqlPrincipal {
@@ -89,7 +89,7 @@ export function currentHostHooks(): DqlHostHooks | undefined {
   return scopedHostHooks()?.hooks;
 }
 
-/** What DQL knows about the values it is about to send a model (`isInBoundary`). */
+/** What ZLens knows about the values it is about to send a model (`isInBoundary`). */
 export interface DqlBoundaryContext {
   /** Every table the values came from, as DQL's SQL scan saw each statement; absent when it cannot list them all. */
   relations?: string[];
@@ -121,7 +121,7 @@ export async function hostAllowedSources(hooks: DqlHostHooks | undefined, princi
 
 /**
  * One knowledge server as a host hands it over for one person (HH-15): a
- * streamable HTTP MCP endpoint and that person's headers. DQL calls only its
+ * streamable HTTP MCP endpoint and that person's headers. ZLens calls only its
  * search and fetch tools (read-only), through the tool gate.
  */
 export interface DqlKnowledgeServer {
@@ -151,18 +151,18 @@ export interface DqlDecision {
   reason?: string;
   /**
    * HH-12: where to go from a refusal, e.g. a page to ask for access. Only a
-   * same-origin path (`/…`) is passed on; DQL opens it as a host page.
+   * same-origin path (`/…`) is passed on; ZLens opens it as a host page.
    */
   next?: { label: string; href: string };
   /**
    * On a refusal: this person holds the action by role, but the place refuses it for everyone (for example
-   * Production, which follows main, refuses every change). DQL then lets them read what the action reviews,
+   * Production, which follows main, refuses every change). ZLens then lets them read what the action reviews,
    * read-only. A refusal for a person who does not hold the action never sets it; `next` is not a substitute.
    */
   readOnly?: boolean;
 }
 
-/** A refusal's `next` link as DQL passes it on: a same-origin path only. */
+/** A refusal's `next` link as ZLens passes it on: a same-origin path only. */
 export function safeNextLink(next: DqlDecision['next']): { label: string; href: string } | undefined {
   if (!next || typeof next.label !== 'string' || typeof next.href !== 'string') return undefined;
   if (!next.href.startsWith('/') || next.href.startsWith('//') || next.href.includes('\\')) return undefined;
@@ -198,7 +198,7 @@ export interface DqlHostHooks {
    */
   credentials?: DqlCredentialsHook;
   /**
-   * One event per warehouse statement DQL ran (RFC 0010 HH-6): the engine,
+   * One event per warehouse statement ZLens ran (RFC 0010 HH-6): the engine,
    * whether it read data or schema, the outcome and how long it took — for a
    * host's metrics. Never the SQL, its parameters, its rows or who asked.
    * Called after the statement finishes; errors are ignored.
@@ -221,7 +221,7 @@ export interface DqlHostHooks {
    *
    * `context.relations` names every table the values DQL is about to send
    * came from, when it knows them all (a story drafted from a page run, a
-   * question about a chart on screen). It is absent when DQL cannot list
+   * question about a chart on screen). It is absent when ZLens cannot list
    * them — decide as if the values could have come from anywhere.
    */
   isInBoundary?(model: { id: string; name: string; model?: string; baseUrl?: string }, context?: DqlBoundaryContext): boolean;
@@ -264,7 +264,7 @@ export interface DqlHostHooks {
    */
   audience?(principal: DqlPrincipal): Promise<'stakeholder' | 'analyst' | undefined> | 'stakeholder' | 'analyst' | undefined;
   /**
-   * What the DQL app shows around its own screens for this person (HH-9):
+   * What the ZLens app shows around its own screens for this person (HH-9):
    * links to the host's own pages, the host's sign-out, and actions the host
    * offers on answers that need review (for example "Make this a certified
    * answer"). The app's screens stay DQL's; the host only adds to them.
@@ -296,10 +296,10 @@ export interface DqlHostHooks {
   /**
    * Whether figures read from these tables can differ by who reads them: a
    * row rule, column policy or tag protection the host applies to one of
-   * them. DQL asks before an Ask answer's written text (the figures its
+   * them. ZLens asks before an Ask answer's written text (the figures its
    * author saw) is saved into an App page as a static text tile, and refuses
    * it when the answer is yes: a live tile runs each reader's own rules.
-   * `relations` absent: DQL could not list every table the answer read; answer
+   * `relations` absent: ZLens could not list every table the answer read; answer
    * as if it could be any table. An error means yes. Without this hook, a
    * host with `rowPolicy` or `credentials` is taken to mean yes.
    */
@@ -309,17 +309,17 @@ export interface DqlHostHooks {
    * static tile before `figuresDependOnReader` refused them (the people who
    * replace such tiles: an App's authors and stewards). Everyone else reads a
    * placeholder in its place, on the page and in every page run. An error
-   * means no. Without this hook DQL asks `authorize` for `app.author` on the
+   * means no. Without this hook ZLens asks `authorize` for `app.author` on the
    * App, then `dataset.certify`.
    */
   keepsAnswerText?(principal: DqlPrincipal, input: { appId: string }): boolean | Promise<boolean>;
   /**
    * HH-15: the knowledge sources (read-only document servers, e.g.
    * Confluence) this person may use, each with this person's own auth
-   * headers — never a shared key. DQL reads them with its own MCP client, so
+   * headers — never a shared key. ZLens reads them with its own MCP client, so
    * Ask and Research can cite documents with any model provider. With this
    * hook the host decides alone; an error means none. Without it, a host that
-   * signs people in gives no knowledge sources, and `dql notebook` without a
+   * signs people in gives no knowledge sources, and `zlens notebook` without a
    * host reads the project's `.dql/mcp-servers.json` (`use: ["knowledge"]`).
    */
   knowledgeSources?(principal: DqlPrincipal): Promise<DqlKnowledgeServer[]> | DqlKnowledgeServer[];
@@ -355,14 +355,14 @@ export interface DqlHostHooks {
    * A secret the host keeps stable for this workspace (for example derived
    * from its key service), under which question fingerprints leave in traces
    * (the sink above and OTLP): HMAC-SHA256, so they cannot be checked against
-   * likely questions elsewhere. Without it DQL makes one and keeps it in
+   * likely questions elsewhere. Without it ZLens makes one and keeps it in
    * `.dql/local/private/trace-salt`.
    */
   traceSalt?: string;
   /**
    * Where state lives (HH-6), for hosts that run several copies of DQL on
    * shared storage. Each defaults to today's SQLite file in the project.
-   * Every method returns a Promise; DQL awaits each call, so a store may be
+   * Every method returns a Promise; ZLens awaits each call, so a store may be
    * a network database.
    */
   stores?: {
@@ -395,7 +395,7 @@ export interface DqlHostHooks {
    * values go (for example "for the model", "for a delivery"), not who the
    * person is. They stay in the keys of cached and proven results, so a result
    * read for one destination never serves another. They are left out only
-   * when DQL finds the person's own earlier run again: a question about a
+   * when ZLens finds the person's own earlier run again: a question about a
    * chart on screen finds the chart that person ran.
    */
   purposeAttributes?: readonly string[];
@@ -412,7 +412,7 @@ export interface DqlHostHooks {
   sensitiveQuestions?: 'wording' | 'columns';
 }
 
-/** The host's additions to the DQL app for one person (HH-9). */
+/** The host's additions to the ZLens app for one person (HH-9). */
 export type DqlHostIcon = 'inbox' | 'requests' | 'review' | 'work' | 'health' | 'admin' | 'people' | 'git' | 'link';
 
 export interface DqlAnswerStatus {
@@ -436,7 +436,7 @@ export interface DqlHostUi {
    */
   /**
    * Buttons on an answer. `on` says which answers get it: `review` (an AI
-   * answer no certified source backs; the default), `unanswered` (DQL could
+   * answer no certified source backs; the default), `unanswered` (ZLens could
    * not answer at all) and/or `answered` (a certified or governed answer —
    * e.g. "This looks wrong", shown quietly).
    */
@@ -466,7 +466,7 @@ export interface DqlHostUi {
   appNotFound?: { message: string; next?: { label: string; href: string } };
 }
 
-/** `appNotFound` as DQL passes it on: plain text, a same-origin link only. */
+/** `appNotFound` as ZLens passes it on: plain text, a same-origin link only. */
 export function safeAppNotFound(value: unknown): { message: string; next?: { label: string; href: string } } | undefined {
   if (!value || typeof value !== 'object') return undefined;
   const raw = value as Record<string, unknown>;
@@ -512,7 +512,7 @@ export interface DqlPageEdition {
   href: string;
   runId: string;
   at: string;
-  /** Which schedule ran it, when DQL knows. */
+  /** Which schedule ran it, when ZLens knows. */
   scheduleId?: string;
 }
 
@@ -527,7 +527,7 @@ const HOME_TONES = new Set(['info', 'caution', 'done']);
 const sameOriginPath = (href: unknown): href is string => typeof href === 'string' && href.startsWith('/') && !href.startsWith('//') && !href.includes('\\');
 const plain = (value: unknown, max: number): string => (typeof value === 'string' ? value.replace(/\s+/g, ' ').trim().slice(0, max) : '');
 
-/** A host's Home cards as DQL passes them to the app: plain text, same-origin links, bounded. */
+/** A host's Home cards as ZLens passes them to the app: plain text, same-origin links, bounded. */
 export function safeHomeCards(cards: unknown): DqlHomeCard[] {
   if (!Array.isArray(cards)) return [];
   const out: DqlHomeCard[] = [];
@@ -573,7 +573,7 @@ export interface DqlHostBanner {
   links?: Array<{ label: string; href: string }>;
 }
 
-/** A host banner as DQL passes it to the app: plain text, a known tone, same-origin links only. */
+/** A host banner as ZLens passes it to the app: plain text, a known tone, same-origin links only. */
 export function safeHostBanner(banner: unknown): DqlHostBanner | undefined {
   if (!banner || typeof banner !== 'object') return undefined;
   const raw = banner as Record<string, unknown>;
@@ -600,30 +600,30 @@ export type DqlStatementObserver = (event: DqlStatementEvent) => void | Promise<
 
 /**
  * The run store surface the server uses (HH-6). Every method returns a
- * Promise, so a host can keep runs in a shared database; DQL awaits each
+ * Promise, so a host can keep runs in a shared database; ZLens awaits each
  * call. `dql-agent` exports the persisted form (`agentRunForStorage`,
  * `agentRunFromStorage`, the progress pair and `interruptedAgentRun`) so a
  * host store keeps the same records the SQLite store keeps.
  */
-export type DqlRunStore = import('@duckcodeailabs/dql-agent').PromisedMethods<DqlRunStoreMethods>;
-/** The same surface as DQL calls it: its own SQLite store answers synchronously. */
-export type DqlRunStoreLike = import('@duckcodeailabs/dql-agent').AwaitableMethods<DqlRunStoreMethods>;
-type DqlRunStoreMethods = Pick<import('@duckcodeailabs/dql-agent').SqliteAgentRunStore, 'save' | 'get' | 'list' | 'getProgress' | 'saveProgress' | 'claimRequest' | 'requestClaim' | 'count'>;
+export type DqlRunStore = import('@zlens/agent').PromisedMethods<DqlRunStoreMethods>;
+/** The same surface as ZLens calls it: its own SQLite store answers synchronously. */
+export type DqlRunStoreLike = import('@zlens/agent').AwaitableMethods<DqlRunStoreMethods>;
+type DqlRunStoreMethods = Pick<import('@zlens/agent').SqliteAgentRunStore, 'save' | 'get' | 'list' | 'getProgress' | 'saveProgress' | 'claimRequest' | 'requestClaim' | 'count'>;
 /** The memory store surface (HH-6); every method returns a Promise. */
-export type DqlMemoryStore = import('@duckcodeailabs/dql-agent').PromisedMethods<Pick<import('@duckcodeailabs/dql-agent').MemoryStore, 'upsert' | 'get' | 'list' | 'search' | 'setEnabled' | 'delete'>> & { close?(): Promise<void> };
+export type DqlMemoryStore = import('@zlens/agent').PromisedMethods<Pick<import('@zlens/agent').MemoryStore, 'upsert' | 'get' | 'list' | 'search' | 'setEnabled' | 'delete'>> & { close?(): Promise<void> };
 /** The conversation store surface (HH-6); every method returns a Promise. */
-export type DqlConversationStore = import('@duckcodeailabs/dql-agent').PromisedMethods<import('@duckcodeailabs/dql-agent').ConversationStoreMethods> & {
+export type DqlConversationStore = import('@zlens/agent').PromisedMethods<import('@zlens/agent').ConversationStoreMethods> & {
   pruneThreads?(olderThanDays: number): Promise<number>;
   close?(): Promise<void>;
 };
 
-/** The generate/stream surface DQL needs from a model; dql-agent's AgentProvider satisfies it. */
-export type DqlModelProvider = import('@duckcodeailabs/dql-agent').AgentProvider;
+/** The generate/stream surface ZLens needs from a model; dql-agent's AgentProvider satisfies it. */
+export type DqlModelProvider = import('@zlens/agent').AgentProvider;
 
 const requestContext = new AsyncLocalStorage<DqlRequestContext>();
 
 /**
- * ONE PROCESS, SEVERAL SERVERS (RFC 0010). A host may run several DQL servers
+ * ONE PROCESS, SEVERAL SERVERS (RFC 0010). A host may run several ZLens servers
  * in one process — its Production and each pull request's preview, a server
  * without hooks beside them — each with its own hooks. Every request a server
  * answers, and the work it starts, runs in that server's scope, so the hooks
@@ -641,7 +641,7 @@ export interface DqlServerScope {
 }
 const serverScope = new AsyncLocalStorage<DqlServerScope>();
 
-/** Run `work` as the server `scope`'s own (DQL does this around each request and its server's startup). */
+/** Run `work` as the server `scope`'s own (ZLens does this around each request and its server's startup). */
 export function withServerScope<T>(scope: DqlServerScope, work: () => T): T {
   return serverScope.run(scope, work);
 }
@@ -733,7 +733,7 @@ export function hostGitAuthor(): string | undefined {
   return `${name} <${principal.email.replace(/[<>\s]/g, '')}>`;
 }
 
-export const HOST_MODEL_UNAVAILABLE = 'DQL could not get the model your administrator set up, so it did not ask a model. Try again; if it keeps happening, ask your administrator.';
+export const HOST_MODEL_UNAVAILABLE = 'ZLens could not get the model your administrator set up, so it did not ask a model. Try again; if it keeps happening, ask your administrator.';
 
 /** The host's model hook failed or answered something that is not a model: no model is used, not even the project's own. */
 export class HostModelUnavailableError extends Error {
@@ -747,7 +747,7 @@ export class HostModelUnavailableError extends Error {
 /**
  * The host's model for the person asking, if the host supplies one (HH-5). Undefined (the hook answers nothing, or
  * there is no hook) uses DQL's own provider settings. A hook that throws, or answers something other than
- * `{ id, provider }`, refuses: DQL then asks no model at all rather than the project's own (HostModelUnavailableError).
+ * `{ id, provider }`, refuses: ZLens then asks no model at all rather than the project's own (HostModelUnavailableError).
  */
 export function hostModelProvider(): { id: string; provider: DqlModelProvider } | undefined {
   const hook = modelHooks().modelProvider;
@@ -847,9 +847,9 @@ export async function resolveHostPrincipal(hooks: DqlHostHooks, req: IncomingMes
 }
 
 /** Shown when the host does not say in time who is asking (rule 1: a time limit, then a refusal). */
-export const HOST_IDENTITY_UNAVAILABLE = 'DQL could not check who you are right now. Try again in a moment.';
+export const HOST_IDENTITY_UNAVAILABLE = 'ZLens could not check who you are right now. Try again in a moment.';
 /** Shown when the host does not say in time whether this person may do this. */
-export const HOST_DECISION_UNAVAILABLE = 'DQL could not check what you may do right now. Try again in a moment.';
+export const HOST_DECISION_UNAVAILABLE = 'ZLens could not check what you may do right now. Try again in a moment.';
 
 /**
  * Who is asking, and whether the host could not say in time (`unavailable`: the hook did not answer within its
@@ -1007,7 +1007,7 @@ export function hostPrincipalRunOwner(): Record<string, unknown> | undefined {
   return { id: principal.id, groups: [...(principal.groups ?? [])].sort(), attributes };
 }
 
-/** The host's `purposeAttributes` as DQL reads them: a list of names; anything else names none. */
+/** The host's `purposeAttributes` as ZLens reads them: a list of names; anything else names none. */
 export function purposeAttributeNames(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((name): name is string => typeof name === 'string' && name.length > 0) : [];
 }

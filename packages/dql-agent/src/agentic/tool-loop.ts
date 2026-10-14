@@ -30,6 +30,7 @@ import type {
 } from '../providers/types.js';
 import { assertProviderPayloadAllowed, boundProviderResultRows } from '../provider-egress.js';
 import { runGatedTool } from './tool-gate.js';
+import { readEnv } from '@zlens/core';
 
 export interface AgenticToolLoopOptions extends ProviderToolLoopOptions {
   /**
@@ -436,7 +437,7 @@ export async function runTextProtocolToolLoopDetailed(
     }
     const requestedCall = parseTextToolCall(text);
     if (!requestedCall) {
-      if (process.env.DQL_DEBUG_TOOL_LOOP) console.error('[tool-loop unparsed]', JSON.stringify(text.slice(0, 400)));
+      if (readEnv('ZLENS_DEBUG_TOOL_LOOP')) console.error('[tool-loop unparsed]', JSON.stringify(text.slice(0, 400)));
       const policy = livePolicyBeforeDispatch;
       const adopted = await adoptProseAsFinishNarration(options, tools, policy, text);
       if (adopted) {

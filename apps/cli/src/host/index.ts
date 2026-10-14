@@ -1,9 +1,9 @@
 /**
  * The supported way to run DQL inside another program (RFC 0010): start the
- * server with host hooks. Import from `@duckcodeailabs/dql-cli/host`.
+ * server with host hooks. Import from `@zlens/cli/host`.
  */
 export { startLocalServer, type LocalServerOptions } from '../local-runtime.js';
-/** The full server with its UI for one project — what `dql notebook` runs — as a hosted runtime. */
+/** The full server with its UI for one project — what `zlens notebook` runs — as a hosted runtime. */
 export { startProjectRuntime, type ProjectRuntimeHandle } from '../commands/notebook.js';
 export {
   currentPrincipal,
@@ -52,7 +52,7 @@ export {
 
 export { answerFactsFromRun, answerSql, tablesRead, type DqlAnswerFacts } from './answer-facts.js';
 /**
- * The statement check DQL runs on a hosted connection, and the reading of a statement it rests on, for a host that
+ * The statement check ZLens runs on a hosted connection, and the reading of a statement it rests on, for a host that
  * checks a statement before it passes it on (the same rules, the same reading per engine).
  */
 export {

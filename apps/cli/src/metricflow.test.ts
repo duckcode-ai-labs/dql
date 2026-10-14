@@ -20,14 +20,14 @@ describe('MetricFlow compile wrapper', () => {
 
   beforeEach(() => {
     tmpDir = mkdtempSync(join(tmpdir(), 'dql-mf-'));
-    previousBin = process.env.DQL_METRICFLOW_BIN;
+    previousBin = process.env.ZLENS_METRICFLOW_BIN;
   });
 
   afterEach(() => {
     if (previousBin === undefined) {
-      delete process.env.DQL_METRICFLOW_BIN;
+      delete process.env.ZLENS_METRICFLOW_BIN;
     } else {
-      process.env.DQL_METRICFLOW_BIN = previousBin;
+      process.env.ZLENS_METRICFLOW_BIN = previousBin;
     }
     rmSync(tmpDir, { recursive: true, force: true });
   });
@@ -48,7 +48,7 @@ describe('MetricFlow compile wrapper', () => {
       'utf-8',
     );
     chmodSync(bin, 0o755);
-    process.env.DQL_METRICFLOW_BIN = bin;
+    process.env.ZLENS_METRICFLOW_BIN = bin;
 
     const result = await compileMetricFlowQuery({
       projectRoot: tmpDir,
@@ -90,7 +90,7 @@ describe('MetricFlow compile wrapper', () => {
       'utf-8',
     );
     chmodSync(bin, 0o755);
-    process.env.DQL_METRICFLOW_BIN = bin;
+    process.env.ZLENS_METRICFLOW_BIN = bin;
 
     let ticks = 0;
     const ticker = setInterval(() => { ticks += 1; }, 50);
@@ -117,7 +117,7 @@ describe('MetricFlow compile wrapper', () => {
       'utf-8',
     );
     chmodSync(bin, 0o755);
-    process.env.DQL_METRICFLOW_BIN = bin;
+    process.env.ZLENS_METRICFLOW_BIN = bin;
     const started = Date.now();
     await expect(compileMetricFlowQuery({
       projectRoot: tmpDir,
@@ -142,7 +142,7 @@ describe('MetricFlow compile wrapper', () => {
       'utf-8',
     );
     chmodSync(bin, 0o755);
-    process.env.DQL_METRICFLOW_BIN = bin;
+    process.env.ZLENS_METRICFLOW_BIN = bin;
     const controller = new AbortController();
     const pending = compileMetricFlowQuery({
       projectRoot: tmpDir,
@@ -171,7 +171,7 @@ describe('MetricFlow compile wrapper', () => {
   });
 
   it('reports a missing MetricFlow executable as unavailable', () => {
-    process.env.DQL_METRICFLOW_BIN = join(tmpDir, 'missing-mf');
+    process.env.ZLENS_METRICFLOW_BIN = join(tmpDir, 'missing-mf');
     expect(hasMetricFlowCli()).toBe(false);
   });
 
@@ -179,7 +179,7 @@ describe('MetricFlow compile wrapper', () => {
     const bin = join(tmpDir, 'failing-mf');
     writeFileSync(bin, '#!/bin/sh\nexit 1\n', 'utf-8');
     chmodSync(bin, 0o755);
-    process.env.DQL_METRICFLOW_BIN = bin;
+    process.env.ZLENS_METRICFLOW_BIN = bin;
     expect(hasMetricFlowCli()).toBe(false);
   });
 });
@@ -426,7 +426,7 @@ If you think you found a bug, please report it here:
 
   it('carries the real error into the compile failure thrown by compileMetricFlowQuery', async () => {
     const tmpDir = mkdtempSync(join(tmpdir(), 'dql-mf-banner-'));
-    const previousBin = process.env.DQL_METRICFLOW_BIN;
+    const previousBin = process.env.ZLENS_METRICFLOW_BIN;
     try {
       mkdirSync(join(tmpDir, 'target'), { recursive: true });
       writeFileSync(join(tmpDir, 'target', 'semantic_manifest.json'), '{}', 'utf-8');
@@ -444,7 +444,7 @@ If you think you found a bug, please report it here:
         'utf-8',
       );
       chmodSync(bin, 0o755);
-      process.env.DQL_METRICFLOW_BIN = bin;
+      process.env.ZLENS_METRICFLOW_BIN = bin;
 
       const failure = await compileMetricFlowQuery({
         projectRoot: tmpDir,
@@ -456,8 +456,8 @@ If you think you found a bug, please report it here:
         .toBe('MetricFlow compile failed (1): The given input does not exactly match any known metrics. Query input: tax_paid.');
       expectNoBanner(failure?.message ?? '');
     } finally {
-      if (previousBin === undefined) delete process.env.DQL_METRICFLOW_BIN;
-      else process.env.DQL_METRICFLOW_BIN = previousBin;
+      if (previousBin === undefined) delete process.env.ZLENS_METRICFLOW_BIN;
+      else process.env.ZLENS_METRICFLOW_BIN = previousBin;
       rmSync(tmpDir, { recursive: true, force: true });
     }
   });

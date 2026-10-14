@@ -12,7 +12,7 @@ import { performance } from 'node:perf_hooks';
 import { resolve } from 'node:path';
 
 const project = resolve(process.argv[2] ?? '.');
-const cli = process.env.DQL_CLI ?? 'node apps/cli/dist/index.js';
+const cli = (process.env.ZLENS_CLI ?? process.env.DQL_CLI) ?? 'node apps/cli/dist/index.js';
 
 function time(label, fn) {
   const t0 = performance.now();

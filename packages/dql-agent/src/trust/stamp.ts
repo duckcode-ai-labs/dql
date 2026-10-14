@@ -3,7 +3,7 @@ import {
   type DataStateLike,
   type ResolvedTrustLabel,
   type TrustLabelId,
-} from '@duckcodeailabs/dql-core';
+} from '@zlens/core';
 
 export interface TrustStampableAnswer {
   kind?: string;

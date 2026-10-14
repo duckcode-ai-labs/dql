@@ -1,8 +1,8 @@
 # Hosted servers
 
-`dql notebook` is a single-user server: whoever opens it is the person using it.
+`zlens notebook` is a single-user server: whoever opens it is the person using it.
 A **host** is a program that runs the same server for many people and tells it,
-for every request, who is asking. DQL's [host hooks](../rfcs/0010-host-hooks.md)
+for every request, who is asking. ZLens's [host hooks](../rfcs/0010-host-hooks.md)
 (RFC 0010) are how a host does that. This page says what the server does when a
 host is present. Without a host, nothing on this page applies, except where the
 [changelog](https://github.com/duckcode-ai-labs/dql/blob/main/CHANGELOG.md) says
@@ -20,7 +20,7 @@ otherwise.
   project's own connections; connection settings inside a request are ignored.
 - **Statements are read-only and checked once.** SQL written by a person or a
   model passes through one checked path, is read with the rules of the engine
-  it will run on, and is refused unless it only reads. A statement DQL cannot
+  it will run on, and is refused unless it only reads. A statement ZLens cannot
   read the same way under every server setting is refused. The warehouse's own
   activity and settings views are not readable this way.
 - **One figures decision.** Whether needs-review figures may be shown is
@@ -33,9 +33,9 @@ otherwise.
 - **Hooks fail closed.** A hook that throws, answers late (every hook has a
   time limit) or answers with the wrong shape is treated as a refusal.
 
-## What changes for a single-user `dql notebook`
+## What changes for a single-user `zlens notebook`
 
-Fonts and driver icons come from DQL itself, an export holds the whole result up
+Fonts and driver icons come from ZLens itself, an export holds the whole result up
 to 100,000 rows (a larger result is refused with `EXPORT_TOO_LARGE`; it used to
 stop at the 500 rows on screen), a local Ollama model contacts only its
 configured address, and research narration follows `providerResultRowEgress:
@@ -45,6 +45,6 @@ disabled`. The changelog lists the rest.
 
 [RFC 0010](../rfcs/0010-host-hooks.md) lists every hook and field once, with its
 default. The host package
-(`@duckcodeailabs/dql-cli/host`) exports the statement check and the per-engine
-reader that DQL applies, so a host that checks a statement before passing it on
+(`zlens/host`) exports the statement check and the per-engine
+reader that ZLens applies, so a host that checks a statement before passing it on
 uses the same rules.

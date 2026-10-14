@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
-import { buildManifest } from '@duckcodeailabs/dql-core';
+import { buildManifest } from '@zlens/core';
 
 const fixtureRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../test/fixtures/app-datasets-pilot');
 let projectRoot: string | undefined;

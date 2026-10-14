@@ -1,5 +1,5 @@
 {
-  "name": "@duckcodeailabs/dql-notebook-app",
+  "name": "@zlens/notebook-app",
   "version": "1.6.34",
   "private": true,
   "license": "Apache-2.0",
@@ -22,8 +22,8 @@
     "@codemirror/theme-one-dark": "^6.1.2",
     "@codemirror/view": "^6.36.3",
     "@dagrejs/dagre": "^3.0.0",
-    "@duckcodeailabs/dql-core": "workspace:*",
-    "@duckcodeailabs/dql-ui": "workspace:*",
+    "@zlens/core": "workspace:*",
+    "@zlens/ui": "workspace:*",
     "@lezer/highlight": "^1.2.3",
     "@radix-ui/react-dialog": "^1.1.6",
     "@tanstack/react-query": "^5",

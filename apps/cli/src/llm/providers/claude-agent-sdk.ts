@@ -1,11 +1,12 @@
 import { homedir } from 'node:os';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { DQLContext, findProjectRoot } from '@duckcodeailabs/dql-mcp';
+import { DQLContext, findProjectRoot } from '@zlens/mcp';
 import type { AgentRunRequest, AgentRunner, AgentTurn, BlockProposal } from '../types.js';
 import { buildAgentTools, type AgentTool } from '../tools.js';
 import { blockProposalDqlMetadata } from '../proposal-metadata.js';
-import { runGatedTool } from '@duckcodeailabs/dql-agent';
+import { runGatedTool } from '@zlens/agent';
+import { readEnv } from '@zlens/core';
 
 const MODEL = 'claude-opus-4-7';
 const MAX_TOOL_ITERATIONS = 16;
@@ -29,7 +30,8 @@ interface AnthropicClient {
 
 function loadApiKey(): string | null {
   if (process.env.ANTHROPIC_API_KEY) return process.env.ANTHROPIC_API_KEY;
-  if (process.env.DQL_LLM_KEY) return process.env.DQL_LLM_KEY;
+  const legacyKey = readEnv('ZLENS_LLM_KEY');
+  if (legacyKey) return legacyKey;
   const credPath = join(homedir(), '.dql', 'credentials');
   if (!existsSync(credPath)) return null;
   try {

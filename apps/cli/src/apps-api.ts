@@ -23,7 +23,7 @@ import type {
   NarrateItem,
   NarrateResult,
   ResearchPlan as AppResearchPlan,
-} from '@duckcodeailabs/dql-agent';
+} from '@zlens/agent';
 import {
   loadAppDocument,
   findAppDocuments,
@@ -67,7 +67,7 @@ import {
   tileQueryValidationRuns,
   validateTileQuery,
   resolveBlockReplacement,
-} from '@duckcodeailabs/dql-core';
+} from '@zlens/core';
 import {
   defaultPersonaRegistry,
   defaultLocalAppsDbPath,
@@ -79,8 +79,9 @@ import {
   type LocalAppInvestigation,
   type LocalAppInvestigationIntent,
   type LocalAppInvestigationReportSection,
-} from '@duckcodeailabs/dql-project';
+} from '@zlens/project';
 import type { LocalOperation, LocalOperationProgress } from './local-operation-coordinator.js';
+import { readEnv } from '@zlens/core';
 
 interface Ctx {
   req: IncomingMessage;
@@ -106,7 +107,7 @@ interface Ctx {
   mayKeepAnswerText?: (appId: string) => Promise<boolean>;
   /**
    * One of the signed-in person's own Ask answers (never anyone else's): the tables its SQL read (absent when
-   * DQL cannot list them all), and that SQL, for a live tile.
+   * ZLens cannot list them all), and that SQL, for a live tile.
    */
   askRunReads?: (runId: string) => Promise<{ relations?: string[]; sql?: string; question?: string } | null>;
   executeSql?: (sql: string) => Promise<unknown>;
@@ -434,7 +435,7 @@ export async function handleAppsApi(ctx: Ctx): Promise<boolean> {
       let resolvePublishedDatasetSources: CreateStoredAppBuildDraftOptions['resolvePublishedDatasetSources'];
       if (body.baseAppId) {
         try {
-          const { ensureAgentProjectReady, resolveAppSourceCatalogRecords } = await import('@duckcodeailabs/dql-agent');
+          const { ensureAgentProjectReady, resolveAppSourceCatalogRecords } = await import('@zlens/agent');
           await ensureAgentProjectReady(projectRoot);
           resolvePublishedDatasetSources = (sourceIds, sourcePolicy) => resolveAppSourceCatalogRecords(
             projectRoot,
@@ -481,7 +482,7 @@ export async function handleAppsApi(ctx: Ctx): Promise<boolean> {
         sendJson(res, 404, { ok: false, error: 'App Build Draft not found.' });
         return true;
       }
-      const { ensureAgentProjectReady, queryAppSourceCatalog } = await import('@duckcodeailabs/dql-agent');
+      const { ensureAgentProjectReady, queryAppSourceCatalog } = await import('@zlens/agent');
       await ensureAgentProjectReady(projectRoot);
       const lifecycles = splitQueryValues(ctx.url.searchParams.getAll('lifecycle')) as AppBuildSourceLifecycle[];
       const domains = splitQueryValues(ctx.url.searchParams.getAll('domain'));
@@ -521,7 +522,7 @@ export async function handleAppsApi(ctx: Ctx): Promise<boolean> {
       if (body.sourceIds !== undefined && (!Array.isArray(body.sourceIds) || body.sourceIds.some((sourceId) => typeof sourceId !== 'string' || !sourceId.trim()))) {
         throw new Error('APP_BUILD_SOURCE_RESOLVE_INVALID: sourceIds must be a non-empty string array when supplied.');
       }
-      const { ensureAgentProjectReady, resolveAppSourceCatalogRecords } = await import('@duckcodeailabs/dql-agent');
+      const { ensureAgentProjectReady, resolveAppSourceCatalogRecords } = await import('@zlens/agent');
       await ensureAgentProjectReady(projectRoot);
       // Reading a review-required candidate lets Studio present a deliberate
       // local-policy choice after a source revision changes. It never alters
@@ -595,7 +596,7 @@ export async function handleAppsApi(ctx: Ctx): Promise<boolean> {
         sendJson(res, 409, {
           ok: false,
           code: 'DATASET_TILE_SAVE_UNAVAILABLE',
-          error: 'This local runtime cannot save a Dataset tile as a review draft. Update the local DQL runtime and run the tile again.',
+          error: 'This local runtime cannot save a Dataset tile as a review draft. Update the local ZLens runtime and run the tile again.',
         });
         return true;
       }
@@ -663,7 +664,7 @@ export async function handleAppsApi(ctx: Ctx): Promise<boolean> {
         sendJson(res, 409, {
           ok: false,
           code: 'DATASET_TILE_REPLACE_UNAVAILABLE',
-          error: 'This local runtime cannot replace a Dataset tile with a review draft. Update the local DQL runtime and run a fresh preview.',
+          error: 'This local runtime cannot replace a Dataset tile with a review draft. Update the local ZLens runtime and run a fresh preview.',
         });
         return true;
       }
@@ -833,7 +834,7 @@ export async function handleAppsApi(ctx: Ctx): Promise<boolean> {
       const hosted = Boolean(ctx.figuresDependOnReader);
       if (body.mode === 'live') {
         if (!reads?.sql) {
-          sendJson(res, 400, { ok: false, code: 'ANSWER_HAS_NO_LIVE_FORM', error: 'DQL has no SQL for this answer that it could run for each reader, so it cannot add it as a live tile.' });
+          sendJson(res, 400, { ok: false, code: 'ANSWER_HAS_NO_LIVE_FORM', error: 'ZLens has no SQL for this answer that it could run for each reader, so it cannot add it as a live tile.' });
           return true;
         }
         // A live tile runs the answer's SQL for each reader; it carries no figures of its own.
@@ -1136,7 +1137,7 @@ export async function handleAppsApi(ctx: Ctx): Promise<boolean> {
   if (req.method === 'POST' && path === '/api/apps/recommend-blocks') {
     try {
       const body = await readJson<AppRecommendationRequest>(req);
-      const { ensureAgentProjectReady, queryAppSourceCatalog } = await import('@duckcodeailabs/dql-agent');
+      const { ensureAgentProjectReady, queryAppSourceCatalog } = await import('@zlens/agent');
       await ensureAgentProjectReady(projectRoot);
       const page = queryAppSourceCatalog(projectRoot, {
         query: [body.purpose, body.audience, ...(body.tags ?? [])].filter(Boolean).join(' '),
@@ -2630,7 +2631,7 @@ export async function generateAppPackage(
     planAppFromPrompt,
     reindexProject,
     validateAppPlan,
-  } = await import('@duckcodeailabs/dql-agent');
+  } = await import('@zlens/agent');
 
   const kgPath = defaultKgPath(projectRoot);
   await reindexProject(projectRoot, { kgPath });
@@ -3099,7 +3100,7 @@ export async function proposeAppAiBuild(
     planAppFromPrompt,
     reindexProject,
     validateAppPlan,
-  } = await import('@duckcodeailabs/dql-agent');
+  } = await import('@zlens/agent');
   const kgPath = defaultKgPath(projectRoot);
   const index = await reindexProject(projectRoot, { kgPath });
   const kg = new KGStore(kgPath);
@@ -3442,7 +3443,7 @@ async function resolveCurrentDatasetSourceRecords(
     }
     return byId;
   }
-  const { ensureAgentProjectReady, resolveAppSourceCatalogRecords } = await import('@duckcodeailabs/dql-agent');
+  const { ensureAgentProjectReady, resolveAppSourceCatalogRecords } = await import('@zlens/agent');
   await ensureAgentProjectReady(projectRoot);
   // Discovery includes review-required sources so local draft preview can
   // honour an explicit source-policy opt-in. Eligibility is enforced below;
@@ -4155,7 +4156,7 @@ export async function proposeAppBuildDraftOperations(
     planAppBuildBrief,
     resolveAppSourceCatalogRecords,
     shortlistAppSources,
-  } = await import('@duckcodeailabs/dql-agent');
+  } = await import('@zlens/agent');
   await ensureAgentProjectReady(projectRoot);
   const requestedIds = unique((input.selectedBlockIds ?? []).map(cleanString).filter(Boolean));
   if (requestedIds.length > 12) {
@@ -4825,7 +4826,7 @@ export async function commitAppAiBuild(
     generateAppFromPlan,
     reindexProject,
     validateAppPlan,
-  } = await import('@duckcodeailabs/dql-agent');
+  } = await import('@zlens/agent');
   const index = await reindexProject(projectRoot, { kgPath: defaultKgPath(projectRoot) });
   if (!session.snapshotId || index.kgFingerprint !== session.snapshotId) {
     // This compares a whole-project index, so an unrelated block or model edit
@@ -5176,7 +5177,7 @@ async function routeAppAskQuestion(
       return {
         ok: true,
         route: 'investigation',
-        answer: 'This needs a scoped analysis memo. Add the comparison, filters, timeframe, and decision context before DQL writes SQL or runs a preview.',
+        answer: 'This needs a scoped analysis memo. Add the comparison, filters, timeframe, and decision context before ZLens writes SQL or runs a preview.',
         trustState: 'draft_ready',
         reviewStatus: 'draft_ready',
         citations,
@@ -5330,7 +5331,7 @@ function buildAppAskDecision(
     return {
       mode: 'analysis',
       reason: appAskInvestigationReason(intent),
-      nextAction: 'Add the exact comparison, filters, and proof focus before DQL writes SQL or opens the main-canvas analysis.',
+      nextAction: 'Add the exact comparison, filters, and proof focus before ZLens writes SQL or opens the main-canvas analysis.',
       requiresContext: true,
       usesCertifiedResult: Boolean(input.blockId || input.selected),
       confidence: 0.82,
@@ -5348,7 +5349,7 @@ function buildAppAskDecision(
   }
   return {
     mode: 'metadata',
-    reason: 'No specific certified tile was selected, so DQL answered from app metadata.',
+    reason: 'No specific certified tile was selected, so ZLens answered from app metadata.',
     nextAction: 'Select a tile for a trusted answer, or ask for deeper analysis with a clear comparison and filter scope.',
     requiresContext: false,
     usesCertifiedResult: false,
@@ -5581,7 +5582,7 @@ function buildCertifiedAppAnswer(input: {
       .join('; ')
     : '';
   const nextStep = /\bwhy|driver|change|changed|compare|segment|drill|root cause|because\b/i.test(input.question)
-    ? 'This question asks for explanation beyond the current certified result. Use the copilot analysis flow with the exact comparison, timeframe, and segment so DQL can create review-required analysis.'
+    ? 'This question asks for explanation beyond the current certified result. Use the copilot analysis flow with the exact comparison, timeframe, and segment so ZLens can create review-required analysis.'
     : 'Use deeper analysis only when you need a new grain, driver breakdown, segment comparison, or reusable block that this certified tile does not already cover.';
 
   return [
@@ -6066,7 +6067,7 @@ function appPublicationReadiness(
   return { ready: blockers.length === 0, governedTiles, blockers };
 }
 
-/** One published App's tiles as `dql app check` reports them: what each reads and whether it can publish. */
+/** One published App's tiles as `zlens app check` reports them: what each reads and whether it can publish. */
 export interface AppPublicationCheck {
   app: { id: string; title: string; domain: string };
   ready: boolean;
@@ -7024,7 +7025,7 @@ async function composeStoredAppBuildDraft(
   const selections = request.selections ?? [];
   if (selections.length === 0) throw new Error('APP_BUILD_SOURCE_REQUIRED: choose at least one source.');
   if (selections.length > 100) throw new Error('APP_BUILD_SOURCE_LIMIT: at most 100 components can be composed at once.');
-  const { ensureAgentProjectReady, resolveAppSourceCatalogRecords } = await import('@duckcodeailabs/dql-agent');
+  const { ensureAgentProjectReady, resolveAppSourceCatalogRecords } = await import('@zlens/agent');
   await ensureAgentProjectReady(projectRoot);
   const effectiveSourcePolicy = request.enableReviewRequired === true
     ? 'include_review_required'
@@ -7987,7 +7988,7 @@ export function addAskResultToAppBuildDraft(
       sourceClass: 'narrative',
       sourceEvidence: [
         { source: `ask:${identity}`, reason: 'Saved from Ask as an editable review-required narrative.', kind: 'text', trustState: 'review_required' },
-        // The tables the answer read, so DQL can tell later whether its figures depend on who is looking.
+        // The tables the answer read, so ZLens can tell later whether its figures depend on who is looking.
         ...(options.relations ?? []).map((relation) => ({ source: relation, reason: 'A table the answer read.', kind: ANSWER_RELATION })),
       ],
       review: { status: 'required' },
@@ -8540,7 +8541,7 @@ async function bindServerIssuedPreviewReceipts(
     }
     const page = receiptBindingDraft.pages.find((candidate) => candidate.id === receipt.pageId);
     if (!page) throw new Error(`APP_BUILD_PREVIEW_RECEIPT_INVALID: page ${receipt.pageId} is not in this local draft.`);
-    if (!verifyPreview) throw new Error('APP_BUILD_PREVIEW_UNVERIFIABLE: run the current local draft from an active DQL runtime before saving its receipt.');
+    if (!verifyPreview) throw new Error('APP_BUILD_PREVIEW_UNVERIFIABLE: run the current local draft from an active ZLens runtime before saving its receipt.');
     const tileIds = page.layout.items.filter((tile) => !tile.text && !tile.aiPin).map((tile) => tile.i);
     const datasetTileIds = page.layout.items.filter((tile) => Boolean(tile.query)).map((tile) => tile.i);
     const intentFingerprint = appBuildPreviewIntentFingerprint(receiptBindingDraft, page.id);
@@ -8813,7 +8814,7 @@ function appBuildBlockedMessage(validation: unknown, plan: Record<string, unknow
   const reviewTasks = reviewTasksFromPlan(plan).slice(0, 4);
   return [
     'No certified DQL blocks matched strongly enough to create a stakeholder app.',
-    'DQL did not write an empty dashboard. Create or certify reusable blocks first, or select certified blocks explicitly.',
+    'ZLens did not write an empty dashboard. Create or certify reusable blocks first, or select certified blocks explicitly.',
     warnings.length ? `Missing proof: ${warnings.join(' | ')}` : '',
     reviewTasks.length ? `Next review tasks: ${reviewTasks.join(' | ')}` : '',
   ].filter(Boolean).join(' ');
@@ -9132,7 +9133,7 @@ export function deleteAppPackage(
   const isProjectApp = /^apps\/[^/]+$/.test(relativeAppDir);
   const isDomainApp = /^domains\/(?:[^/]+\/)*apps\/[^/]+$/.test(relativeAppDir);
   if ((!isProjectApp && !isDomainApp) || relativeAppDir.startsWith('../')) {
-    return { ok: false, status: 400, error: 'DQL refused to delete an App outside this project.' };
+    return { ok: false, status: 400, error: 'ZLens refused to delete an App outside this project.' };
   }
 
   const trashRoot = join(projectRoot, '.dql', 'local', 'trash', 'apps');
@@ -10175,7 +10176,7 @@ async function runAppInvestigation(
       routeDecision,
       assumptions: [
         ...investigationAssumptions(intent, selected, generatedSql, sqlError),
-        ...(baselineGap ? ['The selected tile sample does not include at least two comparable time values, so DQL did not invent a change query from an unrelated table.'] : []),
+        ...(baselineGap ? ['The selected tile sample does not include at least two comparable time values, so ZLens did not invent a change query from an unrelated table.'] : []),
       ],
       context,
       agentEvidence: narrativeGeneration?.evidence ?? agentGeneration?.evidence,
@@ -10985,13 +10986,13 @@ async function boundedPromise<T>(promise: Promise<T>, timeoutMs: number): Promis
 }
 
 function appResearchPreviewTimeoutMs(): number {
-  const raw = Number(process.env.DQL_APP_RESEARCH_PREVIEW_TIMEOUT_MS);
+  const raw = Number(readEnv('ZLENS_APP_RESEARCH_PREVIEW_TIMEOUT_MS'));
   if (Number.isFinite(raw) && raw >= 500) return Math.min(raw, 120000);
   return 12000;
 }
 
 function appResearchAiTimeoutMs(): number {
-  const raw = Number(process.env.DQL_APP_RESEARCH_AI_TIMEOUT_MS);
+  const raw = Number(readEnv('ZLENS_APP_RESEARCH_AI_TIMEOUT_MS'));
   if (Number.isFinite(raw) && raw >= 500) return Math.min(raw, 120000);
   return 12000;
 }
@@ -11181,7 +11182,7 @@ function buildMissingBaselineSummary(
   selected: Record<string, unknown> | null,
 ): string {
   const target = selectedString(selected, 'title') ?? 'the selected tile';
-  return `DQL opened review-required analysis for ${target}: ${question}. The selected tile shows the current certified result, but its sample does not include a comparable prior period or historical snapshot, so DQL cannot calculate what changed without guessing.`;
+  return `ZLens opened review-required analysis for ${target}: ${question}. The selected tile shows the current certified result, but its sample does not include a comparable prior period or historical snapshot, so ZLens cannot calculate what changed without guessing.`;
 }
 
 function buildMissingBaselineRecommendation(selected: Record<string, unknown> | null): string {
@@ -11201,7 +11202,7 @@ function buildInvestigationRecommendation(
   if (sqlErrorKind === 'safety') return 'Rewrite the SQL as a read-only SELECT/WITH query before any preview or promotion.';
   if (sqlError) return 'Review the generated SQL or add a certified drilldown block before promoting this result.';
   if (intent === 'trust_gap_review') return 'Use the certified tile for stakeholder reporting, and promote only the reviewed gaps into a draft block.';
-  if (!selected) return 'Select a dashboard tile or provide SQL so DQL can rank drivers with stronger evidence.';
+  if (!selected) return 'Select a dashboard tile or provide SQL so ZLens can rank drivers with stronger evidence.';
   return 'Review the driver evidence, then pin the useful answer or promote the SQL path into a draft DQL block.';
 }
 
@@ -11483,7 +11484,7 @@ function reportPreviewIssue(
     return {
       id: 'ai-generation-timeout',
       title: 'AI SQL generation timed out',
-      body: 'DQL did not receive generated SQL inside the bounded AI window. The memo uses certified app evidence only; retry AI generation, provide reviewed SQL, or draft reusable logic manually before promoting this analysis.',
+      body: 'ZLens did not receive generated SQL inside the bounded AI window. The memo uses certified app evidence only; retry AI generation, provide reviewed SQL, or draft reusable logic manually before promoting this analysis.',
       tone: 'warning',
     };
   }
@@ -11586,8 +11587,8 @@ function keyNumbersTitleForIntent(intent: LocalAppInvestigationIntent): string {
 }
 
 function keyNumbersBodyForIntent(intent: LocalAppInvestigationIntent): string {
-  if (intent === 'diagnose_change') return 'The bounded preview includes the values DQL can prove for this movement question. Use them for stakeholder framing, but validate the baseline and time grain before promotion.';
-  if (intent === 'segment_compare') return 'The bounded preview includes the segment values DQL can compare from the selected context. Confirm the grouping field and filters before promotion.';
+  if (intent === 'diagnose_change') return 'The bounded preview includes the values ZLens can prove for this movement question. Use them for stakeholder framing, but validate the baseline and time grain before promotion.';
+  if (intent === 'segment_compare') return 'The bounded preview includes the segment values ZLens can compare from the selected context. Confirm the grouping field and filters before promotion.';
   if (intent === 'entity_drilldown') return 'The bounded preview includes entity-level values from the selected context. Confirm the entity key and grain before promotion.';
   if (intent === 'anomaly_investigation') return 'The bounded preview includes values that may explain the exception. Confirm the baseline, threshold, and time grain before promotion.';
   if (intent === 'trust_gap_review') return 'The bounded preview includes values available for validation. Confirm source proof, lineage, and owner review before promotion.';
@@ -12678,7 +12679,7 @@ function activatePersona(
 
 async function refreshGeneratedMetadata(projectRoot: string): Promise<void> {
   try {
-    const { ensureMetadataCatalogFresh } = await import('@duckcodeailabs/dql-agent');
+    const { ensureMetadataCatalogFresh } = await import('@zlens/agent');
     await ensureMetadataCatalogFresh(projectRoot, { force: true });
   } catch {
     // App files remain the source of truth; the local catalog refreshes again

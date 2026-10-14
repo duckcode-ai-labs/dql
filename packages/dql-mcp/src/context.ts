@@ -12,7 +12,7 @@ import {
   type LineageEdgeType,
   type LineageLayer,
   type LineageNodeType,
-} from '@duckcodeailabs/dql-core';
+} from '@zlens/core';
 
 export interface DQLContextOptions {
   projectRoot: string;
@@ -26,7 +26,7 @@ export interface DQLContextOptions {
 }
 
 /**
- * Shared read-only view over a DQL project.
+ * Shared read-only view over a ZLens project.
  *
  * Loads the manifest + semantic layer once per MCP session. Tools call
  * {@link refresh} between turns if they need to see edits.

@@ -1,4 +1,4 @@
-import { Certifier } from '@duckcodeailabs/dql-governance';
+import { Certifier } from '@zlens/governance';
 import type { DQLContext } from '../context.js';
 import { manifestBlockToRecord } from './util.js';
 import { zodInputShapeForTool } from '../tool-schema.js';

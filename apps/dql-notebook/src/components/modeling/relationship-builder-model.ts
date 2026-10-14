@@ -1,4 +1,4 @@
-import type { ManifestModelRelationship, ManifestRelationshipValidationEvidence } from '@duckcodeailabs/dql-core';
+import type { ManifestModelRelationship, ManifestRelationshipValidationEvidence } from '@zlens/core';
 
 /**
  * The relationship builder in plain words.

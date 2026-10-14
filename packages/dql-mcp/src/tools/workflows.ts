@@ -14,8 +14,8 @@ import {
   type MetadataAllowedSqlContext,
   type MetadataObject,
   type ReindexProjectResult,
-} from '@duckcodeailabs/dql-agent';
-import { resolveTrustLabel, trustLabelIdForRoute } from '@duckcodeailabs/dql-core';
+} from '@zlens/agent';
+import { resolveTrustLabel, trustLabelIdForRoute } from '@zlens/core';
 import { suggestBlock } from './suggest-block.js';
 import { zodInputShapeForTool } from '../tool-schema.js';
 
@@ -163,7 +163,7 @@ export async function buildDqlApp(
         ? [
           'Open the generated app draft in DQL.',
           'Review draft/research tiles before stakeholder use.',
-          'Run dql app build after review.',
+          'Run zlens app build after review.',
         ]
         : [
           'Review the returned plan.',

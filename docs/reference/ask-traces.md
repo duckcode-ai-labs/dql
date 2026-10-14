@@ -23,7 +23,7 @@ credential, URL, or local path.
 
 ## Local runtime API
 
-All endpoints are served only by the local DQL runtime.
+All endpoints are served only by the local ZLens runtime.
 
 | Endpoint | Result |
 | --- | --- |
@@ -40,7 +40,7 @@ Stable failures are:
 | `TRACE_NOT_FOUND` | No local trace matches the ID |
 | `TRACE_DETAIL_EXPIRED` | Detailed evidence expired; a summary may remain |
 | `TRACE_STORE_UNAVAILABLE` | Local tracing was not available; Ask remains unaffected |
-| `TRACE_SCHEMA_UNSUPPORTED` | The store was created by a newer DQL schema |
+| `TRACE_SCHEMA_UNSUPPORTED` | The store was created by a newer ZLens schema |
 | `TRACE_EXPORT_REDACTION_FAILED` | Export cannot pass its redaction/canary check |
 
 The full trace is intentionally absent from ordinary Ask run lists, conversation
@@ -52,12 +52,12 @@ trace reference.
 The trace inspector opens the local store read-only:
 
 ```bash
-dql agent trace list --format json
-dql agent trace show <trace-id-or-run-id> --format json
-dql agent trace export <trace-id-or-run-id> --out ./trace-bundle --profile strict
-dql agent trace validate ./trace-bundle
-dql agent trace replay ./trace-bundle --mode receipt
-dql agent trace compare ./left-bundle ./right-bundle --mode compare
+zlens agent trace list --format json
+zlens agent trace show <trace-id-or-run-id> --format json
+zlens agent trace export <trace-id-or-run-id> --out ./trace-bundle --profile strict
+zlens agent trace validate ./trace-bundle
+zlens agent trace replay ./trace-bundle --mode receipt
+zlens agent trace compare ./left-bundle ./right-bundle --mode compare
 ```
 
 `export` requires an empty directory and will not overwrite an earlier bundle.
@@ -68,7 +68,7 @@ answer prose.
 
 Use `--profile support --confirm-reviewed-identifiers` only when a reviewer has
 approved the identifiers for sharing. Support-only reviewed question prose is
-explicit CLI input; DQL does not recover a question from its local trace.
+explicit CLI input; ZLens does not recover a question from its local trace.
 
 ## Portable bundles
 
@@ -82,13 +82,13 @@ redaction-receipt.json
 ```
 
 `strict` pseudonymizes identifiers. Both profiles run a defensive canary for
-secrets, SQL, URLs, and paths. DQL also offers an OpenTelemetry/OpenInference
+secrets, SQL, URLs, and paths. ZLens also offers an OpenTelemetry/OpenInference
 JSON mapper for a reviewed local artifact; it does not ship a network exporter.
 
 When traces are sent on (to a host's sink, or as OTLP when
 `OTEL_EXPORTER_OTLP_ENDPOINT` is set, also on a single-user install), the
 question's fingerprint leaves keyed: HMAC-SHA256 under the host's `traceSalt`,
-or under a key DQL makes once in `.dql/local/private/trace-salt`. The same
+or under a key ZLens makes once in `.dql/local/private/trace-salt`. The same
 question keys the same way on one install, and the value cannot be checked
 against a list of likely questions anywhere else. Fingerprints in the local
 trace store are unchanged.

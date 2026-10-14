@@ -38,7 +38,7 @@ export function listRunRecords(projectRoot: string, limit = 20): RunRecord[] {
       records.push(JSON.parse(raw) as RunRecord);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      console.warn(`[dql schedule] skipping malformed run record ${f}: ${msg}`);
+      console.warn(`[zlens schedule] skipping malformed run record ${f}: ${msg}`);
     }
   }
   return records;

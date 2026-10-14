@@ -1,4 +1,4 @@
-import { tileQueryOutputAliases } from '@duckcodeailabs/dql-core/apps/tile-query';
+import { tileQueryOutputAliases } from '@zlens/core/apps/tile-query';
 import type { DashboardDocumentResponse, DashboardDriverDefinitionV1, DashboardRunResponse } from '../../api/client';
 
 type LayoutItem = DashboardDocumentResponse['dashboard']['layout']['items'][number];

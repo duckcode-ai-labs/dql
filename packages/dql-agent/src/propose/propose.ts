@@ -1,5 +1,5 @@
 /**
- * `dql propose` engine — turn dbt evidence into a ranked queue of DRAFT blocks.
+ * `zlens propose` engine — turn dbt evidence into a ranked queue of DRAFT blocks.
  *
  * Product principle: **AI drafts, humans certify.** A new user should not author
  * DQL from a blank file. This engine scans dbt artifacts and proposes a draft
@@ -9,7 +9,7 @@
  *
  * Hard rules enforced here:
  *   - Nothing is ever emitted with `status: certified`. Promotion is a separate
- *     human action (`dql certify --from-draft`).
+ *     human action (`zlens certify --from-draft`).
  *   - Re-running is idempotent: an existing draft / certified / review block for
  *     the same model is never overwritten or duplicated.
  *   - Inference is conservative — grain/pattern/outputs are only set when the
@@ -18,8 +18,8 @@
 
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { Certifier } from '@duckcodeailabs/dql-governance';
-import type { BlockRecord, BlockStatus } from '@duckcodeailabs/dql-project';
+import { Certifier } from '@zlens/governance';
+import type { BlockRecord, BlockStatus } from '@zlens/project';
 import {
   loadDbtArtifacts,
   type DbtArtifacts,

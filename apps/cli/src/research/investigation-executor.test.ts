@@ -9,7 +9,7 @@ import {
   type InvestigationReportV1,
   type PipelineOutcome,
   type PipelineReceipt,
-} from '@duckcodeailabs/dql-agent';
+} from '@zlens/agent';
 import { toExecutorResult, type AskPipelineHost, type AskRequestScope } from '../ask-pipeline-host/host.js';
 import { compatibleDimensionRefs, createInvestigationExecutor, investigationSourceIntent } from './investigation-executor.js';
 

@@ -19,9 +19,9 @@ describe('the provider usage ledger', () => {
     const file = join(mkdtempSync(join(tmpdir(), 'dql-usage-')), 'usage.jsonl');
     const reply = () => new Response(JSON.stringify({ content: [{ type: 'text', text: 'SELECT 1' }], usage: { input_tokens: 10, output_tokens: 5 } }), { status: 200, headers: { 'content-type': 'application/json' } });
     recordProviderUsage({ provider: 'claude', operation: 'generate', model: 'claude-sonnet-5', response: reply() }, {});
-    recordProviderUsage({ provider: 'claude', operation: 'generate', model: 'claude-sonnet-5', response: new Response('{}', { status: 500, headers: { 'content-type': 'application/json' } }) }, { DQL_PROVIDER_USAGE_LEDGER: file });
+    recordProviderUsage({ provider: 'claude', operation: 'generate', model: 'claude-sonnet-5', response: new Response('{}', { status: 500, headers: { 'content-type': 'application/json' } }) }, { ZLENS_PROVIDER_USAGE_LEDGER: file });
     const response = reply();
-    recordProviderUsage({ provider: 'claude', operation: 'generate', model: 'claude-sonnet-5', response }, { DQL_PROVIDER_USAGE_LEDGER: file });
+    recordProviderUsage({ provider: 'claude', operation: 'generate', model: 'claude-sonnet-5', response }, { ZLENS_PROVIDER_USAGE_LEDGER: file });
     // The caller can still read its own body.
     expect((await response.json()).usage.output_tokens).toBe(5);
     await new Promise((resolve) => setTimeout(resolve, 20));

@@ -435,7 +435,7 @@ describe('UnifiedAgentRunPanel DQL-first artifact display helpers', () => {
   });
 
   it('turns an Ask-to-App 405 into a safe runtime compatibility recovery', () => {
-    expect(askAppWriteErrorMessage(Object.assign(new Error('Method not allowed'), { status: 405 }), 'Could not create the app.')).toContain('Restart dql notebook');
+    expect(askAppWriteErrorMessage(Object.assign(new Error('Method not allowed'), { status: 405 }), 'Could not create the app.')).toContain('Restart zlens notebook');
     expect(askAppWriteErrorMessage(new Error('Draft conflict'), 'Could not create the app.')).toBe('Draft conflict');
     expect(askAppWriteErrorMessage(null, 'Could not create the app.')).toBe('Could not create the app.');
   });
@@ -1079,7 +1079,7 @@ describe('UnifiedAgentRunPanel DQL-first artifact display helpers', () => {
   it('uses proof-specific not-executed copy for blocked semantic authority', () => {
     expect(askFailurePresentation.proof_integrity).toEqual({
       title: 'Not executed: exact semantic proof was not established',
-      hint: 'DQL could not establish the exact metric, requested grain, join keys, and fanout proof. Warehouse success cannot create that authority.',
+      hint: 'ZLens could not establish the exact metric, requested grain, join keys, and fanout proof. Warehouse success cannot create that authority.',
     });
   });
 
@@ -1549,7 +1549,7 @@ describe('UnifiedAgentRunPanel DQL-first artifact display helpers', () => {
         kind: 'answer',
         payload: {
           exploratoryCandidate: { kind: 'dbt_grounded_exploration' },
-          executionError: 'DQL could not parse the exploratory SQL.',
+          executionError: 'ZLens could not parse the exploratory SQL.',
         },
       }],
     } as any)).toContain('bounded execution failed');
@@ -2365,7 +2365,7 @@ describe('failure card origin and detail', () => {
     });
 
     expect(askFailureDetail(run)).toBe(
-      'This Ask needs a certified relationship or approved allocation proof before it can run. DQL did not infer a relationship or execute a query.',
+      'This Ask needs a certified relationship or approved allocation proof before it can run. ZLens did not infer a relationship or execute a query.',
     );
   });
 

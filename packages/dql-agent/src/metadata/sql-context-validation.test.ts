@@ -680,7 +680,7 @@ describe('validateSqlAgainstLocalContext', () => {
     context.routeDecision = {
       route: 'clarify',
       intent: 'clarify',
-      reason: 'DQL needs one more business or metadata detail before it can safely generate SQL.',
+      reason: 'ZLens needs one more business or metadata detail before it can safely generate SQL.',
       trustLabel: 'mixed',
       reviewStatus: 'none',
       selectedEvidence: [],

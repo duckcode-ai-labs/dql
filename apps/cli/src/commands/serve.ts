@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { QueryExecutor } from '@duckcodeailabs/dql-connectors';
+import { QueryExecutor } from '@zlens/connectors';
 import type { CLIFlags } from '../args.js';
 import { assertLocalQueryRuntimeReady, findProjectRoot, loadProjectConfig, normalizeProjectConnection, startLocalServer } from '../local-runtime.js';
 import { maybeOpenBrowser } from '../open-browser.js';
@@ -8,7 +8,7 @@ import { maybeOpenBrowser } from '../open-browser.js';
 export async function runServe(targetDir: string | null, flags: CLIFlags): Promise<void> {
   const rootDir = resolve(targetDir || 'dist');
   if (!existsSync(join(rootDir, 'index.html'))) {
-    throw new Error(`No built DQL bundle found at ${rootDir}. Run "dql build <file.dql>" first or pass a directory containing index.html.`);
+    throw new Error(`No built DQL bundle found at ${rootDir}. Run "zlens build <file.dql>" first or pass a directory containing index.html.`);
   }
   const projectRoot = findProjectRoot(rootDir);
   const config = loadProjectConfig(projectRoot);

@@ -13,7 +13,7 @@
  * The replacement is a block reference: a block name, or a `.dql` path
  * relative to the project root. These helpers resolve that reference, follow
  * replacement chains, and produce the `kind: 'retirement'` manifest
- * diagnostics `dql compile` / `dql validate` print.
+ * diagnostics `zlens compile` / `zlens validate` print.
  *
  * Rules:
  *   - `replacedBy` / `deprecatedOn` only mean something on a deprecated block

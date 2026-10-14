@@ -2,7 +2,7 @@
  * Domain declaration writer (spec 17, part B).
  *
  * `scanDomains` reads first-class `domain "<Name>" { ... }` declarations and
- * `dql doctor` warns when a used domain has no such declaration — but until now
+ * `zlens doctor` warns when a used domain has no such declaration — but until now
  * there was no way to AUTHOR one. This module emits a `domain` declaration in
  * the EXACT format the parser (`parseDomainDecl`) + `scanDomains` accept, and
  * resolves the canonical on-disk location for it.

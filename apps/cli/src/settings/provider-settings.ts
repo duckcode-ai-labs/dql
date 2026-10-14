@@ -4,14 +4,14 @@ import {
   coerceReasoningEffort,
   supportsReasoningEffort as providerSupportsReasoningEffort,
   type ReasoningEffort,
-} from '@duckcodeailabs/dql-agent';
+} from '@zlens/agent';
 
 export type ProviderSettingsId = 'anthropic' | 'openai' | 'gemini' | 'ollama' | 'custom-openai' | 'claude-code' | 'codex';
 
 /**
  * Reasoning-effort ceiling for a provider. `'auto'` (the default when unset)
  * lets the agent pick effort per task/route up to `high`; an explicit level caps
- * it there. See `@duckcodeailabs/dql-agent`'s reasoning-effort helpers.
+ * it there. See `@zlens/agent`'s reasoning-effort helpers.
  */
 export type ReasoningEffortSetting = ReasoningEffort | 'auto';
 
@@ -99,7 +99,7 @@ const PROVIDER_META: Record<ProviderSettingsId, ProviderMeta> = {
   openai: { label: 'OpenAI', authMode: 'api_key', keyEnv: 'OPENAI_API_KEY', modelEnv: 'OPENAI_MODEL', baseUrlEnv: 'OPENAI_BASE_URL', reasoningEffortEnv: 'OPENAI_REASONING_EFFORT', reasoningFamily: 'openai' },
   gemini: { label: 'Google Gemini', authMode: 'api_key', keyEnv: 'GEMINI_API_KEY', modelEnv: 'GEMINI_MODEL', baseUrlEnv: 'GEMINI_BASE_URL', reasoningEffortEnv: 'GEMINI_REASONING_EFFORT', reasoningFamily: 'gemini' },
   ollama: { label: 'Ollama', authMode: 'local', modelEnv: 'OLLAMA_MODEL', baseUrlEnv: 'OLLAMA_BASE_URL', reasoningFamily: null },
-  'custom-openai': { label: 'Custom OpenAI-compatible', authMode: 'api_key', keyEnv: 'DQL_OPENAI_COMPAT_API_KEY', modelEnv: 'DQL_OPENAI_COMPAT_MODEL', baseUrlEnv: 'DQL_OPENAI_COMPAT_BASE_URL', reasoningEffortEnv: 'DQL_OPENAI_COMPAT_REASONING_EFFORT', reasoningFamily: 'openai' },
+  'custom-openai': { label: 'Custom OpenAI-compatible', authMode: 'api_key', keyEnv: 'ZLENS_OPENAI_COMPAT_API_KEY', modelEnv: 'ZLENS_OPENAI_COMPAT_MODEL', baseUrlEnv: 'ZLENS_OPENAI_COMPAT_BASE_URL', reasoningEffortEnv: 'ZLENS_OPENAI_COMPAT_REASONING_EFFORT', reasoningFamily: 'openai' },
   'claude-code': { label: 'Claude subscription (Claude Code CLI)', authMode: 'subscription_cli', command: 'claude', modelEnv: 'CLAUDE_CODE_MODEL', reasoningFamily: null },
   codex: { label: 'ChatGPT subscription (Codex CLI)', authMode: 'subscription_cli', command: 'codex', modelEnv: 'CODEX_MODEL', reasoningFamily: null },
 };

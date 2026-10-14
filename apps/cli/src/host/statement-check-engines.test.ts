@@ -30,7 +30,7 @@ const MUST_REFUSE: Entry[] = [
   ['postgresql', "SELECT 1 /* a /* b */ ' */ , pg_read_file('/etc/passwd') -- '"],
   ['duckdb', 'SELECT 1 /* outer /* inner */ still a comment here */ AS a'],
   ['mssql', 'SELECT 1 /* a /* b */ c */ AS a'],
-  // Backslash escapes: Snowflake reads them in strings; MySQL and Spark depend on a setting DQL cannot see.
+  // Backslash escapes: Snowflake reads them in strings; MySQL and Spark depend on a setting ZLens cannot see.
   ['snowflake', "SELECT 'a\\' , system$whitelist() , '' AS b"],
   ['mysql', "SELECT 'a\\' , 1 INTO OUTFILE '/tmp/x' -- '"],
   ['mysql', 'SELECT "a\\" , 1 AS b -- "'],
@@ -100,7 +100,7 @@ const MUST_REFUSE: Entry[] = [
   ['postgresql', "SELECT * FROM pg_ls_dir('.')"],
   ['trino', "SELECT 1 AS a; SET SESSION x = 1"],
   ['athena', 'SELECT `a` FROM t -- `'],
-  // An engine DQL does not know how to read.
+  // An engine ZLens does not know how to read.
   ['oracle', 'SELECT 1 FROM dual'],
 ];
 
@@ -265,7 +265,7 @@ const MUST_REFUSE_SYSTEM: Entry[] = [
   ['fabric', 'SELECT * FROM sys.dm_exec_requests'],
 ];
 
-/** Look-alikes of those: a team's own tables and columns with similar names, catalog lookups DQL itself makes. Allowed. */
+/** Look-alikes of those: a team's own tables and columns with similar names, catalog lookups ZLens itself makes. Allowed. */
 const MUST_ALLOW_NOT_SYSTEM: Entry[] = [
   ['snowflake', 'SELECT * FROM sessions'],
   ['snowflake', 'SELECT session_id, query_history FROM analytics.web_sessions'],

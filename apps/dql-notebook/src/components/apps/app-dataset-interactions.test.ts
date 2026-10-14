@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { DatasetDescriptor } from '@duckcodeailabs/dql-core/datasets/descriptor';
+import type { DatasetDescriptor } from '@zlens/core/datasets/descriptor';
 import type { DashboardDocumentResponse } from '../../api/client';
 import {
   buildDatasetCrossFilter,

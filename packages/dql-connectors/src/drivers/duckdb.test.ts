@@ -5,8 +5,9 @@ import { setFlagsFromString } from 'node:v8';
 import { runInNewContext } from 'node:vm';
 import { describe, expect, it, vi } from 'vitest';
 import { DuckDBConnector, duckDBAutoinstallOff, normalizeDuckDBRow, normalizeDuckDBValue, resolveDuckDBModule } from './duckdb.js';
+import { readEnv } from '../env.js';
 
-const configuredDuckDbConnectorRoot = process.env.DQL_APP_DATASETS_DUCKDB_CONNECTOR_ROOT?.trim();
+const configuredDuckDbConnectorRoot = readEnv('ZLENS_APP_DATASETS_DUCKDB_CONNECTOR_ROOT')?.trim();
 const duckDbIt = configuredDuckDbConnectorRoot ? it : it.skip;
 
 describe('resolveDuckDBModule', () => {
@@ -214,15 +215,15 @@ describe('DuckDB database lifetime', () => {
   });
 });
 
-describe('extension downloads (DQL_DUCKDB_AUTOINSTALL)', () => {
+describe('extension downloads (ZLENS_DUCKDB_AUTOINSTALL)', () => {
   it('reads the switch: off, false, 0 or no turn downloads off; unset keeps DuckDB\'s default', () => {
-    for (const value of ['off', 'false', '0', 'no', 'OFF']) expect(duckDBAutoinstallOff({ DQL_DUCKDB_AUTOINSTALL: value })).toBe(true);
-    for (const value of [undefined, '', 'on', 'true']) expect(duckDBAutoinstallOff({ DQL_DUCKDB_AUTOINSTALL: value })).toBe(false);
+    for (const value of ['off', 'false', '0', 'no', 'OFF']) expect(duckDBAutoinstallOff({ ZLENS_DUCKDB_AUTOINSTALL: value })).toBe(true);
+    for (const value of [undefined, '', 'on', 'true']) expect(duckDBAutoinstallOff({ ZLENS_DUCKDB_AUTOINSTALL: value })).toBe(false);
   });
 
   duckDbIt('with the switch off, the database never installs an extension on first use', async () => {
-    const before = process.env.DQL_DUCKDB_AUTOINSTALL;
-    process.env.DQL_DUCKDB_AUTOINSTALL = 'off';
+    const before = process.env.ZLENS_DUCKDB_AUTOINSTALL;
+    process.env.ZLENS_DUCKDB_AUTOINSTALL = 'off';
     const connector = new DuckDBConnector();
     try {
       await connector.connect({ driver: 'duckdb', filepath: ':memory:', moduleSearchPaths: [configuredDuckDbConnectorRoot!] });
@@ -230,8 +231,8 @@ describe('extension downloads (DQL_DUCKDB_AUTOINSTALL)', () => {
       expect(String(setting.rows[0].on)).toBe('false');
     } finally {
       await connector.disconnect();
-      if (before === undefined) delete process.env.DQL_DUCKDB_AUTOINSTALL;
-      else process.env.DQL_DUCKDB_AUTOINSTALL = before;
+      if (before === undefined) delete process.env.ZLENS_DUCKDB_AUTOINSTALL;
+      else process.env.ZLENS_DUCKDB_AUTOINSTALL = before;
     }
   });
 });

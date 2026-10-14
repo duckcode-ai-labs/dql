@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { DQLManifest } from '@duckcodeailabs/dql-core';
+import type { DQLManifest } from '@zlens/core';
 import { domainContextSearchDomains, resolveDomainContextEnvelope } from './domain-context.js';
 
 describe('resolveDomainContextEnvelope', () => {

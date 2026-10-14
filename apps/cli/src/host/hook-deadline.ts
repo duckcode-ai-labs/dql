@@ -2,9 +2,9 @@ import type { DqlHostHooks } from './request-context.js';
 
 /**
  * A TIME LIMIT ON EVERY HOOK DQL WAITS FOR (RFC 0010 rule 1). A host's
- * policy store, identity provider or database can hang; DQL then must not
+ * policy store, identity provider or database can hang; ZLens then must not
  * hold the person's request (or their Ask run) until their browser gives
- * up. Each hook DQL waits on gets a deadline; one that does not answer in
+ * up. Each hook ZLens waits on gets a deadline; one that does not answer in
  * time is treated as one that failed, which every hook already handles by
  * failing closed (a refusal, no figures, nothing listed, a plain message).
  * An answer that arrives after the deadline is ignored.
@@ -16,7 +16,7 @@ import type { DqlHostHooks } from './request-context.js';
  * - Work the host does outside DQL (delivery, signing, git): six times that.
  * - The tool gate's own decision: until it calls `next()`; the tool's run
  *   after that is not bounded here.
- * - Observers DQL does not wait for (audit, traces, statements, page
+ * - Observers ZLens does not wait for (audit, traces, statements, page
  *   editions) and the synchronous model hooks are left as they are.
  */
 export const DEFAULT_HOST_HOOK_TIMEOUT_MS = 10_000;
@@ -61,7 +61,7 @@ export function hostHookTimeoutMs(value: unknown): number {
 
 type AnyFunction = (...args: never[]) => unknown;
 
-/** The decision hooks DQL waits on, each bounded by the decision deadline. */
+/** The decision hooks ZLens waits on, each bounded by the decision deadline. */
 const DECISION_HOOKS = [
   'resolvePrincipal', 'authorize', 'rowPolicy', 'credentials', 'columnsVisible', 'audience', 'ui', 'answerStatus',
   'sourceAccess', 'answerFigures', 'figuresDependOnReader', 'keepsAnswerText', 'knowledgeSources', 'homeCards',
@@ -69,9 +69,9 @@ const DECISION_HOOKS = [
 ] as const satisfies ReadonlyArray<keyof DqlHostHooks>;
 
 /**
- * The host's hooks with a deadline on every one DQL waits for (see above).
+ * The host's hooks with a deadline on every one ZLens waits for (see above).
  * Only the hooks the host gave are present, so "has a hook" checks keep their
- * meaning. Stores are bounded where DQL opens them (`host-stores.ts`).
+ * meaning. Stores are bounded where ZLens opens them (`host-stores.ts`).
  */
 export function hooksWithDeadlines(hooks: DqlHostHooks, timeoutMs?: number): DqlHostHooks {
   const ms = hostHookTimeoutMs(timeoutMs);

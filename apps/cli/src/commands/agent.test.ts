@@ -7,7 +7,7 @@ import {
   type AgentProvider,
   type AgentRun,
   type AskTraceObserverV1,
-} from '@duckcodeailabs/dql-agent';
+} from '@zlens/agent';
 import { __test__, createDirectCliAskTraceProvider, evalResultRefused, runCanonicalCliAsk } from './agent.js';
 import { answerFromRuntimeRun, projectRuntimeRun } from './agent-eval-runtime.js';
 

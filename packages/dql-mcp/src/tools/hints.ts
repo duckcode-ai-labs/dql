@@ -19,7 +19,7 @@ import {
   reviewGovernedHint,
   type Hint,
   type HintLesson,
-} from '@duckcodeailabs/dql-agent';
+} from '@zlens/agent';
 import { zodInputShapeForTool } from '../tool-schema.js';
 
 export const recordCorrectionInput = zodInputShapeForTool('record_correction');

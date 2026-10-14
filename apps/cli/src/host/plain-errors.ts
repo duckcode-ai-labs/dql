@@ -35,7 +35,7 @@ export function logUnderReference(what: string, error: unknown): string {
   return reference;
 }
 
-/** The plain sentence a person reads for a failure DQL did not expect, with a host. */
-export function plainFailureMessage(reference: string, sentence = 'DQL could not finish this request.'): string {
+/** The plain sentence a person reads for a failure ZLens did not expect, with a host. */
+export function plainFailureMessage(reference: string, sentence = 'ZLens could not finish this request.'): string {
   return `${sentence} Try again; if it keeps happening, ask your administrator about reference ${reference}.`;
 }

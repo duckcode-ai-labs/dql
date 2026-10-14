@@ -3,7 +3,7 @@ import { TestRunner } from './test-runner.js';
 import { Certifier, PROMOTABLE_RULES } from './certifier.js';
 import { CostEstimator } from './cost-estimator.js';
 import { PolicyEngine } from './policy-engine.js';
-import type { BlockRecord, TestResultSummary } from '@duckcodeailabs/dql-project';
+import type { BlockRecord, TestResultSummary } from '@zlens/project';
 import type { BlockTestAssertion, QueryExecutor } from './test-runner.js';
 
 function makeBlock(overrides: Partial<BlockRecord> = {}): BlockRecord {

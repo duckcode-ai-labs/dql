@@ -3,8 +3,8 @@ import type { Server } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join, relative, sep } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import type { AgentRunExecutors } from '@duckcodeailabs/dql-agent';
-import type { QueryExecutor } from '@duckcodeailabs/dql-connectors';
+import type { AgentRunExecutors } from '@zlens/agent';
+import type { QueryExecutor } from '@zlens/connectors';
 import { startLocalServer } from '../local-runtime.js';
 import type { DqlPrincipal } from './request-context.js';
 

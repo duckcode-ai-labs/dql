@@ -2,7 +2,7 @@
  * Runtime version-drift status (REL-002 / Slice 1).
  *
  * A stale runtime is the #1 way "the fix didn't work" reports happen: the
- * project pins one dql-cli version, the global binary is another, and the
+ * project pins one zlens version, the global binary is another, and the
  * long-running server is a third. This module makes drift VISIBLE (doctor,
  * /api/health, Settings) without ever blocking offline use — the latest-version
  * lookup is best-effort with a hard 2s timeout and a 24h in-memory cache, and
@@ -11,6 +11,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { readEnv } from '@zlens/core';
 
 export interface DqlRuntimeVersionStatus {
   /** Version of the code actually serving this process. */
@@ -19,7 +20,7 @@ export interface DqlRuntimeVersionStatus {
   processStartedAt: string;
   /** Where the running code lives: the project's node_modules, a global install, or a dev checkout. */
   invocationSource: 'project_local' | 'global' | 'dev_or_unknown';
-  /** Range declared for @duckcodeailabs/dql-cli in the project package.json, if any. */
+  /** Range declared for zlens in the project package.json, if any. */
   projectPinnedRange?: string;
   /** Version installed in the project's node_modules, if any. */
   projectInstalledVersion?: string;
@@ -40,12 +41,12 @@ let latestInFlight: Promise<string | undefined> | undefined;
 
 /** Best-effort latest published version; never throws, never blocks longer than 2s. */
 export async function fetchLatestPublishedDqlVersion(): Promise<string | undefined> {
-  if (process.env.DQL_DISABLE_VERSION_CHECK === '1') return undefined;
+  if (readEnv('ZLENS_DISABLE_VERSION_CHECK') === '1') return undefined;
   if (latestCache && Date.now() - latestCache.fetchedAt < LATEST_CACHE_TTL_MS) return latestCache.version;
   if (latestInFlight) return latestInFlight;
   latestInFlight = (async () => {
     try {
-      const res = await fetch('https://registry.npmjs.org/@duckcodeailabs/dql-cli/latest', {
+      const res = await fetch('https://registry.npmjs.org/@zlens/cli/latest', {
         signal: AbortSignal.timeout(LATEST_FETCH_TIMEOUT_MS),
         headers: { accept: 'application/json' },
       });
@@ -80,11 +81,11 @@ function readProjectCliDeclaration(projectRoot: string): { range?: string; insta
         dependencies?: Record<string, string>;
         devDependencies?: Record<string, string>;
       };
-      result.range = pkg.devDependencies?.['@duckcodeailabs/dql-cli'] ?? pkg.dependencies?.['@duckcodeailabs/dql-cli'];
+      result.range = pkg.devDependencies?.['@zlens/cli'] ?? pkg.dependencies?.['@zlens/cli'];
     }
   } catch { /* unreadable package.json is not a drift signal */ }
   try {
-    const installedPath = join(projectRoot, 'node_modules', '@duckcodeailabs', 'dql-cli', 'package.json');
+    const installedPath = join(projectRoot, 'node_modules', '@zlens', 'cli', 'package.json');
     if (existsSync(installedPath)) {
       const installed = JSON.parse(readFileSync(installedPath, 'utf-8')) as { version?: string };
       if (typeof installed.version === 'string') result.installed = installed.version;
@@ -145,19 +146,19 @@ export function resolveDqlRuntimeVersionStatus(input: {
   const invocationSource = classifyInvocationSource(input.projectRoot, input.runtimeUrl ?? import.meta.url);
   const drift: string[] = [];
   if (installed && input.runningVersion !== 'unknown' && installed !== input.runningVersion) {
-    drift.push(`The running DQL server is ${input.runningVersion}, but this project's local install is ${installed}. Restart via the project (npx dql / npm run notebook) or align the versions — fixes in one are invisible in the other.`);
+    drift.push(`The running ZLens server is ${input.runningVersion}, but this project's local install is ${installed}. Restart via the project (npx zlens / npm run notebook) or align the versions — fixes in one are invisible in the other.`);
   }
   // Only an OLDER running/installed version is drift: a build ahead of npm
   // (an unreleased checkout or a locally packed tarball) is not.
   if (latest && input.runningVersion !== 'unknown' && isNewerDqlVersion(latest, input.runningVersion)) {
-    drift.push(`A newer dql-cli is published (${latest}; running ${input.runningVersion}).`);
+    drift.push(`A newer zlens is published (${latest}; running ${input.runningVersion}).`);
   }
   if (latest && installed && isNewerDqlVersion(latest, installed)) {
     drift.push(`The project pins/installs ${installed}, but ${latest} is the latest published version.`);
   }
   const upgradeCommand = installed
-    ? `npm install @duckcodeailabs/dql-cli@${latest ?? 'latest'}`
-    : `npm install -g @duckcodeailabs/dql-cli@${latest ?? 'latest'}`;
+    ? `npm install @zlens/cli@${latest ?? 'latest'}`
+    : `npm install -g @zlens/cli@${latest ?? 'latest'}`;
   return {
     runningVersion: input.runningVersion,
     processStartedAt: PROCESS_STARTED_AT,

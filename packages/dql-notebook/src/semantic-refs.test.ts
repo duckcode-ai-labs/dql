@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { SemanticLayer } from '@duckcodeailabs/dql-core';
+import { SemanticLayer } from '@zlens/core';
 import { hasStandaloneSemanticRef, resolveSemanticRefs } from './semantic-refs.js';
 
 describe('standalone semantic references', () => {

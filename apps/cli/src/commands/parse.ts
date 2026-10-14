@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
-import { DataLexContractRegistry, Parser, SemanticAnalyzer, printAST, resolveDataLexManifestPath } from '@duckcodeailabs/dql-core';
-import { deserializeNotebook } from '@duckcodeailabs/dql-notebook';
+import { DataLexContractRegistry, Parser, SemanticAnalyzer, printAST, resolveDataLexManifestPath } from '@zlens/core';
+import { deserializeNotebook } from '@zlens/notebook';
 import type { CLIFlags } from '../args.js';
 
 export async function runParse(filePath: string, flags: CLIFlags): Promise<void> {

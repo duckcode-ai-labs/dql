@@ -1,6 +1,6 @@
-# DQL in 5 Concepts
+# ZLens in 5 Concepts
 
-DQL OSS is analytics as code for a single local user. These five concepts are
+ZLens OSS is analytics as code for a single local user. These five concepts are
 enough to understand the product before reading the references.
 
 ## 1. Block
@@ -31,13 +31,13 @@ persona, and policy fields are local preview metadata, not hosted RBAC.
 
 ## 4. Manifest
 
-`dql-manifest.json` is the dbt-like compiled artifact for a DQL project.
+`dql-manifest.json` is the dbt-like compiled artifact for a ZLens project.
 
 It records blocks, notebooks, Apps, dashboard pages, metrics, dimensions,
 sources, dbt imports when present, diagnostics, and lineage. Run:
 
 ```bash
-dql compile
+zlens compile
 ```
 
 after editing source artifacts.

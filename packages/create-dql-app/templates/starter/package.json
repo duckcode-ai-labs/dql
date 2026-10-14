@@ -3,15 +3,15 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "notebook": "dql notebook",
-    "sync": "dql sync dbt",
-    "compile": "dql compile",
-    "lineage": "dql lineage",
-    "doctor": "dql doctor",
-    "validate": "dql validate"
+    "notebook": "zlens notebook",
+    "sync": "zlens sync dbt",
+    "compile": "zlens compile",
+    "lineage": "zlens lineage",
+    "doctor": "zlens doctor",
+    "validate": "zlens validate"
   },
   "devDependencies": {
-    "@duckcodeailabs/dql-cli": "^1.17.3"
+    "@zlens/cli": "^1.17.3"
   },
   "engines": {
     "node": ">=20"

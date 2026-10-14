@@ -3,17 +3,18 @@ import type { Server } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { QueryExecutor, type ConnectionConfig } from '@duckcodeailabs/dql-connectors';
+import { QueryExecutor, type ConnectionConfig } from '@zlens/connectors';
 import { startLocalServer } from '../local-runtime.js';
 import { DEFAULT_HOST_HOOK_TIMEOUT_MS, HostHookTimeoutError, hooksWithDeadlines, hostHookTimeoutMs, withDeadline } from './hook-deadline.js';
 import { withRequestContext, type DqlHostHooks, type DqlPrincipal } from './request-context.js';
+import { readEnv } from '@zlens/core';
 
 /**
- * RFC 0010 rule 1: every hook DQL waits for answers within a time limit, or
+ * RFC 0010 rule 1: every hook ZLens waits for answers within a time limit, or
  * counts as failed, and failing is closed: a refusal in plain words, no
  * figures, nothing listed. An answer that comes after the limit is ignored.
  */
-const connectorRoot = process.env.DQL_APP_DATASETS_DUCKDB_CONNECTOR_ROOT?.trim();
+const connectorRoot = readEnv('ZLENS_APP_DATASETS_DUCKDB_CONNECTOR_ROOT')?.trim();
 const duckIt = connectorRoot ? it : it.skip;
 const person: DqlPrincipal = { id: 'u-ana', kind: 'person', email: 'ana@example.test', source: 'host' };
 const LIMIT = 300;
@@ -99,7 +100,7 @@ describe('a hook that does not answer in time, on a hosted server', () => {
     const call = await serve({ resolvePrincipal: () => never() });
     const answer = await call('GET', '/api/identity');
     expect(answer.status).toBe(503);
-    expect(answer.body).toEqual({ error: 'DQL could not check who you are right now. Try again in a moment.', code: 'HOST_UNAVAILABLE' });
+    expect(answer.body).toEqual({ error: 'ZLens could not check who you are right now. Try again in a moment.', code: 'HOST_UNAVAILABLE' });
     expect(answer.ms).toBeLessThan(3_000);
   });
 
@@ -108,7 +109,7 @@ describe('a hook that does not answer in time, on a hosted server', () => {
       const call = await serve({ authorize: hook });
       const answer = await call('POST', '/api/agent/threads', { title: 'x', surface: 'ask' });
       expect(answer.status).toBe(403);
-      expect(answer.body).toMatchObject({ code: 'PERMISSION_DENIED', error: 'DQL could not check what you may do right now. Try again in a moment.' });
+      expect(answer.body).toMatchObject({ code: 'PERMISSION_DENIED', error: 'ZLens could not check what you may do right now. Try again in a moment.' });
       expect(answer.ms).toBeLessThan(3_000);
     }
   });
@@ -154,13 +155,13 @@ describe('a hook that does not answer in time, on a hosted server', () => {
     for (const path of ['/api/agent-runs', '/api/agent/threads']) {
       const answer = await call('GET', path);
       expect(answer.status, path).toBeGreaterThanOrEqual(500);
-      expect(String(answer.body?.error ?? answer.body?.message ?? ''), path).toMatch(/^DQL could not reach its saved (answers|conversations) right now\..*reference [bcdfghjkmnpqrstvwxz]{8}\.$/);
+      expect(String(answer.body?.error ?? answer.body?.message ?? ''), path).toMatch(/^ZLens could not reach its saved (answers|conversations) right now\..*reference [bcdfghjkmnpqrstvwxz]{8}\.$/);
       expect(answer.ms).toBeLessThan(3_000);
     }
   });
 
   it('tools: a gate that does not decide in time refuses the tool', async () => {
-    const { runGatedTool } = await import('@duckcodeailabs/dql-agent');
+    const { runGatedTool } = await import('@zlens/agent');
     let ran = 0;
     const hooks = hooksWithDeadlines({ tools: () => never() }, LIMIT);
     await withRequestContext({ principal: person, requestId: 'r', hooks }, async () => {

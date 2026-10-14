@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
-import { ThemeProvider, TooltipProvider } from '@duckcodeailabs/dql-ui';
+import { ThemeProvider, TooltipProvider } from '@zlens/ui';
 import { NotebookProvider, useNotebookStore } from './store/NotebookStore';
 import { AppShell } from './components/shell/AppShell';
 import { ServerAccessGate } from './components/shell/ServerAccessGate';

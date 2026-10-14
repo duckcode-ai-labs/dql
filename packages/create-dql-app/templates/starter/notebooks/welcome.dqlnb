@@ -29,7 +29,7 @@
       "id": "next_steps",
       "type": "markdown",
       "title": "Next Steps",
-      "source": "## Next steps\n\n1. Connect a warehouse or add a local DuckDB/file connection.\n2. Create a business domain with `dql new domain <name>`.\n3. Save repeated SQL as DQL blocks under `domains/<domain>/blocks/`.\n4. Add shared vocabulary under `domains/<domain>/terms/` and agent guidance under `skills/`.\n5. Run `dql compile .` and open Lineage to inspect technical and business paths."
+      "source": "## Next steps\n\n1. Connect a warehouse or add a local DuckDB/file connection.\n2. Create a business domain with `zlens new domain <name>`.\n3. Save repeated SQL as DQL blocks under `domains/<domain>/blocks/`.\n4. Add shared vocabulary under `domains/<domain>/terms/` and agent guidance under `skills/`.\n5. Run `zlens compile .` and open Lineage to inspect technical and business paths."
     }
   ]
 }

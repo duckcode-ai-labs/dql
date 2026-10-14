@@ -2,12 +2,12 @@ import { existsSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { FONT_LICENCE_FILE, fontLicence } from '@duckcodeailabs/dql-ui/font-licence';
+import { FONT_LICENCE_FILE, fontLicence } from '@zlens/ui/font-licence';
 
 const REPO = fileURLToPath(new URL('../../../../', import.meta.url));
 const STYLES = join(REPO, 'packages/dql-ui/src/styles');
 
-describe('fonts are served by DQL itself', () => {
+describe('fonts are served by ZLens itself', () => {
   it('the app page links nothing on another host (no font service, no CDN)', () => {
     const html = readFileSync(join(REPO, 'apps/dql-notebook/index.html'), 'utf8');
     expect(html).not.toMatch(/(href|src)=["']?(https?:)?\/\//i);
@@ -35,7 +35,7 @@ describe('fonts are served by DQL itself', () => {
 
   it('the built app ships the fonts\' licence beside the font files', () => {
     const config = readFileSync(join(REPO, 'apps/dql-notebook/vite.config.ts'), 'utf8');
-    expect(config).toMatch(/from '@duckcodeailabs\/dql-ui\/font-licence'/);
+    expect(config).toMatch(/from '@zlens\/ui\/font-licence'/);
     expect(config).toMatch(/plugins:\s*\[[^\]]*\bfontLicence\(\)/);
     const emitted: Array<{ fileName: string; source: string }> = [];
     const plugin = fontLicence();

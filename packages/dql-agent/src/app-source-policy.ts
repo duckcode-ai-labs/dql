@@ -1,4 +1,4 @@
-import type { ManifestBlock } from '@duckcodeailabs/dql-core';
+import type { ManifestBlock } from '@zlens/core';
 
 /** Parser-supported tag recording an explicit App-source reuse decision. */
 export const APP_SOURCE_REUSABLE_TAG = 'app-source';

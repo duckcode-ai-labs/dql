@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { SemanticLayer } from '@duckcodeailabs/dql-core';
+import { SemanticLayer } from '@zlens/core';
 import { buildExecutionPlan } from './execute.js';
 
 describe('buildExecutionPlan', () => {
@@ -160,7 +160,7 @@ describe('semantic block compose failures (honest reasons)', () => {
       type: 'dql',
       title: 'Previous Day BCM',
       source: semanticBlockSource('previous_day_bcm'),
-    }, { semanticLayer })).toThrow(/derived metric DQL cannot compose natively.*MetricFlow/);
+    }, { semanticLayer })).toThrow(/derived metric ZLens cannot compose natively.*MetricFlow/);
   });
 
   it('API-006/E2E-008 accepts authoritative SQL from the selected semantic runtime', () => {

@@ -72,7 +72,7 @@ describe('host UI (RFC 0010 HH-9)', () => {
     const local = appLibraryWords(false);
     expect(local.filters).toEqual(['all', 'drafts', 'private', 'shared', 'fav']);
     expect(local.label('drafts')).toBe('Local drafts');
-    expect(local.loadingDetail).toBe('Reading local app files from this DQL project.');
+    expect(local.loadingDetail).toBe('Reading local app files from this ZLens project.');
     const reader = appLibraryWords(true);
     expect(reader.filters).toEqual(['all', 'shared', 'fav']);
     expect(reader.label('shared')).toBe('Shared Apps');
@@ -118,7 +118,7 @@ describe('host UI (RFC 0010 HH-9)', () => {
     expect(html).toContain('Add a note');
   });
 
-  it('offers only the actions meant for questions DQL could not answer on a blocked answer', () => {
+  it('offers only the actions meant for questions ZLens could not answer on a blocked answer', () => {
     const withUnanswered = hosted({ answerActions: [
       { id: 'check', label: 'Ask an analyst to check this', url: '/x' },
       { id: 'certify', label: 'Make this a certified answer', url: '/y', on: ['review', 'unanswered'] },
@@ -209,13 +209,13 @@ describe('a hosted page before (or without) its capability map', () => {
     expect(renderToStaticMarkup(<HostUiProvider><span>Settings</span></HostUiProvider>)).toContain('Settings');
   });
 
-  it('says plainly when DQL cannot be reached after a while, and asks to sign in on a 401', () => {
+  it('says plainly when ZLens cannot be reached after a while, and asks to sign in on a 401', () => {
     const since = 1_000_000;
     expect(renderToStaticMarkup(<HostConnecting pending={{ since, attempts: 2, status: 502 }} now={since + 2_000} />)).toContain('Connecting…');
     const late = renderToStaticMarkup(<HostConnecting pending={{ since, attempts: 4, status: 429 }} now={since + HOST_UNREACHABLE_AFTER_MS} />);
-    expect(late).toContain('DQL can&#x27;t be reached right now.');
+    expect(late).toContain('ZLens can&#x27;t be reached right now.');
     expect(late).toContain('Reload');
-    expect(renderToStaticMarkup(<HostConnecting pending={{ since, attempts: 1, status: 401 }} now={since} />)).toContain('Sign in to use DQL.');
+    expect(renderToStaticMarkup(<HostConnecting pending={{ since, attempts: 1, status: 401 }} now={since} />)).toContain('Sign in to use ZLens.');
   });
 
   it('reads the map defensively: only a hosted map with a person counts, and only `true` allows', () => {

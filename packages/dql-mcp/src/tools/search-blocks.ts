@@ -1,5 +1,5 @@
 import type { DQLContext } from '../context.js';
-import type { ManifestBlock } from '@duckcodeailabs/dql-core';
+import type { ManifestBlock } from '@zlens/core';
 import { zodInputShapeForTool } from '../tool-schema.js';
 
 export const searchBlocksInput = zodInputShapeForTool('search_blocks');

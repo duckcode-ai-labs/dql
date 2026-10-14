@@ -6,9 +6,10 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { Server } from 'node:http';
-import { verifyAskNarration } from '@duckcodeailabs/dql-agent';
+import { verifyAskNarration } from '@zlens/agent';
 import { startLocalServer, type AskAgentRuntimeMode } from './local-runtime.js';
 import { createSeededSqliteExecutor, type GoldenSeed, type SeededSqliteExecutor } from './testkit/seeded-sqlite-executor.js';
+import { readEnv } from '@zlens/core';
 
 /**
  * THE GOLDEN HARNESS — does the product return the RIGHT ROWS?
@@ -27,11 +28,11 @@ import { createSeededSqliteExecutor, type GoldenSeed, type SeededSqliteExecutor 
  *     execute — nothing pre-resolved, nothing injected.
  *   - reference SQL: the seed and the references agree (no server).
  *
- * Provider: replayed cassettes by default (hermetic CI). `DQL_ASK_GOLDEN_LIVE=1`
- * uses the provider configured in `DQL_ASK_GOLDEN_PROVIDER_PROJECT`'s
- * `.dql/provider-settings.json`; add `DQL_ASK_GOLDEN_RECORD=1` to (re)record.
- * `DQL_ASK_GOLDEN_MODE` selects the server's Ask runtime mode.
- * `DQL_ASK_GOLDEN_REPEAT=n` replays each case n times and requires the same
+ * Provider: replayed cassettes by default (hermetic CI). `ZLENS_ASK_GOLDEN_LIVE=1`
+ * uses the provider configured in `ZLENS_ASK_GOLDEN_PROVIDER_PROJECT`'s
+ * `.dql/provider-settings.json`; add `ZLENS_ASK_GOLDEN_RECORD=1` to (re)record.
+ * `ZLENS_ASK_GOLDEN_MODE` selects the server's Ask runtime mode.
+ * `ZLENS_ASK_GOLDEN_REPEAT=n` replays each case n times and requires the same
  * outcome, tier and rows every time (the stability lane).
  *
  * Baseline honesty: the legacy runtime's baseline (17/34) is documented in
@@ -52,38 +53,38 @@ interface GoldenCase extends Reference {
 
 const here = dirname(fileURLToPath(import.meta.url));
 /**
- * `DQL_ASK_GOLDEN_FIXTURE` selects the fixture: `jaffle-golden` (default; its
+ * `ZLENS_ASK_GOLDEN_FIXTURE` selects the fixture: `jaffle-golden` (default; its
  * cases live at test/ask-golden/*.json) or another fixture directory whose
  * cases live at test/ask-golden/<fixture>/*.json (e.g. `nba-golden`: a
  * Snowflake-shaped dbt project with no semantic layer, parameterized
  * certified blocks and non-unique player names).
  */
-const FIXTURE = process.env.DQL_ASK_GOLDEN_FIXTURE ?? 'jaffle-golden';
+const FIXTURE = readEnv('ZLENS_ASK_GOLDEN_FIXTURE') ?? 'jaffle-golden';
 const goldenDir = FIXTURE === 'jaffle-golden' ? resolve(here, '../test/ask-golden') : resolve(here, '../test/ask-golden', FIXTURE);
 const fixtureDir = resolve(here, '../test/fixtures', FIXTURE);
 const questions = (JSON.parse(readFileSync(join(goldenDir, 'questions.json'), 'utf8')) as { questions: GoldenCase[] }).questions;
 const conversation = (JSON.parse(readFileSync(join(goldenDir, 'conversation.json'), 'utf8')) as { turns: GoldenCase[] }).turns;
 const seed = JSON.parse(readFileSync(join(fixtureDir, 'seeds', 'seed.json'), 'utf8')) as GoldenSeed;
 
-const LIVE = process.env.DQL_ASK_GOLDEN_LIVE === '1';
+const LIVE = readEnv('ZLENS_ASK_GOLDEN_LIVE') === '1';
 // The built product scales its run deadline for a subscription CLI (~35 s a
 // dispatch on a larger vocabulary); under vitest that scale is off, so a live
 // lane sets it explicitly. Replay is instant and keeps the strict deadline.
-if (LIVE && !process.env.DQL_AGENT_DEADLINE_SCALE) process.env.DQL_AGENT_DEADLINE_SCALE = '4';
+if (LIVE && !readEnv('ZLENS_AGENT_DEADLINE_SCALE')) process.env.ZLENS_AGENT_DEADLINE_SCALE = '4';
 // The suite runs on the native semantic engine, as CI does (no MetricFlow
 // there). A developer's own `mf` on PATH would otherwise change the engine,
 // and every prompt that mentions it, between recording and replay.
-if (!process.env.DQL_METRICFLOW_BIN) process.env.DQL_METRICFLOW_BIN = join(tmpdir(), 'dql-ask-golden-no-metricflow', 'mf');
-const RECORD = process.env.DQL_ASK_GOLDEN_RECORD === '1';
-const REPEAT = Math.max(1, Number(process.env.DQL_ASK_GOLDEN_REPEAT ?? '1') || 1);
-/** `DQL_ASK_GOLDEN_KEEP=1` leaves the temporary project (and its run/trace stores) on disk for inspection. */
-const KEEP = process.env.DQL_ASK_GOLDEN_KEEP === '1';
-const MODE = process.env.DQL_ASK_GOLDEN_MODE as AskAgentRuntimeMode | undefined;
+if (!readEnv('ZLENS_METRICFLOW_BIN')) process.env.ZLENS_METRICFLOW_BIN = join(tmpdir(), 'dql-ask-golden-no-metricflow', 'mf');
+const RECORD = readEnv('ZLENS_ASK_GOLDEN_RECORD') === '1';
+const REPEAT = Math.max(1, Number(readEnv('ZLENS_ASK_GOLDEN_REPEAT') ?? '1') || 1);
+/** `ZLENS_ASK_GOLDEN_KEEP=1` leaves the temporary project (and its run/trace stores) on disk for inspection. */
+const KEEP = readEnv('ZLENS_ASK_GOLDEN_KEEP') === '1';
+const MODE = readEnv('ZLENS_ASK_GOLDEN_MODE') as AskAgentRuntimeMode | undefined;
 // The live lane reads provider settings from a project you name; there is no default path.
-const PROVIDER_PROJECT = process.env.DQL_ASK_GOLDEN_PROVIDER_PROJECT ?? '';
-if (LIVE && !PROVIDER_PROJECT) throw new Error('DQL_ASK_GOLDEN_LIVE=1 requires DQL_ASK_GOLDEN_PROVIDER_PROJECT (a project with .dql/provider-settings.json).');
+const PROVIDER_PROJECT = readEnv('ZLENS_ASK_GOLDEN_PROVIDER_PROJECT') ?? '';
+if (LIVE && !PROVIDER_PROJECT) throw new Error('ZLENS_ASK_GOLDEN_LIVE=1 requires ZLENS_ASK_GOLDEN_PROVIDER_PROJECT (a project with .dql/provider-settings.json).');
 /** Comma-separated question ids to run alone (debugging a failure); empty runs everything. */
-const ONLY = new Set((process.env.DQL_ASK_GOLDEN_ONLY ?? '').split(',').map((id) => id.trim()).filter(Boolean));
+const ONLY = new Set((readEnv('ZLENS_ASK_GOLDEN_ONLY') ?? '').split(',').map((id) => id.trim()).filter(Boolean));
 const selected = <T extends { id: string }>(items: T[]): T[] => (ONLY.size ? items.filter((item) => ONLY.has(item.id)) : items);
 const CASSETTES = join(fixtureDir, 'test-cassettes', 'golden');
 const INFRASTRUCTURE = /\b(provider|dispatch(es)?|budget|orchestration|snapshot|closure|kernel|tool path|retry)\b/i;
@@ -204,10 +205,10 @@ async function startGolden(): Promise<Harness> {
       if (existsSync(source)) cpSync(source, join(root, '.dql', file));
     }
   }
-  if (!process.env.DQL_EVAL_CASSETTE_DIR) {
+  if (!readEnv('ZLENS_EVAL_CASSETTE_DIR')) {
     mkdirSync(CASSETTES, { recursive: true });
-    process.env.DQL_EVAL_CASSETTE_DIR = CASSETTES;
-    process.env.DQL_EVAL_CASSETTE_MODE = LIVE ? (RECORD ? 'record' : 'live') : 'replay';
+    process.env.ZLENS_EVAL_CASSETTE_DIR = CASSETTES;
+    process.env.ZLENS_EVAL_CASSETTE_MODE = LIVE ? (RECORD ? 'record' : 'live') : 'replay';
   }
   executor = createSeededSqliteExecutor(seed);
   let server: Server | undefined;

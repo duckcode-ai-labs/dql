@@ -202,7 +202,7 @@ function blocksConflict(a: ManifestBlock, b: ManifestBlock): { concept: string; 
 }
 
 function buildPrompt(objectType: 'term' | 'block', a: string, b: string, concept: string): string {
-  return `Two certified ${objectType}s define "${concept}" differently: "${a}" and "${b}". Which one is authoritative? A human must decide; DQL will not guess.`;
+  return `Two certified ${objectType}s define "${concept}" differently: "${a}" and "${b}". Which one is authoritative? A human must decide; ZLens will not guess.`;
 }
 
 /**

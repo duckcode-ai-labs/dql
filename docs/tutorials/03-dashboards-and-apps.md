@@ -30,7 +30,7 @@ Everything is a file, so the whole surface is reviewable in a PR.
 ## Step 1 — Create the App
 
 ```bash
-dql app new revenue-ops --domain revenue --owner you@your-company.com
+zlens app new revenue-ops --domain revenue --owner you@your-company.com
 ```
 
 > **You should see** `apps/revenue-ops/` created with a `dql.app.json`
@@ -83,7 +83,7 @@ Save.
 ## Step 3 — Build and check block resolution
 
 ```bash
-dql app build
+zlens app build
 ```
 
 > **You should see**
@@ -114,7 +114,7 @@ Dashboard IDs are local to their App; the manifest qualifies them as
 ## Step 4 — Open it in the Apps view
 
 ```bash
-dql notebook
+zlens notebook
 ```
 
 1. Click **Apps** in the activity bar.
@@ -132,7 +132,7 @@ the dashboard.
 ## Step 5 — See the full lineage
 
 ```bash
-dql lineage --app revenue-ops
+zlens lineage --app revenue-ops
 ```
 
 > **You should see** the complete chain:
@@ -146,7 +146,7 @@ dql lineage --app revenue-ops
 > dbt model: orders → staging → seeds
 > ```
 
-This is the graph the agent, the impact-analysis tooling, and `dql verify`
+This is the graph the agent, the impact-analysis tooling, and `zlens verify`
 all share.
 
 ---

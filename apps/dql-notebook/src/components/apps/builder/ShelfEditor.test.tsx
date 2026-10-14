@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import type { DatasetDescriptor } from '@duckcodeailabs/dql-core/datasets/descriptor';
-import type { DashboardVizEncoding } from '@duckcodeailabs/dql-core/apps/viz-encoding';
+import type { DatasetDescriptor } from '@zlens/core/datasets/descriptor';
+import type { DashboardVizEncoding } from '@zlens/core/apps/viz-encoding';
 import { ShelfEditor, describeEncodedChart } from './ShelfEditor';
 import { TileQueryEditor } from './TileQueryEditor';
 import { autoTileView, descriptorTimeField, vizTypeForEncoding } from './field-query';

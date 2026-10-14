@@ -32,7 +32,7 @@ export function publicationIssueSummaries(issues: string[]): Array<{ id: string;
     const sourceMatch = issue.match(/^Source (.+?) changed after selection\.$/i);
     if (sourceMatch) {
       const source = publicationHumanize(sourceMatch[1]);
-      return { id: `sources:${sourceMatch[1]}`, title: `Review ${source}`, detail: `${source} changed since it was selected. Accept the current certified version; DQL will then request a fresh preview.`, action: 'refresh_sources' as const };
+      return { id: `sources:${sourceMatch[1]}`, title: `Review ${source}`, detail: `${source} changed since it was selected. Accept the current certified version; ZLens will then request a fresh preview.`, action: 'refresh_sources' as const };
     }
     if (/does not resolve to (?:a current |a )?certified block|no longer resolves to a certified block/i.test(issue)) return { id: `unavailable:${issue}`, title: 'Replace or remove this source', detail: issue, action: 'sources' as const };
     if (/changed after selection|certified block|source/i.test(issue)) return { id: 'sources', title: 'Review changed sources', detail: issue, action: 'sources' as const };

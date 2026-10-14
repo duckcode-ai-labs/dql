@@ -19,7 +19,7 @@ import {
   loadProjectConfig,
   resolveSemanticLayerWithDiagnostics,
   type SemanticLayer,
-} from '@duckcodeailabs/dql-core';
+} from '@zlens/core';
 import { skillPath, writeSkill, type Skill, type WriteSkillInput } from './loader.js';
 
 export interface SeedDefaultSkillsOptions {
@@ -94,7 +94,7 @@ function metricsGlossarySkill(metrics: MetricLike[]): WriteSkillInput {
     }
   } else {
     bodyLines.push('_No semantic-layer metrics were found when this glossary was seeded._');
-    bodyLines.push('_Add metrics to your semantic layer and re-run `dql init` to refresh, or edit this file._');
+    bodyLines.push('_Add metrics to your semantic layer and re-run `zlens init` to refresh, or edit this file._');
   }
   return {
     id: 'metrics-glossary',
@@ -162,7 +162,7 @@ function domainRulesSkill(): WriteSkillInput {
       '-->',
       '',
       '_This is a starter template. Edit it with your team\'s definitions; re-running',
-      '`dql init` will not overwrite your changes._',
+      '`zlens init` will not overwrite your changes._',
     ].join('\n'),
     isStarter: true,
   };

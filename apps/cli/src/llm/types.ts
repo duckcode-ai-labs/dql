@@ -26,8 +26,8 @@ import type {
   NarrationIntegrityReceiptV1,
   ProviderFailureDiagnosticV1,
   ConversationResultMemberSetV1,
-} from '@duckcodeailabs/dql-agent';
-import type { DQLManifest, ProviderDispatchPhaseV1, ProviderEgressPurpose, ProviderEgressReceiptV1 } from '@duckcodeailabs/dql-core';
+} from '@zlens/agent';
+import type { DQLManifest, ProviderDispatchPhaseV1, ProviderEgressPurpose, ProviderEgressReceiptV1 } from '@zlens/core';
 
 export type ProviderId = 'anthropic' | 'claude-agent-sdk' | 'claude-code' | 'codex' | 'openai' | 'gemini' | 'ollama' | 'custom-openai';
 

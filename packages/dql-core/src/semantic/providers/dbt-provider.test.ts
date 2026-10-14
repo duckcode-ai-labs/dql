@@ -922,7 +922,7 @@ describe('MetricFlow global time axis', () => {
     const metricTime = layer.listTimeDimensions(undefined, { includeVariants: true })
       .find((dimension) => dimension.name === 'metric_time');
 
-    // metric_time is never DECLARED — MetricFlow synthesizes it — so DQL had no
+    // metric_time is never DECLARED — MetricFlow synthesizes it — so ZLens had no
     // such dimension at all and every `metric_time__day` query failed as unknown.
     expect(metricTime).toBeDefined();
     // It projects onto the model's AGGREGATE time column, not just any time dim.

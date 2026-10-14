@@ -3,8 +3,8 @@ import type { Server } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
-import { QueryExecutor, type ConnectionConfig } from '@duckcodeailabs/dql-connectors';
-import { LocalAppStorage, LocalNotebookResearchStorage, defaultLocalAppsDbPath } from '@duckcodeailabs/dql-project';
+import { QueryExecutor, type ConnectionConfig } from '@zlens/connectors';
+import { LocalAppStorage, LocalNotebookResearchStorage, defaultLocalAppsDbPath } from '@zlens/project';
 import { homePersonKey } from '../home/home-state.js';
 import { startLocalServer } from '../local-runtime.js';
 import { knowledgeServersFor } from './knowledge-sources.js';
@@ -18,6 +18,7 @@ import {
   type DqlHostHooks,
   type DqlPrincipal,
 } from './request-context.js';
+import { readEnv } from '@zlens/core';
 
 /**
  * The host-hook contract: every hook is optional and fails closed. For each hook, a hook that throws,
@@ -26,11 +27,11 @@ import {
  * in plain words, never a 500 with internals. A hook that never answers is cut off by the time limit every hook has
  * (hook-deadline.ts).
  *
- * Needs DQL_APP_DATASETS_DUCKDB_CONNECTOR_ROOT (the folder holding the pinned duckdb driver) for the query hooks.
+ * Needs ZLENS_APP_DATASETS_DUCKDB_CONNECTOR_ROOT (the folder holding the pinned duckdb driver) for the query hooks.
  * Evidence lines go to hook-faults.jsonl in the folder an evidence variable names, when one is set.
  */
 
-const connectorRoot = process.env.DQL_APP_DATASETS_DUCKDB_CONNECTOR_ROOT?.trim();
+const connectorRoot = readEnv('ZLENS_APP_DATASETS_DUCKDB_CONNECTOR_ROOT')?.trim();
 const duckIt = connectorRoot ? it : it.skip;
 const evidenceDir = process.env.HOST_CHECK_EVIDENCE_DIR?.trim();
 function evidence(record: Record<string, unknown>): void {
@@ -145,7 +146,7 @@ describe('resolvePrincipal (HH-1)', () => {
     const fetchAs = async (headers: Record<string, string>) => call('GET', '/api/identity', undefined, { headers });
     const thrown = await fetchAs({ 'x-test-mode': 'throw' });
     expect(thrown.status).toBe(401);
-    expect(thrown.body).toEqual({ error: 'Sign in to use DQL.' });
+    expect(thrown.body).toEqual({ error: 'Sign in to use ZLens.' });
     for (index = 0; index < junk.length; index += 1) {
       const answer = await fetchAs({ 'x-test-junk': String(index) });
       expect(answer.status, `junk #${index} ${JSON.stringify(junk[index])}`).toBe(401);
@@ -589,7 +590,7 @@ describe('knowledgeSources (HH-15), audit (HH-6), tools (HH-7)', () => {
   });
 
   it('tools: a gate that throws refuses the tool; one that answers late still answers; one that never answers holds it', async () => {
-    const { runGatedTool } = await import('@duckcodeailabs/dql-agent');
+    const { runGatedTool } = await import('@zlens/agent');
     const held = gate<unknown>();
     await serve({
       tools: async (call, next) => {

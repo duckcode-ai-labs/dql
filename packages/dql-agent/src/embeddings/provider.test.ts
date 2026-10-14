@@ -174,9 +174,9 @@ describe('local-first embeddings (W3.1)', () => {
   });
 
   it('embeddingOptionsFromEnv reads Ollama and OpenAI config (Ollama wins)', () => {
-    expect(embeddingOptionsFromEnv({ DQL_OLLAMA_EMBED_URL: 'http://x:11434', DQL_OLLAMA_EMBED_MODEL: 'nomic' }))
+    expect(embeddingOptionsFromEnv({ ZLENS_OLLAMA_EMBED_URL: 'http://x:11434', ZLENS_OLLAMA_EMBED_MODEL: 'nomic' }))
       .toEqual({ ollamaEndpoint: 'http://x:11434', ollamaModel: 'nomic' });
-    expect(embeddingOptionsFromEnv({ DQL_OPENAI_API_KEY: 'sk-x' })).toEqual({ openaiApiKey: 'sk-x' });
+    expect(embeddingOptionsFromEnv({ ZLENS_OPENAI_API_KEY: 'sk-x' })).toEqual({ openaiApiKey: 'sk-x' });
     expect(embeddingOptionsFromEnv({ OPENAI_API_KEY: 'ambient-answer-key' })).toEqual({});
     expect(embeddingOptionsFromEnv({})).toEqual({});
   });
@@ -199,8 +199,8 @@ describe('local-first embeddings (W3.1)', () => {
       expect(envEmbeddingProvider({})).toBe(projectProvider);
       // An explicit environment override remains the operator's escape hatch.
       clearEnvEmbeddingProviderCache();
-      expect(envEmbeddingProvider({ DQL_OLLAMA_EMBED_URL: 'http://localhost:11434' }).id).toContain('ollama:');
-      expect(envEmbeddingProvider({ DQL_OLLAMA_EMBED_URL: 'http://localhost:11434' })).not.toBe(projectProvider);
+      expect(envEmbeddingProvider({ ZLENS_OLLAMA_EMBED_URL: 'http://localhost:11434' }).id).toContain('ollama:');
+      expect(envEmbeddingProvider({ ZLENS_OLLAMA_EMBED_URL: 'http://localhost:11434' })).not.toBe(projectProvider);
     } finally {
       setProcessDefaultEmbeddingProvider(undefined);
       clearEnvEmbeddingProviderCache();
@@ -210,10 +210,10 @@ describe('local-first embeddings (W3.1)', () => {
 
   it('reuses the environment-selected provider so corpus vectors stay cached between questions', () => {
     clearEnvEmbeddingProviderCache();
-    const env = { DQL_OLLAMA_EMBED_URL: 'http://localhost:11434', DQL_OLLAMA_EMBED_MODEL: 'nomic' };
+    const env = { ZLENS_OLLAMA_EMBED_URL: 'http://localhost:11434', ZLENS_OLLAMA_EMBED_MODEL: 'nomic' };
     expect(envEmbeddingProvider(env)).toBe(envEmbeddingProvider(env));
 
-    const changed = envEmbeddingProvider({ ...env, DQL_OLLAMA_EMBED_MODEL: 'mxbai' });
+    const changed = envEmbeddingProvider({ ...env, ZLENS_OLLAMA_EMBED_MODEL: 'mxbai' });
     expect(changed).not.toBe(envEmbeddingProvider(env));
     clearEnvEmbeddingProviderCache();
   });

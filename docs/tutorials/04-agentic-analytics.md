@@ -49,7 +49,7 @@ review-required SQL unless a certified block already covers that exact grain.
 ## Step 1 — Build the knowledge graph
 
 ```bash
-dql agent reindex
+zlens agent reindex
 ```
 
 > **You should see** a node/edge count — your business terms, business views,
@@ -62,7 +62,7 @@ dql agent reindex
 ## Step 2 — Ask a question that hits a certified block
 
 ```bash
-dql agent ask "how has revenue trended by month?"
+zlens agent ask "how has revenue trended by month?"
 ```
 
 > **You should see**
@@ -78,7 +78,7 @@ dql agent ask "how has revenue trended by month?"
 Inspect the routing decision:
 
 ```bash
-dql agent ask "how has revenue trended by month?" --format json | jq '.kind'
+zlens agent ask "how has revenue trended by month?" --format json | jq '.kind'
 ```
 
 > **You should see** `"certified"`.
@@ -88,7 +88,7 @@ dql agent ask "how has revenue trended by month?" --format json | jq '.kind'
 ## Step 3 — Ask something no block covers
 
 ```bash
-dql agent ask "what share of orders are food vs drink?"
+zlens agent ask "what share of orders are food vs drink?"
 ```
 
 > **You should see** the answer clearly labelled **Uncertified**: the LLM
@@ -115,7 +115,7 @@ human-reviewed and start with `status: draft`.
 Measure the follow-up path with an eval suite:
 
 ```bash
-dql agent eval docs/guides/agent-evals.yml --format json
+zlens agent eval docs/guides/agent-evals.yml --format json
 ```
 
 > **You should see** certified hit rate, generated follow-up pass rate, safe
@@ -139,24 +139,24 @@ needed, add `owner`, `llmContext`, and `tests`, then run it through the same
 gate as tutorial 02:
 
 ```bash
-dql certify --from-draft domains/<domain>/blocks/_drafts/<draft-file>.dql
+zlens certify --from-draft domains/<domain>/blocks/_drafts/<draft-file>.dql
 ```
 
 > **You should see** the rule table go green and the block land in the domain
-> block folder as `certified`. Re-run `dql agent reindex`, ask the same
+> block folder as `certified`. Re-run `zlens agent reindex`, ask the same
 > question again, and the answer is now **✓ Certified** — the loop is
 > closed.
 
 Feedback tunes retrieval over time:
 
 ```bash
-dql agent feedback up --question "monthly revenue" --block "block:revenue_by_month"
+zlens agent feedback up --question "monthly revenue" --block "block:revenue_by_month"
 ```
 
 Follow-up drilldowns use the same loop:
 
 ```bash
-dql agent ask "drill into Enterprise last week"
+zlens agent ask "drill into Enterprise last week"
 ```
 
 > **You should see** either a certified drilldown block, if one exists, or an
@@ -171,7 +171,7 @@ The OSS app builder writes reviewable files. It does not generate hidden React
 or bypass certification state:
 
 ```bash
-dql app generate "Build a weekly revenue health app for the COO"
+zlens app generate "Build a weekly revenue health app for the COO"
 ```
 
 > **You should see** an `apps/<app-id>/` package with:
@@ -187,7 +187,7 @@ App is useful immediately but still safe for Git review.
 Build the App manifest after review:
 
 ```bash
-dql app build
+zlens app build
 ```
 
 ---
@@ -198,14 +198,14 @@ The same graduated-trust loop is exposed to any MCP client (Claude Code,
 Claude Desktop, Cursor, Codex):
 
 ```bash
-dql mcp test
-dql connect claude-code
-# or: dql connect codex
-# or: dql connect all
+zlens mcp test
+zlens connect claude-code
+# or: zlens connect codex
+# or: zlens connect all
 ```
 
-`dql connect claude-code` writes project-local `.mcp.json` plus `CLAUDE.md`.
-`dql connect codex` writes project-local `.codex/config.toml` plus `AGENTS.md`.
+`zlens connect claude-code` writes project-local `.mcp.json` plus `CLAUDE.md`.
+`zlens connect codex` writes project-local `.codex/config.toml` plus `AGENTS.md`.
 Full setup for every client is in [Connect an AI agent (MCP)](../guides/mcp.md).
 
 The server exposes workflow tools such as `inspect_dql_project`, `ask_dql`,
@@ -224,4 +224,4 @@ when it has to generate a deeper or different-grain answer.
 ✓ A local generated App package with certified tiles and draft review tasks
 ✓ An MCP server giving Claude, Codex, Cursor, and other agents governed access to your analytics
 
-[Continue to tutorial 05 — CI and `dql verify` →](./05-ci-and-verify.md)
+[Continue to tutorial 05 — CI and `zlens verify` →](./05-ci-and-verify.md)

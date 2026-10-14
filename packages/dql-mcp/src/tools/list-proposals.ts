@@ -1,7 +1,7 @@
 import { existsSync, readdirSync, readFileSync, type Dirent } from 'node:fs';
 import { join } from 'node:path';
 import type { DQLContext } from '../context.js';
-import type { DimensionDefinition, MetricDefinition, SemanticLayer } from '@duckcodeailabs/dql-core';
+import type { DimensionDefinition, MetricDefinition, SemanticLayer } from '@zlens/core';
 import { zodInputShapeForTool } from '../tool-schema.js';
 
 export const listProposalsInput = zodInputShapeForTool('list_proposals');
@@ -128,7 +128,7 @@ function parseProposal(
   const proposedEntity = pickStringField(content, 'proposed_entity') ?? '';
   const upstreamRefs = pickArrayField(content, 'upstream_refs');
   const sourceDqlArtifact = parseSourceDqlArtifact(content);
-  const certifyHint = `dql certify --from-draft ${draftPath} --domain ${proposedDomain || '<domain>'} --contract ${proposedContractId || '<id>'}@1 --owner <you@example.com>`;
+  const certifyHint = `zlens certify --from-draft ${draftPath} --domain ${proposedDomain || '<domain>'} --contract ${proposedContractId || '<id>'}@1 --owner <you@example.com>`;
   return {
     kind: 'block_draft',
     artifactType: 'block',

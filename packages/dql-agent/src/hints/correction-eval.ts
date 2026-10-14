@@ -6,7 +6,7 @@
  * source is a separate authoring action. The generated assertion only checks
  * referenced relations and is not semantic proof for hint approval.
  */
-import { analyzeSqlReferences } from '@duckcodeailabs/dql-core';
+import { analyzeSqlReferences } from '@zlens/core';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import yaml from 'js-yaml';
@@ -57,7 +57,7 @@ export function appendCorrectionEvalCase(projectRoot: string, evalCase: Correcti
   mkdirSync(dirname(path), { recursive: true });
   const header = '# Auto-generated regression eval cases from human corrections (W4.3).\n'
     + '# Each case asserts a future answer references the relations the correction used.\n'
-    + '# Run: dql agent eval agent-evals/corrections.agent-evals.yml --execute\n';
+    + '# Run: zlens agent eval agent-evals/corrections.agent-evals.yml --execute\n';
   writeFileSync(path, header + yaml.dump({ cases: deduped }, { lineWidth: 120 }));
   return path;
 }

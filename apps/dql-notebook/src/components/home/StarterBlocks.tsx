@@ -25,7 +25,7 @@ import {
   AlertTriangle,
   HelpCircle,
 } from 'lucide-react';
-import { TrustBadge } from '@duckcodeailabs/dql-ui';
+import { TrustBadge } from '@zlens/ui';
 import { api } from '../../api/client';
 import { controlStyle } from '../../themes/control-tokens';
 import { useNotebook } from '../../store/NotebookStore';
@@ -103,7 +103,7 @@ export function StarterBlocks({
             <p style={{ margin: '3px 0 0', fontSize: 12.5, lineHeight: 1.5, color: t.textSecondary }}>
               Block suggestions are drafted by <strong>your AI provider</strong> from your dbt models and
               data — that's where the value is. Connect a provider (OpenAI, Anthropic, Gemini, or a local
-              Ollama) and DQL will propose a few important blocks you can learn from and certify.
+              Ollama) and ZLens will propose a few important blocks you can learn from and certify.
             </p>
           </div>
         </div>
@@ -185,7 +185,7 @@ export function StarterBlocks({
             <span style={{ fontSize: 12.5, color: t.textSecondary, lineHeight: 1.5 }}>
               {readiness && !readiness.ready && readiness.reason
                 ? readiness.reason
-                : 'No starter blocks to suggest yet — connect a dbt project so DQL can read your models, or build your first block by hand to see how it works.'}
+                : 'No starter blocks to suggest yet — connect a dbt project so ZLens can read your models, or build your first block by hand to see how it works.'}
             </span>
             <button type="button" onClick={buildOwn} style={ghostBtnStyle(t)}>
               <BlocksIcon size={14} strokeWidth={2} aria-hidden="true" />

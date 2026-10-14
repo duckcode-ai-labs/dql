@@ -4,8 +4,8 @@
  * provider can enrich the prose later, but every candidate carries the exact
  * metrics, blocks, and terms that caused it to exist.
  */
-import type { DQLManifest } from '@duckcodeailabs/dql-core';
-import type { DomainInput } from '@duckcodeailabs/dql-core';
+import type { DQLManifest } from '@zlens/core';
+import type { DomainInput } from '@zlens/core';
 import { buildDomainReferenceSkills } from './domain-skills.js';
 import type { WriteSkillInput } from './loader.js';
 

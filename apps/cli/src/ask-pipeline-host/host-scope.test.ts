@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { ConnectionConfig, QueryExecutor } from '@duckcodeailabs/dql-connectors';
-import type { AgentMessage, AgentProvider, AgentRunRequest, AnalyticalIntentV1, VocabularyIndex } from '@duckcodeailabs/dql-agent';
+import type { ConnectionConfig, QueryExecutor } from '@zlens/connectors';
+import type { AgentMessage, AgentProvider, AgentRunRequest, AnalyticalIntentV1, VocabularyIndex } from '@zlens/agent';
 import { createAskPipelineHost, type AskPipelineHostDeps } from './host.js';
 
 const connection = { driver: 'duckdb', path: ':memory:' } as ConnectionConfig;

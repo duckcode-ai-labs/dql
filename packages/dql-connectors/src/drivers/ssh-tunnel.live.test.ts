@@ -1,8 +1,8 @@
 /**
  * A PostgreSQL connection through a real SSH tunnel: an in-process ssh2
  * server stands in for the bastion and forwards to the database named by
- * DQL_LIVE_POSTGRES. Skipped unless that database and the ssh2 package
- * (DQL_LIVE_MODULES) are available.
+ * ZLENS_LIVE_POSTGRES. Skipped unless that database and the ssh2 package
+ * (ZLENS_LIVE_MODULES) are available.
  */
 import { createRequire } from 'node:module';
 import { connect as netConnect, type AddressInfo } from 'node:net';
@@ -10,9 +10,10 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import type { ConnectionConfig } from '../connector.js';
 import { ConnectionPoolManager } from '../connection-pool.js';
+import { readEnv } from '../env.js';
 
-const modules = process.env.DQL_LIVE_MODULES;
-const database = process.env.DQL_LIVE_POSTGRES;
+const modules = readEnv('ZLENS_LIVE_MODULES');
+const database = readEnv('ZLENS_LIVE_POSTGRES');
 
 describe.skipIf(!modules || !database)('SSH tunnel (live)', () => {
   it('reaches the database through the bastion, and closes the tunnel with the connection', async () => {

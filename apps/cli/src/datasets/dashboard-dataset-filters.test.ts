@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { DashboardDocument, DatasetDescriptor } from '@duckcodeailabs/dql-core';
+import type { DashboardDocument, DatasetDescriptor } from '@zlens/core';
 import { resolveDashboardDatasetFilters, resolveRelativeDateRange } from './dashboard-dataset-filters.js';
 
 const descriptor = {

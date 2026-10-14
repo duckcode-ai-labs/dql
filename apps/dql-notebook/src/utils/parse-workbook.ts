@@ -1,4 +1,4 @@
-import { canonicalizeNotebook, NOTEBOOK_FORMAT_VERSION } from '@duckcodeailabs/dql-core/format';
+import { canonicalizeNotebook, NOTEBOOK_FORMAT_VERSION } from '@zlens/core/format';
 import type {
   Cell,
   CellType,

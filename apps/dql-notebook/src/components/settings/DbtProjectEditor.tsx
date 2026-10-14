@@ -213,7 +213,7 @@ export function DbtProjectEditor({
         text: observedPreparation?.status === 'completed'
           ? observedPreparation.message || `Connected ${preview.projectName || preview.projectDir}. Governed search is ready.`
           : observedPreparation
-          ? `Connected ${preview.projectName || preview.projectDir}. DQL is preparing ${summary} for fast governed search in the background.`
+          ? `Connected ${preview.projectName || preview.projectDir}. ZLens is preparing ${summary} for fast governed search in the background.`
           : `Applied ${preview.projectName || preview.projectDir}. ${summary}.`,
       });
       onConfigured?.({
@@ -338,7 +338,7 @@ export function DbtProjectEditor({
   const preparing = preparation?.status === 'queued' || preparation?.status === 'running';
   const preparationFailed = preparation?.status === 'failed' || preparation?.status === 'cancelled';
   const projectStatusTitle = reapplyRequired
-    ? 'Reapply required after DQL update'
+    ? 'Reapply required after ZLens update'
     : preparationFailed
     ? 'dbt project needs attention'
     : preparing
@@ -469,7 +469,7 @@ export function DbtProjectEditor({
                   {!adapter.ready ? (
                     <>
                       <div style={{ fontSize: 10.5, color: t.textSecondary, lineHeight: 1.45 }}>
-                        Install into an isolated <code style={{ fontFamily: t.fontMono }}>.dql/runtimes/metricflow</code> environment. DQL never uses sudo or changes system Python.
+                        Install into an isolated <code style={{ fontFamily: t.fontMono }}>.dql/runtimes/metricflow</code> environment. ZLens never uses sudo or changes system Python.
                       </div>
                       <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
                         <select

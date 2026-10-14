@@ -4,9 +4,9 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as yaml from 'js-yaml';
 import { afterAll, describe, expect, it, vi } from 'vitest';
-import type { ConnectionConfig, QueryExecutor } from '@duckcodeailabs/dql-connectors';
-import type { AgentProvider, AgentRunRequest } from '@duckcodeailabs/dql-agent';
-import { applyDbtMetricPatch, buildManifest, previewDbtMetricPatch, resolveSemanticLayer, type DbtMetricAuthoringInput } from '@duckcodeailabs/dql-core';
+import type { ConnectionConfig, QueryExecutor } from '@zlens/connectors';
+import type { AgentProvider, AgentRunRequest } from '@zlens/agent';
+import { applyDbtMetricPatch, buildManifest, previewDbtMetricPatch, resolveSemanticLayer, type DbtMetricAuthoringInput } from '@zlens/core';
 import { createAskPipelineRouteExecutor } from './host.js';
 
 // Owner scenario B4 without `dbt parse`: DQL Enterprise never runs dbt and the sandbox workspace commits

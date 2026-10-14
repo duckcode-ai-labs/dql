@@ -17,7 +17,7 @@
  *   - `search_semantic_layer` / `scan_manifest` are read-only discovery.
  */
 
-import { semanticDimensionReference, type SemanticLayer } from '@duckcodeailabs/dql-core';
+import { semanticDimensionReference, type SemanticLayer } from '@zlens/core';
 import type { AgentToolDefinition } from '../providers/types.js';
 import type { KGStore } from '../kg/sqlite-fts.js';
 import type { KGNode, KGNodeKind } from '../kg/types.js';

@@ -1,7 +1,7 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { ShieldCheck } from 'lucide-react';
-import type { DatasetDescriptor, DatasetMeasureField } from '@duckcodeailabs/dql-core/datasets/descriptor';
-import type { TileQuery } from '@duckcodeailabs/dql-core/apps/tile-query';
+import type { DatasetDescriptor, DatasetMeasureField } from '@zlens/core/datasets/descriptor';
+import type { TileQuery } from '@zlens/core/apps/tile-query';
 import {
   checkTileCalculations,
   formatTileCalcExpr,
@@ -10,7 +10,7 @@ import {
   type TileCalcExpr,
   type TileCalcOutput,
   type TileCalculation,
-} from '@duckcodeailabs/dql-core/apps/tile-calcs';
+} from '@zlens/core/apps/tile-calcs';
 import { humanize } from './studio-ui';
 
 type Verdict =

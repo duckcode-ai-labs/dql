@@ -1,8 +1,8 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { basename, join, relative, resolve } from 'node:path';
-import { createWelcomeNotebook, serializeNotebook } from '@duckcodeailabs/dql-notebook';
-import { resolveLocalOwner, seedDefaultSkills, seedDomainSkills } from '@duckcodeailabs/dql-agent';
-import { buildManifest } from '@duckcodeailabs/dql-core';
+import { createWelcomeNotebook, serializeNotebook } from '@zlens/notebook';
+import { resolveLocalOwner, seedDefaultSkills, seedDomainSkills } from '@zlens/agent';
+import { buildManifest } from '@zlens/core';
 import type { CLIFlags } from '../args.js';
 import { ensureDqlGitignore } from '../git-contract.js';
 import { runNotebook } from './notebook.js';
@@ -21,7 +21,7 @@ export async function runInit(targetArg: string | null, flags: CLIFlags): Promis
   const alreadyInitialized =
     existsSync(join(targetDir, 'dql.config.json')) || existsSync(join(targetDir, 'cdql.yaml'));
   if (alreadyInitialized && !flags.force) {
-    console.error('✗ This directory already has a DQL project (dql.config.json exists).');
+    console.error('✗ This directory already has a ZLens project (dql.config.json exists).');
     console.error('  Re-run with --force to patch missing dirs without overwriting config.');
     process.exitCode = 1;
     return;
@@ -42,7 +42,7 @@ export async function runInit(targetArg: string | null, flags: CLIFlags): Promis
     }
   }
   // Detect DuckDB file — in the workspace OR the dbt project dir (common layout:
-  // the .duckdb lives next to dbt_project.yml, a level up from the DQL workspace).
+  // the .duckdb lives next to dbt_project.yml, a level up from the ZLens workspace).
   const duckdbPath = detectDuckDBFile(targetDir, dbtProjectDir);
 
   // Don't overwrite existing dql.config.json
@@ -71,7 +71,7 @@ export async function runInit(targetArg: string | null, flags: CLIFlags): Promis
 
   // UI-001, SEC-001, E2E-001: repair the legacy broad `.dql/` ignore while
   // retaining local runtime and credential exclusions. This also applies to
-  // `dql init --force` repairs of existing projects.
+  // `zlens init --force` repairs of existing projects.
   ensureDqlGitignore(targetDir);
 
   // `--force` on an initialized project is intentionally a directory repair,
@@ -124,7 +124,7 @@ export async function runInit(targetArg: string | null, flags: CLIFlags): Promis
       // Domain skills need a compilable manifest; best-effort like the starters.
     }
   } catch {
-    // Skill seeding is best-effort; never fail `dql init` over it.
+    // Skill seeding is best-effort; never fail `zlens init` over it.
   }
 
   // Output
@@ -142,7 +142,7 @@ export async function runInit(targetArg: string | null, flags: CLIFlags): Promis
     return;
   }
 
-  console.log(`\n  ✓ DQL project initialized: ${projectName}`);
+  console.log(`\n  ✓ ZLens project initialized: ${projectName}`);
   console.log(`    Path: ${targetDir}`);
   console.log('');
   console.log('  Detected:');
@@ -176,19 +176,19 @@ export async function runInit(targetArg: string | null, flags: CLIFlags): Promis
   console.log('  Next steps:');
   const step = targetArg && targetArg !== '.' ? 1 : 0;
   if (step === 1) console.log(`    ${step}. cd ${targetArg}`);
-  // E2E-005: `npx dql` works for both project-local and global installs. A
-  // bare `dql` only works after a global install and was misleading for the
+  // E2E-005: `npx zlens` works for both project-local and global installs. A
+  // bare `zlens` only works after a global install and was misleading for the
   // recommended existing-repo `npm i -D` path.
-  console.log(`    ${step + 1}. npx dql doctor`);
-  console.log(`    ${step + 2}. npx dql notebook`);
+  console.log(`    ${step + 1}. npx zlens doctor`);
+  console.log(`    ${step + 2}. npx zlens notebook`);
   if (isDbt) {
-    console.log(`    ${step + 3}. npx dql compile .`);
-    console.log(`    ${step + 4}. npx dql sync dbt .`);
+    console.log(`    ${step + 3}. npx zlens compile .`);
+    console.log(`    ${step + 4}. npx zlens sync dbt .`);
   } else if (projectConfig.modeling?.mode === 'warehouse-first') {
-    console.log(`    ${step + 3}. npx dql sync warehouse --schemas <schema>   (reads tables, columns and keys)`);
+    console.log(`    ${step + 3}. npx zlens sync warehouse --schemas <schema>   (reads tables, columns and keys)`);
   } else {
     console.log('');
-    console.log('  No dbt project? `dql init --warehouse-first` models your warehouse tables directly.');
+    console.log('  No dbt project? `zlens init --warehouse-first` models your warehouse tables directly.');
   }
   console.log('');
 
@@ -208,7 +208,7 @@ function detectDuckDBFile(workspaceDir: string, dbtProjectDir: string | null): s
     'target/jaffle_shop.duckdb',
     'reports/jaffle_shop.duckdb',
   ];
-  // 1. The DQL workspace itself — store a bare relative path.
+  // 1. The ZLens workspace itself — store a bare relative path.
   for (const candidate of candidates) {
     if (existsSync(join(workspaceDir, candidate))) return candidate;
   }
@@ -289,7 +289,7 @@ function buildConfig(
     };
     config.manifestVersion = 3;
     config.modeling = { mode: 'dbt-first' };
-    // Tell `dql sync dbt` and `dql compile` where to find target/manifest.json
+    // Tell `zlens sync dbt` and `zlens compile` where to find target/manifest.json
     // without requiring --dbt-manifest on every invocation.
     config.dbt = {
       projectDir: projectPath,
@@ -300,7 +300,7 @@ function buildConfig(
       provider: 'dql',
     };
     if (warehouseFirst) {
-      // RFC 0007: model the warehouse's own tables. `dql sync warehouse`
+      // RFC 0007: model the warehouse's own tables. `zlens sync warehouse`
       // reads their columns and declared keys; entities bind with `relation:`.
       config.manifestVersion = 3;
       config.modeling = { mode: 'warehouse-first' };

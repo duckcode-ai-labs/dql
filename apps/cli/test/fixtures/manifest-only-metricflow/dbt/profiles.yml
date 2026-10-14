@@ -6,5 +6,5 @@ manifest_only_metricflow:
       # dbt resolves a relative DuckDB path against the invoking process rather
       # than --project-dir.  The acceptance runner supplies an absolute path so
       # the external fixture is relocatable and never writes into the product.
-      path: "{{ env_var('DQL_MANIFEST_ONLY_METRICFLOW_DB', 'target/manifest_only_metricflow.duckdb') }}"
+      path: "{{ env_var('ZLENS_MANIFEST_ONLY_METRICFLOW_DB', 'target/manifest_only_metricflow.duckdb') }}"
       threads: 1

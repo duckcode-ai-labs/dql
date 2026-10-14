@@ -14,14 +14,14 @@ import {
   type DashboardGridItem,
   type DatasetDescriptor,
   type TileQuery,
-} from '@duckcodeailabs/dql-core';
+} from '@zlens/core';
 import {
   driverDimensionTileId,
   driverTotalTileId,
   foldDriverAnalysis,
   planDriverQueries,
   type DriverQueryPlan,
-} from '@duckcodeailabs/dql-agent';
+} from '@zlens/agent';
 
 export class DriverProbeError extends Error {}
 

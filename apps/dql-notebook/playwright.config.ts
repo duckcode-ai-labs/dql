@@ -3,7 +3,7 @@ import { defineConfig } from '@playwright/test';
 /**
  * Real-browser smoke journeys for the notebook UI.
  *
- * The journeys run against the BUILT `dql notebook` CLI (see
+ * The journeys run against the BUILT `zlens notebook` CLI (see
  * browser/global-setup.ts), never the Vite dev server: AGENTS.md says Vite-only
  * proof is not acceptance. The journeys live in `browser/journeys/*.journey.ts`.
  *

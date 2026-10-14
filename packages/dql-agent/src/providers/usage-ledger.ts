@@ -1,9 +1,10 @@
 import { appendFileSync } from 'node:fs';
 import type { ProviderName } from './types.js';
+import { readEnv } from '@zlens/core';
 
 /**
  * THE PROVIDER USAGE LEDGER. What each API call cost, in tokens, for a run
- * that asks for it: with `DQL_PROVIDER_USAGE_LEDGER=<file>` set, every
+ * that asks for it: with `ZLENS_PROVIDER_USAGE_LEDGER=<file>` set, every
  * successful HTTP provider call appends one JSON line. Nothing is written
  * otherwise, and the ledger never holds prompt or reply text. A benchmark
  * prices the lines per question from the run store's own start and end times;
@@ -124,7 +125,7 @@ export function setProviderUsageListener(listener: ProviderUsageListener | null)
  * accounts for.
  */
 export function recordProviderUsage(input: { provider: ProviderName; operation: string; model?: string; response: Response }, env: NodeJS.ProcessEnv = process.env): void {
-  const file = env.DQL_PROVIDER_USAGE_LEDGER;
+  const file = readEnv('ZLENS_PROVIDER_USAGE_LEDGER', env);
   const listener = usageListener;
   if ((!file && !listener) || !input.response.ok) return;
   const type = input.response.headers.get('content-type') ?? '';

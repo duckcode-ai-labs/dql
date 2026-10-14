@@ -3,7 +3,7 @@ import type { Server } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import type { QueryExecutor } from '@duckcodeailabs/dql-connectors';
+import type { QueryExecutor } from '@zlens/connectors';
 import {
   ConversationStore,
   MemoryStore,
@@ -11,13 +11,13 @@ import {
   defaultAgentRunSqlitePath,
   defaultConversationPath,
   defaultMemoryPath,
-} from '@duckcodeailabs/dql-agent';
+} from '@zlens/agent';
 import { startLocalServer } from '../local-runtime.js';
 import type { DqlConversationStore, DqlHostHooks, DqlMemoryStore, DqlPrincipal, DqlRunStore } from './request-context.js';
 
 /**
  * RFC 0010 HH-6: a host's stores answer with Promises (a shared database, so
- * several copies of DQL can serve one project). DQL awaits every call, keeps
+ * several copies of ZLens can serve one project). ZLens awaits every call, keeps
  * each person's runs and threads their own, and never opens the project's
  * SQLite files for them.
  */

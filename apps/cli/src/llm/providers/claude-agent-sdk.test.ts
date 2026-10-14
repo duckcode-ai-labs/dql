@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { DQLContext } from '@duckcodeailabs/dql-mcp';
+import type { DQLContext } from '@zlens/mcp';
 import { __test__ } from './claude-agent-sdk.js';
 
 describe('claudeAgentSdkRunner governed prompt', () => {

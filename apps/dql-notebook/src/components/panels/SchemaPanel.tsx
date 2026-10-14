@@ -1,6 +1,6 @@
 import type { Theme } from '../../themes/notebook-theme';
 import React, { useMemo, useState } from 'react';
-import { PanelFrame, PanelToolbar, PanelEmpty } from '@duckcodeailabs/dql-ui';
+import { PanelFrame, PanelToolbar, PanelEmpty } from '@zlens/ui';
 import { useNotebook } from '../../store/NotebookStore';
 import { themes } from '../../themes/notebook-theme';
 import { api } from '../../api/client';

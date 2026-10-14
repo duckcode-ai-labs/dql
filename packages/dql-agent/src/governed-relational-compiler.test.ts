@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { AnalyticalQuestionFrameV2, MetricCapabilityContract } from '@duckcodeailabs/dql-core';
+import type { AnalyticalQuestionFrameV2, MetricCapabilityContract } from '@zlens/core';
 import { buildAnalyticalExecutionGraph } from './analytical-execution-graph.js';
 import { buildResolvedAnalyticalPlan } from './resolved-analytical-plan.js';
 import {

@@ -1,14 +1,15 @@
 import type { Notifier, NotifierPayload } from '../types.js';
+import { readEnv } from '@zlens/core';
 
 export function createSlackNotifier(): Notifier {
   return {
     type: 'slack',
     async send(recipients, payload) {
-      const webhook = process.env.DQL_SLACK_WEBHOOK;
+      const webhook = readEnv('ZLENS_SLACK_WEBHOOK');
       if (!webhook) {
         return {
           delivered: false,
-          error: 'DQL_SLACK_WEBHOOK environment variable is not set',
+          error: 'ZLENS_SLACK_WEBHOOK environment variable is not set',
         };
       }
 

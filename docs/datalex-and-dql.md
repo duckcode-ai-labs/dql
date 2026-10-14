@@ -1,23 +1,23 @@
-# dbt-first DQL 2.0
+# dbt-first ZLens
 
-DQL is the open-source workspace for governed analytics: it connects dbt
+ZLens is the open-source workspace for governed analytics: it connects dbt
 transformation and MetricFlow to analytical blocks, notebooks, business views,
 stakeholder apps, lineage, Ask AI, evaluations, and approved learning hints.
 
-In DQL 2.0, **dbt owns physical modeling**. DQL does not replace dbt and does
+In dbt-first mode, **dbt owns physical modeling**. ZLens does not replace dbt and does
 not maintain a second `schema.yml`.
 
 ## One source of truth, one sparse overlay
 
-| Concern                                                         | Owner            | DQL behavior                                                     |
+| Concern                                                         | Owner            | ZLens behavior                                                     |
 | --------------------------------------------------------------- | ---------------- | ---------------------------------------------------------------- |
 | Model SQL, columns, descriptions, dbt tests                     | dbt              | Read from dbt artifacts; edit through a previewed dbt YAML patch |
 | Transformation lineage                                          | dbt              | Import as provenance and transformation lineage                  |
 | MetricFlow models, measures, dimensions and formulas            | dbt / MetricFlow | Compose from the dbt semantic artifact                           |
-| Domain/subdomain/microdomain organization                       | DQL              | Git-versioned Domain Packages                                    |
-| Entity binding, relationship cardinality, fanout, export policy | DQL              | Sparse analytical overlay only where dbt is insufficient         |
-| Business contracts, conformance, reusable blocks and apps       | DQL              | Version, review and certify in the DQL project                   |
-| Agent hints and evaluations                                     | DQL              | Draft → evaluate → review → approved retrieval                   |
+| Domain/subdomain/microdomain organization                       | ZLens              | Git-versioned Domain Packages                                    |
+| Entity binding, relationship cardinality, fanout, export policy | ZLens              | Sparse analytical overlay only where dbt is insufficient         |
+| Business contracts, conformance, reusable blocks and apps       | ZLens              | Version, review and certify in the ZLens project                   |
+| Agent hints and evaluations                                     | ZLens              | Draft → evaluate → review → approved retrieval                   |
 
 The compiler records dbt **provenance**—unique IDs, artifact paths,
 fingerprints and availability—not a serialized copy of physical columns,
@@ -79,7 +79,7 @@ revenue by customer acquisition channel can use a certified customer-grain
 relationship; revenue through raw campaign touches must ask for first-touch,
 last-touch, fractional, or another explicit attribution policy.
 
-## Enable DQL 2.0
+## Enable dbt-first mode
 
 ```json
 {
@@ -97,8 +97,8 @@ Then run:
 
 ```bash
 dbt parse
-dql compile .
-dql notebook .
+zlens compile .
+zlens notebook .
 ```
 
 Manifest v3 is opt-in during the compatibility window. Existing manifest v2
@@ -106,15 +106,15 @@ projects keep their current behavior and do not need a separate migration.
 
 ## Migrating from DataLex
 
-DataLex can be migrated into a dbt-first DQL project without treating it as a
+DataLex can be migrated into a dbt-first ZLens project without treating it as a
 second runtime dependency:
 
 ```bash
 # Review only; default and --dry-run never write source
-dql migrate datalex --input ../datalex/datalex-manifest.json --dry-run
+zlens migrate datalex --input ../datalex/datalex-manifest.json --dry-run
 
 # Write draft Domain Package overlays and suggested dbt YAML patch files
-dql migrate datalex --input ../datalex/datalex-manifest.json --apply
+zlens migrate datalex --input ../datalex/datalex-manifest.json --apply
 ```
 
 The migration matches legacy objects to dbt unique IDs, deliberately drops

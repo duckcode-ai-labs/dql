@@ -456,7 +456,7 @@ export function incidentSummaryForTrace(trace: AskTraceDataV1): TraceIncidentSum
       state: 'attention',
       whatHappened: 'The Ask stopped because the requested relationship is not certified.',
       why: 'The cascade recorded MISSING_RELATIONSHIP: this request needs a certified relationship or approved allocation proof.',
-      impact: 'No query executed; DQL did not infer a relationship or allocation for the requested ranking.',
+      impact: 'No query executed; ZLens did not infer a relationship or allocation for the requested ranking.',
       howToFix: 'Add or certify the required relationship or approved allocation proof, then retry the Ask.',
       spanId: relationshipGap.span.spanId,
     };
@@ -471,7 +471,7 @@ export function incidentSummaryForTrace(trace: AskTraceDataV1): TraceIncidentSum
       state: 'attention',
       whatHappened: 'The Ask needs a declared fiscal calendar and date role before it can answer.',
       why: 'The fiscal-period request could not bind to a declared fiscal calendar and date role in the recorded snapshot.',
-      impact: 'No query executed; DQL is waiting for a choice that changes the analytical plan.',
+      impact: 'No query executed; ZLens is waiting for a choice that changes the analytical plan.',
       howToFix: 'Select or declare the fiscal calendar and date role, then retry the Ask.',
       spanId: fiscalClarification.span.spanId,
     };
@@ -494,8 +494,8 @@ export function incidentSummaryForTrace(trace: AskTraceDataV1): TraceIncidentSum
         ? 'The frozen certified plan could not reach a database connection.'
         : 'The frozen analytical plan could not reach a database connection.',
       why: certified
-        ? 'The certified plan was frozen, but no database connection was configured before DQL could compile or execute its block.'
-        : 'The selected plan was frozen, but no database connection was configured before DQL could compile or execute it.',
+        ? 'The certified plan was frozen, but no database connection was configured before ZLens could compile or execute its block.'
+        : 'The selected plan was frozen, but no database connection was configured before ZLens could compile or execute it.',
       impact: certified
         ? 'No query or data result executed after the frozen certified plan.'
         : 'No query or data result executed after the frozen analytical plan.',
@@ -528,7 +528,7 @@ export function incidentSummaryForTrace(trace: AskTraceDataV1): TraceIncidentSum
       state: 'attention',
       whatHappened: 'The Ask needs one ambiguity-changing business choice before it can answer.',
       why: 'The cascade recorded more than one business meaning that would change the analytical plan.',
-      impact: 'No query executed; DQL is waiting for a choice that changes the analytical plan.',
+      impact: 'No query executed; ZLens is waiting for a choice that changes the analytical plan.',
       howToFix: 'Select the requested business meaning, then retry the Ask.',
       spanId: terminalCascade.span.spanId,
     };
@@ -542,7 +542,7 @@ export function incidentSummaryForTrace(trace: AskTraceDataV1): TraceIncidentSum
       : denied
         ? 'The cascade recorded a policy or safety denial before a plan could continue.'
         : postFreezeFailure
-          ? 'The selected plan failed after it was frozen, so DQL did not silently choose another tier.'
+          ? 'The selected plan failed after it was frozen, so ZLens did not silently choose another tier.'
           : 'The available evidence did not produce one safe executable plan.';
     return {
       state: 'attention',
@@ -738,7 +738,7 @@ export function incidentSummaryFromDecisionSummary(summary: NonNullable<AskTrace
   return {
     state: 'attention',
     whatHappened: incident.code === 'INTERNAL_EXPLORATORY_AUTHORIZATION_STATE_MISMATCH'
-      ? 'DQL rejected an inconsistent exploratory SQL authorization receipt before execution.'
+      ? 'ZLens rejected an inconsistent exploratory SQL authorization receipt before execution.'
       : `The Ask stopped at ${incident.boundary.replace('.', ' ')}.`,
     why: `Recorded origin: ${incident.origin.replace('_', ' ')}; impact: ${incident.impact.replace(/_/g, ' ')}.`,
     impact: incident.impact === 'execution_not_attempted'
@@ -750,7 +750,7 @@ export function incidentSummaryFromDecisionSummary(summary: NonNullable<AskTrace
 
 function safeActionInstruction(action: NonNullable<AskTraceDataV1['decisionSummary']>['safeNextAction']): string {
   return action === 'export_redacted_trace'
-    ? 'Export the redacted trace and share the recorded SQL authorization incident with DQL support.'
+    ? 'Export the redacted trace and share the recorded SQL authorization incident with ZLens support.'
     : action === 'configure_connection'
       ? 'Configure the selected database connection, then retry the same Ask.'
       : action === 'change_authorized_connection'

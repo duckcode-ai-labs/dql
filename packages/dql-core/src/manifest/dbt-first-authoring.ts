@@ -229,7 +229,7 @@ export interface DbtNodeAuthoringDetail {
   dqlMeta?: { grain?: string; keys: string[] };
 }
 
-/** A dbt-owned documentation/test edit. DQL only plans and applies a source
+/** A dbt-owned documentation/test edit. ZLens only plans and applies a source
  * YAML patch; it never mutates manifest.json or mirrors these fields into a
  * Domain Package. */
 export interface DbtSourceAuthoringInput {

@@ -258,7 +258,7 @@ describe('buildLineageGraph', () => {
   });
 
   it('does not create a block self-loop when a block ref()s its own dbt model name (regression)', () => {
-    // `dql propose` names a block after the dbt model it wraps, so a mart block
+    // `zlens propose` names a block after the dbt model it wraps, so a mart block
     // "customers" whose query is `SELECT * FROM ref('customers')` used to depend on
     // itself (block:customers as its own up/downstream), distorting impact analysis.
     const graph = buildLineageGraph(

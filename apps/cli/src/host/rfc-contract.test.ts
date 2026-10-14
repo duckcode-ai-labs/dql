@@ -4,14 +4,14 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
-import type { ConnectionConfig, QueryExecutor } from '@duckcodeailabs/dql-connectors';
+import type { ConnectionConfig, QueryExecutor } from '@zlens/connectors';
 import { startLocalServer } from '../local-runtime.js';
 import { knowledgeServersFor } from './knowledge-sources.js';
 import type { DqlHostHooks, DqlPrincipal } from './request-context.js';
 
 /**
  * The host-hook contract: RFC 0010 is the contract a host author reads. It must list every hook and field
- * of `DqlHostHooks` (and of the `ui` answer) once, with a default, and each documented default must be what DQL does
+ * of `DqlHostHooks` (and of the `ui` answer) once, with a default, and each documented default must be what ZLens does
  * when the hook is absent. The hook types are read from request-context.ts and row-policy.ts, the RFC from
  * docs/rfcs/0010-host-hooks.md; nothing is listed by hand except the RFC's own wording of each default, which the
  * behavioural checks below quote.
@@ -99,7 +99,7 @@ describe('RFC 0010 lists every hook and field once, with a default', () => {
     expect(uiFields.filter((field) => !new RegExp(`\\b${field}\\??:`).test(block)), 'ui fields missing from the RFC').toEqual([]);
   });
 
-  it('the RFC\'s rowPolicy answer names every field DQL reads (sql, params, groupRows, refuse) and its query context every field DQL passes', () => {
+  it('the RFC\'s rowPolicy answer names every field ZLens reads (sql, params, groupRows, refuse) and its query context every field ZLens passes', () => {
     const resultFields = ['sql', 'params', 'groupRows', 'refuse'];
     const rfcRow = /rowPolicy\?\(query: DqlQueryContext\): Promise<([^\n]*)>;/.exec(rfc)?.[1] ?? '';
     expect(resultFields.filter((field) => !rfcRow.includes(field))).toEqual([]);
@@ -124,7 +124,7 @@ describe('RFC 0010 lists every hook and field once, with a default', () => {
   });
 });
 
-// ── Each documented default, against what DQL does without the hook ──
+// ── Each documented default, against what ZLens does without the hook ──
 
 const servers: Server[] = [];
 const roots: string[] = [];
@@ -155,9 +155,9 @@ async function serve(hostHooks?: Partial<DqlHostHooks>, setup?: (projectRoot: st
 
 const priya: DqlPrincipal = { id: 'u-priya', kind: 'person', email: 'priya@example.test', source: 'host' };
 
-describe('each documented default is what DQL does without the hook', () => {
+describe('each documented default is what ZLens does without the hook', () => {
   // The RFC's row states both defaults: no host is the local owner; a host without resolvePrincipal places no one.
-  // This checks each documented default against what DQL does.
+  // This checks each documented default against what ZLens does.
   it('resolvePrincipal — "No host: the local owner"; "A host without it: no one is placed"', async () => {
     const row = rfcDefaultsTable().get('resolvePrincipal') ?? '';
     expect(row).toMatch(/No host: the local owner from `resolveLocalOwner`/);
@@ -206,7 +206,7 @@ describe('each documented default is what DQL does without the hook', () => {
     expect(readdirSync(join(projectRoot, '.dql', 'local', 'private', 'home')).length).toBeGreaterThan(0);
   });
 
-  it('knowledgeSources — the RFC table says "None"; without a host DQL reads the project\'s .dql/mcp-servers.json', async () => {
+  it('knowledgeSources — the RFC table says "None"; without a host ZLens reads the project\'s .dql/mcp-servers.json', async () => {
     const projectRoot = mkdtempSync(join(tmpdir(), 'dql-rfc-knowledge-'));
     roots.push(projectRoot);
     mkdirSync(join(projectRoot, '.dql'), { recursive: true });
@@ -214,8 +214,8 @@ describe('each documented default is what DQL does without the hook', () => {
     const servers = await knowledgeServersFor({ projectRoot, hooks: undefined, principal: undefined });
     expect(servers.map((server) => server.id), 'the project file is read without a host (guards this check)').toEqual(['docs']);
     const table = rfcDefaultsTable().get('knowledgeSources') ?? '';
-    // The table must not say "None" while DQL reads the project file without a host.
-    expect.soft(servers.length === 0 || !/^None$/.test(table), `table says "${table}", DQL reads ${servers.length} project server(s) without a host`).toBe(true);
+    // The table must not say "None" while ZLens reads the project file without a host.
+    expect.soft(servers.length === 0 || !/^None$/.test(table), `table says "${table}", ZLens reads ${servers.length} project server(s) without a host`).toBe(true);
   });
 
   it('enterpriseCertification — the table says "the request\'s own choice"; with a host and no field the request\'s choice is ignored', () => {

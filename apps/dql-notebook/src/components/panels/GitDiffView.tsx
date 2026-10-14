@@ -1,5 +1,5 @@
 import React from 'react';
-import type { DiffReport, DiffChange, FieldChange } from '@duckcodeailabs/dql-core/format';
+import type { DiffReport, DiffChange, FieldChange } from '@zlens/core/format';
 
 // Renders either a semantic DiffReport (for .dql/.dqlnb) or a raw unified
 // git diff (everything else). The two paths share one component so panels

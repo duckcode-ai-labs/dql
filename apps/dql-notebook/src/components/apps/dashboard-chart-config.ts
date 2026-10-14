@@ -1,5 +1,5 @@
-import { encodingChartColumns, type DashboardVizEncoding } from '@duckcodeailabs/dql-core/apps/viz-encoding';
-import type { TileQuery } from '@duckcodeailabs/dql-core/apps/tile-query';
+import { encodingChartColumns, type DashboardVizEncoding } from '@zlens/core/apps/viz-encoding';
+import type { TileQuery } from '@zlens/core/apps/tile-query';
 import type { CellChartConfig, QueryResult, ResultColumnMeta } from '../../store/types';
 import { CHART_TYPE_OPTIONS } from '../output/ChartOutput';
 

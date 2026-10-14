@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Blocks, BookOpen, Boxes, CheckCircle2, Columns3, Download, EyeOff, FileSearch, FolderTree, GitBranch, GraduationCap, Link2, Maximize2, MessageCircle, Network, PanelRightClose, PanelRightOpen, Plus, RefreshCw, RotateCcw, Search, Settings2, ShieldCheck, SlidersHorizontal, Sparkles, XCircle } from 'lucide-react';
-import { DEFAULT_MODEL_AREA_ID } from '@duckcodeailabs/dql-core/modeling-ids';
-import type { DbtMetricAuthoringInput, DbtMetricPatchPreview, DbtNodeAuthoringDetail, DbtSourceAuthoringInput, DbtSourcePatchPreview, ManifestModelArea, ManifestModelEntity, ManifestModelRelationship, ModelingAuthoringChange, ModelingChangePreview } from '@duckcodeailabs/dql-core';
+import { DEFAULT_MODEL_AREA_ID } from '@zlens/core/modeling-ids';
+import type { DbtMetricAuthoringInput, DbtMetricPatchPreview, DbtNodeAuthoringDetail, DbtSourceAuthoringInput, DbtSourcePatchPreview, ManifestModelArea, ManifestModelEntity, ManifestModelRelationship, ModelingAuthoringChange, ModelingChangePreview } from '@zlens/core';
 import { hostAllows, hostReadOnly, readOnlyReason, useHostUi, type HostUiState } from '../../host/host-ui';
 import { api, type AgentRunArtifact, type ContextAuthoringProposalV1, type DbtFirstModelingResponse } from '../../api/client';
 import { useNotebook } from '../../store/NotebookStore';
@@ -1318,7 +1318,7 @@ function ModelingEmptyWorkspace({ t, connectedModels, warehouse, onDbt, onYaml, 
   // dead-end an author who has not set up governance objects yet.
   const actions = [
     // RFC 0007: a warehouse-first project starts from its own tables.
-    ...(warehouse ? [{ icon: <Boxes size={20} />, title: warehouse.drafting ? 'Drafting from the warehouse…' : 'Draft from your warehouse', detail: warehouse.tables > 0 ? `${warehouse.tables} table${warehouse.tables === 1 ? '' : 's'} synced. DQL drafts models from their keys and joins from declared foreign keys, view SQL and column names, checks each join on the warehouse, and shows you every change to review.` : 'Sync schema in Settings → Connections first, so DQL can read your tables, keys and comments.', action: warehouse.onDraft }] : []),
+    ...(warehouse ? [{ icon: <Boxes size={20} />, title: warehouse.drafting ? 'Drafting from the warehouse…' : 'Draft from your warehouse', detail: warehouse.tables > 0 ? `${warehouse.tables} table${warehouse.tables === 1 ? '' : 's'} synced. DQL drafts models from their keys and joins from declared foreign keys, view SQL and column names, checks each join on the warehouse, and shows you every change to review.` : 'Sync schema in Settings → Connections first, so ZLens can read your tables, keys and comments.', action: warehouse.onDraft }] : []),
     { icon: <Boxes size={20} />, title: warehouse ? 'Pick tables' : 'Use connected dbt', detail: warehouse ? `${connectedModels} table${connectedModels === 1 ? '' : 's'} or model${connectedModels === 1 ? '' : 's'} available. Search, multi-select, confirm where they belong, then review the bindings.` : `${connectedModels} model${connectedModels === 1 ? '' : 's'} available. Search, multi-select, confirm where they belong, then review the bindings.`, action: onDbt },
     { icon: <FileSearch size={20} />, title: 'Import modeling YAML', detail: 'Discover DQL modeling or dbt YAML from this project, a safe local path, an upload, or pasted content. Relationships declared in dbt tests come across as draft edges.', action: onYaml },
     { icon: <Plus size={20} />, title: 'Add one model by hand', detail: 'Pick a single dbt model and describe what one of its rows means. Connect it to others afterwards.', action: onManual },
@@ -1737,7 +1737,7 @@ function DbtSourceEditor({ entity, detail, snapshotId, t, onClose, onApplied }: 
   };
   return (
     <Modal title={`Edit dbt source · ${detail.name}`} t={t} onClose={onClose}>
-      <Message text="dbt owns descriptions and tests. DQL will preview a guarded patch to the dbt YAML source; no dbt metadata is copied into the domain folder." t={t} />
+      <Message text="dbt owns descriptions and tests. ZLens will preview a guarded patch to the dbt YAML source; no dbt metadata is copied into the domain folder." t={t} />
       {!preview ? <div style={{ display: 'grid', gap: 12 }}>
         <Field label="Model description">
           <textarea aria-label="Model description" value={description} onChange={(event) => setDescription(event.target.value)} rows={5} style={{ ...inputStyle(t), resize: 'vertical' }} />

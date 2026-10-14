@@ -5,11 +5,12 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { QueryExecutor, type ConnectionConfig, type QueryResult } from '@duckcodeailabs/dql-connectors';
+import { QueryExecutor, type ConnectionConfig, type QueryResult } from '@zlens/connectors';
 import { startLocalServer } from '../local-runtime.js';
 import { inflateRawSync } from 'node:zlib';
 import { destinationForAction, destinationForRequest, withRequestContext, type DqlHostHooks, type DqlPrincipal } from './request-context.js';
 import { withRowPolicy, type DqlQueryContext } from './row-policy.js';
+import { readEnv } from '@zlens/core';
 
 /**
  * RFC 0010 HH-17: where a statement's result goes. Exports are files made on
@@ -17,7 +18,7 @@ import { withRowPolicy, type DqlQueryContext } from './row-policy.js';
  * policy hears `destination: 'export'` and decides what the file may hold.
  */
 const here = dirname(fileURLToPath(import.meta.url));
-const connectorRoot = process.env.DQL_APP_DATASETS_DUCKDB_CONNECTOR_ROOT?.trim();
+const connectorRoot = readEnv('ZLENS_APP_DATASETS_DUCKDB_CONNECTOR_ROOT')?.trim();
 const withDuckDb = connectorRoot ? describe : describe.skip;
 const fixtureRoot = resolve(here, '../../test/fixtures/app-datasets-pilot');
 const seedWarehouse = resolve(here, '../../../../scripts/seed-eval-warehouse.mjs');

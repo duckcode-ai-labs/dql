@@ -1,9 +1,9 @@
-# create-dql-app
+# create-zlens-app
 
-The fastest way to start a DQL project.
+The fastest way to start a ZLens project.
 
 ```bash
-npx create-dql-app@latest my-analytics
+npx create-zlens-app@latest my-analytics
 cd my-analytics
 npm install
 npm install --prefix .dql/connectors duckdb       # DuckDB/local files only
@@ -14,29 +14,29 @@ npm run notebook
 
 Opens a running notebook at <http://127.0.0.1:3474> in under 5 minutes on a
 clean machine. No global install required; the template installs
-`@duckcodeailabs/dql-cli` locally and exposes it through npm scripts.
+`zlens` locally and exposes it through npm scripts.
 
 The scaffolded project is a clean starter: `dql.config.json`, a welcome
 notebook, and npm scripts for `notebook`, `compile`, `lineage`, `doctor`, and
 `validate`. If a sibling dbt project is detected, it is wired into
-`dql.config.json` automatically so `dql sync dbt` works out of the box.
+`dql.config.json` automatically so `zlens sync dbt` works out of the box.
 
 Database drivers are project-local so the base install stays fast:
 
 | Database | Extra install | Notes |
 | --- | --- | --- |
-| Databricks SQL | none | Built into DQL through HTTPS |
+| Databricks SQL | none | Built into ZLens through HTTPS |
 | DuckDB or local files | `npm install --prefix .dql/connectors duckdb` | Needed for DuckDB, CSV, Parquet, and JSON |
 | Snowflake | `npm install --prefix .dql/connectors snowflake-sdk` | Needed for Snowflake connections |
 
 You can also install DuckDB or Snowflake from the notebook Connections page.
 
-Want a ready-made dbt project to try DQL on? Clone the example repo and add
-DQL to it — the same steps you'd use on your own dbt repo:
+Want a ready-made dbt project to try ZLens on? Clone the example repo and add
+ZLens to it — the same steps you'd use on your own dbt repo:
 [github.com/duckcode-ai/jaffle-shop-duckdb](https://github.com/duckcode-ai/jaffle-shop-duckdb).
 
-Already installed `@duckcodeailabs/dql-cli` globally? That only installs the
-command. From an existing dbt repo, run `dql init ./dql` before `cd dql`.
+Already installed `zlens` globally? That only installs the
+command. From an existing dbt repo, run `zlens init ./dql` before `cd dql`.
 
 ## Flags
 

@@ -189,9 +189,9 @@ describe('emitProjectSnapshot', () => {
     expect(types).toEqual(['START', 'COMPLETE']);
   });
 
-  it('respects DQL_OPENLINEAGE_DISABLED (drops events silently)', async () => {
-    const prev = process.env.DQL_OPENLINEAGE_DISABLED;
-    process.env.DQL_OPENLINEAGE_DISABLED = '1';
+  it('respects ZLENS_OPENLINEAGE_DISABLED (drops events silently)', async () => {
+    const prev = process.env.ZLENS_OPENLINEAGE_DISABLED;
+    process.env.ZLENS_OPENLINEAGE_DISABLED = '1';
     try {
       const fetchSpy = vi.fn();
       const emitter = createEmitter({
@@ -204,8 +204,8 @@ describe('emitProjectSnapshot', () => {
       expect(result.emitted).toBe(2);
       expect(fetchSpy).not.toHaveBeenCalled();
     } finally {
-      if (prev === undefined) delete process.env.DQL_OPENLINEAGE_DISABLED;
-      else process.env.DQL_OPENLINEAGE_DISABLED = prev;
+      if (prev === undefined) delete process.env.ZLENS_OPENLINEAGE_DISABLED;
+      else process.env.ZLENS_OPENLINEAGE_DISABLED = prev;
     }
   });
 });

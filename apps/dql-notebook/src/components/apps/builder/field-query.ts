@@ -1,6 +1,6 @@
-import type { DatasetDescriptor, DatasetField, DatasetPhysicalField } from '@duckcodeailabs/dql-core/datasets/descriptor';
-import { datasetTileVisualizationCompatibility, type TileQuery } from '@duckcodeailabs/dql-core/apps/tile-query';
-import { chartFromEncoding, refName, type DashboardVizEncoding } from '@duckcodeailabs/dql-core/apps/viz-encoding';
+import type { DatasetDescriptor, DatasetField, DatasetPhysicalField } from '@zlens/core/datasets/descriptor';
+import { datasetTileVisualizationCompatibility, type TileQuery } from '@zlens/core/apps/tile-query';
+import { chartFromEncoding, refName, type DashboardVizEncoding } from '@zlens/core/apps/viz-encoding';
 
 /**
  * Click-a-field tile building. A measure click adds or removes a value; a

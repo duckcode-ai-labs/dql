@@ -13,7 +13,7 @@ pnpm release:dry-run -- --tag latest --expected-version 1.7.0
 ## Unit and Package Tests
 
 `pnpm test` runs the workspace package tests through Turbo. Coverage is focused
-on the surfaces that make DQL adoptable:
+on the surfaces that make ZLens adoptable:
 
 - parser, formatter, semantic analysis, manifest, and lineage in `dql-core`
 - compiler/chart lowering in `dql-compiler`
@@ -21,14 +21,14 @@ on the surfaces that make DQL adoptable:
 - project storage, manifest cache, persona preview, MCP tools, local agent, and
   Slack formatting
 - CLI commands and local runtime helpers
-- `create-dql-app` scaffold smoke checks
+- `create-zlens-app` scaffold smoke checks
 
 ## Template Adoption Checks
 
 The test suite verifies adoption-critical templates:
 
-- generated projects use the current `@duckcodeailabs/dql-cli` version
-- generated scripts avoid deprecated `dql test`
+- generated projects use the current `zlens` version
+- generated scripts avoid deprecated `zlens test`
 - template and fixture `.dql` files use canonical syntax
 - the `apps/cli/test/fixtures/lineage-app` fixture compiles
   source-table -> block -> dashboard -> App lineage
@@ -51,7 +51,7 @@ The synthetic dbt stress scripts are available for scale checks:
 
 ```bash
 node scripts/bench/gen-dbt-project.mjs --models 4000 --out /tmp/stress
-DQL_CLI="node $PWD/apps/cli/dist/index.js" node scripts/bench/run-bench.mjs /tmp/stress
+ZLENS_CLI="node $PWD/apps/cli/dist/index.js" node scripts/bench/run-bench.mjs /tmp/stress
 ```
 
 CI runs this on pushes to `main`, not on every PR.

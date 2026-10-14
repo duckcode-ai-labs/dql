@@ -1,5 +1,6 @@
-import { askScopeFromWorkspace, workspaceContextForScope } from '@duckcodeailabs/dql-agent';
+import { askScopeFromWorkspace, workspaceContextForScope } from '@zlens/agent';
 import type { DQLContext } from '../context.js';
+import { readEnv } from '@zlens/core';
 
 /**
  * Governed-generation MCP tools. Unlike the BYOSQL Tier-2 tool
@@ -11,14 +12,14 @@ import type { DQLContext } from '../context.js';
  * endpoints (`/api/agent-runs`, `/api/ai/build`), which already own the LLM
  * provider + warehouse executors, so there is no second provider to configure.
  *
- * Both require the DQL runtime to be running (`dql serve`) because governed
+ * Both require the ZLens runtime to be running (`zlens serve`) because governed
  * answering/building executes SQL against the warehouse.
  */
 
 const DEFAULT_RUNTIME_URL = 'http://127.0.0.1:3474';
 
 function runtimeBase(serverUrl?: string): string {
-  return (serverUrl ?? process.env.DQL_RUNTIME_URL ?? DEFAULT_RUNTIME_URL).replace(/\/$/, '');
+  return (serverUrl ?? readEnv('ZLENS_RUNTIME_URL') ?? DEFAULT_RUNTIME_URL).replace(/\/$/, '');
 }
 
 function runtimeUnavailable(base: string, projectRoot: string, err: unknown) {
@@ -26,8 +27,8 @@ function runtimeUnavailable(base: string, projectRoot: string, err: unknown) {
     ok: false as const,
     runtimeUnavailable: true as const,
     error:
-      `Could not reach the DQL runtime at ${base}. Governed answering/building needs it running — ` +
-      `start it with \`dql serve\` in ${projectRoot} (or pass serverUrl), then retry. ` +
+      `Could not reach the ZLens runtime at ${base}. Governed answering/building needs it running — ` +
+      `start it with \`zlens serve\` in ${projectRoot} (or pass serverUrl), then retry. ` +
       `(${err instanceof Error ? err.message : String(err)})`,
   };
 }
@@ -180,7 +181,7 @@ export async function answerQuestion(
     return runtimeUnavailable(base, ctx.projectRoot, err);
   }
   if (!response.ok) {
-    return { ok: false as const, error: `DQL runtime returned ${response.status}: ${await response.text()}` };
+    return { ok: false as const, error: `ZLens runtime returned ${response.status}: ${await response.text()}` };
   }
   const payload = (await response.json().catch(() => ({}))) as { run?: AgentRunLike; error?: string };
   if (payload.error || !payload.run) return { ok: false as const, error: payload.error ?? 'No run returned by the runtime.' };
@@ -234,7 +235,7 @@ export async function buildBlockFromPrompt(
     return runtimeUnavailable(base, ctx.projectRoot, err);
   }
   if (!response.ok) {
-    return { ok: false as const, error: `DQL runtime returned ${response.status}: ${await response.text()}` };
+    return { ok: false as const, error: `ZLens runtime returned ${response.status}: ${await response.text()}` };
   }
   const result = (await response.json().catch(() => ({}))) as BuildFromPromptResultLike;
   if (result.error) return { ok: false as const, error: result.error };
@@ -250,7 +251,7 @@ export async function buildBlockFromPrompt(
     verdict: result.verdict,
     appliedSkills: result.appliedSkills,
     citations: result.citations,
-    promote: result.draftBlock?.path ? `dql certify --from-draft ${result.draftBlock.path}` : undefined,
+    promote: result.draftBlock?.path ? `zlens certify --from-draft ${result.draftBlock.path}` : undefined,
     trustNote:
       'AI drafts, humans certify. This is a review-required DRAFT — never present it as certified. Review the verdict, then certify explicitly.',
   };

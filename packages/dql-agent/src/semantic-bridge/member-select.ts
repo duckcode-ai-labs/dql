@@ -7,7 +7,7 @@
  * on any parse/shape failure so the caller falls through to metric-first /
  * generation.
  */
-import { semanticDimensionReference, type SemanticLayer } from '@duckcodeailabs/dql-core';
+import { semanticDimensionReference, type SemanticLayer } from '@zlens/core';
 import type { AgentMessage, AgentProvider } from '../providers/types.js';
 import type { ReasoningEffort } from '../providers/reasoning-effort.js';
 import type { SemanticBridgeFilter, SemanticMemberSelection } from './compose.js';

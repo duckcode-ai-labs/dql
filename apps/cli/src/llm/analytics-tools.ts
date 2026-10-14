@@ -1,5 +1,5 @@
-import { DQLContext } from '@duckcodeailabs/dql-mcp';
-import type { KGNode } from '@duckcodeailabs/dql-agent';
+import { DQLContext } from '@zlens/mcp';
+import type { KGNode } from '@zlens/agent';
 import type { AgentRunRequest, AgentTurn, BlockProposal } from './types.js';
 import { buildAgentTools, type AgentTool } from './tools.js';
 import { blockProposalDqlMetadata } from './proposal-metadata.js';
@@ -36,7 +36,7 @@ const EXECUTE_GENERATED_SQL_SCHEMA = {
   properties: {
     sql: {
       type: 'string',
-      description: 'Read-only SQL to execute as a bounded, uncertified preview. DQL will add safety limits.',
+      description: 'Read-only SQL to execute as a bounded, uncertified preview. ZLens will add safety limits.',
     },
   },
 } as const;

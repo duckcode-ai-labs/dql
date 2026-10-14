@@ -119,7 +119,7 @@ export interface AppDocument extends ProductDomainContext {
   audience?: string;
   /**
    * The identity-provider groups the App is for. Without a host this is
-   * a note (DQL has one local owner); with a host that signs people in, only
+   * a note (ZLens has one local owner); with a host that signs people in, only
    * members of these groups, the App's owners and people the host granted it
    * open the App (RFC 0010 HH-16). Empty: the App's policies decide alone.
    */

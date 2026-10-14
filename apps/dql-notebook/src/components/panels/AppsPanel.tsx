@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { PanelFrame, PanelToolbar, PanelEmpty, StatusPill } from '@duckcodeailabs/dql-ui';
+import { PanelFrame, PanelToolbar, PanelEmpty, StatusPill } from '@zlens/ui';
 import { api } from '../../api/client';
 import { useNotebook } from '../../store/NotebookStore';
 import { themes } from '../../themes/notebook-theme';
@@ -114,7 +114,7 @@ export function AppsPanel(_props: AppsPanelProps) {
                   display: 'inline-block', marginTop: 6, padding: '2px 6px',
                   background: t.inputBg, borderRadius: 3, fontSize: 10,
                 }}>
-                  dql app new &lt;name&gt; --domain &lt;domain&gt;
+                  zlens app new &lt;name&gt; --domain &lt;domain&gt;
                 </code>
               </>
             }

@@ -120,7 +120,7 @@ describe('runApp', () => {
   });
 });
 
-describe('dql app check', () => {
+describe('zlens app check', () => {
   it('reports each tile\'s source and trust as publication checks them', async () => {
     const { cpSync } = await import('node:fs');
     const { checkAppPublication } = await import('../apps-api.js');

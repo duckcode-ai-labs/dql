@@ -3,7 +3,7 @@
 > `packages/dql-agent/src/answer-loop.ts` (query-plan + repair) · `agent-run-engine.ts` (replan /
 > escalate) · `agent-run-gates.ts`
 
-DQL corrects itself at three layers: **prevention** (a query-plan before SQL), **execution-guided
+ZLens corrects itself at three layers: **prevention** (a query-plan before SQL), **execution-guided
 repair** (fix the SQL from the real error), and **escalation** (switch to a deeper route). Crucially,
 the *recovery reasoning stays in the trace* — it never leaks into the answer the user reads.
 

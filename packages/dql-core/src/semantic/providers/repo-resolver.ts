@@ -177,7 +177,7 @@ function injectToken(repoUrl: string, token: string | undefined): string {
 }
 
 /**
- * Manually refresh a cached repo (for `dql semantic pull` CLI command).
+ * Manually refresh a cached repo (for `zlens semantic pull` CLI command).
  */
 export function pullCachedRepo(repoUrl: string, branch: string = 'main'): RepoResolveResult {
   const cacheBase = getCacheBaseDir();

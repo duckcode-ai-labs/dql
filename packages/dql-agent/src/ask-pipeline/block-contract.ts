@@ -4,7 +4,7 @@ import {
   readSelectList,
   splitSqlTopLevel as splitTopLevel,
   sqlClause as clause,
-} from '@duckcodeailabs/dql-core';
+} from '@zlens/core';
 
 /**
  * What a certified block PROMISES, read from its declaration and its SQL.
