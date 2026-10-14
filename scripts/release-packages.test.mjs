@@ -160,9 +160,12 @@ test('the release inventory has exactly the intended public packages and exclude
 
 test('the release workflow passes its trusted Git tag version to the release script', () => {
   const workflow = readFileSync(path.join(root, '.github/workflows/release.yml'), 'utf8');
-  assert.match(workflow, /release_version="\$\{GITHUB_REF_NAME#v\}"/);
+  assert.match(workflow, /- 'zlens-v\*\.\*\.\*'/);
+  assert.doesNotMatch(workflow, /- 'v\*\.\*\.\*'/);
+  assert.match(workflow, /startsWith\(github\.ref, 'refs\/tags\/zlens-v'\)/);
+  assert.match(workflow, /release_version="\$\{GITHUB_REF_NAME#zlens-v\}"/);
   assert.match(
     workflow,
-    /node scripts\/release-packages\.mjs --publish --tag "\$\{\{ steps\.npm_dist_tag\.outputs\.tag \}\}" --expected-version "\$\{GITHUB_REF_NAME#v\}"/,
+    /node scripts\/release-packages\.mjs --publish --tag "\$\{\{ steps\.npm_dist_tag\.outputs\.tag \}\}" --expected-version "\$\{GITHUB_REF_NAME#zlens-v\}"/,
   );
 });
