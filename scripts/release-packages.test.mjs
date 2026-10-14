@@ -124,14 +124,13 @@ test('the release inventory has exactly the intended public packages and exclude
     'packages/dql-mcp',
     'packages/dql-slack',
     'packages/dql-lsp',
-    'apps/vscode-extension',
     'apps/cli',
     'packages/create-dql-app',
   ];
   assert.deepEqual(RELEASE_PACKAGE_PATHS, expectedPaths);
 
   const releaseManifests = readReleasePackageManifests(root);
-  assert.equal(releaseManifests.length, 19);
+  assert.equal(releaseManifests.length, 18);
   // Version-agnostic: every release bumps the workspace in lockstep, so the
   // CLI's own version is the one the whole inventory must share.
   const releaseVersion = JSON.parse(readFileSync(path.join(root, 'apps/cli/package.json'), 'utf8')).version;

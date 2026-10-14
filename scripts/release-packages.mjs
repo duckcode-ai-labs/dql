@@ -26,7 +26,9 @@ export const RELEASE_PACKAGE_PATHS = [
   'packages/dql-mcp',
   'packages/dql-slack',
   'packages/dql-lsp',
-  'apps/vscode-extension',
+  // The VS Code extension (apps/vscode-extension) is not on npm's ZLens line: its
+  // npm name `dql-language-support` reached 1.17.2 before the rename, and the
+  // extension ships as a .vsix (release.yml), not from npm.
   'apps/cli',
   'packages/create-dql-app',
 ];

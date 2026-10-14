@@ -25,9 +25,10 @@ The OpenLineage producer URI emitted in lineage events
 (`packages/dql-openlineage/src`) also points at
 `https://github.com/duckcode-ai-labs/zlens`.
 
-The 19 release packages include the VS Code extension's language support
-package, which is published to npm as `dql-language-support` with the rest.
-The Visual Studio Marketplace listing is separate: it is published only from a
+The 18 release packages do not include the VS Code extension. Its npm name,
+`dql-language-support`, reached 1.17.2 before the rename and is not continued on
+the ZLens 0.x line; the extension ships as a `.vsix`. The Visual Studio
+Marketplace listing is separate: it is published only from a
 manual `workflow_dispatch` run with `publish_extension=true`.
 
 Every dry run and publish must name an npm dist-tag explicitly. Stable versions
@@ -35,7 +36,7 @@ must use `latest`; prereleases (including release candidates) must use `next`.
 The release script rejects a mismatched tag before it builds or publishes, and
 passes the selected tag to every `pnpm publish` invocation. It also requires a
 trusted `--expected-version` and refuses to build, pack, or publish unless all
-19 release manifests exactly match it. The tag workflow derives that value from
+18 release manifests exactly match it. The tag workflow derives that value from
 the pushed `v...` Git tag.
 
 | Release version | Required npm dist-tag | Example Git tag |
@@ -84,7 +85,7 @@ npm dist-tag add @zlens/cli@1.7.0-rc.1 next
 npm dist-tag ls @zlens/cli
 ```
 
-   Repeat for each of the 19 packages (`npm dist-tag ls` shows the tags).
+   Repeat for each of the 18 packages (`npm dist-tag ls` shows the tags).
 8. Smoke the published packages:
 
 ```bash
@@ -150,8 +151,8 @@ fallback does not make VS Code Marketplace publication automatic.
 - Keep generated templates on the same CLI range as the release.
 - The notebook React app is served by the CLI; the release script builds the
   workspace before packing so the CLI ships fresh notebook assets.
-- The VS Code extension's npm package (`dql-language-support`) ships with the
-  other packages. The Marketplace listing ships separately, only from an
+- The VS Code extension is not published to npm with the other packages. The
+  `.vsix` and the Marketplace listing ship separately, only from an
   explicit `workflow_dispatch` run with `publish_extension=true`.
 - Provenance is added only when `GITHUB_ACTIONS=true`. The local same-SHA
   fallback publishes without it.
@@ -160,7 +161,7 @@ fallback does not make VS Code Marketplace publication automatic.
 
 | Artifact | Where |
 | --- | --- |
-| npm packages (19, with provenance) | `npmjs.com/org/zlens` (17 `@zlens/*` packages), plus `create-zlens-app` and `dql-language-support` |
+| npm packages (18, with provenance) | `npmjs.com/org/zlens` (17 `@zlens/*` packages), plus `create-zlens-app` |
 | `create-zlens-app` templates | npm tarball |
 | Notebook app assets | bundled inside `zlens` |
 | VS Code extension | Marketplace |
