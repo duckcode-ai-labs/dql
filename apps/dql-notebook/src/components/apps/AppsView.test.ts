@@ -169,6 +169,45 @@ describe('App dashboard filter wiring (UI-001, E2E-001)', () => {
   });
 });
 
+describe('Parameter filter coverage (F6)', () => {
+  it('counts a tile whose block parameter a page control drives, after a run too', () => {
+    const dashboard: DashboardDocumentResponse['dashboard'] = {
+      version: 1,
+      id: 'overview',
+      metadata: { title: 'Business Overview' },
+      filters: [{ id: 'season', type: 'select', bindsTo: 'game_date_est.year' }],
+      layout: {
+        kind: 'grid', cols: 12, rowHeight: 32,
+        items: [
+          {
+            i: 'codex-scorers', x: 0, y: 0, w: 6, h: 4,
+            block: { blockId: 'Codex Top Scorers' },
+            viz: { type: 'table' },
+            filterBindings: [{ filter: 'season', binding: 'game_date_est.year', unsupportedReason: 'No matching certified block parameter or allowed filter was declared.' }],
+          },
+          {
+            i: 'top-players', x: 6, y: 0, w: 6, h: 4,
+            block: { blockId: 'Top Players By Total Points 2016 2017' },
+            viz: { type: 'bar' },
+            parameterBindings: [
+              { param: 'season_start', source: 'variable', field: 'season_start' },
+              { param: 'season_end', source: 'variable', field: 'season_end' },
+              { param: 'top_n', source: 'variable', field: 'top_n' },
+            ],
+          },
+        ],
+      },
+    } as DashboardDocumentResponse['dashboard'];
+    const run = { tiles: [{ tileId: 'codex-scorers', filterableColumns: [{ column: 'player_name' }] }, { tileId: 'top-players', filterableColumns: [] }] };
+    for (const filterId of ['season_start', 'season_end', 'top_n']) {
+      const coverage = dashboardFilterCoverage(dashboard, filterId, run);
+      expect(coverage.applied).toEqual(['top-players']);
+      expect(coverage.unaffected.map((tile) => tile.tileId)).toEqual(['codex-scorers']);
+      expect(coverage.filterable).toBe(2);
+    }
+  });
+});
+
 describe('Published Dataset filter presentation (APP-066)', () => {
   it('uses settled Dataset runtime scope instead of legacy binding inference', async () => {
     vi.stubGlobal('window', { location: { origin: 'http://localhost' } });

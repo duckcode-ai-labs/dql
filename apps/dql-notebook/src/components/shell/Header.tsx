@@ -11,86 +11,20 @@ import { useQueryExecution } from '../../hooks/useQueryExecution';
 import { downloadDashboard } from '../../utils/export-dashboard';
 import { setBlockName } from '../../utils/block-studio';
 import { TaskCenter } from './TaskCenter';
+import { ZLensMark } from './ZLensMark';
+import { createNotebookSaveQueue } from '../../utils/notebook-save-queue';
 
-interface NotebookSaveWaiter {
-  resolve: () => void;
-  reject: (error: unknown) => void;
-}
+// Saves to one notebook file are serialized; see utils/notebook-save-queue.ts.
+const notebookSaveQueue = createNotebookSaveQueue((path, content) => api.saveNotebook(path, content));
+const enqueueNotebookSave = notebookSaveQueue.enqueue;
+const notebookSavePending = notebookSaveQueue.pending;
 
-interface NotebookSaveLane {
-  running: boolean;
-  pending?: { content: string; waiters: NotebookSaveWaiter[] };
-}
-
-const notebookSaveLanes = new Map<string, NotebookSaveLane>();
-
-function enqueueNotebookSave(path: string, content: string): Promise<void> {
-  let lane = notebookSaveLanes.get(path);
-  if (!lane) {
-    lane = { running: false };
-    notebookSaveLanes.set(path, lane);
-  }
-  const activeLane = lane;
-  const promise = new Promise<void>((resolve, reject) => {
-    if (activeLane.pending) {
-      activeLane.pending.content = content;
-      activeLane.pending.waiters.push({ resolve, reject });
-    } else {
-      activeLane.pending = { content, waiters: [{ resolve, reject }] };
-    }
-  });
-  if (!activeLane.running) {
-    activeLane.running = true;
-    void (async () => {
-      while (activeLane.pending) {
-        const batch = activeLane.pending;
-        activeLane.pending = undefined;
-        try {
-          await api.saveNotebook(path, batch.content);
-          for (const waiter of batch.waiters) waiter.resolve();
-        } catch (error) {
-          for (const waiter of batch.waiters) waiter.reject(error);
-        }
-      }
-    })().finally(() => {
-      activeLane.running = false;
-      if (!activeLane.pending) notebookSaveLanes.delete(path);
-    });
-  }
-  return promise;
-}
-
-function notebookSavePending(path: string): boolean {
-  const lane = notebookSaveLanes.get(path);
-  return Boolean(lane?.running || lane?.pending);
-}
-
-function DQLLogo({ t }: { t: Theme }) {
+/** The product mark in the Workbench chrome (the ZLens symbol, not a text badge). */
+function ProductMark({ t }: { t: Theme }) {
   return (
-    <div
-      style={{
-        width: 28,
-        height: 28,
-        borderRadius: 6,
-        background: '#0b7a75',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        flexShrink: 0,
-      }}
-    >
-      <span
-        style={{
-          color: '#ffffff',
-          fontSize: 11,
-          fontWeight: 700,
-          fontFamily: t.fontMono,
-          letterSpacing: '-0.5px',
-        }}
-      >
-        DQL
-      </span>
-    </div>
+    <span style={{ display: 'inline-flex', color: t.textPrimary, flexShrink: 0 }}>
+      <ZLensMark size={26} />
+    </span>
   );
 }
 
@@ -341,7 +275,7 @@ export function Header() {
     >
       {/* Left: Logo + title */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-        <DQLLogo t={t as any} />
+        <ProductMark t={t as any} />
         <div
           style={{
             width: 1,

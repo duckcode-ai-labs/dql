@@ -291,7 +291,7 @@ export function createAnalystLaneHandler(deps: {
       };
     }
     if (readEnv('ZLENS_ORCHESTRATOR_TRACE')) {
-      console.warn(`[dql] analyst loop outcome: stop=${outcome.stop} sql=${outcome.sql ? 'yes' : 'no'} admitted=${outcome.admitted.length} corrections=${outcome.corrections.length}`);
+      console.warn(`[zlens] analyst loop outcome: stop=${outcome.stop} sql=${outcome.sql ? 'yes' : 'no'} admitted=${outcome.admitted.length} corrections=${outcome.corrections.length}`);
     }
     // The agentic generated lane normally makes its one generation attempt in
     // `runAnalystLoop`.  A router-frozen exploratory plan is the narrow

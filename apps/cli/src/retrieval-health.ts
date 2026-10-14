@@ -81,7 +81,7 @@ export function resolveRetrievalHealthStatus(input: {
   if (!semantic) {
     warnings.push('Embeddings are the deterministic hashed fallback: paraphrase matching is lexical-only. Run a local Ollama embedding model or set an OpenAI key for semantic recall.');
     embeddingUpgrade = 'Install an Ollama embedding model (for example `ollama pull nomic-embed-text`) and restart the server:'
-      + ' DQL detects it, switches to it, and re-embeds the index automatically. Set ai.embeddings in dql.config.json to choose'
+      + ' ZLens detects it, switches to it, and re-embeds the index automatically. Set ai.embeddings in dql.config.json to choose'
       + ' explicitly, or ZLENS_EMBEDDINGS_AUTODETECT=off to stay on the lexical fallback.';
   }
 

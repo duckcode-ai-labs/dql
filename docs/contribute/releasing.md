@@ -58,13 +58,13 @@ pnpm install --frozen-lockfile
 pnpm build
 pnpm test
 node scripts/check-doc-links.mjs
-pnpm release:dry-run -- --tag latest --expected-version 1.7.0
+pnpm release:dry-run -- --tag latest --expected-version 0.2.0
 ```
 
 For a prerelease candidate, replace `latest` with `next`:
 
 ```bash
-pnpm release:dry-run -- --tag next --expected-version 1.7.0-rc.1
+pnpm release:dry-run -- --tag next --expected-version 0.2.0-rc.1
 ```
 
 4. Commit the release candidate and push `main`. Let ordinary CI complete.
@@ -78,13 +78,25 @@ git push origin zlens-v0.2.0
 6. Monitor the tag workflow. It is the authoritative npm publication path.
    `pnpm release:dry-run` runs the same steps (build, pack every package,
    report what would be published or skipped) without publishing.
+
+   To pack without `pnpm release:dry-run`'s extra `pnpm build && pnpm test`,
+   call the script directly. It needs the same two flags; without `--tag` it
+   stops with `Release tag is required. Use --tag latest or --tag next.`:
+
+   ```bash
+   node scripts/release-packages.mjs --dry-run --tag latest --expected-version 0.1.0
+   ```
+
+   It is not pack-only: the script rebuilds the whole workspace first (about
+   a minute and a half on a laptop), then packs every package into
+   `.release-artifacts/`.
 7. After a release candidate, point `next` at it and check `latest` did not
    move. The tag workflow already publishes an rc with `--tag next`, so run
    this only if `next` is wrong. Each command needs an npm login with publish
    rights on the `@zlens` scope:
 
 ```bash
-npm dist-tag add @zlens/cli@1.7.0-rc.1 next
+npm dist-tag add @zlens/cli@0.2.0-rc.1 next
 npm dist-tag ls @zlens/cli
 ```
 
@@ -92,9 +104,9 @@ npm dist-tag ls @zlens/cli
 8. Smoke the published packages:
 
 ```bash
-npx -p @zlens/cli@1.7.0 zlens --version
-npx -p @zlens/cli@1.7.0 zlens --help
-npx create-zlens-app@1.7.0 --help
+npx -p @zlens/cli@0.2.0 zlens --version
+npx -p @zlens/cli@0.2.0 zlens --help
+npx create-zlens-app@0.2.0 --help
 ```
 
 Use the exact published prerelease version in the same commands for an RC. Do
@@ -131,7 +143,7 @@ registry target version agree, then run:
 git diff --check
 git rev-parse HEAD
 git rev-parse zlens-v0.2.0^{}
-pnpm release:publish -- --tag latest --expected-version 1.7.0
+pnpm release:publish -- --tag latest --expected-version 0.2.0
 ```
 
 The fallback publishes with your own npm login: run `npm login` first (an
@@ -139,7 +151,7 @@ account with publish rights on the `@zlens` scope and `create-zlens-app`) and ap
 OTP or web prompt when `pnpm publish` asks. It does not need `NODE_AUTH_TOKEN`;
 that variable is only read on GitHub Actions. Check with `npm whoami`.
 
-Use `--tag next --expected-version 1.7.0-rc.1` for an authorized prerelease
+Use `--tag next --expected-version 0.2.0-rc.1` for an authorized prerelease
 fallback. The script will reject a stable version with `next`, a prerelease
 with `latest`, or any expected version that differs from the manifests.
 

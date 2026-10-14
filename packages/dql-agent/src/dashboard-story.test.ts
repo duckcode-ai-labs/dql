@@ -139,4 +139,45 @@ describe('dashboard business story', () => {
     expect(result.story.paragraphs.join(' ')).not.toContain('Monthly Revenue');
     expect(result.story.caveat).toContain('outside the current filter scope');
   });
+
+  it('does not claim the filter scope when no tile reflects the selected filters (F6)', () => {
+    const result = buildDeterministicDashboardStory({
+      goal: 'NBA player performance',
+      filters: { season_start: 2016, season_end: 2017, top_n: 5 },
+      tiles: [{
+        tileId: 'codex-scorers', title: 'Codex Top Scorers', status: 'ok', trustState: 'certified',
+        // The block took none of the page values.
+        filters: {},
+        result: { columns: ['player_name', 'total_points'], rows: [{ player_name: 'James Harden', total_points: 5534 }] },
+      }],
+    });
+    const text = [result.story.headline, ...result.story.paragraphs].join(' ');
+    expect(text).not.toMatch(/season start 2016|top n 5/);
+    expect(result.story.paragraphs[0]).toMatch(/^For the current scope, /);
+    expect(result.story.caveat).toContain('Season start, season end and top n do not narrow any tile summarized here');
+  });
+
+  it('narrates only tiles the page filters reached and names the filter that reached none (F6)', () => {
+    const result = buildDeterministicDashboardStory({
+      goal: 'NBA player performance',
+      filters: { season: 2017, season_start: 2016, season_end: 2017, top_n: 5 },
+      tiles: [
+        {
+          tileId: 'top-players', title: 'Top Players', status: 'ok', trustState: 'certified',
+          filters: { season_start: 2016, season_end: 2017, top_n: 5 },
+          result: { columns: ['player_name', 'total_points'], rows: [{ player_name: 'James Harden', total_points: 5534 }] },
+        },
+        {
+          tileId: 'codex-scorers', title: 'Codex Top Scorers', status: 'ok', trustState: 'certified',
+          filters: {},
+          result: { columns: ['player_name', 'games'], rows: [{ player_name: 'LeBron James', games: 990 }] },
+        },
+      ],
+    });
+    expect(result.story.paragraphs[0]).toContain('For season start 2016, season end 2017, top n 5,');
+    expect(result.story.paragraphs.join(' ')).not.toContain('Codex Top Scorers');
+    expect(result.story.caveat).toContain('outside the current filter scope');
+    expect(result.story.caveat).toContain('Season does not narrow any tile summarized here');
+    expect(validateDashboardStoryBrief(result.story, result.facts).ok).toBe(true);
+  });
 });

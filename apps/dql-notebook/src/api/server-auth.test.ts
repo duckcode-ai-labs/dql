@@ -30,6 +30,12 @@ describe('LAN server authentication', () => {
     expect(serverTokenFromAccessInput('short')).toBeUndefined();
   });
 
+  it('accepts #zlens_token= as well as the #dql_token= links already shared', () => {
+    expect(serverTokenFromHash('#zlens_token=secret-456')).toBe('secret-456');
+    expect(hashWithoutServerToken('#view=apps&zlens_token=secret-456')).toBe('#view=apps');
+    expect(serverTokenFromAccessInput('http://10.0.0.31:3630/#zlens_token=secret-456')).toBe('secret-456');
+  });
+
   it('only a refused token (401) asks for the access link', () => {
     expect(reportServerAuthRejected(403)).toBe(false);
     expect(reportServerAuthRejected(500)).toBe(false);

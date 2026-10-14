@@ -367,7 +367,7 @@ export function DbtProjectEditor({
         <div>
           <div style={{ fontSize: 17, fontWeight: 700, color: t.textPrimary }}>Project &amp; dbt</div>
           <div style={{ fontSize: 12.5, color: t.textMuted, marginTop: 3, lineHeight: 1.5 }}>
-            Preview a local project or Git repository before DQL replaces the active dbt configuration.
+            Preview a local project or Git repository before ZLens replaces the active dbt configuration.
           </div>
         </div>
       ) : null}
@@ -411,7 +411,7 @@ export function DbtProjectEditor({
         <div>
           <div style={{ fontSize: 13, fontWeight: 700, color: t.textPrimary }}>Semantic execution adapters</div>
           <div style={{ fontSize: 11.5, color: t.textMuted, marginTop: 3, lineHeight: 1.5 }}>
-            Adapter code is included with DQL. Auto selects one ready adapter in priority order: dbt Cloud, local MetricFlow, then native for simple metrics. Once selected, an adapter failure is shown directly and never silently downgraded.
+            Adapter code is included with ZLens. Auto selects one ready adapter in priority order: dbt Cloud, local MetricFlow, then native for simple metrics. Once selected, an adapter failure is shown directly and never silently downgraded.
           </div>
           {semanticRuntime?.dbtCloud.configured ? (
             <div style={{ fontSize: 10.5, color: semanticRuntime.dbtCloud.targetBindingState === 'bound' && semanticRuntime.dbtCloud.metricInventoryState === 'complete' ? 'var(--status-success)' : 'var(--status-warning)', marginTop: 6, lineHeight: 1.5 }}>

@@ -139,6 +139,10 @@ import {
   staticResponseCacheControl,
   appAutopilotPreviewRequirementFor,
   startLocalServer,
+  isIgnoredProjectWatchPath,
+  dashboardStoryFiltersForBlockTile,
+  projectWatcherDegradedMessage,
+  lineageSourceState,
   validateBlockStudioSource,
   validateConnectionForTest,
 } from './local-runtime.js';
@@ -155,7 +159,7 @@ import { ClaudeOAuthProvider } from './providers/oauth/claude-oauth.js';
 import { setClaudeCredentials } from './providers/oauth/oauth-store.js';
 import { ClaudeCodeCliProvider } from './providers/subscription-cli.js';
 import { afterEach } from 'vitest';
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
 import { storeConnectionSecrets } from './connection-secrets.js';
 import { EventEmitter } from 'node:events';
 import { dirname, join, resolve } from 'node:path';
@@ -1283,9 +1287,10 @@ describe('local runtime network boundary', () => {
     const makeWatcher = () => Object.assign(new EventEmitter(), { close: vi.fn() });
     const firstWatcher = makeWatcher();
     const secondWatcher = makeWatcher();
+    const rootWatcher = makeWatcher();
     const watcherFactory = vi.fn(() => {
-      const watcher = watcherFactory.mock.calls.length === 1 ? firstWatcher : secondWatcher;
-      return watcher;
+      const call = watcherFactory.mock.calls.length;
+      return call === 1 ? firstWatcher : call === 2 ? secondWatcher : rootWatcher;
     });
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     let server: Server | undefined;
@@ -1300,7 +1305,9 @@ describe('local runtime network boundary', () => {
         // FSWatcher equivalents: `fs.watch` reports EMFILE after startup.
         projectWatcherFactory: watcherFactory as never,
       });
-      expect(watcherFactory).toHaveBeenCalledTimes(2);
+      // blocks/ and apps/, plus the non-recursive project-root watcher that
+      // picks up authoring folders created after startup.
+      expect(watcherFactory).toHaveBeenCalledTimes(3);
 
       firstWatcher.emit('error', Object.assign(new Error('too many open files'), { code: 'EMFILE' }));
       // A queued duplicate error after `close()` stays contained too.
@@ -1313,7 +1320,9 @@ describe('local runtime network boundary', () => {
       expect(secondWatcher.close).toHaveBeenCalledTimes(1);
       expect(warn).toHaveBeenCalledTimes(1);
       expect(warn).toHaveBeenCalledWith(expect.stringContaining('EMFILE'));
-      expect(warn).toHaveBeenCalledWith(expect.stringContaining('persisted local state remain available'));
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining('Changes saved in ZLens still update blocks and lineage'));
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining('ulimit -n'));
+      expect(warn).toHaveBeenCalledWith(expect.stringMatching(/^\[zlens\] /));
     } finally {
       warn.mockRestore();
       await new Promise<void>((resolve) => server ? server.close(() => resolve()) : resolve());
@@ -1321,6 +1330,164 @@ describe('local runtime network boundary', () => {
     // Server cleanup remains idempotent after failed watchers remove themselves.
     expect(firstWatcher.close).toHaveBeenCalledTimes(1);
     expect(secondWatcher.close).toHaveBeenCalledTimes(1);
+  });
+  it('starts watching an authoring folder created after startup and ignores dependency trees (F9)', async () => {
+    const projectRoot = mkdtempSync(join(tmpdir(), 'dql-project-watcher-late-root-'));
+    tempDirs.push(projectRoot);
+    writeFileSync(join(projectRoot, 'dql.config.json'), '{}\n');
+    const calls: Array<{ path: string; options: { recursive?: boolean }; listener: (event: string, filename: string | null) => void }> = [];
+    const watcherFactory = vi.fn((path: string, options: { recursive?: boolean }, listener: (event: string, filename: string | null) => void) => {
+      calls.push({ path, options, listener });
+      return Object.assign(new EventEmitter(), { close: vi.fn() });
+    });
+    let server: Server | undefined;
+    try {
+      await startLocalServer({
+        rootDir: projectRoot,
+        projectRoot,
+        executor: {} as QueryExecutor,
+        preferredPort: 0,
+        captureServer: (created) => { server = created; },
+        projectWatcherFactory: watcherFactory as never,
+      });
+      // No authoring folder exists yet: only the project root is watched, without recursion.
+      expect(calls.map((call) => [call.path, Boolean(call.options.recursive)])).toEqual([[projectRoot, false]]);
+
+      mkdirSync(join(projectRoot, 'blocks', 'nba'), { recursive: true });
+      calls[0]!.listener('rename', 'blocks');
+      expect(calls.map((call) => [call.path, Boolean(call.options.recursive)])).toEqual([
+        [projectRoot, false],
+        [join(projectRoot, 'blocks'), true],
+      ]);
+      // A repeated event for the same folder does not open a second watcher.
+      calls[0]!.listener('change', 'blocks');
+      expect(calls).toHaveLength(2);
+      // Unrelated root entries never start a watcher.
+      mkdirSync(join(projectRoot, 'node_modules'), { recursive: true });
+      calls[0]!.listener('rename', 'node_modules');
+      expect(calls).toHaveLength(2);
+    } finally {
+      await new Promise<void>((resolve) => server ? server.close(() => resolve()) : resolve());
+    }
+  });
+
+  it('rebuilds lineage from sources when a block is newer than the emitted manifest (F9)', async () => {
+    const projectRoot = mkdtempSync(join(tmpdir(), 'dql-lineage-stale-manifest-'));
+    tempDirs.push(projectRoot);
+    writeFileSync(join(projectRoot, 'dql.config.json'), '{}\n');
+    // An earlier compile left a manifest whose lineage has no blocks.
+    const manifestPath = join(projectRoot, 'dql-manifest.json');
+    writeFileSync(manifestPath, JSON.stringify({ lineage: { nodes: [], edges: [] } }));
+    const past = new Date(Date.now() - 60_000);
+    utimesSync(join(projectRoot, 'dql.config.json'), past, past);
+    expect(lineageSourceState(projectRoot).emittedManifestCurrent).toBe(true);
+    // A block saved by a path that did not rewrite the manifest.
+    mkdirSync(join(projectRoot, 'blocks', 'nba'), { recursive: true });
+    writeFileSync(join(projectRoot, 'blocks', 'nba', 'top-scorers.dql'), [
+      'block "Top Scorers" {',
+      '    domain = "nba"',
+      '    type = "custom"',
+      '    description = "Top scorers"',
+      '    owner = "e2e"',
+      '    query = """SELECT 1 AS points"""',
+      '}',
+      '',
+    ].join('\n'));
+    const future = new Date(Date.now() + 60_000);
+    utimesSync(join(projectRoot, 'blocks', 'nba', 'top-scorers.dql'), future, future);
+    expect(lineageSourceState(projectRoot).emittedManifestCurrent).toBe(false);
+    let server: Server | undefined;
+    try {
+      const port = await startLocalServer({
+        rootDir: projectRoot,
+        projectRoot,
+        executor: {} as QueryExecutor,
+        preferredPort: 0,
+        captureServer: (created) => { server = created; },
+        projectWatcherFactory: (() => Object.assign(new EventEmitter(), { close: vi.fn() })) as never,
+      });
+      const response = await fetch(`http://127.0.0.1:${port}/api/lineage`);
+      expect(response.status).toBe(200);
+      const graph = await response.json() as { nodes: Array<{ type: string; name: string }> };
+      expect(graph.nodes.filter((node) => node.type === 'block').map((node) => node.name)).toContain('Top Scorers');
+    } finally {
+      await new Promise<void>((resolve) => server ? server.close(() => resolve()) : resolve());
+    }
+  });
+
+  it('scopes a block tile story to the page values that reached the tile (F6)', () => {
+    const page = { season_start: 2016, season_end: 2017, top_n: 5, season: undefined };
+    // Bound through parameterBindings (source: variable), resolved as surface values.
+    expect(dashboardStoryFiltersForBlockTile(page, {
+      filters: { applied: [] },
+      invocation: { resolvedParameters: [
+        { name: 'season_start', source: 'surface' }, { name: 'season_end', source: 'surface' }, { name: 'top_n', source: 'surface' },
+      ] },
+    }, { parameterBindings: [
+      { param: 'season_start', source: 'variable', field: 'season_start' },
+      { param: 'season_end', source: 'variable', field: 'season_end' },
+      { param: 'top_n', source: 'variable', field: 'top_n' },
+    ] })).toEqual({ season_start: 2016, season_end: 2017, top_n: 5 });
+    // A block with no parameters and an unsupported season binding took nothing.
+    expect(dashboardStoryFiltersForBlockTile(page, {
+      filters: { applied: [] },
+      invocation: { resolvedParameters: [] },
+    }, {})).toEqual({});
+    // A predicate filter applied by the runtime counts; a defaulted parameter does not.
+    expect(dashboardStoryFiltersForBlockTile({ region: 'CA', top_n: 5 }, {
+      filters: { applied: [{ filter: 'region' }] },
+      invocation: { resolvedParameters: [{ name: 'top_n', source: 'default' }] },
+    }, {})).toEqual({ region: 'CA' });
+  });
+
+  it('answers a starter query with no connection plainly instead of borrowing a global dbt profile (F11)', async () => {
+    const projectRoot = mkdtempSync(join(tmpdir(), 'dql-starter-unconfigured-'));
+    const profilesDir = mkdtempSync(join(tmpdir(), 'dql-starter-global-profiles-'));
+    tempDirs.push(projectRoot, profilesDir);
+    writeFileSync(join(projectRoot, 'dql.config.json'), JSON.stringify({
+      project: 'newproj',
+      semanticLayer: { provider: 'dql', path: 'semantic-layer' },
+      dbt: { projectDir: '../my-dbt-project', manifestPath: 'target/manifest.json' },
+    }));
+    writeFileSync(join(profilesDir, 'profiles.yml'), 'elementary:\n  target: dev\n  outputs:\n    dev:\n      type: postgres\n      host: 127.0.0.1\n      port: 54322\n      user: someone\n      password: example\n      dbname: postgres\n      schema: public\n');
+    const previous = process.env.DBT_PROFILES_DIR;
+    process.env.DBT_PROFILES_DIR = profilesDir;
+    let server: Server | undefined;
+    try {
+      const port = await startLocalServer({
+        rootDir: projectRoot,
+        projectRoot,
+        executor: {} as QueryExecutor,
+        preferredPort: 0,
+        captureServer: (created) => { server = created; },
+        projectWatcherFactory: (() => Object.assign(new EventEmitter(), { close: vi.fn() })) as never,
+      });
+      const response = await fetch(`http://127.0.0.1:${port}/api/query`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sql: 'select 1 as customer_count', executionTarget: { target: 'connection' } }),
+      });
+      expect(response.status).toBe(409);
+      const body = await response.json() as { code?: string; error?: string };
+      expect(body.code).toBe('CONNECTION_NOT_CONFIGURED');
+      expect(body.error).toContain('No database connection is configured yet');
+      expect(body.error).not.toMatch(/PostgreSQL|54322/);
+      // No driver was installed for a connection nobody configured.
+      expect(existsSync(join(projectRoot, '.dql', 'connectors'))).toBe(false);
+    } finally {
+      if (previous === undefined) delete process.env.DBT_PROFILES_DIR;
+      else process.env.DBT_PROFILES_DIR = previous;
+      await new Promise<void>((resolve) => server ? server.close(() => resolve()) : resolve());
+    }
+  });
+
+  it('ignores dependency, VCS and cache trees inside authoring folders (F9)', () => {
+    expect(isIgnoredProjectWatchPath('nba/node_modules/duckdb/index.js')).toBe(true);
+    expect(isIgnoredProjectWatchPath('.git/index')).toBe(true);
+    expect(isIgnoredProjectWatchPath('nba/.dql/cache/x.sqlite')).toBe(true);
+    expect(isIgnoredProjectWatchPath('nba/top-scorers.dql')).toBe(false);
+    expect(isIgnoredProjectWatchPath('target-customers/blocks/a.dql')).toBe(false);
+    expect(projectWatcherDegradedMessage('unavailable', 'project authoring')).toContain('Restart ZLens to resume live refresh.');
   });
 });
 
@@ -7723,6 +7890,42 @@ describe('discoverDbtProfileConnections', () => {
     expect(resolveDbtProfileRuntimeConnection(projectRoot, config)).toMatchObject({
       driver: 'duckdb', filepath: join(dbtRoot, 'warehouse.duckdb'),
     });
+  });
+
+  it('never borrows an unrelated ~/.dbt profile when the project names no dbt profile (F11)', () => {
+    const projectRoot = mkdtempSync(join(tmpdir(), 'dql-starter-no-dbt-'));
+    const profilesDir = mkdtempSync(join(tmpdir(), 'dql-global-dbt-profiles-'));
+    tempDirs.push(projectRoot, profilesDir);
+    writeFileSync(join(profilesDir, 'profiles.yml'), [
+      'elementary:',
+      '  target: dev',
+      '  outputs:',
+      '    dev:',
+      '      type: postgres',
+      '      host: 127.0.0.1',
+      '      port: 54322',
+      '      user: someone',
+      '      password: example',
+      '      dbname: postgres',
+      '      schema: public',
+    ].join('\n'), 'utf-8');
+    const previous = process.env.DBT_PROFILES_DIR;
+    process.env.DBT_PROFILES_DIR = profilesDir;
+    try {
+      // A create-zlens-app starter: dbt.projectDir points at a folder that does not exist yet.
+      const starterConfig = { dbt: { projectDir: '../my-dbt-project' } };
+      expect(discoverDbtProfileConnections(projectRoot, starterConfig).some((candidate) => candidate.profileName === 'elementary')).toBe(true);
+      expect(resolveDbtProfileRuntimeConnection(projectRoot, starterConfig)).toBeNull();
+      // A dbt project without a profile key does not claim one either.
+      writeFileSync(join(projectRoot, 'dbt_project.yml'), 'name: shop\nversion: 1\n', 'utf-8');
+      expect(resolveDbtProfileRuntimeConnection(projectRoot, {})).toBeNull();
+      // The profile the dbt project names is still used, from the same global file.
+      writeFileSync(join(projectRoot, 'dbt_project.yml'), 'name: shop\nprofile: elementary\n', 'utf-8');
+      expect(resolveDbtProfileRuntimeConnection(projectRoot, {})).toMatchObject({ driver: 'postgresql', port: 54322 });
+    } finally {
+      if (previous === undefined) delete process.env.DBT_PROFILES_DIR;
+      else process.env.DBT_PROFILES_DIR = previous;
+    }
   });
 
   it('previews an explicitly selected profiles.yml or profile.yaml path without filtering to the dbt project profile', () => {

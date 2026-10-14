@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { ZLensMark } from '../shell/ZLensMark';
 import { ArrowLeft, ArrowRight, Boxes, FileText, LayoutDashboard, MessageCircleQuestion, Sparkles } from 'lucide-react';
 import { api, type ProviderSettings, type SetupLaunchResponse } from '../../api/client';
 import { useNotebook } from '../../store/NotebookStore';
@@ -154,7 +155,7 @@ export function SetupOnboarding({
   const hint = useMemo(() => {
     if (loading) return 'Loading existing project-local configuration…';
     if (step === 1) return requiresUpgradeReapply
-      ? `Required for DQL ${launch?.version}: Preview and Reapply the prefilled dbt project.`
+      ? `Required for ZLens ${launch?.version}: Preview and Reapply the prefilled dbt project.`
       : projectState === 'missing'
       ? 'Preview before applying; existing dbt settings stay untouched.'
       : `${projectState === 'passed' ? 'Ready' : 'Configured'} · ${projectDetail}`;
@@ -175,22 +176,22 @@ export function SetupOnboarding({
     color: t.textSecondary, fontSize: 12.5, fontWeight: 650, cursor: 'pointer', fontFamily: t.font,
   };
   const launchTitle = launch?.reason === 'version_upgrade'
-    ? `DQL ${launch.version} update review`
+    ? `ZLens ${launch.version} update review`
     : launch?.reason === 'first_install'
-      ? `Welcome to DQL ${launch.version}`
+      ? `Welcome to ZLens ${launch.version}`
       : 'Guided Setup';
   const launchNotice = launch?.reason === 'version_upgrade'
     ? requiresUpgradeReapply
       ? `ZLens was updated${launch.acknowledgedVersion ? ` from ${launch.acknowledgedVersion}` : ''} to ${launch.version}. Reapply the prefilled dbt project to rebuild its OSS governed snapshot with this version. Saved paths and credentials remain unchanged until Apply succeeds.`
       : `ZLens was updated${launch.acknowledgedVersion ? ` from ${launch.acknowledgedVersion}` : ''} to ${launch.version}. The dbt project was reapplied with this version; review the remaining saved connections before finishing.`
     : launch?.reason === 'first_install'
-      ? `DQL ${launch.version} is installed. Connect the project and database before entering the workspace; AI remains optional.`
+      ? `ZLens ${launch.version} is installed. Connect the project and database before entering the workspace; AI remains optional.`
       : null;
 
   return (
     <div role="dialog" aria-modal="true" aria-label="Guided Setup" style={{ position: 'fixed', inset: 0, zIndex: 1000, background: t.appBg, color: t.textPrimary, display: 'flex', flexDirection: 'column', fontFamily: t.font }}>
       <header style={{ height: 54, flexShrink: 0, borderBottom: `1px solid ${t.headerBorder}`, background: t.headerBg, display: 'flex', alignItems: 'center', gap: 11, padding: '0 20px' }}>
-        <span style={{ width: 29, height: 29, borderRadius: 7, background: '#0b7a75', color: '#fff', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontFamily: t.fontMono, fontSize: 10, fontWeight: 800 }}>DQL</span>
+        <span style={{ display: 'inline-flex', color: t.textPrimary, flexShrink: 0 }}><ZLensMark size={27} /></span>
         <div>
           <div style={{ fontSize: 13.5, fontWeight: 700 }}>{launchTitle}</div>
           <div style={{ fontSize: 10.5, color: t.textMuted }}>Project → Database → optional AI → Finish</div>

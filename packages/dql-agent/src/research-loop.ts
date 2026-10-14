@@ -374,8 +374,8 @@ export async function planResearch(input: {
       : [];
     if (readEnv('ZLENS_ORCHESTRATOR_TRACE')) {
       console.warn(hypothesisSteps.length > 0
-        ? `[dql] research plan: ${hypothesisSteps.length} hypotheses — ${hypothesisSteps.map((step) => step.thought).join(' | ').slice(0, 220)}`
-        : `[dql] research plan: deterministic template (${steps.length} steps) — provider=${Boolean(input.provider)} metrics=${input.metrics.length} blocks=${input.blocks.length}`);
+        ? `[zlens] research plan: ${hypothesisSteps.length} hypotheses — ${hypothesisSteps.map((step) => step.thought).join(' | ').slice(0, 220)}`
+        : `[zlens] research plan: deterministic template (${steps.length} steps) — provider=${Boolean(input.provider)} metrics=${input.metrics.length} blocks=${input.blocks.length}`);
     }
     return {
       decision: 'investigate',

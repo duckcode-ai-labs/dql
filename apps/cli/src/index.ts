@@ -221,10 +221,11 @@ const COMMAND_HELP: Record<string, string> = {
     zlens app generate "<prompt>" [--domain <domain>] [--owner <user>] [--ai-layout]
     zlens app ls [path]
     zlens app show <name> [path]
-    zlens app build [path]
+    zlens app build [path]       Build every App in the project at path (default: .)
     zlens app reindex [path]
 
   Notes:
+    app build takes a project path, not an App id: zlens app build .
     --ai-layout stores DQL-native GenUI metadata for dynamic visualization and
     layout decisions while preserving certified block trust boundaries.
   `,

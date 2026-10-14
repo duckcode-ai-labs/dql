@@ -55,7 +55,7 @@ describe('chart palettes', () => {
 describe('palette choices', () => {
   it('shows DQL for unset and old default palettes', async () => {
     const { selectedPaletteOption, CHART_PALETTE_OPTIONS } = await import('./chart-palettes');
-    expect(CHART_PALETTE_OPTIONS[0]).toEqual({ value: 'dql', label: 'DQL' });
+    expect(CHART_PALETTE_OPTIONS[0]).toEqual({ value: 'dql', label: 'ZLens' });
     expect(selectedPaletteOption(undefined)).toBe('dql');
     expect(selectedPaletteOption('corporate')).toBe('dql');
     expect(selectedPaletteOption('warm')).toBe('warm');

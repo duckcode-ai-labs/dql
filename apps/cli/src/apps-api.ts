@@ -725,7 +725,7 @@ export async function handleAppsApi(ctx: Ctx): Promise<boolean> {
         sendJson(res, 409, {
           ok: false,
           code: 'SEMANTIC_TILE_CONVERSION_UNAVAILABLE',
-          error: 'This local runtime cannot preview a legacy semantic-to-Dataset conversion. Update DQL and run a fresh legacy semantic tile.',
+          error: 'This local runtime cannot preview a legacy semantic-to-Dataset conversion. Update ZLens and run a fresh legacy semantic tile.',
         });
         return true;
       }
@@ -767,7 +767,7 @@ export async function handleAppsApi(ctx: Ctx): Promise<boolean> {
         sendJson(res, 409, {
           ok: false,
           code: 'SEMANTIC_TILE_CONVERSION_UNAVAILABLE',
-          error: 'This local runtime cannot accept a legacy semantic-to-Dataset conversion. Update DQL and preview the tile again.',
+          error: 'This local runtime cannot accept a legacy semantic-to-Dataset conversion. Update ZLens and preview the tile again.',
         });
         return true;
       }
@@ -2845,7 +2845,7 @@ function buildAppProposal(plan: AppPlan): AppBuildProposal {
   if (tiles.length === 0 || gaps.length > 0) {
     clarifications.push({
       id: 'coverage',
-      question: 'How should DQL handle requirements without governed coverage?',
+      question: 'How should ZLens handle requirements without governed coverage?',
       choices: ['Refine metrics or dimensions', 'Use governed semantic coverage', 'Include review-required analysis', 'Keep visible gaps'],
       required: tiles.length === 0,
     });
@@ -10487,7 +10487,7 @@ function buildDriverCards(
     return [{
       title: 'Runtime context needed',
       contribution: 'Needs SQL preview',
-      explanation: 'The selected tile did not include sample rows, so DQL captured the question and review path for a deeper SQL run.',
+      explanation: 'The selected tile did not include sample rows, so ZLens captured the question and review path for a deeper SQL run.',
       intent,
     }];
   }
@@ -10895,7 +10895,7 @@ async function generateInvestigationSql(
     const result = await boundedPromise(ctx.generateInvestigationSql(input), timeoutMs);
     if (result.timedOut) {
       return {
-        executionError: `AI SQL generation timed out after ${Math.round(timeoutMs / 1000)}s. DQL continued with deterministic app evidence and kept the analysis review-required.`,
+        executionError: `AI SQL generation timed out after ${Math.round(timeoutMs / 1000)}s. ZLens continued with deterministic app evidence and kept the analysis review-required.`,
       };
     }
     return result.value;

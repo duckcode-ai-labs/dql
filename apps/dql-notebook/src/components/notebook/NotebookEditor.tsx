@@ -288,7 +288,7 @@ export function NotebookEditor({ onOpenFile, registerCellRef }: NotebookEditorPr
           id: `note_${Date.now()}_mixed_source`,
           body: `AI prepared a bounded warehouse extraction for a local join with ${plan.localDataset} on ${plan.warehouseKey} = ${plan.localKey}. Review required.`,
           createdAt: new Date().toISOString(),
-          author: 'DQL',
+          author: 'ZLens',
         }];
         dispatch({ type: "ADD_CELL", cell: contextCell, afterId: aiSourceCellId ?? undefined });
         dispatch({ type: "ADD_CELL", cell: extractionCell, afterId: contextCell.id });

@@ -176,7 +176,7 @@ function expectedExecutionTarget(input: {
     if (!settings.executionTargetFingerprint || !settings.executionTargetContext) {
       throw new Error(
         'dbt Cloud Semantic Layer is tested but not bound to a warehouse execution target. '
-        + 'Reapply the settings with the intended DQL warehouse connection active.',
+        + 'Reapply the settings with the intended ZLens warehouse connection active.',
       );
     }
     const expected = createWarehouseTargetIdentity({

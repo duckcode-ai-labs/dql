@@ -221,7 +221,7 @@ export class ManagedMetricFlowInstaller {
       this.update(id, {
         state: 'failed',
         progress: Math.max(5, this.jobs.get(id)?.progress ?? 5),
-        message: 'MetricFlow setup needs attention. Your existing dbt and DQL configuration was not replaced.',
+        message: 'MetricFlow setup needs attention. Your existing dbt and ZLens configuration was not replaced.',
         error: message,
       });
     }

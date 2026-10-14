@@ -101,7 +101,7 @@ export function buildCombinedDatasetCell(input: {
       id: `note_${Date.now()}_join`,
       body: `Combined ${input.staged.alias} (${input.staged.refreshedAt}) with ${input.local.alias} (${input.local.refreshedAt}) using ${input.warehouseKey} = ${input.localKey}. Review required.`,
       createdAt: new Date().toISOString(),
-      author: 'DQL',
+      author: 'ZLens',
     }],
   };
   return cell;

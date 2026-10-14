@@ -101,11 +101,12 @@ const EXPECTED_TEST_FILES = 188;
 // 2456 with capability questions that name ZLens as well as DQL (analytical-request-policy.test.ts, +2 tests).
 // 2462 with run ownership across runtimes (agent-run-store.test.ts, +3) and the schema lane's
 // no-tables failure and semantic-runtime fallback (ask-pipeline.test.ts, +3).
-// 2465 with review-required answer drafts (drafts.test.ts, +3 tests).
-const EXPECTED_TESTS = 2465;
+// 2464 with story filter-scope cases (dashboard-story.test.ts, +2 tests).
+// 2467 with review-required answer drafts (drafts.test.ts, +3 tests).
+const EXPECTED_TESTS = 2467;
 // The heavy lane's share of EXPECTED_TESTS (catalog.test.ts 72 + project-state.test.ts 4), pinned so
 // a lane run on its own (CI runs the two lanes as separate steps) is audited as exactly as both together.
-// The ordinary lane's share is the difference: 2316.
+// The ordinary lane's share is the difference: 2388.
 const EXPECTED_HEAVY_TESTS = 76;
 
 const LANES = ['all', 'ordinary', 'heavy'];

@@ -2117,8 +2117,8 @@ function CellComponentInner({ cell, index, onStartResearch, researchState }: Cel
                 {teachCorrectionEligibility(cell).reason === 'missing_generated_sql'
                   ? <>Original SQL evidence is missing. Reopen this draft from Ask or Notebook AI before teaching it.</>
                   : teachCorrectionEligibility(cell).reason === 'run_required' || teachCorrectionEligibility(cell).reason === 'execution_mismatch'
-                    ? <>Draft changed. Run this exact cell successfully to unlock <strong style={{ color: t.accent }}>Teach DQL</strong>.</>
-                    : <>Edit this cell and run it successfully; then <strong style={{ color: t.accent }}>Teach DQL</strong> appears below the editor. Teaching creates a review candidate and never certifies automatically.</>}
+                    ? <>Draft changed. Run this exact cell successfully to unlock <strong style={{ color: t.accent }}>Teach ZLens</strong>.</>
+                    : <>Edit this cell and run it successfully; then <strong style={{ color: t.accent }}>Teach ZLens</strong> appears below the editor. Teaching creates a review candidate and never certifies automatically.</>}
               </div>
             )
           ) : cell.dqlArtifact && (
@@ -2129,7 +2129,7 @@ function CellComponentInner({ cell, index, onStartResearch, researchState }: Cel
           ) ? (
             <div style={{ borderTop: `1px solid ${t.cellBorder}`, padding: '5px 12px', background: `${t.warning}0A`, color: t.textMuted, font: `500 10.5px ${t.font}` }}>
               <strong style={{ color: t.textSecondary }}>Saved governed DQL.</strong>{' '}
-              Notebook edits are a draft for block review and recertification; they do not create Teach DQL learning or overwrite the source automatically.
+              Notebook edits are a draft for block review and recertification; they do not create Teach ZLens learning or overwrite the source automatically.
             </div>
           ) : null
         )}
@@ -2997,7 +2997,7 @@ function TeachCorrectionBar({ cell, t }: { cell: Cell; t: Theme }) {
     <div
       data-teach-state={state === 'error' ? 'error' : 'ready'}
       role="region"
-      aria-label="Teach DQL correction"
+      aria-label="Teach ZLens correction"
       style={{
         borderTop: `2px solid ${state === 'error' ? t.error : t.accent}`,
         borderBottom: `1px solid ${state === 'error' ? `${t.error}44` : `${t.accent}44`}`,
@@ -3030,7 +3030,7 @@ function TeachCorrectionBar({ cell, t }: { cell: Cell; t: Theme }) {
       </div>
       <div style={{ flex: '1 1 300px', minWidth: 0 }}>
         <div style={{ color: state === 'error' ? t.error : t.textPrimary, fontSize: 12.5, fontWeight: 750 }}>
-          {state === 'error' ? 'This correction was not saved' : 'Teach DQL from this successful correction'}
+          {state === 'error' ? 'This correction was not saved' : 'Teach ZLens from this successful correction'}
         </div>
         <div style={{ marginTop: 3, color: t.textMuted, fontSize: 10.75, lineHeight: 1.45 }}>
           {state === 'error'
@@ -3102,7 +3102,7 @@ function TeachCorrectionBar({ cell, t }: { cell: Cell; t: Theme }) {
 
           <details style={{ border: `1px solid ${t.cellBorder}`, borderRadius: 7, padding: '9px 10px' }}>
             <summary style={{ cursor: 'pointer', color: t.textSecondary, fontSize: 10.5, fontWeight: 700 }}>
-              Help DQL generalize this lesson <span style={{ color: t.textMuted, fontWeight: 400 }}>(optional)</span>
+              Help ZLens generalize this lesson <span style={{ color: t.textMuted, fontWeight: 400 }}>(optional)</span>
             </summary>
             <div style={{ display: 'grid', gap: 9, paddingTop: 9 }}>
               <label style={{ display: 'grid', gap: 4, color: t.textMuted, fontSize: 10 }}>
