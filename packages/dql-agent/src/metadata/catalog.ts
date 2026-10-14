@@ -1798,7 +1798,7 @@ export async function buildLocalContextPack(
     if (readEnv('ZLENS_ORCHESTRATOR_TRACE') && request.rerankCandidates) {
       const moved = rerankedObjects.findIndex((object, position) =>
         object.objectKey !== rankedObjects[position]?.objectKey);
-      console.warn(`[dql] rerank: ${moved < 0 ? 'no change' : `reordered from position ${moved}`} over ${Math.min(40, rankedObjects.length)} candidates`);
+      console.warn(`[zlens] rerank: ${moved < 0 ? 'no change' : `reordered from position ${moved}`} over ${Math.min(40, rankedObjects.length)} candidates`);
     }
     const sqlParentObjects = sqlParentObjectsForSelectedColumns(
       rerankedObjects,

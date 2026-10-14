@@ -6,7 +6,7 @@
 
 ```bash
 git clone https://github.com/duckcode-ai-labs/zlens.git
-cd dql
+cd zlens
 pnpm install
 ```
 

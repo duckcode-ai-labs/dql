@@ -706,7 +706,7 @@ export async function getSemanticRuntimeStatus(
       tested: true,
       ready: true,
       source: 'bundled',
-      detail: 'Bundled with DQL. Executes safe simple/additive metrics without an external runtime.',
+      detail: 'Bundled with ZLens. Executes safe simple/additive metrics without an external runtime.',
       capabilities: { having: true },
     },
     {

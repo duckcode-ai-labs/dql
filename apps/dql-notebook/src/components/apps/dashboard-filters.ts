@@ -78,13 +78,22 @@ export function dashboardFilterCoverage(
         .map((tile) => tile.tileId)
         .filter((tileId): tileId is string => Boolean(tileId)),
     );
+    // A control derived from a tile's parameter binding (Season Start → the
+    // block's season_start parameter) narrows that tile even though no result
+    // column carries its name. Without this, every parameter control read
+    // "affects 0 of N tiles" while it was in fact driving the tile.
+    for (const item of items) {
+      if ((item.parameterBindings ?? []).some((binding) => (
+        (binding.filter || binding.field || binding.param) === filterId && Boolean(binding.param)
+      ))) offering.add(item.i);
+    }
     return {
       filterId,
       applied: items.filter((item) => offering.has(item.i)).map((item) => item.i),
       unaffected: items.filter((item) => !offering.has(item.i)).map((item) => ({
         tileId: item.i,
         title: item.title,
-        reason: 'This tile does not return a column that can be filtered by this value.',
+        reason: 'This tile has no parameter bound to this filter and returns no column it can filter.',
       })),
       filterable: items.length,
     };

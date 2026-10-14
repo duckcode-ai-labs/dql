@@ -1,7 +1,7 @@
 # ZLens
 
 [![CI](https://github.com/duckcode-ai-labs/zlens/actions/workflows/ci.yml/badge.svg)](https://github.com/duckcode-ai-labs/zlens/actions/workflows/ci.yml)
-[![npm](https://img.shields.io/npm/v/zlens?label=zlens)](https://www.npmjs.com/package/zlens)
+[![npm](https://img.shields.io/npm/v/@zlens/cli?label=%40zlens%2Fcli)](https://www.npmjs.com/package/@zlens/cli)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](./LICENSE)
 [![Node](https://img.shields.io/badge/node-20%20%7C%2022%20%7C%2024%20LTS-green)](https://nodejs.org)
 

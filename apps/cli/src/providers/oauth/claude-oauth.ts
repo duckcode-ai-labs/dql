@@ -217,7 +217,7 @@ export class ClaudeOAuthManager {
           const credentials = await exchangeCodeForTokens(code, codeVerifier, receivedState);
           setClaudeCredentials(this.projectRoot, credentials);
           res.writeHead(200, { 'Content-Type': 'text/html' });
-          res.end('<html><body style="font-family:system-ui;padding:40px">Signed in to Claude. You can close this tab and return to DQL.</body></html>');
+          res.end('<html><body style="font-family:system-ui;padding:40px">Signed in to Claude. You can close this tab and return to ZLens.</body></html>');
           server.close();
           this.pendingAuth = null;
           resolve(credentials);

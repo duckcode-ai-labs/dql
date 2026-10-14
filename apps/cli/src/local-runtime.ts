@@ -1188,7 +1188,7 @@ export function resolveAskAgentRuntimeMode(
   // A project that still says `authoritative_v2` gets the pipeline: the
   // kernel it named no longer exists, and refusing to start would help nobody.
   if (value === 'authoritative_v2') {
-    console.warn('[dql] agent.askRuntimeMode "authoritative_v2" was removed; serving the Ask pipeline (pipeline_v3). Delete the setting.');
+    console.warn('[zlens] agent.askRuntimeMode "authoritative_v2" was removed; serving the Ask pipeline (pipeline_v3). Delete the setting.');
     return 'pipeline_v3';
   }
   if (typeof value === 'string' && (ASK_AGENT_RUNTIME_MODES as readonly string[]).includes(value)) {
@@ -4974,7 +4974,7 @@ export async function executePreparedAgenticSqlBoundary<T>(input: {
       bindings: input.bindings,
     });
     if (readEnv('ZLENS_ORCHESTRATOR_TRACE')) {
-      console.warn(`[dql] execution authorization: ${verdict.ok ? 'admitted' : 'REFUSED'} proven=${authorization.provenIdentifiers.length}${verdict.ok ? '' : ` reason=${verdict.reason}`}`);
+      console.warn(`[zlens] execution authorization: ${verdict.ok ? 'admitted' : 'REFUSED'} proven=${authorization.provenIdentifiers.length}${verdict.ok ? '' : ` reason=${verdict.reason}`}`);
     }
     if (!verdict.ok) {
       trace?.finishSpan(authorizationSpan, { outcome: 'denied', reasonCode: 'sql_denied', payload: sqlPayload });
@@ -5101,9 +5101,9 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
   // RFC 0010: with a host, Dataset grain proofs are each person's (their row rules decided them); none stays shared.
   if (hostHooks) {
     try {
-      if (retireSharedLocalDatasetProofs(projectRoot)) console.log('[dql] Dataset grain proofs are kept per person with a host: the shared local proofs file was moved aside.');
+      if (retireSharedLocalDatasetProofs(projectRoot)) console.log('[zlens] Dataset grain proofs are kept per person with a host: the shared local proofs file was moved aside.');
     } catch (error) {
-      console.warn(`[dql] Could not move the shared local Dataset proofs aside: ${error instanceof Error ? error.message : String(error)}`);
+      console.warn(`[zlens] Could not move the shared local Dataset proofs aside: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
   // RFC 0010 HH-5, HH-7, HH-8: each request (and this server's own work) uses this server's model, privacy boundary,
@@ -5931,7 +5931,7 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
     try {
       ensureConnectionPackages(projectRoot, connection);
     } catch (error) {
-      console.log(`[dql] Could not install the packages this connection needs (${error instanceof Error ? error.message : String(error)}).`);
+      console.log(`[zlens] Could not install the packages this connection needs (${error instanceof Error ? error.message : String(error)}).`);
     }
   }
 
@@ -6962,7 +6962,7 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
   const appAutopilotProviderFailureGuidance = (failure: AppAutopilotProviderFailureV1): string => {
     switch (failure.safeAction) {
       case 'wait_and_retry':
-        return 'APP_AUTOPILOT_PROVIDER_FAILED: The configured provider asked DQL to wait before retrying this App request.';
+        return 'APP_AUTOPILOT_PROVIDER_FAILED: The configured provider asked ZLens to wait before retrying this App request.';
       case 'retry_same_provider':
         return 'APP_AUTOPILOT_PROVIDER_FAILED: The configured provider did not complete this App request; retry the same request.';
       case 'fix_provider_configuration':
@@ -12306,20 +12306,24 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
       // Do not include a project path or the raw OS error: both can be noisy or
       // sensitive. One bounded warning is enough to explain the degraded hot
       // refresh without masking a healthy local server or durable persistence.
-      console.warn(`[dql] Project file watching was degraded (${code}) for ${scope}; automatic refresh is unavailable for that source, but the server and persisted local state remain available. Restart DQL to resume watching.`);
+      console.warn(projectWatcherDegradedMessage(code, scope));
     });
   };
 
   // Watch all Git-owned authoring roots. Domain Packages are recursive and are
   // the canonical home for modeling, skills, blocks, notebooks, Apps, and evals.
   if (projectRoot) {
-    for (const dir of ['domains', 'skills', 'tests', 'notebooks', 'workbooks', 'blocks', 'apps', 'dashboards', 'semantic-layer', 'data']) {
+    const watchedAuthoringRoots = new Set<string>();
+    const watchAuthoringRoot = (dir: string): void => {
       const watchDir = join(projectRoot, dir);
-      if (!existsSync(watchDir)) continue;
+      if (watchedAuthoringRoots.has(dir) || !existsSync(watchDir)) return;
       try {
         const watcher = projectWatcherFactory(watchDir, { persistent: false, recursive: true }, (eventType, filename) => {
           if (runtimeClosing) return;
           if (!filename) return;
+          // Dependency, VCS and build trees inside an authoring folder are not
+          // authoring input; their churn must not drive refreshes.
+          if (isIgnoredProjectWatchPath(String(filename))) return;
           const path = `${dir}/${filename}`;
           const payload = JSON.stringify({ type: eventType === 'rename' ? 'file-added' : 'file-changed', path });
           for (const client of sseClients) {
@@ -12340,8 +12344,29 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
             }).catch(() => { /* reload errors are non-fatal */ });
           }
         });
+        watchedAuthoringRoots.add(dir);
         registerProjectWatcher(watcher, 'project authoring');
       } catch { /* dir not watchable */ }
+    };
+    for (const dir of PROJECT_AUTHORING_WATCH_ROOTS) watchAuthoringRoot(dir);
+    // A fresh project has no blocks/ (or notebooks/, apps/) until the first save
+    // creates it. Watch the project root itself, without recursion, so a folder
+    // created after startup is picked up instead of silently never refreshing.
+    if (PROJECT_AUTHORING_WATCH_ROOTS.some((dir) => !watchedAuthoringRoots.has(dir))) {
+      try {
+        const rootWatcher = projectWatcherFactory(projectRoot, { persistent: false }, (_eventType, filename) => {
+          if (runtimeClosing || !filename) return;
+          const dir = String(filename).split(/[\\/]/)[0] ?? '';
+          if (!(PROJECT_AUTHORING_WATCH_ROOTS as readonly string[]).includes(dir) || watchedAuthoringRoots.has(dir)) return;
+          if (!existsSync(join(projectRoot, dir))) return;
+          watchAuthoringRoot(dir);
+          if (['domains', 'skills', 'tests', 'blocks', 'apps', 'notebooks'].includes(dir)) {
+            invalidateAgentProjectState(projectRoot);
+            scheduleProjectRefresh(`file:${dir}`);
+          }
+        });
+        registerProjectWatcher(rootWatcher, 'project root');
+      } catch { /* project root not watchable */ }
     }
     // A dbt repository commonly keeps its shared Skills folder beside the DQL
     // project (`../skills`). It is Git-owned context too, so watch the resolved
@@ -22380,7 +22405,9 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
           filters: dashboardVariables,
           tiles: settledTiles.map((tile) => {
             const dashboardItem = loaded.dashboard.layout.items.find((item) => item.i === tile.tileId);
-            const effectiveStoryFilters = dashboardStoryFiltersForTile(loaded.dashboard, dashboardVariables, tile.dataset);
+            const effectiveStoryFilters = dashboardItem?.block && !dashboardItem.query
+              ? dashboardStoryFiltersForBlockTile(dashboardVariables, tile, dashboardItem)
+              : dashboardStoryFiltersForTile(loaded.dashboard, dashboardVariables, tile.dataset);
             const datasetScope = dashboardItem?.query
               ? {
                   // A Dataset tile is a whole-scope value only when its query
@@ -22552,7 +22579,7 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
               person: homePersonKey(currentPrincipal()),
             });
           } catch (error) {
-            console.warn(`[dql] Could not record a story edition for ${appId}/${dashboardId}: ${error instanceof Error ? error.message : String(error)}`);
+            console.warn(`[zlens] Could not record a story edition for ${appId}/${dashboardId}: ${error instanceof Error ? error.message : String(error)}`);
           }
         }
         // HH-16: a reader's whole-page run is theirs on Home — recent, and its
@@ -22592,7 +22619,7 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
               });
             }
           } catch (error) {
-            console.warn(`[dql] Could not record this page run for Home (${appId}/${dashboardId}): ${error instanceof Error ? error.message : String(error)}`);
+            console.warn(`[zlens] Could not record this page run for Home (${appId}/${dashboardId}): ${error instanceof Error ? error.message : String(error)}`);
           }
         }
         // MCP runs intentionally have no App/chart-answer lifecycle. They use
@@ -24116,7 +24143,7 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
           try {
             await refreshUnifiedProjectIndexes(projectRoot);
           } catch (error) {
-            const refreshWarning = `Git pull succeeded, but local DQL indexes could not be refreshed: ${error instanceof Error ? error.message : String(error)}`;
+            const refreshWarning = `Git pull succeeded, but local ZLens indexes could not be refreshed: ${error instanceof Error ? error.message : String(error)}`;
             result.output = [result.output, refreshWarning].filter(Boolean).join('\n');
           }
         }
@@ -24255,7 +24282,7 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
         res.end(serializeJSON(merged));
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        console.warn(`[dql] /api/schema introspection failed: ${message}`);
+        console.warn(`[zlens] /api/schema introspection failed: ${message}`);
         const fallback = [
           ...datasetWorkspace.list().map((dataset) => ({
             name: dataset.alias,
@@ -25572,6 +25599,9 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
         }
 
         await refreshLocalMetadataCatalog(projectRoot);
+        // Saved blocks must reach lineage without relying on the file watcher
+        // (the blocks/ folder may not have existed when the watcher started).
+        if (results.some((result) => result.path && result.status !== 'error')) scheduleProjectRefresh('block-studio-import-save');
         const nextSession = loadDqlGenerationSession(importId);
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(serializeJSON({ ok: results.every((result) => result.status !== 'error'), session: nextSession, results }));
@@ -26006,6 +26036,7 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
           };
           writeBlockStudioImportCandidate(projectRoot, importId, next);
           await refreshLocalMetadataCatalog(projectRoot);
+          scheduleProjectRefresh('block-studio-import-save');
           const payload = openBlockStudioDocument(projectRoot, savedPath, semanticLayer);
           res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
           res.end(serializeJSON({ candidate: next, block: payload }));
@@ -28743,12 +28774,14 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
         }
         // A refusal (the host's row policy or credentials, a connection the server chooses) is a 403, not a server error.
         const refused = isPolicyRefusal(error);
-        res.writeHead(refused ? 403 : 500, { 'Content-Type': 'application/json; charset=utf-8' });
+        // No connection yet (a fresh starter) is a setup state, not a server error (F11).
+        const notConfigured = !refused && analyticalErrorDetail(error)?.code === 'connection_not_configured';
+        res.writeHead(refused ? 403 : notConfigured ? 409 : 500, { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(serializeJSON({
           columns: [],
           rows: [],
           error: errorText,
-          code: refused ? 'POLICY_DENIED' : classifyAnalyticalFailure(error),
+          code: refused ? 'POLICY_DENIED' : notConfigured ? 'CONNECTION_NOT_CONFIGURED' : classifyAnalyticalFailure(error),
           details: {
             phase: 'execution',
             executionContext: notebookExecutionIdentity(execContext),
@@ -30962,6 +30995,39 @@ export function dashboardStoryFiltersForTile(
   if (excluded.size === 0) return dashboardFilters;
   return Object.fromEntries(Object.entries(dashboardFilters)
     .filter(([filterId]) => !excluded.has(filterId)));
+}
+
+/**
+ * The page filter values a block tile's figures actually reflect: filters the
+ * runtime applied to it (predicate or parameter) and block parameters a page
+ * value resolved (by name, or through the tile's declared parameter binding).
+ * A page filter that never reached the tile is left out, so the story does not
+ * narrate that tile's figures as if they were in the filtered scope (F6).
+ */
+export function dashboardStoryFiltersForBlockTile(
+  dashboardFilters: Record<string, unknown>,
+  tile: { [key: string]: unknown },
+  item: Pick<DashboardGridItem, 'parameterBindings'>,
+): Record<string, unknown> {
+  const filters = tile.filters as { applied?: Array<{ filter?: unknown }> } | undefined;
+  const invocation = tile.invocation as { resolvedParameters?: Array<{ name?: unknown; source?: unknown }> } | undefined;
+  const reached = new Set<string>();
+  for (const applied of Array.isArray(filters?.applied) ? filters.applied : []) {
+    if (typeof applied?.filter === 'string') reached.add(applied.filter);
+  }
+  const resolvedFromPage = new Set((Array.isArray(invocation?.resolvedParameters) ? invocation.resolvedParameters : [])
+    .filter((parameter) => parameter.source === 'explicit' || parameter.source === 'surface')
+    .map((parameter) => (typeof parameter.name === 'string' ? parameter.name : ''))
+    .filter(Boolean));
+  for (const name of resolvedFromPage) {
+    if (Object.prototype.hasOwnProperty.call(dashboardFilters, name)) reached.add(name);
+  }
+  for (const binding of item.parameterBindings ?? []) {
+    if (binding.source === 'constant' || binding.source === 'persona') continue;
+    if (!resolvedFromPage.has(binding.param)) continue;
+    reached.add(binding.filter ?? binding.field ?? binding.param);
+  }
+  return Object.fromEntries(Object.entries(dashboardFilters).filter(([filterId]) => reached.has(filterId)));
 }
 
 /**
@@ -35966,7 +36032,7 @@ function installPackages(projectRoot: string, packageSpecs: string[]): void {
       packageJsonPath,
       JSON.stringify({
         private: true,
-        description: 'Project-local DQL connector packages',
+        description: 'Project-local ZLens connector packages',
       }, null, 2) + '\n',
       'utf-8',
     );
@@ -36003,13 +36069,13 @@ export function ensureConnectorInstalledForStartup(projectRoot: string, driver: 
   // Built-in drivers (e.g. the local file driver) and unknown drivers need nothing.
   if (!definition || definition.builtIn || !definition.packageSpec || !definition.packageName) return;
   if (isConnectorPackageInstalled(projectRoot, definition.packageName)) return;
-  console.log(`[dql] Installing the ${definition.label} driver into .dql/connectors (first run after install/upgrade)…`);
+  console.log(`[zlens] Installing the ${definition.label} driver into .dql/connectors (first run after install/upgrade)…`);
   try {
     installConnectorPackage(projectRoot, driver);
-    console.log(`[dql] ${definition.label} driver ready — connection restored without manual setup.`);
+    console.log(`[zlens] ${definition.label} driver ready — connection restored without manual setup.`);
   } catch (err) {
     const detail = err instanceof Error ? err.message : String(err);
-    console.log(`[dql] Could not auto-install the ${definition.label} driver (${detail}). Open the Connections page and click "Install" once you have network access.`);
+    console.log(`[zlens] Could not auto-install the ${definition.label} driver (${detail}). Open the Connections page and click "Install" once you have network access.`);
   }
 }
 
@@ -36057,7 +36123,7 @@ function warnOnceForUntestedNodeRuntime(version: string, major: number): void {
   if (warnedNodeRuntimes.has(major)) return;
   warnedNodeRuntimes.add(major);
   console.warn(
-    `[dql] Node.js ${version} has not been exercised with the Snowflake driver `
+    `[zlens] Node.js ${version} has not been exercised with the Snowflake driver `
     + `(tested on ${SNOWFLAKE_TESTED_NODE_MAJORS.join(', ')}). Continuing — if you hit a connector crash, `
     + `switch to Node ${SNOWFLAKE_TESTED_NODE_MAJORS.at(-1)} and reinstall project dependencies.`,
   );
@@ -43572,7 +43638,7 @@ function buildConversationalFallback(
   }
   switch (kind) {
     case 'greeting':
-      return `Hi! I'm your DQL assistant — I answer questions about your data, grounded in your certified metrics and dbt lineage.${examples}`;
+      return `Hi! I'm your ZLens assistant — I answer questions about your data, grounded in your certified metrics and dbt lineage.${examples}`;
     case 'gratitude':
       return "You're welcome! Ask me anything else about your data whenever you're ready.";
     case 'meta_capability':
@@ -44422,6 +44488,26 @@ function buildNotebookTemplate(
   }, null, 2);
 }
 
+/** Project folders whose files are authoring input and feed hot refresh. */
+const PROJECT_AUTHORING_WATCH_ROOTS = ['domains', 'skills', 'tests', 'notebooks', 'workbooks', 'blocks', 'apps', 'dashboards', 'semantic-layer', 'data'] as const;
+
+/** Folders that are never authoring input: dependencies, VCS, build and cache trees. */
+const IGNORED_PROJECT_WATCH_SEGMENTS = new Set(['node_modules', '.git', '.dql', '.venv', 'venv', '__pycache__', 'dbt_packages']);
+
+export function isIgnoredProjectWatchPath(relativePath: string): boolean {
+  return relativePath.split(/[\\/]/).some((segment) => IGNORED_PROJECT_WATCH_SEGMENTS.has(segment));
+}
+
+/** The one warning printed when the OS stops a project watcher. */
+export function projectWatcherDegradedMessage(code: 'EMFILE' | 'unavailable', scope: string): string {
+  const reason = code === 'EMFILE' ? 'the system ran out of file watchers (EMFILE)' : 'the system stopped the watcher';
+  return `[zlens] Live file refresh is off for ${scope}: ${reason}. Changes saved in ZLens still update blocks and lineage; `
+    + 'files changed outside ZLens (an editor, git pull) show up after a restart. '
+    + (code === 'EMFILE'
+      ? 'To restore live refresh, raise the open-file limit (ulimit -n) or keep large folders (node_modules, target, data exports) out of the project folders, then restart ZLens.'
+      : 'Restart ZLens to resume live refresh.');
+}
+
 /** Build a lineage graph from the project's blocks and semantic layer. */
 // Cache per project + source fingerprint. A process can serve different roots,
 // and a time-only singleton previously returned the wrong graph after a change.
@@ -44431,29 +44517,43 @@ const _lineageCache = new Map<string, {
 }>();
 
 function buildProjectLineageGraph(projectRoot: string, semanticLayer: SemanticLayer | null | undefined) {
-  const signature = lineageSourceSignature(projectRoot);
+  const source = lineageSourceState(projectRoot);
   const cached = _lineageCache.get(projectRoot);
-  if (cached?.signature === signature) return cached.graph;
-  const graph = buildProjectLineageGraphUncached(projectRoot, semanticLayer);
-  _lineageCache.set(projectRoot, { signature, graph });
+  if (cached?.signature === source.signature) return cached.graph;
+  const graph = buildProjectLineageGraphUncached(projectRoot, semanticLayer, source.emittedManifestCurrent);
+  _lineageCache.set(projectRoot, { signature: source.signature, graph });
   return graph;
 }
 
-function lineageSourceSignature(projectRoot: string): string {
+/**
+ * The lineage inputs' fingerprint, and whether the emitted `dql-manifest.json`
+ * is at least as new as every input it was built from. A block saved by a path
+ * that does not rewrite the manifest (or saved while the background refresh is
+ * still queued, or while file watching is degraded) makes the emitted manifest
+ * stale; lineage then rebuilds from the sources instead of showing the old graph.
+ */
+export function lineageSourceState(projectRoot: string): { signature: string; emittedManifestCurrent: boolean } {
   const hash = createHash('sha256');
   const dbtManifestPath = resolveDbtManifestPath(projectRoot, {}) ?? undefined;
   const inputs = new Set(collectInputFiles({ projectRoot, dbtManifestPath }));
   const emittedManifest = join(projectRoot, 'dql-manifest.json');
+  let emittedMtimeMs: number | undefined;
+  let newestInputMtimeMs = 0;
   if (existsSync(emittedManifest)) inputs.add(emittedManifest);
   for (const input of [...inputs].sort()) {
     try {
       const stats = statSync(input);
       hash.update(`${input}\0${stats.size}\0${stats.mtimeMs}\n`);
+      if (input === emittedManifest) emittedMtimeMs = stats.mtimeMs;
+      else newestInputMtimeMs = Math.max(newestInputMtimeMs, stats.mtimeMs);
     } catch {
       hash.update(`${input}\0missing\n`);
     }
   }
-  return hash.digest('hex');
+  return {
+    signature: hash.digest('hex'),
+    emittedManifestCurrent: emittedMtimeMs !== undefined && emittedMtimeMs >= newestInputMtimeMs,
+  };
 }
 
 /** UI-008: bounded compiler-owned Domain Knowledge Capsule response. */
@@ -44546,9 +44646,13 @@ function canonicalKnowledge360(manifest: DQLManifest, rawId: string, snapshotId:
   };
 }
 
-function buildProjectLineageGraphUncached(projectRoot: string, semanticLayer: SemanticLayer | null | undefined) {
+function buildProjectLineageGraphUncached(
+  projectRoot: string,
+  semanticLayer: SemanticLayer | null | undefined,
+  emittedManifestCurrent = true,
+) {
   const manifestPath = join(projectRoot, 'dql-manifest.json');
-  if (existsSync(manifestPath)) {
+  if (emittedManifestCurrent && existsSync(manifestPath)) {
     try {
       const manifest = JSON.parse(readFileSync(manifestPath, 'utf-8'));
       if (manifest.lineage?.nodes && manifest.lineage?.edges) {
@@ -44734,12 +44838,26 @@ export function buildDbtParseArgs(dbtProjectDir: string, profilesDir?: string): 
   ];
 }
 
-/** CFG-003: use a complete default dbt target when no saved ZLens connection exists. */
+/**
+ * CFG-003: use a complete default dbt target when no saved ZLens connection exists.
+ *
+ * Only the profile *this project's* dbt_project.yml names qualifies. Without a
+ * dbt project (a fresh `create-zlens-app` starter) or without a `profile:` key,
+ * nothing is borrowed from ~/.dbt/profiles.yml: an unrelated profile there (say a
+ * local Postgres for another tool) must never become this project's warehouse,
+ * nor make startup install its driver. Running a cell then says plainly that no
+ * connection is configured.
+ */
 export function resolveDbtProfileRuntimeConnection(
   projectRoot: string,
   projectConfig: ProjectConfig,
 ): ConnectionConfig | null {
-  const candidates = discoverDbtProfileConnections(projectRoot, projectConfig);
+  const dbtProjectPath = findDbtProjectPath(projectRoot, projectConfig);
+  if (!existsSync(join(dbtProjectPath, 'dbt_project.yml'))) return null;
+  const projectProfileName = readDbtProjectProfileName(dbtProjectPath);
+  if (!projectProfileName) return null;
+  const candidates = discoverDbtProfileConnections(projectRoot, projectConfig)
+    .filter((candidate) => candidate.profileName === projectProfileName);
   const complete = candidates.filter((candidate) =>
     candidate.missingFields.length === 0
     && !candidate.warnings.some((warning) => warning.startsWith('DuckDB file not found'))
@@ -45290,7 +45408,7 @@ export function buildDbtStatus(projectRoot: string, projectConfig: ProjectConfig
   const manifestExists = existsSync(manifestPath);
   const semanticExists = existsSync(semanticManifestPath);
   const setupHint = !configured
-    ? 'No dbt project detected. Start without dbt or run DQL from a repo with dbt_project.yml.'
+    ? 'No dbt project detected. Start without dbt or run ZLens from a repo with dbt_project.yml.'
     : !manifestExists
       ? 'Run `dbt parse`, `dbt compile`, or `dbt build`, then run `zlens sync dbt`.'
       : !semanticExists
@@ -45381,7 +45499,7 @@ export function buildSemanticLayerDiagnostics(
         severity: 'warning',
         code: 'dbt_project_not_detected',
         message: 'dbt is selected as the semantic source, but no dbt project was detected.',
-        action: 'Set dbt.projectDir or run DQL from a repository containing dbt_project.yml.',
+        action: 'Set dbt.projectDir or run ZLens from a repository containing dbt_project.yml.',
       });
     }
     if (!dbt.artifacts.manifest.exists) {

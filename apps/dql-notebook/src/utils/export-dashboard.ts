@@ -1,4 +1,5 @@
 import type { Cell, QueryResult } from '../store/types';
+import { ZLENS_MARK_SVG } from '../components/shell/ZLensMark';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -183,13 +184,7 @@ export function exportDashboardHtml(title: string, cells: Cell[]): string {
       background: #161b22; border-bottom: 1px solid #21262d;
       padding: 16px 32px; display: flex; align-items: center; gap: 12px;
     }
-    .logo {
-      width: 28px; height: 28px; border-radius: 6px;
-      background: linear-gradient(135deg, #388bfd, #1f6feb);
-      display: flex; align-items: center; justify-content: center;
-      font-size: 10px; font-weight: 700; color: #fff;
-      font-family: monospace; letter-spacing: -0.5px; flex-shrink: 0;
-    }
+    .logo { width: 28px; height: 28px; display: flex; flex-shrink: 0; }
     .page-title { font-size: 18px; font-weight: 600; color: #e6edf3; }
     .page-meta { font-size: 12px; color: #8b949e; margin-left: auto; }
     .content { max-width: 900px; margin: 0 auto; padding: 32px 24px; display: flex; flex-direction: column; gap: 24px; }
@@ -224,7 +219,7 @@ export function exportDashboardHtml(title: string, cells: Cell[]): string {
 </head>
 <body>
   <div class="page-header">
-    <div class="logo">DQL</div>
+    <div class="logo">${ZLENS_MARK_SVG}</div>
     <span class="page-title">${esc(title)}</span>
     <span class="page-meta">Exported ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</span>
   </div>

@@ -73,9 +73,9 @@ export function getPalette(name: string | undefined, themeMode: ThemeMode | unde
   return [...(isDarkThemeMode(themeMode) ? DQL_SERIES_DARK : DQL_SERIES_LIGHT)];
 }
 
-/** Choices offered in chart settings; the old implicit defaults show as DQL. */
+/** Choices offered in chart settings; the old implicit defaults show as ZLens (value stays 'dql'). */
 export const CHART_PALETTE_OPTIONS: ReadonlyArray<{ value: ChartPaletteName; label: string }> = [
-  { value: 'dql', label: 'DQL' },
+  { value: 'dql', label: 'ZLens' },
   { value: 'warm', label: 'Warm' },
   { value: 'cool', label: 'Cool' },
   { value: 'mono', label: 'Mono' },

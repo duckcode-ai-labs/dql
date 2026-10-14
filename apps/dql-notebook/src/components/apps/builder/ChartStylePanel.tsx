@@ -146,7 +146,7 @@ export function ChartStylePanel({ vizType, style, legacyFormat, disabled, onChan
       </select>
       <label htmlFor="chart-style-palette">Colours</label>
       <select id="chart-style-palette" disabled={disabled} value={current.palette ?? 'dql'} onChange={(event) => set({ palette: event.target.value === 'dql' ? undefined : event.target.value as DashboardVizStyle['palette'] })}>
-        <option value="dql">DQL</option>
+        <option value="dql">ZLens</option>
         <option value="cool">Cool</option>
         <option value="warm">Warm</option>
         <option value="mono">Mono</option>

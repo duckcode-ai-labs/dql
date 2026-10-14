@@ -1,17 +1,17 @@
 {
   "dqlnbVersion": 1,
   "version": 1,
-  "title": "{{PROJECT_NAME}} - DQL Workbench",
+  "title": "{{PROJECT_NAME}} - ZLens Workbench",
   "metadata": {
-    "title": "{{PROJECT_NAME}} - DQL Workbench",
-    "description": "DQL starter workbench for building domain-first analytics."
+    "title": "{{PROJECT_NAME}} - ZLens Workbench",
+    "description": "ZLens starter workbench for building domain-first analytics."
   },
   "cells": [
     {
       "id": "intro",
       "type": "markdown",
       "title": "Welcome",
-      "source": "# {{PROJECT_NAME}}\n\nDQL means **Domain Query Language**. It turns SQL, business terms, notebooks, dashboards, apps, and lineage into one trusted analytics project.\n\n**Core path:** source data -> DQL block -> business_view -> dashboard/app/AI answer.\n\nUse this notebook as your workbench: explore data, promote repeated SQL into reusable blocks, define business vocabulary, and compile the project manifest for lineage and AI-ready context."
+      "source": "# {{PROJECT_NAME}}\n\nZLens is governed analytics written in DQL (**Domain Query Language**), its query language. Together they turn SQL, business terms, notebooks, dashboards, apps, and lineage into one trusted analytics project.\n\n**Core path:** source data -> DQL block -> business_view -> dashboard/app/AI answer.\n\nUse this notebook as your workbench: explore data, promote repeated SQL into reusable blocks, define business vocabulary, and compile the project manifest for lineage and AI-ready context."
     },
     {
       "id": "starter_query",

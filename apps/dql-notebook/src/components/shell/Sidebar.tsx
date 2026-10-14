@@ -5,6 +5,7 @@ import { hostReadOnly, useHostUi } from '../../host/host-ui';
 import { useDispatch, useNotebookStore } from '../../store/NotebookStore';
 import { themes } from '../../themes/notebook-theme';
 import { BuildSidebar } from '../panels/BuildSidebar';
+import { buildCatalogFooter } from '../panels/build-footer';
 import { ConnectionPanel } from '../panels/ConnectionPanel';
 import { LineagePanel } from '../panels/LineagePanel';
 import { GitPanel } from '../panels/GitPanel';
@@ -26,6 +27,7 @@ const PANEL_TITLES: Record<string, string> = {
 
 export function Sidebar({ onOpenFile }: SidebarProps) {
   const state = useNotebookStore(useShallow((store) => ({
+    blockStudioDbtStatus: store.blockStudioDbtStatus,
     schemaTables: store.schemaTables,
     semanticLayer: store.semanticLayer,
     sidebarPanel: store.sidebarPanel,
@@ -46,7 +48,24 @@ export function Sidebar({ onOpenFile }: SidebarProps) {
   const buildPanel = panel === 'files' || panel === 'block_library';
   const buildFooter = state.semanticLayer.loading
     ? 'Loading semantic metrics…'
-    : `${state.semanticLayer.provider ? `${state.semanticLayer.provider} synced` : 'dbt synced'} · ${state.schemaTables.length} table${state.schemaTables.length === 1 ? '' : 's'} · ${state.semanticLayer.metrics.length.toLocaleString()} metric${state.semanticLayer.metrics.length === 1 ? '' : 's'}`;
+    : buildCatalogFooter({
+      provider: state.semanticLayer.provider,
+      dbtModels: state.blockStudioDbtStatus?.counts.models,
+      warehouseTables: state.schemaTables.length,
+      metrics: state.semanticLayer.metrics.length,
+    });
+
+  // The dbt model count is a local artifact read (no warehouse call); load it
+  // once if no other view has yet, so the footer can count dbt models.
+  const dbtStatusLoaded = state.blockStudioDbtStatus !== null;
+  useEffect(() => {
+    if (!buildPanel || dbtStatusLoaded) return undefined;
+    let active = true;
+    void api.getBlockStudioDbtStatus()
+      .then((status) => { if (active) dispatch({ type: 'SET_BLOCK_STUDIO_DBT_STATUS', status }); })
+      .catch(() => undefined);
+    return () => { active = false; };
+  }, [buildPanel, dbtStatusLoaded, dispatch]);
 
   // Block Studio loads this context before rendering its footer. Do the same in
   // the Notebook explorer so the shared footer never reports a stale 0 metrics.

@@ -4477,7 +4477,7 @@ Validate the scorer window, then pin this memo or draft a reusable DQL block.`,
       summary: 'Grant Jerrett leads the selected scorer result.',
       recommendation: 'Use certified evidence and retry SQL generation if deeper proof is needed.',
       hasReportEvidence: true,
-      sqlError: 'AI SQL generation timed out after 12s. DQL continued with deterministic app evidence and kept the analysis review-required.',
+      sqlError: 'AI SQL generation timed out after 12s. ZLens continued with deterministic app evidence and kept the analysis review-required.',
       sqlErrorKind: 'ai_generation_timeout',
     });
 

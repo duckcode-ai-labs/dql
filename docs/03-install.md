@@ -8,7 +8,7 @@ The fastest way. No Node, no pnpm, no native build deps.
 
 ```bash
 git clone https://github.com/duckcode-ai-labs/zlens.git
-cd dql
+cd zlens
 export ZLENS_SERVER_TOKEN="$(openssl rand -hex 24)"   # any long random string
 docker compose up
 ```

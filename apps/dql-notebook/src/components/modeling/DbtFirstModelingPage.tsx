@@ -2501,7 +2501,7 @@ export function AddDbtMetricDrawer({ data, domain, snapshotId, t, onClose, onApp
   });
   return (
     <Modal title="Add metric" t={t} onClose={onClose}>
-      <Message text="The metric lives in your dbt project's YAML, where dbt/MetricFlow owns it. DQL previews the exact change first; nothing is written until you apply." t={t} />
+      <Message text="The metric lives in your dbt project's YAML, where dbt/MetricFlow owns it. ZLens previews the exact change first; nothing is written until you apply." t={t} />
       {!preview ? (
         <div style={{ display: 'grid', gap: 12 }}>
           <Field label="dbt model"><Select value={nodeId} onChange={(value) => { setNodeId(value); setSemanticModel(''); }} values={models.map((node) => node.uniqueId)} labels={Object.fromEntries(models.map((node) => [node.uniqueId, node.name]))} t={t} /></Field>

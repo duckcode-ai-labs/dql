@@ -194,3 +194,20 @@ describe('a tile bound to a retired block', () => {
     }));
   });
 });
+
+describe('zlens app build arguments', () => {
+  it('explains that build takes a project path when given an App id', async () => {
+    const projectRoot = mkdtempSync(join(tmpdir(), 'dql-app-build-id-'));
+    tempDirs.push(projectRoot);
+    writeFileSync(join(projectRoot, 'dql.config.json'), JSON.stringify({ project: 'demo' }), 'utf-8');
+    const previousCwd = process.cwd();
+    try {
+      process.chdir(projectRoot);
+      await expect(runApp('build', ['nba-performance'], flags())).rejects.toThrow(
+        /"nba-performance" is not a project folder\. zlens app build \[path\] builds every App/,
+      );
+    } finally {
+      process.chdir(previousCwd);
+    }
+  });
+});

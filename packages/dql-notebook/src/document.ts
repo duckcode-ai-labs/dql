@@ -190,7 +190,7 @@ export function createWelcomeNotebook(template: string, projectTitle: string, dr
         id: 'intro',
         type: 'markdown',
         title: 'Welcome',
-        source: `# ${projectTitle}\n\nDQL means **Domain Query Language**. It is the domain layer that turns dbt models, SQL, metrics, notebooks, dashboards, apps, and business definitions into one trusted analytics project.\n\n**Core path:** source data -> dbt model -> DQL block -> business_view -> dashboard/app/AI answer.\n\nThis notebook is your workbench. Explore the dbt-backed database below, then promote useful queries into blocks and business views so the compiler can write \`dql-manifest.json\` with both technical lineage and business lineage.`,
+        source: `# ${projectTitle}\n\nZLens is governed analytics written in DQL (**Domain Query Language**), its query language. DQL is the domain layer that turns dbt models, SQL, metrics, notebooks, dashboards, apps, and business definitions into one trusted analytics project.\n\n**Core path:** source data -> dbt model -> DQL block -> business_view -> dashboard/app/AI answer.\n\nThis notebook is your workbench. Explore the dbt-backed database below, then promote useful queries into blocks and business views so the compiler can write \`dql-manifest.json\` with both technical lineage and business lineage.`,
       },
       {
         id: 'sql-tables',
@@ -216,7 +216,7 @@ export function createWelcomeNotebook(template: string, projectTitle: string, dr
         title: 'Next Steps',
         source: `## Next steps\n\n1. Query a dbt model and save the useful logic as a DQL block.\n2. Add business terms under \`terms/\` for the vocabulary stakeholders use.\n3. Compose blocks into \`business_view\` files under \`business-views/\`.\n4. Run \`zlens compile .\` to refresh \`dql-manifest.json\`.\n5. Open Lineage to trace source -> model -> block -> business view -> consumption.`,
       },
-    ], { description: 'DQL workbench for turning a dbt project into business lineage.', template: 'dbt' });
+    ], { description: 'ZLens workbench for turning a dbt project into business lineage.', template: 'dbt' });
   }
 
   // Default notebook for non-dbt projects
@@ -225,7 +225,7 @@ export function createWelcomeNotebook(template: string, projectTitle: string, dr
       id: 'intro',
       type: 'markdown',
       title: 'Welcome',
-      source: `# ${projectTitle}\n\nDQL means **Domain Query Language**. It turns SQL, business terms, notebooks, dashboards, apps, and lineage into one trusted analytics project.\n\n**Core path:** source data -> DQL block -> business_view -> dashboard/app/AI answer.\n\nThis notebook is your workbench. Start with a table or local file, promote useful SQL into a block, then compose blocks into business views so the compiler can write \`dql-manifest.json\` with both technical lineage and business lineage.`,
+      source: `# ${projectTitle}\n\nZLens is governed analytics written in DQL (**Domain Query Language**), its query language. Together they turn SQL, business terms, notebooks, dashboards, apps, and lineage into one trusted analytics project.\n\n**Core path:** source data -> DQL block -> business_view -> dashboard/app/AI answer.\n\nThis notebook is your workbench. Start with a table or local file, promote useful SQL into a block, then compose blocks into business views so the compiler can write \`dql-manifest.json\` with both technical lineage and business lineage.`,
     },
     {
       id: 'sql-tables',

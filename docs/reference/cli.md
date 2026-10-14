@@ -134,7 +134,8 @@ zlens lineage --dashboard daily_ops      # consumption lineage
 | `zlens app new <name>` | Create a local App package |
 | `zlens app generate "<prompt>"` | Generate a governed App draft from certified blocks plus review placeholders |
 | `zlens app generate "<prompt>" --ai-layout` | Store richer GenUI layout metadata for dynamic visualization/layout decisions |
-| `zlens app ls\|show\|build\|reindex` | List, inspect, compile, or reindex local Apps |
+| `zlens app ls\|show\|reindex` | List, inspect, or reindex local Apps |
+| `zlens app build [path]` | Build every App in the project at `path` (default `.`) into `dql-manifest.json`. It takes a project path, not an App id: `zlens app build .` |
 | `zlens promote notebook <path> --to shared` | Strip local run/UI state and mark a notebook as shared source |
 | `zlens promote app <app-id> --to shared` | Mark an App manifest as shared/reviewed source |
 | `zlens promote dashboard <app-id>/<dashboard-id> --to shared` | Strip AI pins/local state and mark a dashboard as shared source |

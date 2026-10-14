@@ -7,7 +7,7 @@ pnpm install --frozen-lockfile
 pnpm build
 pnpm test
 node scripts/check-doc-links.mjs
-pnpm release:dry-run -- --tag latest --expected-version 1.7.0
+pnpm release:dry-run -- --tag latest --expected-version 0.2.0
 ```
 
 ## Unit and Package Tests
@@ -39,11 +39,13 @@ The test suite verifies adoption-critical templates:
 `node scripts/check-doc-links.mjs` validates relative markdown links under
 `docs/`.
 
-`pnpm release:dry-run -- --tag latest --expected-version 1.7.0` builds, tests,
+`pnpm release:dry-run -- --tag latest --expected-version 0.2.0` builds, tests,
 and packs every publishable package into `.release-artifacts/` without
-publishing. Use `--tag next --expected-version 1.7.0-rc.1` for a prerelease
+publishing. Use `--tag next --expected-version 0.2.0-rc.1` for a prerelease
 candidate; the script rejects an incompatible version/tag pair or manifest
-version before it builds or packs.
+version before it builds or packs. Calling the script directly needs the same
+flags (`node scripts/release-packages.mjs --dry-run --tag latest
+--expected-version <version>`); it rebuilds the workspace before packing.
 
 ## Stress Test
 

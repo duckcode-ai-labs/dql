@@ -6722,11 +6722,11 @@ export const api = {
         | { error?: string; fallback?: SchemaTable[] }
         | null;
       if (body?.error) {
-        console.warn(`[dql] schema introspection failed: ${body.error}`);
+        console.warn(`[zlens] schema introspection failed: ${body.error}`);
       }
       return body?.fallback ?? [];
     } catch (err) {
-      console.warn('[dql] getSchema request failed', err);
+      console.warn('[zlens] getSchema request failed', err);
       return [];
     }
   },

@@ -99,7 +99,7 @@ flowchart LR
 
 | Package | What it does |
 |---|---|
-| [`zlens`](https://www.npmjs.com/package/zlens) | The `zlens` binary: notebook, compile, validate, certify, lineage, MCP |
+| [`@zlens/cli`](https://www.npmjs.com/package/@zlens/cli) | The `zlens` binary: notebook, compile, validate, certify, lineage, MCP |
 | [`@zlens/core`](https://www.npmjs.com/package/@zlens/core) | Parser, formatter, semantic analyzer, manifest builder, lineage |
 | [`@zlens/mcp`](https://www.npmjs.com/package/@zlens/mcp) | MCP tools for certified block search, query, certification, and lineage |
 | [`@zlens/dql-lsp`](https://www.npmjs.com/package/@zlens/dql-lsp) | LSP for `.dql` files |

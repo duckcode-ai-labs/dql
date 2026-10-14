@@ -148,21 +148,39 @@ export function buildDeterministicDashboardStory(input: DashboardStoryBuildInput
   // A selected page control can intentionally exclude a component. Preserve
   // that tile's complete-source fact, but never narrate it as if it carried
   // the global filter values used by other components.
-  const scopedFacts = facts.filter((fact) => sameDashboardFilterScope(fact.filters ?? {}, input.filters));
+  //
+  // A page filter that reaches no tile at all is not part of any figure's
+  // scope. Leave it out of the scope the story claims and name it in the caveat
+  // instead, so "these figures use this exact filter scope" is only ever said
+  // about filters that actually narrowed the narrated tiles (F6).
+  const reachedFilterIds = new Set(facts.flatMap((fact) => Object.keys(fact.filters ?? {})));
+  const storyFilters = Object.fromEntries(Object.entries(input.filters)
+    .filter(([filterId]) => reachedFilterIds.has(filterId)));
+  const unreachedFilters = Object.entries(input.filters)
+    .filter(([filterId, value]) => !reachedFilterIds.has(filterId) && isActiveFilterValue(value))
+    .map(([filterId]) => humanize(filterId));
+  const scopedFacts = facts.filter((fact) => sameDashboardFilterScope(fact.filters ?? {}, storyFilters));
   const hasScopeExclusions = scopedFacts.length !== facts.length;
   const trustState = scopedFacts.reduce<DashboardDisplayTrustState>(
     (least, fact) => TRUST_ORDER[fact.trustState] < TRUST_ORDER[least] ? fact.trustState : least,
     'certified',
   );
-  const scope = filterScope(input.filters);
+  const scope = filterScope(storyFilters);
   const primary = scopedFacts.slice(0, 3);
   const supporting = scopedFacts.slice(3, 6);
+  // Facts exist, but no tile reflects the selected filters: say so rather than
+  // narrating unfiltered figures as the filtered picture (F6).
+  const onlyOutOfScope = primary.length === 0 && facts.length > 0;
   const headline = primary.length
     ? `${humanize(input.goal).replace(/[?.!]+$/, '')}: the current picture`
-    : `No result is available yet for ${humanize(input.goal).replace(/[?.!]+$/, '')}`;
+    : onlyOutOfScope
+      ? `${humanize(input.goal).replace(/[?.!]+$/, '')}: no tile reflects the current filters`
+      : `No result is available yet for ${humanize(input.goal).replace(/[?.!]+$/, '')}`;
   const firstParagraph = primary.length
     ? `For ${scope}, the clearest signals are ${joinFacts(primary)}. These figures come from tiles with this exact filter scope, so the summary and visible results stay aligned when filters change.`
-    : `The dashboard did not return enough governed evidence to summarize ${scope}. Apply a different filter range or review the unavailable sections before using this view for a decision.`;
+    : onlyOutOfScope
+      ? `None of the tiles on this page is narrowed by ${scope}, so this summary does not present their figures as results for that scope. Check each tile's own scope before using a figure for a decision.`
+      : `The dashboard did not return enough governed evidence to summarize ${scope}. Apply a different filter range or review the unavailable sections before using this view for a decision.`;
   const driverFacts = scopedFacts.filter((fact) => fact.kind === 'driver');
   const secondParagraph = supporting.length
     ? `${joinFacts(supporting)} add context across the rest of the view. ${driverFacts.length ? `The supported driver evidence points to ${joinFacts(driverFacts.slice(0, 2))}.` : 'The current view shows association and ranking, but it does not prove why the pattern occurred.'}`
@@ -183,6 +201,9 @@ export function buildDeterministicDashboardStory(input: DashboardStoryBuildInput
       caveat: [
         driverFacts.length === 0 && scopedFacts.length > 0 ? 'This view does not contain validated causal evidence.' : undefined,
         hasScopeExclusions ? 'Some visible tiles are outside the current filter scope and are not included in this summary.' : undefined,
+        facts.length > 0 && unreachedFilters.length > 0
+          ? `${joinNames(unreachedFilters)} ${unreachedFilters.length === 1 ? 'does' : 'do'} not narrow any tile summarized here, so ${unreachedFilters.length === 1 ? 'it is' : 'they are'} not part of this summary's scope.`
+          : undefined,
       ].filter((value): value is string => Boolean(value)).join(' ') || undefined,
       claims,
       evidenceRefs: Array.from(new Set(scopedFacts.map((fact) => fact.evidenceRef))),
@@ -242,9 +263,19 @@ function joinFacts(facts: DashboardStoryFact[]): string {
   return facts.map((fact) => `${fact.label} is **${formatValue(fact.value, fact.unit)}**`).join(facts.length > 2 ? '; ' : ' and ');
 }
 
+/** An empty multi-select is "All", not a filter. */
+function isActiveFilterValue(value: unknown): boolean {
+  return value !== undefined && value !== null && value !== '' && !(Array.isArray(value) && value.length === 0);
+}
+
+function joinNames(names: string[]): string {
+  const capitalized = names.map((name, index) => (index === 0 ? name.charAt(0).toUpperCase() + name.slice(1) : name));
+  if (capitalized.length <= 1) return capitalized.join('');
+  return `${capitalized.slice(0, -1).join(', ')} and ${capitalized[capitalized.length - 1]}`;
+}
+
 function filterScope(filters: Record<string, unknown>): string {
-  // An empty multi-select is "All", not a filter.
-  const active = Object.entries(filters).filter(([, value]) => value !== undefined && value !== null && value !== '' && !(Array.isArray(value) && value.length === 0));
+  const active = Object.entries(filters).filter(([, value]) => isActiveFilterValue(value));
   if (active.length === 0) return 'the current scope';
   return active.map(([key, value]) => `${humanize(key)} ${Array.isArray(value) ? value.join(' to ') : String(value)}`).join(', ');
 }
