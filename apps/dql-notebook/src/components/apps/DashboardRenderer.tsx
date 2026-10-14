@@ -34,7 +34,8 @@ import {
   normalizeViz, roleForDisplayComponent, textTileDisplay, uniqueStrings, type DqlGenUiMetadata,
 } from './dashboard-tile-model';
 import { autoLayoutDashboardItems, autoLayoutRank, layoutScore, packDashboardItems, reorderTileForDrop } from './dashboard-layout';
-import { readerTileFreshness, readerTileReceipt, readerTileTrust, readerTrustCounts } from './reader-trust';
+import { READER_TRUST_LABELS, readerTileFreshness, readerTileReceipt, readerTileTrust, readerTrustCounts } from './reader-trust';
+import { appTrustSummary, type AppTrustSummary, type ReaderTrustItem, type ReaderTrustTile } from '@zlens/core/apps/reader-trust';
 import { plainDescription, ReaderTrustBadge, TrustLensBar } from './ReaderTrust';
 import { DriverPanel, DriverView } from './DriverView';
 import { StoryView, storyEditionSummary } from './StoryView';
@@ -201,6 +202,7 @@ export function DashboardRenderer({
   copilotOpen,
   onCopilotChange,
   onRunChange,
+  onTrustChange,
   onNavigateDashboard,
 }: {
   appId: string;
@@ -218,6 +220,11 @@ export function DashboardRenderer({
   copilotOpen?: boolean;
   onCopilotChange?: (open: boolean) => void;
   onRunChange?: (run: DashboardRunResponse | null) => void;
+  /**
+   * The page's one aggregate data trust (see `appTrustSummary`), so the App
+   * header shows exactly what the Trust Lens line, story and tiles show.
+   */
+  onTrustChange?: (trust: AppTrustSummary | null) => void;
   /** Page navigation is owned by AppsView because it owns page filter state. */
   onNavigateDashboard?: (input: {
     fromDashboardId: string;
@@ -363,10 +370,27 @@ export function DashboardRenderer({
     const timer = window.setInterval(() => setNowMs(Date.now()), 60_000);
     return () => window.clearInterval(timer);
   }, [editable]);
+  // Page trust covers every tile whose result feeds this page — including
+  // tiles collapsed because a certified tile answers the same question, since
+  // they still ran and the page story narrates them. Only review tiles hidden
+  // from (and not run for) a stakeholder are outside it.
+  const trustItems = storyItems ?? baseVisibleItems;
   const trustCounts = useMemo(
-    () => (editable || !run ? [] : readerTrustCounts((storyItems ?? visibleItems).map((item) => readerTileTrust(item, tileResults.get(item.i))))),
-    [editable, run, storyItems, tileResults, visibleItems],
+    () => (editable || !run ? [] : readerTrustCounts(trustItems.map((item) => readerTileTrust(item, tileResults.get(item.i))))),
+    [editable, run, trustItems, tileResults],
   );
+  // One aggregate trust for this page, from the same items and run evidence
+  // as the tile badges. Every page-level label reads it.
+  const pageTrust = useMemo(
+    () => (editable ? null : appTrustSummary(
+      trustItems as unknown as ReadonlyArray<ReaderTrustItem & { i: string }>,
+      run ? (tileResults as unknown as ReadonlyMap<string, ReaderTrustTile>) : undefined,
+    )),
+    [editable, run, trustItems, tileResults],
+  );
+  useEffect(() => {
+    onTrustChange?.(pageTrust);
+  }, [onTrustChange, pageTrust]);
   const runDriverProbe = useCallback(async (
     item: DashboardDocumentResponse['dashboard']['layout']['items'][number],
     definition: DashboardDriverDefinitionV1,
@@ -1189,6 +1213,7 @@ export function DashboardRenderer({
       {!editable ? (
         <TrustLensBar
           counts={trustCounts}
+          summary={pageTrust?.text}
           on={trustLens}
           onToggle={() => setTrustLens((current) => !current)}
           actions={(
@@ -1280,11 +1305,7 @@ export function DashboardRenderer({
           tiles={run?.tiles ?? []}
           themeMode={state.themeMode}
           loading={loading}
-          trust={trustCounts.length ? (() => {
-            const total = trustCounts.reduce((sum, entry) => sum + entry.count, 0);
-            const certified = trustCounts.find((entry) => entry.state === 'certified')?.count ?? 0;
-            return certified === total ? `all ${total} tiles certified` : `${certified} of ${total} tiles certified`;
-          })() : null}
+          trust={pageTrust?.text ? pageTrust.text.charAt(0).toLowerCase() + pageTrust.text.slice(1) : null}
           onMark={(item, tile, row, pointer) => openMarkMenu(item, tile, row, pointer, [])}
           receiptFor={numberReceiptFor}
         />
@@ -1294,11 +1315,7 @@ export function DashboardRenderer({
           catalog={storyCatalog}
           receiptFor={numberReceiptFor}
           edition={run && !run.partial && storyEditions ? storyEditionSummary(storyEditions, run, storyCatalog) : null}
-          trust={trustCounts.length ? (() => {
-            const total = trustCounts.reduce((sum, entry) => sum + entry.count, 0);
-            const certified = trustCounts.find((entry) => entry.state === 'certified')?.count ?? 0;
-            return certified === total ? `all ${total} tiles certified` : `${certified} of ${total} tiles certified`;
-          })() : null}
+          trust={pageTrust?.text ? pageTrust.text.charAt(0).toLowerCase() + pageTrust.text.slice(1) : null}
           renderTile={(tileId) => {
             const item = visibleItems.find((candidate) => candidate.i === tileId);
             if (!item) return null;
@@ -2359,9 +2376,14 @@ const generatedVizOverflowStyle: React.CSSProperties = {
   maxWidth: 74,
 };
 
+/** The same words the tiles use (READER_TRUST_LABELS), so a page never says two things. */
 function TrustPill({ trust }: { trust: string }) {
   const certified = trust === 'certified';
-  const label = certified ? 'Certified' : trust === 'review_required' ? 'Review required' : 'Draft ready';
+  const label = certified
+    ? READER_TRUST_LABELS.certified
+    : trust === 'governed' || trust === 'grounded'
+      ? READER_TRUST_LABELS.governed
+      : trust === 'review_required' ? READER_TRUST_LABELS.review : 'Draft';
   return (
     <span style={trustPillStyle(certified)}>
       {certified ? <ShieldCheck size={10} strokeWidth={2.4} /> : <AlertTriangle size={10} strokeWidth={2.4} />}
@@ -2399,6 +2421,16 @@ function DashboardStoryStrip({ story }: { story: DashboardStory }): JSX.Element 
   );
 }
 
+/**
+ * "Verified" is said only when every source behind the story is certified.
+ * Otherwise the chip says the facts come from results that still need review.
+ */
+export function storySourceChipLabel(story: Pick<DashboardStoryBrief, 'generatedBy' | 'trustState'>): string {
+  const certified = story.trustState === 'certified';
+  if (story.generatedBy === 'ai') return certified ? 'AI wording · verified facts' : 'AI wording · facts from sources that need review';
+  return certified ? 'Verified result summary' : 'Result summary · sources need review';
+}
+
 function BusinessStoryPanel({
   story,
   onEvidence,
@@ -2429,7 +2461,7 @@ function BusinessStoryPanel({
         ) : null}
       </div>
       <div style={{ ...dashboardStoryChipRowStyle, marginTop: 14 }}>
-        <span style={dashboardStorySourceChipStyle}>{story.generatedBy === 'ai' ? 'AI wording · verified facts' : 'Verified result summary'}</span>
+        <span style={dashboardStorySourceChipStyle}>{storySourceChipLabel(story)}</span>
         <span style={dashboardStoryChipStyle}>{story.evidenceRefs.length} evidence source{story.evidenceRefs.length === 1 ? '' : 's'}</span>
         {story.caveat ? <span style={dashboardStoryChipStyle}>{story.caveat}</span> : null}
         <span style={{ flex: 1 }} />
@@ -2901,7 +2933,7 @@ export function TileEvidencePanel({
         <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: 16, fontWeight: 600 }}>{item.title ?? tile.title ?? artifact?.name ?? 'App tile'}</div>
-            <div style={{ marginTop: 4, fontSize: 12, color: 'var(--text-secondary)' }}>{sourceLabel} · {artifact?.trustState === 'certified' && !tile.repair ? 'Certified' : 'Review required'}</div>
+            <div style={{ marginTop: 4, fontSize: 12, color: 'var(--text-secondary)' }}>{sourceLabel} · {artifact?.trustState === 'certified' && !tile.repair ? READER_TRUST_LABELS.certified : READER_TRUST_LABELS.review}</div>
           </div>
           <button type="button" onClick={onClose} aria-label="Close details" style={iconTileButtonStyle}><X size={14} /></button>
         </div>

@@ -19,7 +19,7 @@ flowchart TD
 
     T2{can the AI write SQL<br/>from manifest + dbt schema?}
     T2Tool[query_via_metadata]
-    T2Out["⚠ uncertified answer<br/>+ auto-saved draft block"]
+    T2Out["⚠ review-required answer<br/>+ auto-saved draft block"]
 
     T3Out[refuse with reason]
 
@@ -61,16 +61,40 @@ questions, and they also attach to block answers as evidence. For executable
 answers, the result is safe to ship to dashboards because every output column
 traces back through the contract → dbt model → source column.
 
-## Tier 2 — `query_via_metadata`
+## Tier 2 — review-required answers leave a draft
 
-Use when Tier 1 returns no match. The agent supplies the SQL it inferred from
-the manifest + dbt schema; the runtime executes it. The result returns with
-`uncertified: true` so the human sees the trust label, and the proposal is
-auto-captured as a draft block. Domain-first projects use
-`domains/<domain>/blocks/_drafts/<slug>.dql`; legacy projects use
-`blocks/_drafts/<slug>.dql`. Same question asked again increments the
-`asked_times` counter on the existing draft — questions that get asked
-repeatedly are the strongest candidates for certification.
+Use when Tier 1 returns no match. ZLens (or, on the BYOSQL path, the agent)
+writes SQL from the manifest + dbt schema and the runtime executes it. The
+answer is labelled **review required** (`uncertified: true` on MCP) and the
+proposal is **auto-saved as a draft block** so a person can review and certify
+it. This is the same on every surface:
+
+| Surface | What leaves the draft |
+| --- | --- |
+| Notebook UI Ask | `POST /api/agent-runs`; the answer shows *Saved for review as a draft block* with an **Open draft to review** action |
+| `zlens agent ask` | `POST /api/agent-runs`; prints `Review draft saved: <path>` and the `zlens certify --from-draft` command |
+| MCP `answer_question` | `POST /api/agent-runs`; returns `reviewDraft` / `draftBlockPath` |
+| MCP `query_via_metadata` | writes the draft itself (`saveDraft: false` opts out) |
+
+Where and how:
+
+- Domain-first projects use `domains/<domain>/blocks/_drafts/<slug>.dql`;
+  legacy projects use `blocks/_drafts/<slug>.dql`. The Blocks list shows them
+  under **Drafts** with status `draft`.
+- The draft is always `status = "draft"`. Capturing an answer never certifies it.
+- Repeats do not create new files. The draft carries `answer_fingerprint` (a
+  sha256 of the answer SQL with comments, case and whitespace normalized); the
+  same SQL asked in other words, or the same question asked again, increments
+  `asked_times` on the existing draft. Questions that get asked repeatedly are
+  the strongest candidates for certification.
+- The answer's executed DQL artifact stays `persistence = "transient"`: it is
+  the execution receipt and is never replaced by a file. The saved draft is a
+  separate copy, reported on the run as `reviewDraft { path, askedTimes,
+  created }`.
+- Only executed Ask answers are captured: certified answers, refusals,
+  clarifications, authoring modes (Block AI, App builder, which keep their own
+  explicit *Add to Block Studio* commits), evaluation runs
+  (`reviewDraftCapture: "off"`) and host-run (multi-user) runtimes are not.
 
 For follow-up drilldowns, Tier 2 is also context-aware. A prior certified
 answer can seed the next request, but the agent must first search for a
@@ -92,6 +116,53 @@ queryViaMetadata({
 The agent contract: surface `uncertified: true` verbatim to the human, and
 mention the path forward — `zlens certify --from-draft <path>`.
 
+## Saving never certifies
+
+Nothing becomes certified implicitly. Saving — an Ask answer, a notebook cell
+(*Save draft block*), an imported SQL candidate (*Save draft*), or a block in
+Block Studio — always writes `status = "draft"`, and the companion YAML
+(`semantic-layer/blocks/.../<slug>.yaml`) always says the same `reviewStatus`
+as the `.dql` file.
+
+A block becomes certified only through an explicit **Certify** action, which
+runs the certification rules (owner, a successful compile and run, passing
+tests; `--enterprise` adds grain, outputs, lineage, pattern and cadence) and,
+only when they pass, writes `status = "certified"` and a **certification
+receipt** beside `reviewStatus: certified`:
+
+```yaml
+reviewStatus: certified
+certification:
+  certifiedBy: analyst@example.com   # host's signed-in person, else the local owner
+  certifiedAt: '2026-10-14T12:00:00.000Z'
+  via: block-studio                  # block-studio | sql-import | app-dataset | cli
+  rules: oss                         # oss | enterprise
+  sourceSha256: 5f0c…                # the exact source that was certified
+  checks: [metadata, validation, run, tests]
+```
+
+The explicit Certify actions are Block Studio's **Certify**, the import
+candidate's **Certify**, App Studio's **Certify and use this data** (a Dataset
+from a table), and `zlens certify --from-draft`. Block Studio shows the receipt
+as *Certified by … · when · via …*. Changing a block's status away from
+certified removes the receipt.
+
+## Apps: one trust state per page
+
+An App page shows one aggregate data trust, derived from its current tiles'
+run evidence (the server resolves each tile against its source as it is now):
+the header badge, the *N of M tiles certified* line, the story's trust pill and
+every tile badge read the same value (`appTrustSummary` in `@zlens/core`).
+"All data certified" and "verified" wording appear only when every data tile
+ran from a certified source and no App draft is pending; before the page runs,
+the badge says *Trust not checked yet* — a saved dashboard's own fields are
+never enough to claim certified. The tile and story vocabulary is the same:
+Certified, Governed, Needs review, Blocked.
+
+An App's **lifecycle** (draft, in review, certified) is a separate axis. The
+App library card shows lifecycle only, worded *App draft* / *App in review* /
+*App certified*, so it cannot be read as data trust.
+
 ## Tier 3 — refuse
 
 When the question is unanswerable from any data the project has, the agent
@@ -110,14 +181,18 @@ workflow that turns ad-hoc AI proposals into certified contracts.
    `mcp call list_proposals --asked-at-least-times 3`.
 3. **Refine** — A human edits the SQL, names the contract, sets ownership.
    Standard git workflow — open a PR, request review.
-4. **Certify** — `zlens certify --from-draft <path>` does the promotion:
+4. **Certify** — `zlens certify --from-draft <path>` does the promotion,
+   only after the promoted source passes the same certification rules Block
+   Studio's Certify runs (it asks a short-lived local runtime for its
+   read-only certification check; nothing is written if a rule fails):
    - Moves `domains/<domain>/blocks/_drafts/<slug>.dql` →
      `domains/<domain>/blocks/<slug>.dql` in domain-first projects, or
      `blocks/_drafts/<slug>.dql` → `blocks/<domain>/<slug>.dql` in legacy
      projects
    - Flips `status = "draft"` to `"certified"`
    - Sets `datalex_contract = "<id>@<version>"`
-   - Drops the `_proposed` provenance block
+   - Drops the `_proposed` provenance block and Tier-2 capture fields
+   - Writes the certification receipt into the block's companion YAML
    - Surfaces the patch the human still needs to apply to
      `datalex-manifest.json` (so the contract id resolves)
 5. **Forever** — Next time the same question is asked, Tier 1 hits. Same
@@ -162,6 +237,7 @@ and audit logs, that's the day they pay.
 | --------------------------------- | ------------- | ---------------------------------------------------------------------------------- |
 | `search_blocks`, `get_block`      | discovery     | Find Tier-1 candidates before deciding which tool to call                          |
 | `query_via_block`                 | Tier 1        | Always try first                                                                   |
+| `answer_question`                 | Tier 1 → 3    | ZLens runs the full cascade; a Tier-2 answer returns `reviewDraft`                  |
 | `query_via_metadata`              | Tier 2        | Only after Tier 1 returns no match                                                 |
 | `list_proposals`                  | review        | Surface the ranked draft queue for human triage                                    |
 | `suggest_block`                   | curated draft | Hand-shape a proposal that aggregates over many Tier-2 captures                    |

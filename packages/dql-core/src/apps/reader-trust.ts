@@ -119,3 +119,66 @@ export function readerTrustSummary(trusts: Array<ReaderTrust | null>): { certifi
   const text = total === 0 ? '' : certified === total ? `All ${total} ${total === 1 ? 'tile' : 'tiles'} certified` : `${certified} of ${total} tiles certified`;
   return { certified, total, text };
 }
+
+/**
+ * The one aggregate trust an App page shows (header badge, Trust Lens line,
+ * story and canvas summaries), derived from its current tiles' run evidence.
+ *
+ * - `certified` only when every data tile ran from a certified source and the
+ *   App has no pending drafts; nothing else may say "certified" or "verified".
+ * - `pending` while no run evidence exists yet: a saved document's own claims
+ *   (or a bare block reference) are never read as certified, because the
+ *   source behind them may have been edited or demoted since.
+ *
+ * This is data trust. An App's lifecycle (draft / review / published) is a
+ * separate axis and is labelled separately.
+ */
+export type AppTrustState = 'certified' | 'partial' | 'review' | 'pending' | 'empty';
+
+export interface AppTrustSummary {
+  state: AppTrustState;
+  certified: number;
+  total: number;
+  allCertified: boolean;
+  /** Short badge text: "All data certified", "0 of 1 tiles certified", "Trust not checked yet". */
+  label: string;
+  /** Sentence form for summaries; empty when no data tile ran. */
+  text: string;
+}
+
+export function appTrustSummary<Item extends ReaderTrustItem & { i: string }>(
+  items: ReadonlyArray<Item> | undefined,
+  runTiles: ReadonlyMap<string, ReaderTrustTile> | ReadonlyArray<ReaderTrustTile & { i?: string; id?: string; tileId?: string }> | undefined,
+  options: { pendingDrafts?: number } = {},
+): AppTrustSummary {
+  const tileFor = (id: string): ReaderTrustTile | undefined => {
+    if (!runTiles) return undefined;
+    if (runTiles instanceof Map) return runTiles.get(id);
+    return (runTiles as ReadonlyArray<ReaderTrustTile & { i?: string; id?: string; tileId?: string }>)
+      .find((tile) => (tile.i ?? tile.tileId ?? tile.id) === id);
+  };
+  const dataItems = (items ?? []).filter((item) => isDataTileForTrust(item, tileFor(item.i)));
+  const total = dataItems.length;
+  if (total === 0) {
+    return { state: 'empty', certified: 0, total: 0, allCertified: false, label: 'No data tiles', text: '' };
+  }
+  if (!runTiles) {
+    return { state: 'pending', certified: 0, total, allCertified: false, label: 'Trust not checked yet', text: '' };
+  }
+  // A tile with no run evidence counts as not certified, never as certified.
+  const trusts = dataItems.map((item) => readerTileTrust(item, tileFor(item.i)));
+  const certified = trusts.filter((entry) => entry?.state === 'certified').length;
+  const drafts = options.pendingDrafts ?? 0;
+  const allCertified = certified === total && drafts === 0;
+  const text = certified === total
+    ? `All ${total} ${total === 1 ? 'tile' : 'tiles'} certified`
+    : `${certified} of ${total} ${total === 1 ? 'tile' : 'tiles'} certified`;
+  return {
+    state: allCertified ? 'certified' : certified > 0 ? 'partial' : 'review',
+    certified,
+    total,
+    allCertified,
+    label: allCertified ? 'All data certified' : text,
+    text,
+  };
+}

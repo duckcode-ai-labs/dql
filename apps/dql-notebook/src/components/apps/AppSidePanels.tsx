@@ -100,6 +100,6 @@ export function PanelHead({ title, meta }: { title: string; meta?: string }) {
   );
 }
 
-export function StatusSeal({ children, tone = 'certified' }: { children: ReactNode; tone?: 'certified' | 'draft' | 'agentic' }) {
-  return <span className={`dql-app-seal ${tone}`}>{children}</span>;
+export function StatusSeal({ children, tone = 'certified', title }: { children: ReactNode; tone?: 'certified' | 'draft' | 'agentic'; title?: string }) {
+  return <span className={`dql-app-seal ${tone}`} title={title}>{children}</span>;
 }

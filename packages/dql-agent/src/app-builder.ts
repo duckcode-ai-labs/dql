@@ -837,7 +837,7 @@ export function planAppFromPrompt(input: PlanAppFromPromptInput): AppPlan {
       {
         id: "overview",
         title: inferDashboardTitle(prompt, domain, appName),
-        description: `Certified app surface for ${audience}. Draft gaps stay in reports until reviewed.`,
+        description: `App for ${audience}. Each tile shows whether its source is certified; draft gaps stay in reports until reviewed.`,
         filters,
         tiles: dashboardTiles,
       },

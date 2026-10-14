@@ -232,7 +232,19 @@ import {
   type DatasetDeclarationPatch,
 } from '@zlens/core/datasets/source-authoring.node';
 import { dump as dumpYaml, load as loadYaml } from 'js-yaml';
+import {
+  applyCompanionCertification,
+  blockSourceStatus,
+  buildCertificationReceipt,
+  demoteCertifiedSource,
+  passedCheckNames,
+  readCompanionCertification,
+  sourceSha256,
+  type CertificationReceipt,
+  type CertificationSurface,
+} from './certification-receipt.js';
 import { listBlockTemplates } from './block-templates.js';
+import { captureReviewRequiredDraft } from './review-draft-capture.js';
 import { scopeAppCopilotRequest } from './app-copilot-scope.js';
 import { rethrowIfCancelled } from './llm/cancellation.js';
 import { fetchLatestPublishedDqlVersion, resolveDqlRuntimeVersionStatus } from './version-status.js';
@@ -12758,6 +12770,25 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
   };
 
   /**
+   * The receipt an explicit Certify action leaves once `certifyBlockStudioSource`
+   * passed: who certified (the host's signed-in person, else the local owner),
+   * which surface, which rule set, and which exact source.
+   */
+  const explicitCertificationReceipt = (input: {
+    source: string;
+    via: CertificationSurface;
+    enterprise: boolean;
+    verdict: Awaited<ReturnType<typeof certifyBlockStudioSource>>;
+  }): CertificationReceipt => buildCertificationReceipt({
+    source: input.source,
+    certifiedBy: hostActor() ?? (hostHooks ? undefined : resolveLocalOwner(projectRoot, { persist: false })) ?? parseBlockSourceMetadata(input.source).owner,
+    via: input.via,
+    enterprise: input.enterprise,
+    checks: passedCheckNames(input.verdict.checklist),
+    warnings: input.verdict.certification.warnings.map((warning) => `${warning.rule}: ${warning.message}`),
+  });
+
+  /**
    * Execute one already-resolved complete-source grain probe and retain only
    * its target-bound local evidence. Both the explicit source-validation API
    * and a field-tile run use this exact producer: a missing local file is not
@@ -16547,6 +16578,13 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
       try {
         const body = await readJSON(req).catch(() => null);
         const parsed = parseAgentRunRequestBody(body);
+        // Ask answers that need review are captured as drafts. Evaluation
+        // harnesses opt out (`reviewDraftCapture: "off"`) so scoring a suite
+        // never writes project files, and a host-run project does not let any
+        // asker write shared source; authoring modes have their own commits.
+        const captureReviewDraft = agentRunRecord(body)?.reviewDraftCapture !== 'off'
+          && !hostedRequest()
+          && (parsed.request?.requestedMode === undefined || parsed.request.requestedMode === 'ask' || parsed.request.requestedMode === 'auto');
         if (!parsed.request) {
           res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
           res.end(serializeJSON({ error: parsed.error ?? 'Invalid agent run request.' }));
@@ -16848,7 +16886,12 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
               }
               const capable = attachAnalyticalRepairCapability(rawRun, resolvedTargetFingerprint);
               // HH-14: withheld figures are never stored for this person either.
-              const run = runForPerson(figuresRule, capable);
+              const personRun = runForPerson(figuresRule, capable);
+              // Graduated trust, Tier 2: a review-required answer leaves a
+              // durable, de-duplicated draft block for a person to review and
+              // certify. Same for every Ask surface (UI, CLI, MCP answer_question).
+              const reviewDraft = captureReviewDraft ? captureReviewRequiredDraft(projectRoot, personRun) : undefined;
+              const run = reviewDraft ? { ...personRun, reviewDraft } : personRun;
               // The engine persists before the host can validate the DQL wrapper;
               // replace that row with the server-owned capability atomically.
               await agentRunStore.save(run);
@@ -19856,18 +19899,22 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
           tags: ['app-datasets', 'from-table'],
           gitMetadata: readGitMetadata(projectRoot),
         });
-        // The author who saves it owns it: it is certified when it compiles
-        // and runs, as a saved block is; its row identity is checked against
-        // the complete table before any tile trusts it.
+        // This route is the explicit "Certify and use this data" action of the
+        // App table-to-Dataset dialog (a host gates it as `dataset.certify`):
+        // the block is written as a draft, the same certification rules as
+        // Block Studio's Certify run against it, and only a pass certifies it,
+        // with a receipt naming who certified. Its row identity is checked
+        // against the complete table before any tile trusts it.
         let status: 'certified' | 'draft' = 'draft';
         let blockers: string[] = [];
         try {
           const saved = readFileSync(join(projectRoot, created.path), 'utf-8');
           // With a host, the host decides whether every enterprise gate applies (as for Block Studio).
-          const verdict = await certifyBlockStudioSource(saved, created.path, { enterprise: hostIdentity ? hostHooks?.enterpriseCertification === true : false });
+          const enterprise = hostIdentity ? hostHooks?.enterpriseCertification === true : false;
+          const verdict = await certifyBlockStudioSource(saved, created.path, { enterprise });
           blockers = Array.from(new Set(verdict.checklist.blockers));
           if (verdict.certification.certified && blockers.length === 0) {
-            setBlockStudioStatus(projectRoot, created.path, 'certified');
+            setBlockStudioStatus(projectRoot, created.path, 'certified', explicitCertificationReceipt({ source: saved, via: 'app-dataset', enterprise, verdict }));
             status = 'certified';
           }
         } catch (error) {
@@ -24426,34 +24473,31 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
           invariants,
           gitMetadata: readGitMetadata(projectRoot),
         });
-        // Save first, then certify against the same local runtime used for the
-        // answer. Passing blocks become certified immediately; anything that
-        // cannot prove itself remains a clearly labelled draft at this path.
+        // Saving never certifies (the trust promise: a person certifies
+        // explicitly). The block is written as a draft; the certification
+        // rules run read-only so the answer can say whether the draft is ready
+        // for the explicit Certify action in Block Studio, and what blocks it.
         setBlockStudioStatus(projectRoot, created.path, "draft");
-        let source = readFileSync(join(projectRoot, created.path), "utf-8");
-        let status: "certified" | "draft" = "draft";
+        const source = readFileSync(join(projectRoot, created.path), "utf-8");
+        const status = "draft" as const;
         let blockers: string[] = reviewRequired
           ? [
               "Imported or staged datasets require review and reproducibility checks before certification.",
             ]
           : [];
         let certification:
-          | { certified: boolean; errors: unknown[]; warnings: unknown[] }
+          | { certified: false; readyToCertify: boolean; errors: unknown[]; warnings: unknown[] }
           | undefined;
         try {
           if (reviewRequired) throw new Error(blockers[0]);
           const verdict = await certifyBlockStudioSource(source, created.path, { enterprise: hostIdentity ? hostHooks?.enterpriseCertification === true : false });
           blockers = Array.from(new Set(verdict.checklist.blockers));
           certification = {
-            certified: verdict.certification.certified && blockers.length === 0,
+            certified: false,
+            readyToCertify: verdict.certification.certified && blockers.length === 0,
             errors: verdict.certification.errors,
             warnings: verdict.certification.warnings,
           };
-          if (certification.certified) {
-            setBlockStudioStatus(projectRoot, created.path, 'certified');
-            status = 'certified';
-            source = readFileSync(join(projectRoot, created.path), 'utf-8');
-          }
         } catch (error) {
           blockers = Array.from(
             new Set([
@@ -25144,9 +25188,10 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
           }
         }
 
+        const certificationEnterprise = hostIdentity ? hostHooks?.enterpriseCertification === true : body.enterprise === true;
         operationCoordinator.run(operation.id, async (signal, report) => {
           const result = await certifyBlockStudioSource(draftSource, draftPath, {
-            enterprise: hostIdentity ? hostHooks?.enterpriseCertification === true : body.enterprise === true,
+            enterprise: certificationEnterprise,
             reportProgress: (progress) => {
               if (signal.aborted) throw Object.assign(new Error('Certification cancelled.'), { code: 'OPERATION_CANCELLED' });
               report(progress);
@@ -25186,6 +25231,7 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
             description: certifiedMetadata.description,
             owner: certifiedMetadata.owner,
             tags: certifiedMetadata.tags,
+            certification: explicitCertificationReceipt({ source: certifiedSource, via: 'block-studio', enterprise: certificationEnterprise, verdict: result }),
           });
           if (canonicalPath && draftPath !== savedPath) {
             try { deleteBlockStudioArtifacts(projectRoot, draftPath); } catch { /* certified source is already durable */ }
@@ -25333,7 +25379,8 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
         // a successful run are the gate; grain/outputs/pattern/lineage/cadence are
         // AI-filled advisory warnings, not hard blockers. Enterprise-grade certification
         // (all of those required) is an opt-in for the cloud tier — request it explicitly.
-        const result = await certifyBlockStudioSource(source, blockPath, { enterprise: hostIdentity ? hostHooks?.enterpriseCertification === true : body.enterprise === true, timer });
+        const certificationEnterprise = hostIdentity ? hostHooks?.enterpriseCertification === true : body.enterprise === true;
+        const result = await certifyBlockStudioSource(source, blockPath, { enterprise: certificationEnterprise, timer });
         const blockers = Array.from(new Set(result.checklist.blockers));
         if (!result.certification.certified || blockers.length > 0) {
           if (blockPath && result.preview) writeBlockStudioRunSummary(projectRoot, blockPath, source, result.preview.result);
@@ -25343,6 +25390,7 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
           return;
         }
         const certifiedSource = setBlockStudioStatusInSource(source, 'certified');
+        const receipt = explicitCertificationReceipt({ source: certifiedSource, via: 'block-studio', enterprise: certificationEnterprise, verdict: result });
         const certifiedPayload: ReturnType<typeof openBlockStudioDocument> | null = blockPath
           ? await timer.time('write_certified_block', async () => {
           const normalizedBlockPath = normalize(blockPath).replace(/^\/+/, '');
@@ -25356,11 +25404,19 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
               description: parsed.description,
               owner: parsed.owner,
               tags: parsed.tags,
+              certification: receipt,
             });
             if (result.preview) writeBlockStudioRunSummary(projectRoot, savedPath, certifiedSource, result.preview.result);
             return openBlockStudioDocument(projectRoot, savedPath, semanticLayer);
           }
-          setBlockStudioStatus(projectRoot, normalizedBlockPath, 'certified');
+          // Certify exactly what was evaluated: flipping the status of a file
+          // whose content differs from the checked source would certify
+          // something no rule looked at.
+          const onDisk = existsSync(join(projectRoot, normalizedBlockPath)) ? readFileSync(join(projectRoot, normalizedBlockPath), 'utf-8') : '';
+          if (setBlockStudioStatusInSource(onDisk, 'draft').trim() !== setBlockStudioStatusInSource(source, 'draft').trim()) {
+            throw Object.assign(new Error('The saved block differs from the source that was checked. Save it, then certify again.'), { code: 'SOURCE_CHANGED' });
+          }
+          setBlockStudioStatus(projectRoot, normalizedBlockPath, 'certified', receipt);
           if (result.preview) writeBlockStudioRunSummary(projectRoot, normalizedBlockPath, certifiedSource, result.preview.result);
           return openBlockStudioDocument(projectRoot, normalizedBlockPath, semanticLayer);
         })
@@ -25410,8 +25466,9 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
         }));
       } catch (error) {
         stampTiming();
-        res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
-        res.end(serializeJSON({ error: error instanceof Error ? error.message : String(error) }));
+        const changed = (error as { code?: unknown } | null)?.code === 'SOURCE_CHANGED';
+        res.writeHead(changed ? 409 : 500, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(serializeJSON({ error: error instanceof Error ? error.message : String(error), ...(changed ? { code: 'SOURCE_CHANGED' } : {}) }));
       }
       return;
     }
@@ -25484,14 +25541,20 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
           error?: string;
         }> = [];
 
+        // Saving reviewed AI/imported candidates writes drafts only. The
+        // trust promise is that a person certifies explicitly: certification
+        // runs through the candidate's Certify action
+        // (`POST .../candidates/:id/certify`), which evaluates the rules and
+        // leaves a receipt. Save never promotes, even when every gate would pass.
         for (const candidateId of candidateIds) {
           try {
             let candidate = readBlockStudioImportCandidate(projectRoot, importId, candidateId);
             if (candidate.reviewStatus === 'saved' && candidate.savedPath && existsSync(join(projectRoot, candidate.savedPath))) {
+              const onDisk = readFileSync(join(projectRoot, candidate.savedPath), 'utf-8');
               results.push({
                 candidateId,
                 path: candidate.savedPath,
-                status: 'certified',
+                status: blockSourceStatus(onDisk) === 'certified' ? 'certified' : 'draft',
                 blockers: [],
                 candidate: candidate as DqlGenerationCandidate,
                 block: openBlockStudioDocument(projectRoot, candidate.savedPath, semanticLayer),
@@ -25510,54 +25573,23 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
 
             candidate = updateBlockStudioImportCandidate(projectRoot, importId, candidateId, { owner });
             const readiness = validateImportCandidateForSave(candidate);
-            const validationBlockers = readiness.errors;
-            if (validationBlockers.length === 0) {
-              const certifiedSource = setBlockStudioSourceStatus(readiness.candidate.dqlSource, 'certified');
-              const certification = await certifyBlockStudioSource(certifiedSource, readiness.candidate.savedPath, { enterprise: false });
-              const blockers = Array.from(new Set(certification.checklist.blockers));
-              if (certification.certification.certified && blockers.length === 0) {
-                const savedPath = saveBlockStudioArtifacts(projectRoot, {
-                  currentPath: readiness.candidate.savedPath,
-                  source: certifiedSource,
-                  name: readiness.candidate.name,
-                  domain: readiness.candidate.domain,
-                  description: readiness.candidate.description,
-                  owner,
-                  tags: readiness.candidate.tags,
-                  lineage: readiness.candidate.lineage.sourceTables,
-                  importMeta: { importId, candidateId, sourceKind: readiness.candidate.sourceKind, sourcePath: readiness.candidate.sourcePath },
-                });
-                const savedCandidate: DqlGenerationCandidate = {
-                  ...readiness.candidate,
-                  dqlSource: certifiedSource,
-                  reviewStatus: 'saved',
-                  savedPath,
-                  analysisStatus: 'ready',
-                  validation: validateBlockStudioSource(certifiedSource, semanticLayer),
-                  generationMode: readiness.candidate.generationMode ?? 'deterministic',
-                  generationProvider: readiness.candidate.generationProvider ?? 'local-deterministic',
-                  llmContext: readiness.candidate.llmContext ?? deterministicDqlGenerationContext(readiness.candidate, readiness.candidate.evidence ?? []),
-                  evidence: readiness.candidate.evidence ?? [],
-                  draftSave: { status: 'saved', path: savedPath, savedAt: new Date().toISOString() },
-                };
-                writeBlockStudioImportCandidate(projectRoot, importId, savedCandidate);
-                results.push({ candidateId, path: savedPath, status: 'certified', blockers: [], candidate: savedCandidate, block: openBlockStudioDocument(projectRoot, savedPath, semanticLayer) });
-                continue;
-              }
-              validationBlockers.push(...blockers);
-            }
-
             const draftCandidate = saveDqlGenerationDraft(importId, {
               ...readiness.candidate,
               dqlSource: setBlockStudioSourceStatus(readiness.candidate.dqlSource, 'draft'),
-              analysisStatus: 'needs_attention',
+              analysisStatus: readiness.errors.length > 0 ? 'needs_attention' : 'ready',
             });
             writeBlockStudioImportCandidate(projectRoot, importId, draftCandidate);
+            if (draftCandidate.draftSave?.status === 'error') {
+              results.push({ candidateId, status: 'error', blockers: [], candidate: draftCandidate, error: draftCandidate.draftSave.error ?? 'The draft could not be saved.' });
+              continue;
+            }
             results.push({
               candidateId,
               path: draftCandidate.savedPath,
               status: 'draft',
-              blockers: Array.from(new Set(validationBlockers.length > 0 ? validationBlockers : ['Certification gates did not pass.'])),
+              // What still stands between this draft and certification; empty
+              // means it is ready for the explicit Certify action.
+              blockers: Array.from(new Set(readiness.errors)),
               candidate: draftCandidate,
               block: draftCandidate.savedPath ? openBlockStudioDocument(projectRoot, draftCandidate.savedPath, semanticLayer) : undefined,
             });
@@ -25678,6 +25710,8 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
           }
           const certifiedSource = setBlockStudioSourceStatus(readiness.candidate.dqlSource, 'certified');
           // OSS certify = non-enterprise (owner-gated); enterprise depth is the cloud tier.
+          // This is the explicit Certify action for an imported candidate; Save
+          // (save-selected) only ever writes the draft.
           const certification = await certifyBlockStudioSource(certifiedSource, readiness.candidate.savedPath, { enterprise: false });
           const blockers = Array.from(new Set(certification.checklist.blockers));
           if (!certification.certification.certified || blockers.length > 0) {
@@ -25702,6 +25736,7 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
               sourceKind: readiness.candidate.sourceKind,
               sourcePath: readiness.candidate.sourcePath,
             },
+            certification: explicitCertificationReceipt({ source: certifiedSource, via: 'sql-import', enterprise: false, verdict: certification }),
           });
           const next: DqlGenerationCandidate = {
             ...readiness.candidate,
@@ -25830,8 +25865,11 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
             continue;
           }
           try {
+            // Imported SQL is saved as a draft block; certification is the
+            // explicit Certify action in Block Studio.
+            const draftSource = setBlockStudioSourceStatus(readiness.candidate.dqlSource, 'draft');
             const savedPath = saveBlockStudioArtifacts(projectRoot, {
-              source: readiness.candidate.dqlSource,
+              source: draftSource,
               name: readiness.candidate.name,
               domain: readiness.candidate.domain,
               description: readiness.candidate.description,
@@ -25845,7 +25883,7 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
                 sourcePath: readiness.candidate.sourcePath,
               },
             });
-            nextCandidates[i] = { ...readiness.candidate, reviewStatus: 'saved', savedPath };
+            nextCandidates[i] = { ...readiness.candidate, dqlSource: draftSource, reviewStatus: 'saved', savedPath };
             writeBlockStudioImportCandidate(projectRoot, importId, nextCandidates[i]);
             saved.push({ candidateId: candidate.id, path: savedPath });
           } catch (error) {
@@ -25981,7 +26019,9 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
             }));
             return;
           }
-          const reusableSource = markBlockStudioSourceReusable(readiness.candidate.dqlSource);
+          // Imported SQL is saved as a draft block; certification is the
+          // explicit Certify action in Block Studio.
+          const reusableSource = markBlockStudioSourceReusable(setBlockStudioSourceStatus(readiness.candidate.dqlSource, 'draft'));
           const savedPath = saveBlockStudioArtifacts(projectRoot, {
             source: reusableSource,
             name: readiness.candidate.name,
@@ -38770,6 +38810,9 @@ export function openBlockStudioDocument(
   const companion = companionPath ? readBlockCompanionFile(projectRoot, companionPath) : null;
   const parsedMetadata = parseBlockSourceMetadata(source);
   const fileName = normalizedPath.split('/').pop()?.replace(/\.dql$/, '') ?? 'block';
+  const certificationReceipt = blockSourceStatus(source) === 'certified' && companionPath && existsSync(join(projectRoot, companionPath))
+    ? readCompanionCertification(readFileSync(join(projectRoot, companionPath), 'utf-8'))
+    : null;
   const metadata = {
     name: parsedMetadata.name || companion?.name || fileName,
     path: normalizedPath,
@@ -38779,6 +38822,9 @@ export function openBlockStudioDocument(
     owner: parsedMetadata.owner || companion?.owner || '',
     tags: parsedMetadata.tags.length > 0 ? parsedMetadata.tags : companion?.tags ?? [],
     reviewStatus: parsedMetadata.status || companion?.reviewStatus || 'draft',
+    // Who certified this exact source, from the receipt the explicit Certify
+    // action wrote. Absent for drafts and for blocks certified before receipts.
+    ...(certificationReceipt ? { certification: certificationReceipt } : {}),
     sourceFingerprint: createHash('sha256').update(source).digest('hex'),
     ...blockStudioRetirement(projectRoot, normalizedPath, parsedMetadata),
   };
@@ -40610,6 +40656,12 @@ export function saveBlockStudioArtifacts(
       sourceKind?: string;
       sourcePath?: string;
     };
+    /**
+     * Receipt of the explicit Certify action that produced a certified
+     * `source`. Without it a certified source is written as a draft, unless it
+     * is the exact certified source already on disk (a no-op re-save).
+     */
+    certification?: CertificationReceipt;
   },
 ): string {
   const slug = options.name.toLowerCase().replace(/[^a-z0-9_]+/g, '-').replace(/^[-_]+|[-_]+$/g, '') || 'block';
@@ -40627,8 +40679,31 @@ export function saveBlockStudioArtifacts(
     throw new Error('BLOCK_EXISTS');
   }
 
+  // Saving never certifies. A certified source reaches disk only with the
+  // receipt of an explicit Certify action, or when it is byte-for-byte the
+  // certified source already there.
+  const previousAbsolute = previousPath ? join(projectRoot, previousPath) : null;
+  // "Unchanged" ignores only the metadata Block Studio adds on save (pattern,
+  // the reusable tag), as the Block Studio save route does.
+  const comparable = (text: string) => ensureBlockStudioPattern(markBlockStudioSourceReusable(text)).trim();
+  const unchangedCertified = blockSourceStatus(options.source) === 'certified'
+    && previousAbsolute !== null
+    && existsSync(previousAbsolute)
+    && blockSourceStatus(readFileSync(previousAbsolute, 'utf-8')) === 'certified'
+    && comparable(readFileSync(previousAbsolute, 'utf-8')) === comparable(options.source);
+  const source = options.certification || unchangedCertified ? options.source : demoteCertifiedSource(options.source);
+  const previousCompanion = unchangedCertified && !options.certification && previousPath
+    ? blockCompanionRelativePath(projectRoot, previousPath)
+    : null;
+  const carriedReceipt = previousCompanion && existsSync(join(projectRoot, previousCompanion))
+    ? readCompanionCertification(readFileSync(join(projectRoot, previousCompanion), 'utf-8'))
+    : null;
+  const certification = options.certification && blockSourceStatus(source) === 'certified'
+    ? { ...options.certification, sourceSha256: sourceSha256(source) }
+    : carriedReceipt ?? undefined;
+
   mkdirSync(dirname(targetPath), { recursive: true });
-  writeFileSync(targetPath, options.source.trimEnd() + '\n', 'utf-8');
+  writeFileSync(targetPath, source.trimEnd() + '\n', 'utf-8');
   writeBlockCompanionFile(projectRoot, {
     slug,
     name: options.name,
@@ -40638,9 +40713,10 @@ export function saveBlockStudioArtifacts(
     owner: options.owner,
     tags: options.tags,
     provider: 'dql',
-    content: options.source,
+    content: source,
     lineage: options.lineage,
     importMeta: options.importMeta,
+    ...(certification ? { certification } : {}),
   });
 
   if (previousPath && previousPath !== targetRelativePath) {
@@ -40825,8 +40901,10 @@ export function saveBlockStudioDraftArtifacts(
     }
   }
 
+  // A draft is never certified, whatever status the incoming source claims.
+  const draftSource = demoteCertifiedSource(options.source);
   mkdirSync(dirname(targetPath), { recursive: true });
-  writeFileSync(targetPath, options.source.trimEnd() + '\n', 'utf-8');
+  writeFileSync(targetPath, draftSource.trimEnd() + '\n', 'utf-8');
   const companionSlug = targetRelativePath.split('/').pop()?.replace(/\.dql$/, '') || slug;
   writeBlockCompanionFile(projectRoot, {
     slug: companionSlug,
@@ -40836,7 +40914,7 @@ export function saveBlockStudioDraftArtifacts(
     owner: options.owner,
     tags: options.tags,
     provider: 'dql',
-    content: options.source,
+    content: draftSource,
     lineage: options.lineage,
     importMeta: options.importMeta,
   });
@@ -41523,7 +41601,23 @@ function setBlockStudioStatusInSource(source: string, newStatus: string): string
   return source.replace(/block\s+"[^"]*"\s*\{/, (match) => `${match}\n  status = "${newStatus}"`);
 }
 
-export function setBlockStudioStatus(projectRoot: string, blockPath: string, newStatus: string): void {
+/**
+ * Set a saved block's lifecycle status in its `.dql` and companion YAML.
+ *
+ * Certifying is never a plain status flip: `certified` requires the receipt of
+ * an explicit Certify action that ran the certification rules, and that
+ * receipt is written beside `reviewStatus: certified`. Any other status drops
+ * the receipt, so the YAML never claims a certification the source lost.
+ */
+export function setBlockStudioStatus(
+  projectRoot: string,
+  blockPath: string,
+  newStatus: string,
+  certification?: CertificationReceipt,
+): void {
+  if (newStatus === 'certified' && !certification) {
+    throw new Error('Certifying a block requires a certification receipt from an explicit Certify action.');
+  }
   const normalizedPath = normalize(blockPath).replace(/^\/+/, '');
   if (!isBlockStudioBlockPath(normalizedPath)) throw new Error('Invalid block path');
   const absPath = join(projectRoot, normalizedPath);
@@ -41535,13 +41629,11 @@ export function setBlockStudioStatus(projectRoot: string, blockPath: string, new
   if (!companionPath) return;
   const absCompanionPath = join(projectRoot, companionPath);
   if (!existsSync(absCompanionPath)) return;
-  let companion = readFileSync(absCompanionPath, 'utf-8');
-  if (/^reviewStatus:\s*.+$/m.test(companion)) {
-    companion = companion.replace(/^reviewStatus:\s*.+$/m, `reviewStatus: ${newStatus}`);
-  } else {
-    companion = `${companion.trimEnd()}\nreviewStatus: ${newStatus}\n`;
-  }
-  writeFileSync(absCompanionPath, companion, 'utf-8');
+  const status = blockSourceStatus(source);
+  const receipt = status === 'certified' && certification
+    ? { ...certification, sourceSha256: sourceSha256(source) }
+    : null;
+  writeFileSync(absCompanionPath, applyCompanionCertification(readFileSync(absCompanionPath, 'utf-8'), status, receipt), 'utf-8');
 }
 
 interface DqlGenerationPatch {
@@ -43802,7 +43894,7 @@ export function createBlockArtifacts(
     ? listBlockTemplates().find((template) => template.id === options.template)?.content
     : undefined;
   const relativePath = target.relativePath;
-  const fileContent = canonicalizeSafe(options.blockType === 'semantic' && !options.content?.trim() && !templateContent
+  const canonicalContent = canonicalizeSafe(options.blockType === 'semantic' && !options.content?.trim() && !templateContent
     ? buildBlankSemanticBlockContent({
         name: options.name,
         domain: safeDomain || 'uncategorized',
@@ -43821,6 +43913,9 @@ export function createBlockArtifacts(
         invariants: options.invariants,
         content: options.content?.trim() || templateContent,
       }));
+  // Creating a block never certifies it: a supplied `status = "certified"`
+  // is written as a draft. Certification is a separate, explicit action.
+  const fileContent = demoteCertifiedSource(canonicalContent);
 
   writeFileSync(blockPath, fileContent, 'utf-8');
   const companionPath = writeBlockCompanionFile(projectRoot, {
@@ -44043,6 +44138,12 @@ function writeBlockCompanionFile(
       sourceKind?: string;
       sourcePath?: string;
     };
+    /**
+     * The receipt of the explicit Certify action that produced this source.
+     * Only certify paths pass it; a certified source re-saved unchanged keeps
+     * the receipt already on disk.
+     */
+    certification?: CertificationReceipt | null;
   },
 ): string {
   const extractedRefs = extractSemanticReferenceNames(options.content);
@@ -44053,6 +44154,13 @@ function writeBlockCompanionFile(
     : join(projectRoot, 'semantic-layer', 'blocks', options.domain, options.folderPath ?? '');
   mkdirSync(companionDir, { recursive: true });
   const companionPath = join(companionDir, `${options.slug}.yaml`);
+  // The companion's reviewStatus always mirrors the `.dql` status, so the
+  // source and its YAML can never disagree about whether a block is certified.
+  const status = blockSourceStatus(options.content);
+  const previousReceipt = status === 'certified' && options.certification === undefined && existsSync(companionPath)
+    ? readCompanionCertification(readFileSync(companionPath, 'utf-8'))
+    : null;
+  const receipt = status === 'certified' ? (options.certification ?? previousReceipt) : null;
   const lines = [
     `name: ${options.slug}`,
     `block: ${options.slug}`,
@@ -44106,8 +44214,7 @@ function writeBlockCompanionFile(
     if (options.importMeta.sourceKind) lines.push(`  sourceKind: ${yamlScalar(options.importMeta.sourceKind)}`);
     if (options.importMeta.sourcePath) lines.push(`  sourcePath: ${yamlScalar(options.importMeta.sourcePath)}`);
   }
-  lines.push('reviewStatus: draft');
-  writeFileSync(companionPath, lines.join('\n') + '\n', 'utf-8');
+  writeFileSync(companionPath, applyCompanionCertification(lines.join('\n'), status, receipt), 'utf-8');
   return relative(projectRoot, companionPath).replaceAll('\\', '/');
 }
 

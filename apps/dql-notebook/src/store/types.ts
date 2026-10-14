@@ -1138,6 +1138,20 @@ export interface BlockStudioMetadata {
   owner: string;
   tags: string[];
   reviewStatus?: string;
+  /**
+   * The receipt the explicit Certify action wrote into the companion YAML:
+   * who certified this exact source, when, from which surface, under which
+   * rules. Absent for drafts and for blocks certified before receipts existed.
+   */
+  certification?: {
+    certifiedBy: string;
+    certifiedAt: string;
+    via: string;
+    rules: 'oss' | 'enterprise';
+    sourceSha256: string;
+    checks?: string[];
+    warnings?: string[];
+  };
   /** Fingerprint of the source that was opened; used for save/certify conflict checks. */
   sourceFingerprint?: string;
   sourceKind?: string;

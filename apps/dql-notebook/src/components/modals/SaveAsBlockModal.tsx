@@ -480,7 +480,7 @@ export function SaveAsBlockModal({
           <span style={{ fontSize: 11.5, color: t.textMuted, marginRight: 'auto', alignSelf: 'center' }}>
             {cell.datasetRefs?.length
               ? 'This analysis uses imported or staged data, so it will be saved as a review-required draft. Certification requires project-controlled, contracted, tested, reproducible sources.'
-              : 'ZLens will certify this block now when its local checks pass; otherwise it is saved as a draft.'}
+              : 'Saved as a draft block that needs review. Saving never certifies: open it in Block Studio and click Certify when it is ready.'}
           </span>
           <button
             onClick={onClose}
@@ -513,7 +513,7 @@ export function SaveAsBlockModal({
               opacity: saving || hasErrors ? 0.5 : 1,
             }}
           >
-            {saving ? 'Saving & checking…' : 'Save block'}
+            {saving ? 'Saving draft…' : 'Save draft block'}
           </button>
         </div>
       </div>

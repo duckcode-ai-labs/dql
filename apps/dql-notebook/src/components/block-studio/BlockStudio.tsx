@@ -21,6 +21,7 @@ import type {
   BlockStudioImportSessionSummary,
   BlockStudioImportCandidate,
   BlockStudioOpenPayload,
+  BlockStudioMetadata,
   BlockStudioDbtStatus,
   BlockParameterDefinition,
   SemanticDimension,
@@ -3033,6 +3034,21 @@ const PARAMETER_POLICY_OPTIONS = ['dynamic', 'static', 'business', 'derived', 'o
 // Read-only overview for an opened block: icon tile + mono name + status pill,
 // meta line, "Open in builder", stat strip, Outputs pills, Parameters table,
 // DQL source with "Open in DQL Source", Tests checklist, collapsed Lineage.
+const CERTIFICATION_SURFACE_LABELS: Record<string, string> = {
+  'block-studio': 'Block Studio',
+  'sql-import': 'SQL import',
+  'app-dataset': 'App Dataset',
+  cli: 'zlens certify',
+};
+
+/** One line saying who certified this block, when, and how — or that no receipt exists. */
+export function certificationReceiptLine(receipt: BlockStudioMetadata['certification'] | undefined): string {
+  if (!receipt) return 'Certified · no certification receipt on file (certified before receipts were recorded, or edited by hand).';
+  const when = Number.isNaN(Date.parse(receipt.certifiedAt)) ? receipt.certifiedAt : new Date(receipt.certifiedAt).toLocaleString();
+  const via = CERTIFICATION_SURFACE_LABELS[receipt.via] ?? receipt.via;
+  return `Certified by ${receipt.certifiedBy} · ${when} · via ${via} · ${receipt.rules === 'enterprise' ? 'enterprise' : 'OSS'} rules`;
+}
+
 export function BlockDetailView({
   metadata,
   source,
@@ -3110,6 +3126,11 @@ export function BlockDetailView({
             <div style={{ fontSize: 12, color: t.textMuted, marginTop: 4 }}>
               {[metadata?.domain, metadata?.folderPath ? `folder: ${metadata.folderPath}` : null, metadata?.owner, ...(metadata?.tags?.length ? [metadata.tags.join(', ')] : [])].filter(Boolean).join(' · ') || 'Unsaved draft'}
             </div>
+            {certified ? (
+              <div data-testid="block-certification-receipt" style={{ fontSize: 11.5, color: t.textMuted, marginTop: 4 }}>
+                {certificationReceiptLine(metadata?.certification)}
+              </div>
+            ) : null}
           </div>
           <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
             {metadata?.reviewStatus === 'deprecated' && onOpenReplacement ? (
@@ -3949,15 +3970,27 @@ function isDraftBlockPath(path?: string | null): boolean {
   return path.startsWith('blocks/_drafts/') || /^domains\/[^/]+\/blocks\/_drafts\//.test(path);
 }
 
+/**
+ * Where an import candidate stands on the trust path, read from the DQL it
+ * saved: only a source whose status is certified (written by the explicit
+ * Certify action) counts as certified. Saving writes a draft.
+ */
+export function importCandidateTrust(candidate: Pick<BlockStudioImportCandidate, 'reviewStatus' | 'dqlSource' | 'savedPath' | 'draftSave'>): 'certified' | 'draft_saved' | 'unsaved' {
+  if (candidate.reviewStatus === 'saved' && /^\s*status\s*=\s*"certified"/m.test(candidate.dqlSource ?? '')) return 'certified';
+  if (candidate.reviewStatus === 'saved' || candidate.draftSave?.status === 'saved' || isDraftBlockPath(candidate.savedPath)) return 'draft_saved';
+  return 'unsaved';
+}
+
 function smartItemFromCandidate(candidate: BlockStudioImportCandidate): SmartImportItem {
   if (candidate.reviewStatus === 'saved') {
+    const certified = importCandidateTrust(candidate) === 'certified';
     return {
       id: candidate.id,
       name: candidate.name,
       sourcePath: candidate.sourcePath,
       status: 'saved',
       rows: rowCountForImportCandidate(candidate),
-      message: 'Block saved.',
+      message: certified ? 'Certified.' : 'Draft saved · needs review. Certify it when it is ready.',
     };
   }
   if (candidate.validation?.valid === false) {
@@ -4172,7 +4205,9 @@ function BlockStudioImportWorkspace({
     else counts.processing += 1;
     return counts;
   }, { saved: 0, ready: 0, attention: 0, processing: 0 });
-  const activeStep = !session ? 1 : smartCounts.saved > 0 ? 3 : 2;
+  const certifiedCount = session?.candidates.filter((candidate) => importCandidateTrust(candidate) === 'certified').length ?? 0;
+  const draftSavedCount = session?.candidates.filter((candidate) => importCandidateTrust(candidate) === 'draft_saved').length ?? 0;
+  const activeStep = !session ? 1 : smartCounts.saved > 0 || draftSavedCount > 0 ? 3 : 2;
   const readyCount = session?.candidates.filter((candidate) => candidate.validation?.valid !== false).length ?? 0;
 
   const sourceReady = Boolean(mode === 'paste'
@@ -4401,7 +4436,7 @@ function BlockStudioImportWorkspace({
           if (result.candidate) updateCandidate(result.candidate);
           if (result.candidate && result.block) onSavedCandidate(result.candidate, result.block);
           if (result.status === 'draft' && result.blockers.length > 0) {
-            setError(`Saved as draft: ${result.blockers.join(' ')}`);
+            setError(`Saved as a draft. Before it can be certified: ${result.blockers.join(' ')}`);
           }
         } else {
           const result = await api.saveBlockStudioImportCandidate(session.id, candidate.id);
@@ -4414,6 +4449,29 @@ function BlockStudioImportWorkspace({
       setError(message.includes('409') || message.includes('already exists')
         ? 'A block with this name already exists. Rename this candidate, then save again.'
         : message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // The explicit Certify action: runs the certification rules against the
+  // saved draft and, only when they pass, certifies it and records who did.
+  const certifyCandidate = async (candidate: BlockStudioImportCandidate) => {
+    if (!session) return;
+    if (!(candidate.owner.trim() || owner.trim())) {
+      setError('Owner is required before a block can be certified.');
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await api.certifyDqlGenerationCandidate(session.id, candidate.id);
+      updateCandidate(response.candidate);
+      onSavedCandidate(response.candidate, response.block);
+      await onRefreshSessions();
+    } catch (err: any) {
+      const message = err?.message ?? 'Certification failed.';
+      setError(`Not certified; the draft is unchanged. ${message}`);
     } finally {
       setLoading(false);
     }
@@ -4453,16 +4511,15 @@ function BlockStudioImportWorkspace({
             ...smartItemFromCandidate(candidate),
             status: 'saved' as const,
             savedPath,
-            message: 'Block saved.',
+            message: importCandidateTrust(candidate) === 'certified' ? 'Certified.' : 'Draft saved · needs review. Certify it when it is ready.',
           }];
         }
         return [candidate.id, smartItemFromCandidate(candidate)];
       })));
       await onRefreshSessions();
       const failedCount = result.results.filter((item) => item.status === 'error').length;
-      const draftCount = result.results.filter((item) => item.status === 'draft').length;
-      if (failedCount > 0 || draftCount > 0) {
-        setError(`${result.results.length - failedCount} saved. ${draftCount} stayed draft; ${failedCount} need attention.`);
+      if (failedCount > 0) {
+        setError(`${result.results.length - failedCount} saved as drafts; ${failedCount} need attention. Saving never certifies: review each draft, then click Certify.`);
       }
     } catch (err: any) {
       setError(err?.message ?? 'Save all failed.');
@@ -4503,7 +4560,7 @@ function BlockStudioImportWorkspace({
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(130px, 1fr))', gap: 6, width: 'min(560px, 44vw)', minWidth: 390 }}>
           <ImportStep index={1} active={activeStep === 1} complete={Boolean(session)} title="Source" detail={mode === 'paste' ? 'Paste SQL' : mode === 'upload' ? 'Upload files' : 'Local path'} t={t} />
           <ImportStep index={2} active={activeStep === 2} complete={smartCounts.ready > 0 || smartCounts.saved > 0} title="Draft" detail={session ? `${session.candidates.length} blocks · ${readyCount} ready` : 'Generate DQL'} t={t} />
-          <ImportStep index={3} active={activeStep === 3} complete={smartCounts.saved > 0} title="Review" detail={smartCounts.saved > 0 ? `${smartCounts.saved} certified` : 'Preview and certify'} t={t} />
+          <ImportStep index={3} active={activeStep === 3} complete={certifiedCount > 0} title="Review" detail={certifiedCount > 0 ? `${certifiedCount} certified` : draftSavedCount > 0 ? `${draftSavedCount} draft${draftSavedCount === 1 ? '' : 's'} saved · certify next` : 'Preview and certify'} t={t} />
         </div>
         <div style={{ flex: 1 }} />
         <button
@@ -4660,7 +4717,7 @@ function BlockStudioImportWorkspace({
                         {candidate.lineage.statementIndex}/{candidate.lineage.totalStatements} · {candidate.sourcePath}
                       </span>
                       <span style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
-                        <ImportPill label={candidate.draftSave?.status === 'saved' || isDraftBlockPath(candidate.savedPath) ? 'draft saved' : candidate.reviewStatus} tone={candidate.reviewStatus === 'rejected' ? 'warn' : 'info'} t={t} />
+                        <ImportPill label={importCandidateTrust(candidate) === 'certified' ? 'certified' : importCandidateTrust(candidate) === 'draft_saved' ? 'draft saved' : candidate.reviewStatus} tone={candidate.reviewStatus === 'rejected' ? 'warn' : importCandidateTrust(candidate) === 'certified' ? 'ok' : 'info'} t={t} />
                         <ImportPill label={candidate.validation?.valid === false ? 'fix' : 'valid'} tone={candidate.validation?.valid === false ? 'warn' : 'ok'} t={t} />
                         {typeof rowCount === 'number' && <ImportPill label={`${rowCount} rows`} tone="ok" t={t} />}
                         {warnings.length > 0 && <ImportPill label={`${warnings.length} warning`} tone="warn" t={t} />}
@@ -4703,7 +4760,7 @@ function BlockStudioImportWorkspace({
                   {sessions.slice(0, 6).map((item) => (
                     <div key={item.id} style={{ border: `1px solid ${session?.id === item.id ? t.accent : t.btnBorder}`, borderRadius: 8, background: session?.id === item.id ? `${t.accent}10` : t.btnBg, display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', overflow: 'hidden' }}>
                       <button onClick={() => void resumeSession(item.id)} style={{ background: 'transparent', border: 'none', color: t.textSecondary, cursor: 'pointer', fontFamily: t.font, padding: '8px 9px', textAlign: 'left', display: 'grid', gap: 3, minWidth: 0 }}>
-                        <span style={{ fontSize: 11 }}>{item.candidateCount} drafts · {item.savedCount} certified</span>
+                        <span style={{ fontSize: 11 }}>{item.candidateCount} candidates · {item.savedCount} saved</span>
                         <span style={{ fontSize: 10, color: t.textMuted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.inputPath}</span>
                       </button>
                       <button onClick={() => void deleteSession(item.id)} title="Delete local import session" style={{ background: 'transparent', border: 'none', borderLeft: `1px solid ${t.headerBorder}`, color: t.textMuted, cursor: 'pointer', fontFamily: t.font, padding: '0 8px', fontSize: 11, fontWeight: 700 }}>
@@ -4733,6 +4790,7 @@ function BlockStudioImportWorkspace({
               onCandidateUpdated={updateCandidate}
               onRun={runCandidate}
               onSave={saveCandidate}
+              onCertify={certifyCandidate}
               onReject={rejectCandidate}
               onReviewInEditor={onSelectCandidate}
               runError={candidateErrors[selectedCandidate.id] ?? null}
@@ -4850,14 +4908,14 @@ function SmartImportOverview({
         ? smartImportPhaseLabel(phase)
         : counts.ready > 0
           ? `${counts.ready} draft${counts.ready === 1 ? '' : 's'} ready for review`
-          : `${counts.saved} DQL block${counts.saved === 1 ? '' : 's'} certified`;
+          : `${counts.saved} DQL block${counts.saved === 1 ? '' : 's'} saved`;
     const detail = counts.attention > 0
       ? 'Ready candidates remain in this session. Fix the exceptions in advanced details before saving.'
       : counts.processing > 0
         ? 'ZLens is previewing SQL and keeping generated drafts saved.'
         : counts.ready > 0
           ? 'Generated DQL drafts are saved under blocks/_drafts or domains/<domain>/blocks/_drafts. Open a candidate to review, preview, and certify.'
-          : 'Certified blocks are saved in the canonical blocks folder.';
+          : 'Saved drafts stay drafts until someone clicks Certify; certified blocks move to the canonical blocks folder.';
 
   return (
     <div style={{ display: 'grid', gap: 12 }}>
@@ -4945,6 +5003,7 @@ function ImportCandidateDetail({
   onCandidateUpdated,
   onRun,
   onSave,
+  onCertify,
   onReject,
   onReviewInEditor,
   runError,
@@ -4957,6 +5016,7 @@ function ImportCandidateDetail({
   onCandidateUpdated: (candidate: BlockStudioImportCandidate) => void;
   onRun: (candidate: BlockStudioImportCandidate) => Promise<void>;
   onSave: (candidate: BlockStudioImportCandidate) => Promise<void>;
+  onCertify: (candidate: BlockStudioImportCandidate) => Promise<void>;
   onReject: (candidate: BlockStudioImportCandidate) => Promise<void>;
   onReviewInEditor: (candidate: BlockStudioImportCandidate) => void;
   runError?: string | null;
@@ -5053,6 +5113,7 @@ function ImportCandidateDetail({
     const previewRowCount = candidate.preview?.result?.rowCount ?? candidate.preview?.result?.rows?.length;
     const draftPath = candidate.draftSave?.path ?? (isDraftBlockPath(candidate.savedPath) ? candidate.savedPath : undefined);
     const reuseRecommended = candidate.recommendedAction === 'reuse_existing' || candidate.draftSave?.status === 'skipped';
+    const trust = importCandidateTrust(candidate);
     const contextCount = candidate.lineage.sourceTables.length + (candidate.evidence?.length ?? 0) + candidate.lineage.parameters.length + warnings.length;
 
   return (
@@ -5067,7 +5128,18 @@ function ImportCandidateDetail({
           {contextOpen ? 'Hide context' : `Show context${contextCount > 0 ? ` (${contextCount})` : ''}`}
         </button>
         <button onClick={() => onReviewInEditor(candidate)} style={primaryImportButtonStyle(t)}>Edit full DQL</button>
-        <button onClick={() => void onSave(candidate)} disabled={loading || candidate.reviewStatus === 'saved' || reuseRecommended} style={primaryImportButtonStyle(t)}>{reuseRecommended ? 'Reuse existing' : candidate.reviewStatus === 'saved' ? 'Certified' : 'Save block'}</button>
+        {/* Save writes a draft; Certify is the separate, explicit trust action. */}
+        <button onClick={() => void onSave(candidate)} disabled={loading || trust === 'certified' || reuseRecommended} style={trust === 'draft_saved' ? secondaryImportButtonStyle(t) : primaryImportButtonStyle(t)}>{reuseRecommended ? 'Reuse existing' : trust === 'certified' ? 'Saved' : trust === 'draft_saved' ? 'Save draft again' : 'Save draft'}</button>
+        {isAiGeneratedCandidate(candidate) && !reuseRecommended && (
+          <button
+            onClick={() => void onCertify(candidate)}
+            disabled={loading || trust !== 'draft_saved'}
+            title={trust === 'certified' ? 'Certified' : trust === 'unsaved' ? 'Save the draft first, then certify it.' : 'Run the certification rules and certify this block as its reviewer.'}
+            style={trust === 'draft_saved' ? primaryImportButtonStyle(t) : secondaryImportButtonStyle(t)}
+          >
+            {trust === 'certified' ? 'Certified' : 'Certify'}
+          </button>
+        )}
       </div>
 
       {editError && <div role="alert" style={{ fontSize: 12, color: '#f85149', background: '#f8514914', borderRadius: 8, padding: 10 }}>{editError}</div>}
@@ -5078,7 +5150,7 @@ function ImportCandidateDetail({
       )}
 
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-        <ImportPill label={candidate.draftSave?.status === 'skipped' ? 'reuse recommended' : candidate.draftSave?.status === 'saved' || draftPath ? 'draft saved' : candidate.reviewStatus} tone={candidate.reviewStatus === 'rejected' ? 'warn' : candidate.draftSave?.status === 'skipped' ? 'ok' : 'info'} t={t} />
+        <ImportPill label={candidate.draftSave?.status === 'skipped' ? 'reuse recommended' : trust === 'certified' ? 'certified' : trust === 'draft_saved' ? 'draft saved · needs review' : candidate.reviewStatus} tone={candidate.reviewStatus === 'rejected' ? 'warn' : candidate.draftSave?.status === 'skipped' || trust === 'certified' ? 'ok' : 'info'} t={t} />
         <ImportPill label={`${Math.round(candidate.confidence * 100)}% confidence`} tone="info" t={t} />
         <ImportPill label={candidate.validation?.valid === false ? 'needs fixes' : 'valid'} tone={candidate.validation?.valid === false ? 'warn' : 'ok'} t={t} />
         {typeof previewRowCount === 'number' && <ImportPill label={`${previewRowCount} rows`} tone="ok" t={t} />}

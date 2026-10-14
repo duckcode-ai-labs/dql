@@ -4027,7 +4027,7 @@ describe('agent run runtime API', () => {
     expect(parsed.request?.executionTarget).toBeUndefined();
   });
 
-  it('saves an answer block with an owner and returns either a certified block or a labelled draft', async () => {
+  it('saves an answer block with an owner as a labelled draft: saving never certifies', async () => {
     const projectRoot = mkdtempSync(join(tmpdir(), 'dql-save-answer-block-'));
     tempDirs.push(projectRoot);
     writeFileSync(join(projectRoot, 'dql.config.json'), '{}\n');
@@ -4052,7 +4052,7 @@ describe('agent run runtime API', () => {
       });
       expect(response.status).toBe(201);
       const saved = await response.json() as { path: string; content: string; status: string; blockers: string[] };
-      expect(['certified', 'draft']).toContain(saved.status);
+      expect(saved.status).toBe('draft');
       expect(Array.isArray(saved.blockers)).toBe(true);
       expect(saved.content).toContain('block "Monthly revenue"');
       expect(saved.content).toContain('owner = "owner@example.com"');

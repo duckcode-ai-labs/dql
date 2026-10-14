@@ -3,7 +3,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { buildManifest, parse } from '@zlens/core';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { deriveGeneratedDraftSlug, deriveSemanticDraftName, upsertGeneratedDqlArtifactDraft, upsertGeneratedDraft } from './drafts.js';
+import { existsSync, readdirSync } from 'node:fs';
+import { deriveGeneratedDraftSlug, deriveSemanticDraftName, upsertGeneratedDqlArtifactDraft, upsertGeneratedDraft, upsertReviewRequiredAnswerDraft } from './drafts.js';
 
 describe('generated draft blocks', () => {
   let projectRoot: string;
@@ -219,5 +220,48 @@ describe('semantic draft naming (spec 14, part D)', () => {
     // No recognized entity → legacy tokenizer, but still valid + deduped.
     expect(name).toMatch(/^[a-z][a-z0-9_]*$/);
     expect(name.length).toBeGreaterThan(0);
+  });
+});
+
+describe('review-required answer drafts (graduated trust, Tier 2)', () => {
+  let projectRoot: string;
+  beforeEach(() => {
+    projectRoot = mkdtempSync(join(tmpdir(), 'dql-review-draft-'));
+    writeFileSync(join(projectRoot, 'dql.config.json'), JSON.stringify({ project: 'drafts' }), 'utf-8');
+  });
+  afterEach(() => rmSync(projectRoot, { recursive: true, force: true }));
+
+  const sql = 'SELECT team_id, SUM(wins) AS total_wins FROM team_season_facts WHERE season = 2017 GROUP BY team_id ORDER BY total_wins DESC LIMIT 1';
+  const artifact = { kind: 'sql_block', name: 'which_team_had_the_most_wins_in_season_2017', source: `block "which_team_had_the_most_wins_in_season_2017" {\n  type = "custom"\n  status = "certified"\n  description = "Which team had the most wins in season 2017?"\n  query = """\n    ${sql}\n  """\n}` };
+
+  it('leaves one durable, parseable draft that is never certified', () => {
+    const saved = upsertReviewRequiredAnswerDraft(projectRoot, { question: 'Which team had the most wins in season 2017?', sql, dqlArtifact: artifact, owner: 'analyst@example.com', runId: 'run-1' });
+    expect(saved).toMatchObject({ created: true, askedTimes: 1 });
+    expect(saved.path).toMatch(/^blocks\/_drafts\/.+\.dql$/);
+    const source = readFileSync(join(projectRoot, saved.path), 'utf-8');
+    expect(source).toContain('status = "draft"');
+    expect(source).not.toContain('status = "certified"');
+    expect(source).toContain(`answer_fingerprint = "${saved.fingerprint}"`);
+    expect(source).toContain('source_run_id = "run-1"');
+    expect(() => parse(source, saved.path)).not.toThrow();
+  });
+
+  it('de-duplicates repeats by answer fingerprint and by question, bumping asked_times', () => {
+    const first = upsertReviewRequiredAnswerDraft(projectRoot, { question: 'Which team had the most wins in season 2017?', sql, dqlArtifact: artifact });
+    // The same answer SQL asked in other words, with different spacing and case.
+    const reworded = upsertReviewRequiredAnswerDraft(projectRoot, { question: 'Top team by wins, 2017 season', sql: sql.toLowerCase().replace(/ /g, '  ') });
+    expect(reworded).toMatchObject({ created: false, path: first.path, askedTimes: 2, fingerprint: first.fingerprint });
+    // The same question with different SQL keeps one draft per question.
+    const sameQuestion = upsertReviewRequiredAnswerDraft(projectRoot, { question: 'Which team had the most wins in season 2017?', sql: 'SELECT 1' });
+    expect(sameQuestion).toMatchObject({ created: false, path: first.path, askedTimes: 3 });
+    expect(readFileSync(join(projectRoot, first.path), 'utf-8')).toContain('asked_times = 3');
+    expect(readdirSync(join(projectRoot, 'blocks', '_drafts')).filter((name) => name.endsWith('.dql'))).toHaveLength(1);
+    expect(existsSync(join(projectRoot, first.path))).toBe(true);
+  });
+
+  it('MCP query_via_metadata drafts share the fingerprint, so an Ask repeat reuses them', () => {
+    const mcp = upsertGeneratedDraft(projectRoot, { slug: 'top_team_wins', question: 'Top team by wins in 2017', proposedSql: sql, proposedContractId: 'nba.Team.top_team_wins' });
+    const ask = upsertReviewRequiredAnswerDraft(projectRoot, { question: 'Which team had the most wins in season 2017?', sql });
+    expect(ask).toMatchObject({ created: false, path: mcp.path, askedTimes: 2 });
   });
 });

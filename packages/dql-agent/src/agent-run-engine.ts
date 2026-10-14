@@ -750,6 +750,26 @@ export interface AgentRun {
   traceReference?: AgentRunTraceReferenceV1;
   /** Who asked, when a host signs people in (RFC 0010); local runs omit it. */
   ownerId?: string;
+  /**
+   * The durable review draft a review-required (Tier-2) answer left behind,
+   * so a person can review and certify it. The executed `dqlArtifact` stays
+   * transient (it is the execution receipt); this is a separate saved copy.
+   */
+  reviewDraft?: AgentRunReviewDraftV1;
+}
+
+export interface AgentRunReviewDraftV1 {
+  version: 1;
+  /** Project-relative `.dql` path under `blocks/_drafts/` or `domains/<d>/blocks/_drafts/`. */
+  path: string;
+  /** Always draft: capturing an answer never certifies it. */
+  status: 'draft';
+  /** How many times this answer (by SQL fingerprint or question) was asked. */
+  askedTimes: number;
+  /** False when an existing draft was reused (de-duplicated). */
+  created: boolean;
+  /** sha256 of the normalized answer SQL. */
+  fingerprint: string;
 }
 
 /**

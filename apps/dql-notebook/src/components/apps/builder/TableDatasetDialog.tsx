@@ -9,8 +9,10 @@ type Choice = { name: string; include: boolean; format: 'number' | 'currency' | 
 /**
  * Start from a table (RFC 0009, "15-minute first page"). Pick a table; DQL
  * proposes what it can add up and count and what one row is, checked
- * against the table; "Use this data" saves it as a Dataset the author owns.
- * No dbt, no modeling vocabulary: numbers, groupings and dates.
+ * against the table; "Certify and use this data" saves it as a Dataset the
+ * author owns and certifies it, explicitly, through the same certification
+ * rules as Block Studio's Certify (compiles, runs, owner). The server records
+ * who certified it. No dbt, no modeling vocabulary: numbers, groupings and dates.
  */
 export function TableDatasetDialog({
   domain,
@@ -81,7 +83,7 @@ export function TableDatasetDialog({
         return;
       }
       if (response.status !== 'certified') {
-        setError(`Saved, but it did not pass its checks yet: ${(response.blockers ?? []).join(' ') || 'run it once to see why.'}`);
+        setError(`Saved as a draft, not certified: it did not pass its checks yet. ${(response.blockers ?? []).join(' ') || 'Run it once to see why.'}`);
         return;
       }
       onCreated(response.sourceId, name.trim() || draft.proposal.name);
@@ -180,9 +182,9 @@ export function TableDatasetDialog({
 
         <footer>
           {proposal ? <button type="button" onClick={() => { setDraft(null); setPicked(null); setError(null); }} disabled={saving}>Back</button> : <span />}
-          {proposal ? <small>You will own this data. It is saved as a file in your project.</small> : null}
+          {proposal ? <small>You will own and certify this data: ZLens saves it as a file in your project, checks it compiles and runs, and records you as the person who certified it.</small> : null}
           {proposal ? (
-            <button type="button" className="primary" disabled={saving || !proposal.key || keptCount === 0} onClick={save}>{saving ? 'Saving…' : 'Use this data'}</button>
+            <button type="button" className="primary" disabled={saving || !proposal.key || keptCount === 0} onClick={save}>{saving ? 'Certifying…' : 'Certify and use this data'}</button>
           ) : null}
         </footer>
       </section>

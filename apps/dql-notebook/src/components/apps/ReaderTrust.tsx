@@ -96,11 +96,14 @@ export function ReaderTrustBadge({
  */
 export function TrustLensBar({
   counts,
+  summary,
   on,
   onToggle,
   actions,
 }: {
   counts: Array<{ state: ReaderTrustState; label: string; count: number }>;
+  /** The page's aggregate trust sentence (`appTrustSummary().text`); derived from counts when absent. */
+  summary?: string;
   on: boolean;
   onToggle: () => void;
   /** Page actions shown at the end of the bar, such as Export. */
@@ -112,7 +115,7 @@ export function TrustLensBar({
   return (
     <div className="dql-trust-lens-bar" role="group" aria-label="Trust on this page">
       <span className="dql-trust-summary">
-        {certified === total ? `All ${total} ${total === 1 ? 'tile' : 'tiles'} certified` : `${certified} of ${total} tiles certified`}
+        {summary || (certified === total ? `All ${total} ${total === 1 ? 'tile' : 'tiles'} certified` : `${certified} of ${total} tiles certified`)}
       </span>
       {on ? counts.map((entry) => (
         <span key={entry.state} className={`dql-trust-count ${entry.state}`}>

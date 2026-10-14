@@ -93,7 +93,8 @@ import {
   removeDashboardFilterFromDocument,
 } from './dashboard-filters';
 import { semanticApprovalState } from './app-semantic-approval';
-import { appCertificationRollup } from './app-certification';
+import { appCertificationRollup, appLifecycleLabel } from './app-certification';
+import type { AppTrustSummary } from '@zlens/core/apps/reader-trust';
 import { beginPersistedAppWorkspaceLoad, resolvePersistedWorkspaceMetadata, type WorkspaceDashboardSummary } from './app-workspace-loader';
 import {
   isAppScopedDashboardFilter,
@@ -1505,8 +1506,10 @@ function AppCard({
             <Star size={14} strokeWidth={1.8} />
           </button>
         </div>
-        <StatusSeal tone={certified ? 'certified' : draftCount > 0 ? 'draft' : 'agentic'}>
-          {certified ? 'certified' : draftCount > 0 ? 'mixed' : app.lifecycle ?? 'draft'}
+        {/* The card shows the App's lifecycle, not its data trust: whether each
+            tile's source is certified is shown inside the App, from its run. */}
+        <StatusSeal tone={certified ? 'certified' : draftCount > 0 ? 'draft' : 'agentic'} title="App lifecycle (draft, in review, certified). Data trust is shown on each tile inside the App.">
+          {appLifecycleLabel(app.lifecycle, certified, draftCount)}
         </StatusSeal>
         <h3>
           <a
@@ -2223,14 +2226,25 @@ function AppWorkspaceSurface({
   const canWriteApp = Boolean(app && metadataApp && app.id === metadataApp.id);
   const isEditable = experience === 'build' && canWriteApp && !readerOnly;
   const draftCount = appDoc?.drafts?.length ?? 0;
-  const certification = appCertificationRollup(dashboardDoc?.dashboard.layout.items, draftCount);
-  const certifiedCount = certification.certified;
   const dashboardBlockIds = useMemo(() => {
     return getCopilotBlockTiles(dashboardDoc?.dashboard ?? null).map((item) => item.blockId);
   }, [dashboardDoc]);
   const dashboardBlockKey = dashboardBlockIds.join('|');
   const [selectedBlockId, setSelectedBlockId] = useState<string | null>(dashboardBlockIds[0] ?? null);
   const [dashboardRun, setDashboardRun] = useState<DashboardRunResponse | null>(null);
+  // One aggregate data trust for the page, from the current run's tiles: the
+  // header badge, Trust Lens line, story and tiles all read the same evidence.
+  const [pageTrust, setPageTrust] = useState<AppTrustSummary | null>(null);
+  const rollup = appCertificationRollup(dashboardDoc?.dashboard.layout.items, draftCount, dashboardRun?.tiles ?? null);
+  // The rendered page reports the aggregate it shows next to its tiles; the
+  // header repeats that exact value (plus any pending App drafts) rather than
+  // computing its own. Before the page reports, the rollup says "not checked".
+  const certification = pageTrust && pageTrust.state !== 'pending' && pageTrust.state !== 'empty'
+    ? {
+        allCertified: pageTrust.allCertified && draftCount === 0,
+        label: pageTrust.allCertified && draftCount === 0 ? pageTrust.label : draftCount > 0 && pageTrust.allCertified ? `${pageTrust.text} · ${draftCount} App draft pending` : pageTrust.text,
+      }
+    : rollup;
   const [chartAnswer, setChartAnswer] = useState<{
     runId: string;
     tileId: string;
@@ -2550,10 +2564,12 @@ function AppWorkspaceSurface({
         )}
         {/* A reader sees the App's name; its id is for the people who build it. */}
         <span className="dql-app-crumb"><b>{hostReader(hostUi) ? (tidyTitle(workspaceAppName) || workspaceAppId || 'App') : (workspaceAppId ?? 'app')}</b></span>
-        <StatusSeal tone={certification.allCertified ? 'certified' : 'draft'}>
-          {certification.allCertified ? 'All certified' : `${certifiedCount} of ${certification.total} certified`}
-        </StatusSeal>
-        {draftCount > 0 ? <StatusSeal tone="draft">{draftCount} draft</StatusSeal> : null}
+        {onDashboards ? (
+          <StatusSeal tone={certification.allCertified ? 'certified' : 'draft'} title="Data trust: whether every tile on this page ran from a certified source.">
+            {certification.label}
+          </StatusSeal>
+        ) : null}
+        {draftCount > 0 ? <StatusSeal tone="draft" title="App drafts waiting for review">{draftCount} App draft{draftCount === 1 ? '' : 's'}</StatusSeal> : null}
 
         {readerOnly ? null : <span className="dql-app-topbar-divider" aria-hidden="true" />}
 
@@ -2851,6 +2867,7 @@ function AppWorkspaceSurface({
                   onCopilotChange={onExplainChange}
                   onDashboardChanged={onDashboardChanged}
                   onRunChange={handleDashboardRunChange}
+                  onTrustChange={setPageTrust}
                   onNavigateDashboard={onNavigateDashboard}
                 />
                 {chartAnswer ? (

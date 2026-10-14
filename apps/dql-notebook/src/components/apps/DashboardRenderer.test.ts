@@ -485,3 +485,12 @@ describe('Reader tile CSV download', () => {
     })).toBe('region,revenue,note\nUS,70,"north, east"\nCA,,"said ""hi""\nthen left"');
   });
 });
+
+describe('App story wording follows source trust (F2)', () => {
+  it('says verified only when every source behind the story is certified', async () => {
+    const { storySourceChipLabel } = await dashboardHelpers();
+    expect(storySourceChipLabel({ generatedBy: 'deterministic', trustState: 'certified' })).toBe('Verified result summary');
+    expect(storySourceChipLabel({ generatedBy: 'deterministic', trustState: 'review_required' })).toBe('Result summary · sources need review');
+    expect(storySourceChipLabel({ generatedBy: 'ai', trustState: 'review_required' })).not.toMatch(/verified/i);
+  });
+});

@@ -12,9 +12,9 @@ describe('what each API request does (RFC 0010 HH-2)', () => {
     ['POST', '/api/persona', 'app.author', 'project'],
     ['POST', '/api/git/commit', 'git.review', 'project'],
     ['POST', '/api/block-studio/certify', 'dataset.certify', 'project'],
-    // The route the UI certifies through, and routes that certify as a side effect.
+    // The route the UI certifies through. Saving a cell only writes a draft.
     ['POST', '/api/block-studio/certifications', 'dataset.certify', 'project'],
-    ['POST', '/api/blocks/save-from-cell', 'dataset.certify', 'project'],
+    ['POST', '/api/blocks/save-from-cell', 'dataset.author', 'project'],
     ['POST', '/api/apps/claims/dashboards/overview/approve-semantic', 'dataset.certify', 'app'],
     ['POST', '/api/block-studio/certification-check', 'dataset.author', 'project'],
     ['POST', '/api/app-datasets/tables/create', 'dataset.certify', 'project'],

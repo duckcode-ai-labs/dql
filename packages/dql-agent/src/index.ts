@@ -503,6 +503,7 @@ export type {
   AgentRouter,
   AgentRun,
   AgentRunAnswerKind,
+  AgentRunReviewDraftV1,
   AgentRunArtifact,
   AgentRunArtifactKind,
   AgentRunAudience,
@@ -1195,8 +1196,11 @@ export {
   renderGeneratedSqlDqlArtifact,
   upsertGeneratedDqlArtifactDraft,
   upsertGeneratedDraft,
+  upsertReviewRequiredAnswerDraft,
+  reviewAnswerFingerprint,
+  findReviewDraftByFingerprint,
 } from "./metadata/drafts.js";
-export type { GeneratedDqlArtifactDraftRecord, SemanticDraftNameInput } from "./metadata/drafts.js";
+export type { GeneratedDqlArtifactDraftRecord, SemanticDraftNameInput, ReviewRequiredAnswerDraftRecord, ReviewRequiredAnswerDraft } from "./metadata/drafts.js";
 export {
   persistOwner,
   readPersistedOwner,

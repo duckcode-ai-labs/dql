@@ -1,6 +1,6 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
-import { dirname, join } from 'node:path';
+import { dirname, join, relative } from 'node:path';
 import type { DqlArtifactFilter, DqlArtifactOrderBy, DqlArtifactReference } from '@zlens/core';
 import { resolveLocalOwner } from './identity.js';
 
@@ -213,6 +213,13 @@ export function upsertGeneratedDraft(
   // Owner is the one field a human must confirm to certify — never let a captured
   // draft be born owner-less (it would hard-block certification for no reason).
   const owner = rec.owner?.trim() || resolveLocalOwner(projectRoot);
+  // The same answer SQL asked in other words reuses its draft (Ask and MCP
+  // share this fingerprint), so repeats never spam the drafts folder.
+  const fingerprint = reviewAnswerFingerprint(rec.proposedSql);
+  const sameAnswer = existsSync(filePath) ? undefined : findReviewDraftByFingerprint(projectRoot, fingerprint);
+  if (sameAnswer) {
+    return { path: sameAnswer, askedTimes: bumpAskedTimes(projectRoot, sameAnswer, owner), proposedContractId: rec.proposedContractId };
+  }
 
   if (existsSync(filePath)) {
     const existing = readFileSync(filePath, 'utf-8');
@@ -235,7 +242,7 @@ export function upsertGeneratedDraft(
   }
 
   mkdirSync(dirname(filePath), { recursive: true });
-  writeFileSync(filePath, renderGeneratedDraft({ ...rec, owner }, relativePath));
+  writeFileSync(filePath, renderGeneratedDraft({ ...rec, owner, answerFingerprint: fingerprint }, relativePath));
   return {
     path: relativePath,
     askedTimes: 1,
@@ -278,6 +285,138 @@ export function upsertGeneratedDqlArtifactDraft(
   };
 }
 
+/**
+ * A review-required (Tier-2) answer, captured so a person can review it and
+ * certify it later. Never certified: the draft's status is always `draft`.
+ */
+export interface ReviewRequiredAnswerDraftRecord {
+  question: string;
+  /** The SQL that produced the answer (compiled SQL of the DQL artifact when there is one). */
+  sql: string;
+  /** The transient DQL artifact the answer ran; its source is saved as the draft body. */
+  dqlArtifact?: { source: string; name?: string; kind?: string } | null;
+  proposedDomain?: string;
+  owner?: string;
+  /** The run that produced the answer, recorded for traceability. */
+  runId?: string;
+}
+
+export interface ReviewRequiredAnswerDraft extends GeneratedDraftBlock {
+  /** False when an existing draft for the same answer was found and its counter bumped. */
+  created: boolean;
+  /** sha256 of the normalized SQL: the de-duplication key across re-asks. */
+  fingerprint: string;
+}
+
+/** sha256 of the answer's SQL with comments, case and whitespace normalized. */
+export function reviewAnswerFingerprint(sql: string): string {
+  const normalized = sql
+    .replace(/--[^\n]*/g, ' ')
+    .replace(/\/\*[\s\S]*?\*\//g, ' ')
+    .replace(/\s+/g, ' ')
+    .replace(/\s*([(),=<>;])\s*/g, '$1')
+    .replace(/;+\s*$/, '')
+    .trim()
+    .toLowerCase();
+  return createHash('sha256').update(normalized).digest('hex');
+}
+
+/** The draft already holding this answer fingerprint, searched across every drafts folder. */
+export function findReviewDraftByFingerprint(projectRoot: string, fingerprint: string): string | undefined {
+  const needle = `answer_fingerprint = "${fingerprint}"`;
+  const roots: string[] = [join(projectRoot, 'blocks', '_drafts')];
+  const domainsRoot = join(projectRoot, 'domains');
+  if (existsSync(domainsRoot)) {
+    for (const entry of readdirSync(domainsRoot, { withFileTypes: true })) {
+      if (entry.isDirectory()) roots.push(join(domainsRoot, entry.name, 'blocks', '_drafts'));
+    }
+  }
+  const visit = (dir: string, depth: number): string | undefined => {
+    if (depth > 4 || !existsSync(dir)) return undefined;
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const child = join(dir, entry.name);
+      if (entry.isDirectory()) {
+        const found = visit(child, depth + 1);
+        if (found) return found;
+      } else if (entry.name.endsWith('.dql') && readFileSync(child, 'utf-8').includes(needle)) {
+        return relative(projectRoot, child).replaceAll('\\', '/');
+      }
+    }
+    return undefined;
+  };
+  for (const root of roots) {
+    const found = visit(root, 0);
+    if (found) return found;
+  }
+  return undefined;
+}
+
+function bumpAskedTimes(projectRoot: string, relativePath: string, owner: string): number {
+  const filePath = join(projectRoot, relativePath);
+  const existing = readFileSync(filePath, 'utf-8');
+  const m = existing.match(/asked_times\s*=\s*(\d+)/);
+  const prev = m ? Number.parseInt(m[1], 10) : 1;
+  const next = Number.isFinite(prev) ? prev + 1 : 2;
+  let updated = m
+    ? existing.replace(/asked_times\s*=\s*\d+/, `asked_times = ${next}`)
+    : insertBeforeFinalBrace(existing, `\n  asked_times = ${next}`);
+  if (!/\n\s*owner\s*=/.test(updated)) updated = insertOwner(updated, owner);
+  writeFileSync(filePath, stampLastAsked(updated));
+  return next;
+}
+
+/**
+ * Leave a durable, findable draft for a review-required answer.
+ *
+ * De-duplicated so repeats do not spam the drafts folder: the same answer SQL
+ * (by fingerprint) or the same question (by slug) bumps `asked_times` on the
+ * existing draft instead of writing another file. The draft lands in
+ * `domains/<domain>/blocks/_drafts/` or `blocks/_drafts/`, always with
+ * `status = "draft"`; certifying it is a separate, explicit action
+ * (`zlens certify --from-draft` or Block Studio's Certify).
+ */
+export function upsertReviewRequiredAnswerDraft(
+  projectRoot: string,
+  rec: ReviewRequiredAnswerDraftRecord,
+): ReviewRequiredAnswerDraft {
+  const fingerprint = reviewAnswerFingerprint(rec.sql);
+  const owner = rec.owner?.trim() || resolveLocalOwner(projectRoot, { persist: false });
+  const slug = deriveGeneratedDraftSlug(rec.question);
+  const proposedContractId = slug;
+  const byFingerprint = findReviewDraftByFingerprint(projectRoot, fingerprint);
+  if (byFingerprint) {
+    return { path: byFingerprint, askedTimes: bumpAskedTimes(projectRoot, byFingerprint, owner), proposedContractId, created: false, fingerprint };
+  }
+  const { filePath, relativePath } = resolveGeneratedDraftPath(projectRoot, { slug, proposedDomain: rec.proposedDomain });
+  if (existsSync(filePath)) {
+    return { path: relativePath, askedTimes: bumpAskedTimes(projectRoot, relativePath, owner), proposedContractId, created: false, fingerprint };
+  }
+  const artifactSource = rec.dqlArtifact?.source?.trim();
+  const body = artifactSource
+    ? stampGeneratedDqlArtifactDraft({
+        slug,
+        question: rec.question,
+        proposedContractId,
+        proposedDomain: rec.proposedDomain,
+        sourceQuestion: rec.question,
+        dqlArtifact: {
+          kind: (rec.dqlArtifact?.kind ?? 'sql_block'),
+          source: forceDraftStatus(artifactSource),
+          ...(rec.dqlArtifact?.name ? { name: rec.dqlArtifact.name } : {}),
+        } as GeneratedDraftSourceDqlArtifact,
+      }, relativePath, owner, { answerFingerprint: fingerprint, sourceRunId: rec.runId })
+    : renderGeneratedDraft({ slug, question: rec.question, proposedSql: rec.sql, proposedContractId, proposedDomain: rec.proposedDomain, owner, answerFingerprint: fingerprint, sourceRunId: rec.runId }, relativePath);
+  mkdirSync(dirname(filePath), { recursive: true });
+  writeFileSync(filePath, body);
+  return { path: relativePath, askedTimes: 1, proposedContractId, created: true, fingerprint };
+}
+
+/** A captured answer is never certified, whatever status its source claims. */
+function forceDraftStatus(source: string): string {
+  if (/\bstatus\s*=\s*"[^"]*"/.test(source)) return source.replace(/(\bstatus\s*=\s*)"[^"]*"/, '$1"draft"');
+  return source.replace(/(\bblock\s+"[^"]+"\s*\{)/, '$1\n  status = "draft"');
+}
+
 export function renderGeneratedSqlDqlArtifact(rec: GeneratedSqlDqlArtifactInput): string {
   const draftPath = rec.draftPath ?? `blocks/_drafts/${rec.slug}.dql`;
   return renderGeneratedDraft(rec, draftPath);
@@ -301,7 +440,7 @@ function resolveGeneratedDraftPath(
   };
 }
 
-function renderGeneratedDraft(rec: GeneratedDraftRecord, draftPath: string): string {
+function renderGeneratedDraft(rec: GeneratedDraftRecord & { answerFingerprint?: string; sourceRunId?: string }, draftPath: string): string {
   const now = new Date().toISOString();
   const upstream = arrayField('upstream_refs', rec.upstreamRefs ?? []);
   const sourceDql = renderSourceDqlMetadata(rec.sourceDqlArtifact);
@@ -340,7 +479,9 @@ function renderGeneratedDraft(rec: GeneratedDraftRecord, draftPath: string): str
     source_block = "${escapeDqlString(rec.sourceBlock ?? '')}"
     followup_kind = "${escapeDqlString(rec.followupKind ?? '')}"
     context_pack_id = "${escapeDqlString(rec.contextPackId ?? '')}"
-    route_intent = "${escapeDqlString(rec.routeIntent ?? '')}"${upstream}${sourceDql}${requestedFilters}${requestedDimensions}${warnings}
+    route_intent = "${escapeDqlString(rec.routeIntent ?? '')}"${rec.answerFingerprint ? `
+    answer_fingerprint = "${rec.answerFingerprint}"` : ''}${rec.sourceRunId ? `
+    source_run_id = "${escapeDqlString(rec.sourceRunId)}"` : ''}${upstream}${sourceDql}${requestedFilters}${requestedDimensions}${warnings}
 
     query = """
         ${safeSql.split('\n').join('\n        ')}
@@ -353,6 +494,7 @@ function stampGeneratedDqlArtifactDraft(
   rec: GeneratedDqlArtifactDraftRecord,
   draftPath: string,
   owner: string,
+  provenance: { answerFingerprint?: string; sourceRunId?: string } = {},
 ): string {
   const now = new Date().toISOString();
   const sourceWithOwner = insertOwner(rec.dqlArtifact.source.trimEnd(), owner);
@@ -371,6 +513,8 @@ function stampGeneratedDqlArtifactDraft(
     `  context_pack_id = "${escapeDqlString(rec.contextPackId ?? '')}"`,
     `  route_intent = "${escapeDqlString(rec.routeIntent ?? '')}"`,
     `  draft_path = "${escapeDqlString(draftPath)}"`,
+    provenance.answerFingerprint ? `  answer_fingerprint = "${provenance.answerFingerprint}"` : '',
+    provenance.sourceRunId ? `  source_run_id = "${escapeDqlString(provenance.sourceRunId)}"` : '',
     arrayField('outputs', rec.outputs ?? []).trimEnd(),
     arrayField('validation_warnings', rec.validationWarnings ?? []).trimEnd(),
   ].filter(Boolean).join('\n');

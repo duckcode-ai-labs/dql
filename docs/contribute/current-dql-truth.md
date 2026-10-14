@@ -57,7 +57,11 @@ route order is:
 Ask AI, Notebook AI, and Block AI use the durable run/artifact contracts in the
 repository. Block AI generation remains ownerless, transient, and
 review-required; only the explicit **Add to Block Studio** action writes a
-draft. Local agent memory is advisory. Certified assets, semantic/dbt facts,
+draft. Ask is different: a review-required (Tier-2) Ask answer — UI, `zlens
+agent ask`, MCP `answer_question` — leaves a de-duplicated draft under
+`_drafts/` (`run.reviewDraft`), while its executed artifact stays transient.
+Saving never certifies; only an explicit Certify action does, and it writes a
+certification receipt into the companion YAML. Local agent memory is advisory. Certified assets, semantic/dbt facts,
 policies, runtime evidence, and current Git state outrank memory.
 
 App AI uses a separate stateful App orchestration loop over the same provider,

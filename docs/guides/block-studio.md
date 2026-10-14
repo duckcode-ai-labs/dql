@@ -166,6 +166,12 @@ The import command autosaves valid candidates as `_drafts` blocks, reports
 similar certified blocks, and keeps `--save` only as a compatibility alias. Run
 the preview/tests and then certify the reviewed block.
 
+In the **Import SQL to DQL** screen, **Save draft** writes the candidate as a
+draft (the `.dql` status and its YAML both say `draft`) and never certifies it,
+even when every check would pass. **Certify** is a separate button: it runs the
+certification rules against the saved draft and, only when they pass, moves it
+to the canonical blocks folder as certified and records who certified it.
+
 ## 5. Certify
 
 Certification is a trust label in OSS. It is not RBAC.
@@ -183,6 +189,14 @@ Before clicking **Certify**, confirm:
 Certification changes useful blocks from `draft` or `review` to `certified`.
 Certified blocks appear in the block library and can be added to App dashboard
 pages.
+
+Certify is the only way a block becomes certified: saving (here, from a notebook
+cell, from an Ask answer, or from an import) always writes a draft. A passing
+certification writes a receipt into the block's companion YAML — who certified
+it, when, from which surface, under which rules, and the hash of the exact
+source — and the block overview shows it as *Certified by … · when · via …*.
+From the CLI, `zlens certify --from-draft <path>` runs the same rules and
+leaves the same receipt.
 
 ## 6. Lineage
 

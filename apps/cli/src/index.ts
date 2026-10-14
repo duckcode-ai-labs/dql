@@ -172,11 +172,15 @@ const COMMAND_HELP: Record<string, string> = {
 
   Usage:
     zlens certify <file.dql> [--connection <driver|path>] [--skip-tests] [--enterprise]
-    zlens certify --from-draft <path> [--contract <id@version>] [--force]
+    zlens certify --from-draft <path> [--owner <name>] [--domain <name>] [--contract <id@version>] [--enterprise] [--force]
 
   Notes:
-    Certification is a local OSS trust label. Use status = "certified" for
-    blocks that pass metadata, lineage, and test checks.
+    \`zlens certify <file.dql>\` evaluates the certification rules and writes
+    nothing. Saving a block never certifies it; a person certifies explicitly.
+    \`zlens certify --from-draft <path>\` runs the same rules Block Studio's
+    Certify runs (owner, a successful compile and run, passing tests) and only
+    when they pass promotes the draft to status = "certified", recording who
+    certified it in the block's companion YAML (reviewStatus + certification).
     --enterprise makes grain, declared outputs, source-system lineage,
     reusable pattern, review cadence, and test assertions hard requirements.
   `,

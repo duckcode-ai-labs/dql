@@ -16,6 +16,54 @@ import { loadProjectConfig, prepareLocalExecution, normalizeProjectConnection, r
 import type { ProjectConfig } from '../local-runtime.js';
 import type { CLIFlags } from '../args.js';
 import { promoteFromDraft } from '../promote-from-draft.js';
+import { passedCheckNames } from '../certification-receipt.js';
+import { resolveLocalOwner } from '@zlens/agent';
+import { startProjectRuntime } from './notebook.js';
+
+/**
+ * Run the same certification rules Block Studio's Certify runs (owner, a
+ * successful compile and run on the project connection, passing tests) by
+ * asking an ephemeral local runtime for its read-only certification check.
+ * Nothing is written by the check itself.
+ */
+async function runtimeCertificationGate(
+  projectRoot: string,
+  flags: CLIFlags,
+  source: string,
+): Promise<{ ok: boolean; blockers: string[]; checks: string[]; warnings: string[]; enterprise: boolean }> {
+  const enterprise = flags.enterprise === true;
+  const projectConfig = loadProjectConfig(projectRoot);
+  const handle = await startProjectRuntime(projectRoot, {
+    preferredPort: 0,
+    ...(flags.connection ? { connection: resolveConnection(flags, projectConfig) } : {}),
+  });
+  try {
+    const response = await fetch(`${handle.url}/api/block-studio/certification-check`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ source, enterprise }),
+    });
+    const body = await response.json().catch(() => ({})) as {
+      ok?: boolean;
+      blockers?: unknown[];
+      error?: string;
+      checklist?: unknown;
+      certification?: { warnings?: Array<{ rule: string; message: string }> };
+    };
+    if (!response.ok) {
+      return { ok: false, blockers: [body.error ?? `Certification check failed (HTTP ${response.status}).`], checks: [], warnings: [], enterprise };
+    }
+    return {
+      ok: body.ok === true,
+      blockers: Array.isArray(body.blockers) ? body.blockers.map(String) : [],
+      checks: passedCheckNames(body.checklist),
+      warnings: (body.certification?.warnings ?? []).map((warning) => `${warning.rule}: ${warning.message}`),
+      enterprise,
+    };
+  } finally {
+    await handle.close();
+  }
+}
 
 function resolveConnection(flags: CLIFlags, projectConfig: ProjectConfig): ConnectionConfig {
   const conn = flags.connection;
@@ -240,7 +288,11 @@ export async function runCertify(filePath: string, flags: CLIFlags): Promise<voi
   // Tier-2 promotion: `zlens certify --from-draft <path>` moves a draft to its
   // canonical certified location and surfaces the datalex-manifest.json patch.
   if (flags.fromDraft) {
-    const result = promoteFromDraft(process.cwd(), flags);
+    const projectRoot = process.cwd();
+    const result = await promoteFromDraft(projectRoot, flags, {
+      gate: (input) => runtimeCertificationGate(projectRoot, flags, input.source),
+      certifiedBy: resolveLocalOwner(projectRoot, { persist: false }),
+    });
     if (flags.format === 'json') {
       console.log(JSON.stringify(result, null, 2));
       if (!result.ok) process.exitCode = 1;
@@ -252,6 +304,9 @@ export async function runCertify(filePath: string, flags: CLIFlags): Promise<voi
       return;
     }
     console.log(`\n  ✓ ${result.message}`);
+    if (result.certification) {
+      console.log(`    Certified by ${result.certification.certifiedBy} (${result.certification.rules} rules); receipt in ${result.companionPath ?? 'the block companion YAML'}.`);
+    }
     if (result.certifiedPath) {
       console.log(`    Run \`zlens compile\` to refresh dql-manifest.json.`);
     }

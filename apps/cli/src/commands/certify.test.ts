@@ -1,4 +1,4 @@
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -234,33 +234,36 @@ describe('runCertify', () => {
     expect(process.exitCode).toBe(1);
   });
 
-  it('promotes OSS drafts from domain-first paths as structured JSON', async () => {
-    const projectDir = makeProject('dql-certify-promote-json-');
+  it('refuses to promote a draft whose certification rules do not pass, and keeps the draft', async () => {
+    const projectDir = makeProject('dql-certify-promote-refused-');
     writeFileSync(join(projectDir, 'dql.config.json'), JSON.stringify({ project: 'demo' }));
     mkdirSync(join(projectDir, 'domains', 'nba', 'blocks', '_drafts'), { recursive: true });
-    const draftRel = 'domains/nba/blocks/_drafts/top_players.dql';
-    writeFileSync(join(projectDir, draftRel), `block "Top Players" {
+    const draftRel = 'domains/nba/blocks/_drafts/no_owner.dql';
+    // No owner: the OSS rules refuse it.
+    writeFileSync(join(projectDir, draftRel), `block "No Owner" {
   domain = "nba"
   type = "custom"
   status = "draft"
-  description = "Ranks players by total points."
-  owner = "sports-analytics"
+  description = "Missing an owner."
   query = """SELECT 1 AS value"""
 }`);
     const spy = vi.spyOn(console, 'log').mockImplementation(() => {});
     const previousCwd = process.cwd();
-
     try {
       process.chdir(projectDir);
-      await runCertify('', flags({ fromDraft: draftRel, force: true }));
+      await runCertify('', flags({ fromDraft: draftRel }));
     } finally {
       process.chdir(previousCwd);
     }
-
     const payload = lastJsonLog(spy);
-    expect(payload.ok).toBe(true);
-    expect(payload.certifiedPath).toBe('domains/nba/blocks/top_players.dql');
-    expect(payload.datalexManifestDiff).toBeUndefined();
-    expect(process.exitCode).toBeUndefined();
-  });
+    expect(payload.ok).toBe(false);
+    expect(payload.blockers.length).toBeGreaterThan(0);
+    expect(existsSync(join(projectDir, draftRel))).toBe(true);
+    expect(existsSync(join(projectDir, 'domains/nba/blocks/no_owner.dql'))).toBe(false);
+    expect(process.exitCode).toBe(1);
+  }, 60_000);
+
+  // The passing promotion path (gate passes → certified + receipt) is covered
+  // by promote-from-draft.test.ts with an injected gate; running a block here
+  // would need a native DuckDB connector inside the test worker.
 });
