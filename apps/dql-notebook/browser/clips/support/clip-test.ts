@@ -32,6 +32,8 @@ export interface Sample {
   connectorsDir: string;
   /** A fresh copy of the prepared sample project. */
   freshProject(name?: string): string;
+  /** Environment that makes git (and so ZLens's owner lookup) see the sample's analyst. */
+  gitEnv: NodeJS.ProcessEnv;
   /** Serve a project with `zlens notebook` (stopped after the clip). */
   serve(projectDir: string): Promise<NotebookServer>;
 }
@@ -59,11 +61,16 @@ const test = base.extend<{ clipId: string; sample: Sample; director: Director }>
     const cassettes = join(cassetteRoot, clipId);
     const mode = askMode();
     if (mode === 'record') rmSync(cassettes, { recursive: true, force: true });
+    // Everything the clips run sees the sample's analyst as the git user, never the recorder's own identity.
+    const gitConfig = join(workDir, 'gitconfig');
+    writeFileSync(gitConfig, '[user]\n\tname = Jaffle Analyst\n\temail = analytics@jaffle.shop\n[init]\n\tdefaultBranch = main\n');
+    const gitEnv = { GIT_CONFIG_GLOBAL: gitConfig, GIT_CONFIG_NOSYSTEM: '1' };
 
     const sample: Sample = {
       workDir,
       cloneDir: env('ZLENS_CLIPS_CLONE_DIR'),
       connectorsDir: env('ZLENS_CLIPS_CONNECTORS_DIR'),
+      gitEnv,
       freshProject(name = 'jaffle-shop-duckdb') {
         const projectDir = join(workDir, name);
         cpSync(env('ZLENS_CLIPS_TEMPLATE_DIR'), projectDir, { recursive: true });
@@ -84,7 +91,7 @@ const test = base.extend<{ clipId: string; sample: Sample; director: Director }>
         const server = await startNotebookServer({
           projectDir,
           workDir: join(workDir, `server-${servers.length + 1}`),
-          env: { ZLENS_EVAL_CASSETTE_DIR: cassettes, ZLENS_EVAL_CASSETTE_MODE: mode },
+          env: { ...gitEnv, ZLENS_EVAL_CASSETTE_DIR: cassettes, ZLENS_EVAL_CASSETTE_MODE: mode },
         });
         servers.push(server);
         return server;

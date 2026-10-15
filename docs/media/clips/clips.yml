@@ -15,3 +15,57 @@ lineage:
     - The graph shows dbt sources and models upstream, the block in the middle, and its chart, dashboard and App downstream.
     - Click the orders dbt model to highlight its path into the block.
     - Click the Jaffle Growth Review App to highlight the path from the block to the App.
+
+ask-certified:
+  title: A certified answer
+  caption: >-
+    Asked how revenue changed by month, Ask answers from the certified
+    monthly_revenue block: the answer is labelled Certified answer, names the
+    block and its owner, and How it was answered shows each step.
+  steps:
+    - Open Ask from the left rail.
+    - Ask "How has revenue changed by month?".
+    - The answer is labelled Certified answer, from the monthly_revenue block, with its owner.
+    - The result table shows gross revenue and order count for each month.
+    - Switch the result to Visualization to see the monthly trend as a line chart.
+    - Open How it was answered to see the steps Ask took.
+
+ask-review:
+  title: An answer that needs review
+  caption: >-
+    No certified block answers average order value by store, so Ask writes the
+    SQL itself: the answer is labelled AI-generated, is saved as a draft block
+    that is not certified, and opens in Block Studio for review.
+  steps:
+    - Open Ask from the left rail.
+    - Ask "What is the average order value at each store?".
+    - The answer is labelled AI-generated answer and shows the two stores with their average order value.
+    - Below the result, Ask notes it saved the query for review as a draft block, not certified.
+    - Open draft to review opens the draft block in Block Studio, where it can be reviewed and certified.
+
+ask-refusal:
+  title: A refusal with a reason
+  caption: >-
+    Asked for an employee churn rate, Ask runs no query and says why: none of
+    the sample's tables hold employee data. How it was answered lists the
+    tables it searched.
+  steps:
+    - Open Ask from the left rail.
+    - Ask "What is our employee churn rate?".
+    - The answer is labelled Couldn't run this query.
+    - The reason says no table holds employee or HR data and lists the tables it searched.
+    - Open How it was answered to see each step and where it stopped.
+
+import-certify:
+  title: Import SQL, save a draft, certify
+  caption: >-
+    Paste SQL into Import SQL, generate a DQL draft and save it: saving never
+    certifies. Certify is a separate, explicit action, and the certified block
+    carries a receipt saying who certified it, when, and how.
+  steps:
+    - Open Blocks and start an import.
+    - Paste a SQL query that counts orders per store, and set the domain and owner.
+    - Generate DQL drafts; the draft gets a name, description, outputs and checks.
+    - Save draft; the draft is saved and marked needs review, and Certify becomes available.
+    - Certify the draft; it is now certified.
+    - Open the block in Block Studio; its receipt reads Certified by, with the date, via SQL import, under OSS rules.
