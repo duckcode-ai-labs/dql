@@ -1076,7 +1076,7 @@ export function BlockStudio() {
     }
   };
 
-  const handleCertify = async (): Promise<boolean> => {
+  const handleCertify = async (override?: { source: string; metadata: BlockStudioMetadata }): Promise<boolean> => {
     if (!state.blockStudioMetadata?.name.trim() || !state.blockStudioMetadata.owner.trim()) {
       pendingIdentityActionRef.current = 'certify';
       setSaveIdentityOpen(true);
@@ -1088,9 +1088,11 @@ export function BlockStudio() {
     setSaveError(null);
     try {
       setCertificationResult(null);
-      const sourceToSave = state.blockStudioMetadata.reviewStatus === 'certified' && state.blockStudioDirty
-        ? setBlockStringField(state.blockStudioDraft, 'status', 'draft')
-        : state.blockStudioDraft;
+      const draftToCertify = override?.source ?? state.blockStudioDraft;
+      const metadataToCertify = override?.metadata ?? state.blockStudioMetadata;
+      const sourceToSave = state.blockStudioMetadata.reviewStatus === 'certified' && (state.blockStudioDirty || Boolean(override))
+        ? setBlockStringField(draftToCertify, 'status', 'draft')
+        : draftToCertify;
       const clientRevision = `${state.blockStudioMetadata.sourceFingerprint ?? 'new'}:${Date.now()}`;
       const idempotencyKey = typeof crypto !== 'undefined' && 'randomUUID' in crypto
         ? crypto.randomUUID()
@@ -1098,7 +1100,7 @@ export function BlockStudio() {
       const accepted = await api.requestBlockStudioCertification({
         source: sourceToSave,
         path: state.activeBlockPath,
-        metadata: state.blockStudioMetadata,
+        metadata: metadataToCertify,
         expectedSourceFingerprint: state.blockStudioMetadata.sourceFingerprint,
         clientRevision,
         idempotencyKey,
@@ -2040,6 +2042,16 @@ export function BlockStudio() {
                     issue.technicalDetails ?? issue.message,
                     { requireCertificationReady: true },
                   )}
+                  onFixDescription={(description) => {
+                    // The person's explicit one-click fix: write the shown
+                    // description into the source, then certify that source.
+                    if (!state.blockStudioMetadata) return;
+                    const metadata = { ...state.blockStudioMetadata, description };
+                    const source = setBlockStringField(state.blockStudioDraft, 'description', description);
+                    dispatch({ type: 'SET_BLOCK_STUDIO_METADATA', metadata });
+                    handleDraftChange(source);
+                    void handleCertify({ source, metadata });
+                  }}
                 />
               )}
               <SavePanel
@@ -4154,6 +4166,9 @@ function BlockStudioImportWorkspace({
   const [candidateErrors, setCandidateErrors] = useState<Record<string, string>>({});
   const [smartPhase, setSmartPhase] = useState<SmartImportPhase>('idle');
   const [smartItems, setSmartItems] = useState<Record<string, SmartImportItem>>({});
+  // Certify refused only because the description still says "review
+  // required": the fix the server suggested, offered as one explicit click.
+  const [certifyFix, setCertifyFix] = useState<{ candidateId: string; suggestedDescription: string } | null>(null);
 
   const selectedCandidate = useMemo(() => {
     if (!session) return null;
@@ -4470,17 +4485,40 @@ function BlockStudioImportWorkspace({
     }
     setLoading(true);
     setError(null);
+    setCertifyFix(null);
     try {
       const response = await api.certifyDqlGenerationCandidate(session.id, candidate.id);
       updateCandidate(response.candidate);
       onSavedCandidate(response.candidate, response.block);
       await onRefreshSessions();
     } catch (err: any) {
-      const message = err?.message ?? 'Certification failed.';
+      const issues: BlockStudioDiagnostic[] = Array.isArray(err?.details?.issues) ? err.details.issues : [];
+      const describedFix = issues.find((issue) => issue.code === 'description_review_required' && issue.suggestedDescription);
+      if (describedFix?.suggestedDescription) setCertifyFix({ candidateId: candidate.id, suggestedDescription: describedFix.suggestedDescription });
+      const message = issues.length > 0
+        ? issues.map((issue) => issue.message).join(' ')
+        : err?.message ?? 'Certification failed.';
       setError(`Not certified; the draft is unchanged. ${message}`);
     } finally {
       setLoading(false);
     }
+  };
+
+  // One explicit click: write the suggested description, then certify.
+  const fixDescriptionAndCertify = async (candidate: BlockStudioImportCandidate, description: string) => {
+    if (!session) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const next = await api.updateDqlGenerationCandidate(session.id, candidate.id, { description });
+      updateCandidate(next);
+    } catch (err: any) {
+      setError(err?.message ?? 'Could not update the description.');
+      setLoading(false);
+      return;
+    }
+    setLoading(false);
+    await certifyCandidate({ ...candidate, description });
   };
 
   const saveAll = async () => {
@@ -4786,6 +4824,24 @@ function BlockStudioImportWorkspace({
               {error}
             </div>
           )}
+          {session && selectedCandidate && certifyFix?.candidateId === selectedCandidate.id && (
+            <div role="status" style={{ padding: '10px 12px', border: `1px solid ${t.accent}55`, background: `${t.accent}0d`, borderRadius: 8, marginBottom: 12, display: 'grid', gap: 8, fontSize: 12, color: t.textSecondary, lineHeight: 1.45 }}>
+              <div>
+                Certifying is the review, so the description should say what the block returns, not that it needs review. The description becomes:
+              </div>
+              <div style={{ color: t.textPrimary, fontWeight: 700 }}>{certifyFix.suggestedDescription}</div>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <button
+                  onClick={() => void fixDescriptionAndCertify(selectedCandidate, certifyFix.suggestedDescription)}
+                  disabled={loading}
+                  style={primaryImportButtonStyle(t)}
+                >
+                  Remove "review required" from the description and certify
+                </button>
+                <button onClick={() => setCertifyFix(null)} style={secondaryImportButtonStyle(t)}>Edit the description myself</button>
+              </div>
+            </div>
+          )}
           {!session || !selectedCandidate ? (
             <ImportGuide t={t} />
           ) : (
@@ -5070,7 +5126,28 @@ function ImportCandidateDetail({
     setContextOpen(false);
   }, [candidate.id, candidate.name, candidate.domain, candidate.owner, candidate.description, candidate.tags, candidate.terms, candidate.pattern, candidate.grain, candidate.entities, candidate.outputs, candidate.dimensions, candidate.allowedFilters, candidate.sourceSystems, candidate.replacementFor, candidate.reviewCadence, candidate.sql]);
 
-    const saveEdits = async () => {
+  const listOf = (value: string) => value.split(',').map((item) => item.trim()).filter(Boolean);
+  const sameList = (value: string, list: string[] | undefined) => listOf(value).join('\u0000') === (list ?? []).join('\u0000');
+  // What the person sees in the fields is what gets saved: a field that
+  // differs from the candidate is a pending edit, applied before any action.
+  const editsPending = name !== candidate.name
+    || domain !== candidate.domain
+    || owner !== candidate.owner
+    || description !== candidate.description
+    || !sameList(tags, candidate.tags)
+    || !sameList(terms, candidate.terms)
+    || pattern !== (candidate.pattern || 'custom')
+    || grain !== (candidate.grain ?? '')
+    || !sameList(entities, candidate.entities)
+    || !sameList(outputs, candidate.outputs)
+    || !sameList(dimensions, candidate.dimensions)
+    || !sameList(allowedFilters, candidate.allowedFilters)
+    || !sameList(sourceSystems, candidate.sourceSystems)
+    || !sameList(replacementFor, candidate.replacementFor)
+    || reviewCadence !== (candidate.reviewCadence ?? 'monthly')
+    || sql !== candidate.sql;
+
+    const saveEdits = async (): Promise<BlockStudioImportCandidate | null> => {
       setEditError(null);
       try {
         const patch = {
@@ -5096,9 +5173,22 @@ function ImportCandidateDetail({
           ? await api.updateDqlGenerationCandidate(session.id, candidate.id, patch)
           : await api.updateBlockStudioImportCandidate(session.id, candidate.id, patch);
         onCandidateUpdated(next);
+        return next;
     } catch (err: any) {
       setEditError(err?.message ?? 'Could not update candidate.');
+      return null;
     }
+  };
+
+  // Save draft, Certify and Edit full DQL act on the fields as shown: pending
+  // edits are applied first, so validation reads the current values.
+  const withEditsApplied = async (action: (next: BlockStudioImportCandidate) => unknown) => {
+    if (!editsPending) {
+      await action(candidate);
+      return;
+    }
+    const next = await saveEdits();
+    if (next) await action(next);
   };
 
   const assist = async (action: string) => {
@@ -5133,12 +5223,12 @@ function ImportCandidateDetail({
         <button onClick={() => setContextOpen((open) => !open)} style={contextOpen ? primaryImportButtonStyle(t) : secondaryImportButtonStyle(t)}>
           {contextOpen ? 'Hide context' : `Show context${contextCount > 0 ? ` (${contextCount})` : ''}`}
         </button>
-        <button onClick={() => onReviewInEditor(candidate)} style={primaryImportButtonStyle(t)}>Edit full DQL</button>
+        <button onClick={() => void withEditsApplied(onReviewInEditor)} style={primaryImportButtonStyle(t)}>Edit full DQL</button>
         {/* Save writes a draft; Certify is the separate, explicit trust action. */}
-        <button onClick={() => void onSave(candidate)} disabled={loading || trust === 'certified' || reuseRecommended} style={trust === 'draft_saved' ? secondaryImportButtonStyle(t) : primaryImportButtonStyle(t)}>{reuseRecommended ? 'Reuse existing' : trust === 'certified' ? 'Saved' : trust === 'draft_saved' ? 'Save draft again' : 'Save draft'}</button>
+        <button onClick={() => void withEditsApplied(onSave)} disabled={loading || trust === 'certified' || reuseRecommended} style={trust === 'draft_saved' && !editsPending ? secondaryImportButtonStyle(t) : primaryImportButtonStyle(t)}>{reuseRecommended ? 'Reuse existing' : trust === 'certified' ? 'Saved' : trust === 'draft_saved' ? 'Save draft again' : 'Save draft'}</button>
         {isAiGeneratedCandidate(candidate) && !reuseRecommended && (
           <button
-            onClick={() => void onCertify(candidate)}
+            onClick={() => void withEditsApplied(onCertify)}
             disabled={loading || trust !== 'draft_saved'}
             title={trust === 'certified' ? 'Certified' : trust === 'unsaved' ? 'Save the draft first, then certify it.' : 'Run the certification rules and certify this block as its reviewer.'}
             style={trust === 'draft_saved' ? primaryImportButtonStyle(t) : secondaryImportButtonStyle(t)}
@@ -5148,6 +5238,11 @@ function ImportCandidateDetail({
         )}
       </div>
 
+      {editsPending && (
+        <div role="status" style={{ fontSize: 12, color: t.textSecondary, background: `${t.accent}10`, border: `1px solid ${t.accent}40`, borderRadius: 8, padding: '8px 10px', lineHeight: 1.45 }}>
+          You changed the review details. Save draft, Certify and Edit full DQL use the values shown.
+        </div>
+      )}
       {editError && <div role="alert" style={{ fontSize: 12, color: '#f85149', background: '#f8514914', borderRadius: 8, padding: 10 }}>{editError}</div>}
       {runError && (
         <div role="alert" style={{ fontSize: 12, color: '#f85149', background: '#f8514914', border: `1px solid #f8514933`, borderRadius: 8, padding: 10, lineHeight: 1.45, overflowWrap: 'anywhere' }}>
@@ -5198,7 +5293,7 @@ function ImportCandidateDetail({
               <FieldLabel label="Terms" t={t}><input value={terms} onChange={(event) => setTerms(event.target.value)} style={inputStyle} /></FieldLabel>
             </div>
             <FieldLabel label="Replaces" t={t}><input value={replacementFor} onChange={(event) => setReplacementFor(event.target.value)} style={inputStyle} /></FieldLabel>
-            <button onClick={() => void saveEdits()} style={{ ...primaryImportButtonStyle(t), justifySelf: 'start' }}>Apply edits</button>
+            <button onClick={() => void saveEdits()} disabled={!editsPending} style={{ ...(editsPending ? primaryImportButtonStyle(t) : secondaryImportButtonStyle(t)), justifySelf: 'start' }}>{editsPending ? 'Apply edits' : 'Edits applied'}</button>
           </PanelBox>
 
           {candidate.preview && (
@@ -6027,6 +6122,7 @@ function CertificationChecklistPanel({
   onReviewMetrics,
   onRun,
   onFix,
+  onFixDescription,
 }: {
   result: {
     ok?: boolean;
@@ -6061,6 +6157,7 @@ function CertificationChecklistPanel({
   onReviewMetrics: () => void;
   onRun: () => void;
   onFix: (issue: BlockStudioDiagnostic) => void;
+  onFixDescription?: (description: string) => void;
 }) {
   const checklist = result.checklist;
   const testsAreBlocking = Boolean(
@@ -6139,7 +6236,9 @@ function CertificationChecklistPanel({
                   ? 'Edit run inputs'
                   : issue.action === 'configure_runtime'
                     ? 'Review runtime'
-                    : 'Edit source';
+                    : issue.action === 'fix_description'
+                      ? 'Edit the description myself'
+                      : 'Edit source';
             const handleAction = issue.action === 'review_metrics' || issue.action === 'configure_runtime'
               ? onReviewMetrics
               : issue.action === 'run_again'
@@ -6166,6 +6265,11 @@ function CertificationChecklistPanel({
                 <div style={{ fontSize: 11.5, lineHeight: 1.45, color: t.textSecondary }}>{issue.message}</div>
                 {issue.correction && <div style={{ fontSize: 11.5, lineHeight: 1.45, color: t.textPrimary }}><strong>How to fix:</strong> {issue.correction}</div>}
                 <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' }}>
+                  {issue.action === 'fix_description' && issue.suggestedDescription && onFixDescription && (
+                    <button type="button" onClick={() => onFixDescription(issue.suggestedDescription!)} style={primaryImportButtonStyle(t)}>
+                      Remove "review required" from the description and certify
+                    </button>
+                  )}
                   <button type="button" onClick={handleAction} style={secondaryImportButtonStyle(t)}>{actionLabel}</button>
                   {issue.technicalDetails && (
                     <button type="button" onClick={() => onFix(issue)} disabled={repairing} style={secondaryImportButtonStyle(t)}>

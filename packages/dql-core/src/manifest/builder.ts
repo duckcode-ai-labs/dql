@@ -2622,17 +2622,9 @@ function buildManifestLineage(
     declaredTermRefs: view.declaredTermRefs,
   }));
 
-  // Pre-build a map of table name → block names that query that table.
-  // Used to resolve "which blocks feed into a notebook" when a notebook
-  // references a table directly rather than via ref().
-  const tableToBlocks = new Map<string, string[]>();
+  // A bound cell points at a `.dql` block file by path.
   const pathToBlockName = new Map<string, string>();
   for (const block of Object.values(blocks)) {
-    for (const table of block.tableDependencies) {
-      const key = table.toLowerCase();
-      if (!tableToBlocks.has(key)) tableToBlocks.set(key, []);
-      tableToBlocks.get(key)!.push(block.name);
-    }
     if (block.filePath) pathToBlockName.set(block.filePath, block.name);
   }
 
@@ -2656,22 +2648,12 @@ function buildManifestLineage(
       }
     }
 
-    // Blocks whose output tables are directly queried by this notebook's SQL cells.
-    // e.g. a notebook queries fct_orders and there is a block "Monthly Revenue" that
-    // also queries fct_orders — link them so the flow is block → dashboard not
-    // dbt_model → dashboard.
-    const tableMatchedBlocks = new Set<string>();
-    for (const cell of notebook.cells) {
-      if (cell.blockName) continue; // skip block-declaring cells (already handled above)
-      for (const table of cell.tableDependencies ?? []) {
-        for (const blockName of tableToBlocks.get(table.toLowerCase()) ?? []) {
-          if (!inlineBlockSet.has(blockName)) tableMatchedBlocks.add(blockName);
-        }
-      }
-    }
-
-    // Combine: inline declarations + explicit refs + table-matched standalone blocks
-    const allBlocks = [...inlineBlockNames, ...refDeps, ...tableMatchedBlocks];
+    // Only what the notebook's cells actually use: inline declarations,
+    // explicit ref()s and bound cells. A notebook that merely queries the same
+    // table as a block does not use that block. Linking every block that
+    // shares a table made impact analysis name notebooks that never touch the
+    // block (each NBA block "fed" a notebook that queries int_player_stats).
+    const allBlocks = [...new Set([...inlineBlockNames, ...refDeps])];
 
     return {
       name: notebook.title,

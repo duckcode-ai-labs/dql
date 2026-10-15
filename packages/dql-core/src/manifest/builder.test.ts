@@ -739,6 +739,53 @@ block "Notebook Revenue" {
     expect(block.tableDependencies).toEqual(['orders']);
   });
 
+  it('links a notebook only to the blocks its cells use, never to blocks that merely share a table', () => {
+    mkdirSync(join(tmpDir, 'blocks', 'nba'), { recursive: true });
+    mkdirSync(join(tmpDir, 'notebooks'), { recursive: true });
+    const blockSource = (name: string, sql: string) => `block "${name}" {
+  domain = "nba"
+  type = "custom"
+  owner = "analytics"
+  query = """${sql}"""
+}`;
+    writeFileSync(join(tmpDir, 'blocks', 'nba', 'top-scorers.dql'), blockSource('Top Scorers', 'SELECT player_name, SUM(pts) AS points FROM int_player_stats GROUP BY 1'));
+    writeFileSync(join(tmpDir, 'blocks', 'nba', 'top-rebounders.dql'), blockSource('Top Rebounders', 'SELECT player_name, SUM(reb) AS rebounds FROM int_player_stats GROUP BY 1'));
+    writeFileSync(join(tmpDir, 'blocks', 'nba', 'bound-assists.dql'), blockSource('Bound Assists', 'SELECT player_name, SUM(ast) AS assists FROM int_player_stats GROUP BY 1'));
+    // Uses Top Scorers through ref(); also queries the shared table directly.
+    writeFileSync(join(tmpDir, 'notebooks', 'uses-a.dqlnb'), JSON.stringify({
+      version: 1,
+      title: 'Uses A',
+      cells: [
+        { id: 'c1', type: 'sql', source: 'SELECT * FROM ref("Top Scorers")' },
+        { id: 'c2', type: 'sql', source: 'SELECT player_name, SUM(pts) FROM int_player_stats GROUP BY 1' },
+      ],
+    }));
+    // Queries the same table every block reads, and uses no block.
+    writeFileSync(join(tmpDir, 'notebooks', 'feedback.dqlnb'), JSON.stringify({
+      version: 1,
+      title: 'Players Feedback',
+      cells: [{ id: 'c1', type: 'sql', source: 'SELECT player_name, AVG(pts) FROM int_player_stats GROUP BY 1' }],
+    }));
+    // A cell bound to a block file uses that block.
+    writeFileSync(join(tmpDir, 'notebooks', 'bound.dqlnb'), JSON.stringify({
+      version: 1,
+      title: 'Bound',
+      cells: [{ id: 'c1', type: 'sql', source: 'SELECT player_name, SUM(ast) AS assists FROM int_player_stats GROUP BY 1', blockBinding: { path: 'blocks/nba/bound-assists.dql', state: 'bound' } }],
+    }));
+
+    const manifest = buildManifest({ projectRoot: tmpDir, dqlVersion: 'test' });
+    const feeds = (notebook: string) => manifest.lineage.edges
+      .filter((edge) => edge.target === `dashboard:${notebook}` && edge.source.startsWith('block:'))
+      .map((edge) => edge.source)
+      .sort();
+
+    expect(feeds('Uses A')).toEqual(['block:Top Scorers']);
+    expect(feeds('Players Feedback')).toEqual([]);
+    expect(feeds('Bound')).toEqual(['block:Bound Assists']);
+    // The rebounders block feeds no notebook, so its impact names none.
+    expect(manifest.lineage.edges.filter((edge) => edge.source === 'block:Top Rebounders' && edge.target.startsWith('dashboard:'))).toEqual([]);
+  });
+
   it('recovers from legacy nested proposal metadata in draft blocks', () => {
     mkdirSync(join(tmpDir, 'blocks', '_drafts'), { recursive: true });
     writeFileSync(join(tmpDir, 'blocks', '_drafts', 'legacy.dql'), `block "legacy" {

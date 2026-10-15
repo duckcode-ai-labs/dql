@@ -241,6 +241,8 @@ import {
   readCompanionCertification,
   sourceSha256,
   withBlockStatus,
+  describesReviewPending,
+  withoutReviewPendingWording,
   type CertificationReceipt,
   type CertificationSurface,
 } from './certification-receipt.js';
@@ -25855,8 +25857,20 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
           if (!certification.certification.certified || blockers.length > 0) {
             const savedDraft = saveDqlGenerationDraft(importId, readiness.candidate);
             writeBlockStudioImportCandidate(projectRoot, importId, savedDraft);
+            const issues = (certification.checklist.issues ?? []).filter((issue) => issue.severity === 'error');
             res.writeHead(422, { 'Content-Type': 'application/json; charset=utf-8' });
-            res.end(serializeJSON({ ok: false, candidate: savedDraft, blockers, ...certification }));
+            res.end(serializeJSON({
+              ok: false,
+              // The sentence the import shows, and the issues it can offer a fix for.
+              error: issues.length > 0
+                ? issues.map((issue) => issue.title ?? issue.message).join(' ')
+                : blockers.join(' ') || 'The certification rules did not pass.',
+              code: 'CERTIFICATION_BLOCKED',
+              details: { issues, blockers },
+              candidate: savedDraft,
+              blockers,
+              ...certification,
+            }));
             return;
           }
           const savedPath = saveBlockStudioArtifacts(projectRoot, {
@@ -29830,6 +29844,16 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
           return;
         }
         const executableCell = resolved.cell;
+        if (executableCell.type === 'dql' && dqlSourceIsPlainSql(executableCell.source)) {
+          // Plain SQL handed to the DQL parser only says "Parse errors in
+          // <block-invocation>"; say what is wrong and what to do instead.
+          res.writeHead(422, { 'Content-Type': 'application/json; charset=utf-8' });
+          res.end(serializeJSON({
+            code: 'DQL_CELL_HOLDS_SQL',
+            error: 'This is a DQL cell, and it holds plain SQL. Switch it to a SQL cell to run the query as SQL, or wrap the query in a DQL block.',
+          }));
+          return;
+        }
         const invocation = executableCell.type === 'dql'
           ? prepareBlockInvocation({
               source: executableCell.source,
@@ -39181,7 +39205,9 @@ type BlockStudioDiagnostic = {
   references?: string[];
   correction?: string;
   technicalDetails?: string;
-  action?: 'edit_source' | 'review_metrics' | 'configure_runtime' | 'edit_parameters' | 'run_again';
+  action?: 'edit_source' | 'review_metrics' | 'configure_runtime' | 'edit_parameters' | 'run_again' | 'fix_description';
+  /** For `fix_description`: the description the one-click fix would write. */
+  suggestedDescription?: string;
   location?: { line?: number; column?: number };
 };
 
@@ -40917,6 +40943,9 @@ export function saveBlockStudioArtifacts(
       const previousCompanionPath = join(projectRoot, previousCompanion);
       if (existsSync(previousCompanionPath)) rmSync(previousCompanionPath, { force: true });
     }
+    // A draft promoted to its final place takes its companion files with it,
+    // including one an older release wrote under the draft's domain instead.
+    if (isDraftBlockPath(previousPath)) removeOrphanedDraftCompanions(projectRoot, previousPath);
   }
 
   return targetRelativePath;
@@ -41107,9 +41136,71 @@ export function saveBlockStudioDraftArtifacts(
     content: draftSource,
     lineage: options.lineage,
     importMeta: options.importMeta,
+    // The companion lives where the draft's own path says it does, the place
+    // promotion and delete look for it. Deriving it from the block's current
+    // domain instead stranded a YAML in semantic-layer/blocks/_drafts/<domain>/
+    // whenever the draft sat elsewhere (an Ask draft in blocks/_drafts/, or a
+    // draft whose domain was edited).
+    companionRelativePath: blockCompanionRelativePath(projectRoot, targetRelativePath) ?? undefined,
   });
+  removeOrphanedDraftCompanions(projectRoot, targetRelativePath);
 
   return targetRelativePath;
+}
+
+/**
+ * Remove the ZLens-written companion YAMLs of a draft that no draft source
+ * owns any more. Only `semantic-layer/blocks/_drafts/**\/<draft file>.yaml`
+ * files written for this draft's file name (`block: <name>`) are candidates,
+ * and one is kept whenever any draft `.dql` in the project maps to it, so a
+ * same-named draft in another domain keeps its companion.
+ */
+function removeOrphanedDraftCompanions(projectRoot: string, draftRelativePath: string): string[] {
+  const normalized = normalize(draftRelativePath).replace(/^\/+/, '').replaceAll('\\', '/');
+  if (!isDraftBlockPath(normalized) || !normalized.endsWith('.dql')) return [];
+  const baseName = normalized.split('/').pop()!.replace(/\.dql$/, '');
+  const companionsRoot = join(projectRoot, 'semantic-layer', 'blocks', '_drafts');
+  if (!existsSync(companionsRoot)) return [];
+  const candidates: string[] = [];
+  const visitCompanions = (dir: string, depth: number) => {
+    if (depth > 6 || !existsSync(dir)) return;
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const child = join(dir, entry.name);
+      if (entry.isDirectory()) visitCompanions(child, depth + 1);
+      else if (entry.name === `${baseName}.yaml`) candidates.push(relative(projectRoot, child).replaceAll('\\', '/'));
+    }
+  };
+  visitCompanions(companionsRoot, 0);
+  if (candidates.length === 0) return [];
+  const owned = new Set<string>();
+  const visitDrafts = (dir: string, depth: number) => {
+    if (depth > 8 || !existsSync(dir)) return;
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const child = join(dir, entry.name);
+      if (entry.isDirectory()) {
+        visitDrafts(child, depth + 1);
+        continue;
+      }
+      if (entry.name !== `${baseName}.dql`) continue;
+      const relativePath = relative(projectRoot, child).replaceAll('\\', '/');
+      if (!isDraftBlockPath(relativePath)) continue;
+      const companion = blockCompanionRelativePath(projectRoot, relativePath);
+      if (companion) owned.add(companion);
+    }
+  };
+  visitDrafts(join(projectRoot, 'blocks'), 0);
+  visitDrafts(join(projectRoot, 'domains'), 0);
+  const removed: string[] = [];
+  for (const candidate of candidates) {
+    if (owned.has(candidate)) continue;
+    const absolute = join(projectRoot, candidate);
+    const text = readFileSync(absolute, 'utf-8');
+    // Only a companion ZLens wrote for this draft, never a hand-authored file.
+    if (!new RegExp(`^block:\\s*["']?${baseName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}["']?\\s*$`, 'm').test(text)) continue;
+    rmSync(absolute, { force: true });
+    removed.push(candidate);
+  }
+  return removed;
 }
 
 function canonicalBlockRelativePath(
@@ -41715,15 +41806,21 @@ function buildBlockStudioCertificationChecklist(input: {
   // it anyway would leave a "certified" block Ask silently skips, so the
   // description is brought in line first. The review-required TAG is a draft
   // lifecycle marker that Certify removes by itself.
-  if (/review[\s-]*required/i.test(parsed.description ?? '')) {
+  if (describesReviewPending(parsed.description)) {
+    // Certifying is the review, so the fix is to take the status wording out
+    // of the prose. The person still decides: the suggested description is
+    // shown and applied only by their explicit click, never silently.
+    const suggestedDescription = suggestedDescriptionWithoutReviewWording(parsed);
     issues.push({
       severity: 'error',
       code: 'description_review_required',
       title: 'The description says it needs review',
       field: 'Metadata',
-      message: 'The description still says this block is review-required. Ask does not serve a certified block that says it needs review, so edit the description, save the draft, and certify again.',
-      correction: 'Describe what the block answers without "review required", save the draft, and certify again.',
-      action: 'edit_source',
+      message: 'The description still says "review required". Certifying is the review: Ask never treats a block as certified while its own description says it still needs review, so the description has to say what the block returns instead.',
+      correction: suggestedDescription
+        ? `Remove "review required" from the description and certify. The description becomes: "${suggestedDescription}"`
+        : 'Describe what the block returns without "review required", save the draft, and certify again.',
+      ...(suggestedDescription ? { suggestedDescription, action: 'fix_description' as const } : { action: 'edit_source' as const }),
     });
   }
   for (const blocker of input.extraBlockers ?? []) {
@@ -41783,6 +41880,29 @@ function buildBlockStudioCertificationChecklist(input: {
     issues: uniqueIssues,
     checkedAt: new Date().toISOString(),
   };
+}
+
+/**
+ * The description a block would carry with its review-status wording taken
+ * out, or, when that leaves nothing, one written from its declared outputs and
+ * grain. Undefined when neither says anything about the data.
+ */
+function suggestedDescriptionWithoutReviewWording(parsed: { description?: string; outputs?: unknown; grain?: unknown }): string | undefined {
+  const stripped = withoutReviewPendingWording(parsed.description ?? '');
+  if (stripped && !describesReviewPending(stripped)) return stripped;
+  const outputs = Array.isArray(parsed.outputs) ? parsed.outputs.filter((value): value is string => typeof value === 'string' && value.trim().length > 0) : [];
+  if (outputs.length === 0) return undefined;
+  const grain = typeof parsed.grain === 'string' && parsed.grain.trim() ? ` per ${parsed.grain.trim()}` : '';
+  return `Returns ${outputs.slice(0, 8).join(', ')}${grain}.`;
+}
+
+/** A DQL cell whose source is plain SQL (no DQL statement, no `@block(…)` reference). */
+function dqlSourceIsPlainSql(source: string): boolean {
+  const code = source.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/--[^\n]*/g, ' ').trim();
+  if (!code) return false;
+  if (/^\s*(?:@[A-Za-z_]+\s*(?:\([^)]*\))?\s*)*(?:block|term|domain|business_view|dashboard|workbook|chart|digest|import)\b/im.test(code)) return false;
+  if (/@block\s*\(/i.test(code)) return false;
+  return /^(?:select|with|from|values|table|show|describe|explain|summarize|pivot|unpivot|insert|update|delete|create|drop|alter)\b/i.test(code);
 }
 
 function extractSqlTablesLight(sql: string): string[] {
@@ -42069,9 +42189,12 @@ function deterministicDqlGenerationPatch(
   const grain = extractDqlGenerationGroupByFields(parameterized.sql)[0];
   const outputs = extractDqlGenerationSelectOutputs(parameterized.sql);
   const sourceSystems = candidate.lineage.sourceTables.map((table) => table.split('.').filter(Boolean).slice(-2, -1)[0] ?? '').filter(Boolean);
-  const description = candidate.description && !candidate.description.startsWith('Imported from ')
-    ? candidate.description
-    : deterministicDqlGenerationDescription(candidate, evidence);
+  // Review state lives in the status and the review-required tag; the
+  // human description says what the block returns.
+  const ownDescription = candidate.description && !candidate.description.startsWith('Imported from ')
+    ? withoutReviewPendingWording(candidate.description)
+    : '';
+  const description = ownDescription || deterministicDqlGenerationDescription(candidate, evidence);
   const allowedFilters = Array.from(new Set([
     ...parameterized.allowedFilters,
     ...extractDqlGenerationFilterFields(parameterized.sql),
@@ -42490,7 +42613,8 @@ async function buildAiDqlGenerationPatch(
         'Use only directly relevant dbt, semantic, warehouse, certified block, and SQL-shape evidence from the payload.',
         'terms must reference existing DQL/DataLex glossary terms from the payload. Do not invent term names.',
         'If metadata descriptions are missing, describe the observable SQL intent instead of inventing business meaning.',
-        'Descriptions and llmContext must be specific, business-readable, concise, and review-required.',
+        'description says what the block returns: its outputs, grain, period and filters, in specific, business-readable, concise words.',
+        'Never put review, draft or certification status in description or llmContext ("review required", "needs review", "draft"). The status and tags already carry it, and a description that says it needs review can never be certified.',
         'reviewCadence should usually be monthly or quarterly unless evidence strongly suggests a different cadence.',
         'Tags must be business/search tags. Avoid generic tags such as raw-sql, imported, ai-generated.',
       ].join('\n'),
@@ -42601,10 +42725,14 @@ function mergeDqlGenerationPatch(
   evidence: DqlGenerationEvidence[],
 ): DqlGenerationPatch {
   const name = override.name && !isWeakDqlGenerationName(override.name) ? override.name : base.name;
-  const description = override.description
-    && !isWeakDqlGenerationDescription(override.description)
-    && !isUngroundedDqlGenerationDescription(override.description, candidate, evidence)
-    ? override.description
+  // A model told to keep status out of prose still sometimes writes "Review
+  // required: …". The import keeps review state in the status and tags, so the
+  // wording is taken out here; what is left must still describe the data.
+  const overrideDescription = override.description ? withoutReviewPendingWording(override.description) : '';
+  const description = overrideDescription
+    && !isWeakDqlGenerationDescription(overrideDescription)
+    && !isUngroundedDqlGenerationDescription(overrideDescription, candidate, evidence)
+    ? overrideDescription
     : base.description;
   const llmContext = override.llmContext
     && !isUngroundedDqlGenerationDescription(override.llmContext, candidate, evidence)
@@ -44344,6 +44472,8 @@ function writeBlockCompanionFile(
      * the receipt already on disk.
      */
     certification?: CertificationReceipt | null;
+    /** Where the companion goes, project-relative, when its block's path decides it (drafts). */
+    companionRelativePath?: string;
   },
 ): string {
   const extractedRefs = extractSemanticReferenceNames(options.content);
@@ -44352,8 +44482,10 @@ function writeBlockCompanionFile(
   const companionDir = options.visibility === 'private'
     ? join(projectRoot, '.dql', 'local', 'private', 'semantic-layer', 'blocks', options.folderPath ?? '')
     : join(projectRoot, 'semantic-layer', 'blocks', options.domain, options.folderPath ?? '');
-  mkdirSync(companionDir, { recursive: true });
-  const companionPath = join(companionDir, `${options.slug}.yaml`);
+  const companionPath = options.companionRelativePath
+    ? join(projectRoot, options.companionRelativePath)
+    : join(companionDir, `${options.slug}.yaml`);
+  mkdirSync(dirname(companionPath), { recursive: true });
   // The companion's reviewStatus always mirrors the `.dql` status, so the
   // source and its YAML can never disagree about whether a block is certified.
   const status = blockSourceStatus(options.content);
