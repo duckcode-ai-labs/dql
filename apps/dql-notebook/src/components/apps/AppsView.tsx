@@ -2358,6 +2358,11 @@ function AppWorkspaceSurface({
   const handleResearchSeedHandled = useCallback(() => {
     setResearchSeed(null);
   }, []);
+  // The page run on screen, when it is a whole run of this page: Ask reads that run's results (server-side) for
+  // a question about what the App shows. A bounded tile refresh keeps no page evidence, so it is not named.
+  const currentPageRunId = dashboardRun && !dashboardRun.partial && dashboardRun.dashboardId === dashboardDoc?.dashboard.id
+    ? dashboardRun.runId
+    : undefined;
   const handleAskBlock = useCallback((blockId: string, question: string) => {
     setSelectedBlockId(blockId);
     // Stakeholder view: route tile follow-up through the governed agent loop in the
@@ -2372,9 +2377,15 @@ function AppWorkspaceSurface({
           scopeHint: tidyTitle(workspaceAppName) ? `Follow up on ${tidyTitle(workspaceAppName)}` : 'Follow up on this tile',
           selectedObject: { kind: 'block', id: blockId, title: dashboardDoc?.dashboard.metadata.title },
           workspaceContext: {
+            // Scoped to this App and page like "Ask about this App", focused on the tile.
+            surface: 'apps',
             appId: workspaceAppId ?? undefined,
+            appName: workspaceAppName ?? undefined,
             dashboardId: dashboardDoc?.dashboard.id,
+            dashboardTitle: dashboardDoc?.dashboard.metadata.title,
+            dashboardFilters: variables,
             blockId,
+            ...(currentPageRunId ? { dashboardRunId: currentPageRunId } : {}),
           },
           // The app's own suggested questions (uncovered gaps from the AI build).
           suggestedQuestions: (dashboardDoc?.app as { copilot?: { suggestedQuestions?: string[] } } | undefined)?.copilot?.suggestedQuestions,
@@ -2385,7 +2396,7 @@ function AppWorkspaceSurface({
     }
     onExplainChange(true);
     setAskSeed({ text: question, nonce: Date.now() });
-  }, [dispatch, isEditable, workspaceAppId, workspaceAppName, dashboardDoc?.dashboard.id, dashboardDoc?.dashboard.metadata.title, onExplainChange]);
+  }, [dispatch, isEditable, workspaceAppId, workspaceAppName, dashboardDoc?.dashboard.id, dashboardDoc?.dashboard.metadata.title, onExplainChange, variables, currentPageRunId]);
 
   // "Ask about this App" (HH-16): the whole App, its domain and the filters on
   // screen, through the governed Ask loop (the server scopes it; see
@@ -2411,12 +2422,14 @@ function AppWorkspaceSurface({
           dashboardId: dashboardDoc?.dashboard.id,
           dashboardTitle: dashboardDoc?.dashboard.metadata.title,
           dashboardFilters: variables,
+          // The page run on screen: the server answers from its own evidence of it, never from browser rows.
+          ...(currentPageRunId ? { dashboardRunId: currentPageRunId } : {}),
         },
         suggestedQuestions: (dashboardDoc?.app as { copilot?: { suggestedQuestions?: string[] } } | undefined)?.copilot?.suggestedQuestions,
       },
       autoRun: { text: question, mode: 'ask' },
     });
-  }, [dispatch, isEditable, onExplainChange, workspaceAppId, workspaceAppName, dashboardDoc, variables]);
+  }, [dispatch, isEditable, onExplainChange, workspaceAppId, workspaceAppName, dashboardDoc, variables, currentPageRunId]);
   const askAboutAppFilters = useMemo(() => dashboardFilters.flatMap((filter) => {
     const value = dashboardFilterValues[filter.id];
     const text = Array.isArray(value) ? value.map(String).join(', ') : typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean' ? String(value) : '';
@@ -2848,6 +2861,7 @@ function AppWorkspaceSurface({
                       dashboardId: dashboardDoc.dashboard.id,
                       pageTitle: dashboardDoc.dashboard.metadata.title,
                       filters: askAboutAppFilters,
+                      resultsReady: Boolean(currentPageRunId),
                     }}
                     onAsk={handleAskApp}
                   />
@@ -3194,6 +3208,7 @@ function UnifiedAppAiPanel({
     dashboardTitle: dashboard?.metadata.title,
     dashboardDescription: dashboard?.metadata.description,
     dashboardFilters: variables,
+    ...(dashboardRun && !dashboardRun.partial && dashboardRun.dashboardId === dashboard?.id ? { dashboardRunId: dashboardRun.runId } : {}),
     selectedBlock: selectedBlock ? {
       blockId: selectedBlock.blockId,
       tileId: selectedBlock.tileId,
@@ -3205,7 +3220,7 @@ function UnifiedAppAiPanel({
       columns: selectedTileRun?.result?.columns?.slice(0, 12),
       sampleRows: sampleDashboardRows(selectedTileRun?.result?.rows, selectedTileRun?.result?.columns),
     } : undefined,
-  }), [app, appDoc, appId, dashboard, selectedBlock, selectedTileRun, variables]);
+  }), [app, appDoc, appId, dashboard, dashboardRun, selectedBlock, selectedTileRun, variables]);
 
   return (
     <AiSidePanel

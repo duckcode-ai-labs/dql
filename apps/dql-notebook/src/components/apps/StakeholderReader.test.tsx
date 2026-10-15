@@ -21,6 +21,18 @@ describe('the App reader for stakeholders (HH-16)', () => {
     expect(html).toContain('Region: West');
     // An empty question cannot be sent.
     expect(html).toMatch(/<button type="submit"[^>]*disabled=""/);
+    // Before the page has run, the control says what Ask cannot see yet (N3).
+    expect(html).toContain('Ask can see its blocks and filters, not its results yet');
+  });
+
+  it('says it reads the page results, sources, trust and filters once the page has run (N3)', () => {
+    const html = renderToStaticMarkup(
+      <AskAboutApp
+        scope={{ appId: 'claims-weekly', appName: 'Claims Weekly', dashboardId: 'overview', pageTitle: 'Claims this week', filters: [], resultsReady: true }}
+        onAsk={() => undefined}
+      />,
+    );
+    expect(html).toContain('Answers read this page’s current results, each tile’s source and trust label, and the filters on screen.');
   });
 
   it('shows no Follow button until the server says whether this person follows the page', () => {

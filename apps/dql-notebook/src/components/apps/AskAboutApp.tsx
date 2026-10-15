@@ -6,8 +6,10 @@ import { MessageSquare, SendHorizontal } from 'lucide-react';
  * in the reader, beside the questions on each chart. It is asked through the
  * governed Ask loop with the App's scope — its domain and the filters on
  * screen (the server reads both from the App's own files; see
- * app-copilot-scope) — so the answer carries the same trust label as any
- * other and is never wider than the view it was asked from.
+ * app-copilot-scope) — and the page run on screen, so a question about what
+ * the App shows is answered from that run's results (app-view-answer). The
+ * answer carries the trust label of the tiles it read and is never wider than
+ * the view it was asked from.
  */
 export interface AskAboutAppScope {
   appId: string;
@@ -17,6 +19,20 @@ export interface AskAboutAppScope {
   pageTitle?: string;
   /** The filters with a value on screen, as the reader sees them. */
   filters: Array<{ label: string; value: string }>;
+  /**
+   * Whether the page has a current run Ask can read. The question names that
+   * run; the server reads its tiles, sources, trust labels and shown rows
+   * from its own evidence of it. Without one, Ask sees the App's blocks and
+   * filters but not its results, and the control says so before asking.
+   */
+  resultsReady?: boolean;
+}
+
+/** What Ask will see of this App, stated before the question is sent. */
+export function askAboutAppCapability(scope: Pick<AskAboutAppScope, 'resultsReady'>): string {
+  return scope.resultsReady
+    ? 'Answers read this page’s current results, each tile’s source and trust label, and the filters on screen.'
+    : 'This page has not finished running: Ask can see its blocks and filters, not its results yet.';
 }
 
 export function AskAboutApp({ scope, onAsk }: { scope: AskAboutAppScope; onAsk: (question: string) => void }): JSX.Element {
@@ -56,6 +72,7 @@ export function AskAboutApp({ scope, onAsk }: { scope: AskAboutAppScope; onAsk: 
           <span key={chip} style={{ padding: '1px 7px', borderRadius: 999, border: '1px solid var(--border-subtle)', background: 'var(--bg-1)' }}>{chip}</span>
         ))}
       </div>
+      <div className="dql-app-ask-capability" style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>{askAboutAppCapability(scope)}</div>
     </form>
   );
 }

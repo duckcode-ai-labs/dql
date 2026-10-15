@@ -1555,6 +1555,18 @@ describe('UnifiedAgentRunPanel DQL-first artifact display helpers', () => {
     } as any)).toContain('bounded execution failed');
   });
 
+  it('N3 labels an answer read from the App page by the tiles it read, never as AI-written SQL', () => {
+    const fromApp = (trustState: string) => ({
+      trustState,
+      route: trustState === 'certified' ? 'certified_answer' : 'generated_answer',
+      artifacts: [{ kind: 'answer', trustState, payload: { appView: { appId: 'nba', tiles: [] }, answer: 'James Harden is first.' } }],
+    } as any);
+    expect(trustExplainer(fromApp('review_required'))).toBe('Read from this App’s current results. A tile it read needs review: check its source before relying on it.');
+    expect(trustExplainer(fromApp('review_required'))).not.toContain('AI-generated');
+    expect(trustExplainer(fromApp('certified'))).toBe('Read from this App’s current results; every tile it read runs a certified source.');
+    expect(askArtifactMeta(fromApp('review_required').artifacts[0], fromApp('review_required').artifacts[0].payload)).toContain('from this App · needs review');
+  });
+
   it('EXP-002 describes an exploratory answer as executed only when result evidence exists', () => {
     expect(trustExplainer({
       trustState: 'review_required',

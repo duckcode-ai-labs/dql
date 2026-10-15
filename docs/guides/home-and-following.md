@@ -38,6 +38,19 @@ stated in the question, so the answer is never wider than the view you asked
 from, and it carries the usual trust label (certified, governed or needs
 review).
 
+A question about what the page shows ("which player is ranked first in this
+App?", "what does this table show?") is answered from the page's current
+results. The question names the page run on your screen; ZLens reads that
+run's tiles, each tile's source block and trust label, the filters it applied
+and the rows it shows from its own record of the run (never from the browser),
+and cites the tiles it read. The answer's trust label is the weakest of those
+tiles: an answer read from a tile that needs review is labelled needs review.
+The page values reach the AI model only inside the privacy boundary; otherwise
+ZLens reads the rows to you without a model. A page keeps its results for Ask
+for 15 minutes, and only for the person who ran it: after that, or before the
+page has run, the box says Ask cannot see the results yet, and you refresh the
+page.
+
 ## Who an App is for
 
 In an App, **Edit → ⋯ → App settings → Audience**: describe the audience in words and
