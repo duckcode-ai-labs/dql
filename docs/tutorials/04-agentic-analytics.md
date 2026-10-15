@@ -1,5 +1,9 @@
 # 04 — Agentic analytics
 
+!!! warning "Archived page"
+    This page was written for an earlier version of ZLens and may not match the
+    current product. See [About the archive](../archive.md) for the current page.
+
 **Who this is for:** anyone who wants AI to answer data questions **from
 governed blocks**, not from improvised SQL.
 

@@ -1,5 +1,9 @@
 # Build a dashboard
 
+!!! warning "Archived page"
+    This page was written for an earlier version of ZLens and may not match the
+    current product. See [About the archive](../archive.md) for the current page.
+
 > ~3 minutes · ends with an HTML file you can host anywhere
 
 ZLens dashboards are **compiled static HTML**. No SaaS DB, no login, no
