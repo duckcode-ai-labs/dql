@@ -1,173 +1,116 @@
-# Connect a Warehouse
+# Connect a database
 
-> ~3 minutes · ends with `zlens doctor` confirming the configured connection
+ZLens runs queries against one database connection at a time. You set it up
+in **Settings → Database**. Guided Setup uses the same screen.
 
-ZLens keeps the CLI install small. Databricks SQL is built in. DuckDB,
-local files, and Snowflake are enabled by installing the project-local driver
-from the notebook connection panel.
+## Install the driver first
 
-Connections live in `dql.config.json` at the project root. Keep secrets in
-environment variables and reference them with `${ENV_VAR}` interpolation.
+Databricks SQL is built in. DuckDB (and local CSV, Parquet and JSON files)
+and Snowflake need a driver in the project:
 
-## 1. Pick your connector
+1. Open **Settings → Database**.
+2. Pick your database in **Warehouse**.
+3. If the status row says **Connector package required before you can
+   connect**, click **Install connector**.
 
-Databricks example:
-
-```json
-{
-  "connections": {
-    "default": {
-      "driver": "databricks",
-      "host": "${DATABRICKS_HOST}",
-      "httpPath": "/sql/1.0/warehouses/${DATABRICKS_WAREHOUSE_ID}",
-      "catalog": "main",
-      "schema": "analytics",
-      "token": "${DATABRICKS_TOKEN}"
-    }
-  }
-}
-```
-
-Snowflake example:
-
-```json
-{
-  "connections": {
-    "default": {
-      "driver": "snowflake",
-      "account": "${SNOWFLAKE_ACCOUNT}",
-      "username": "${SNOWFLAKE_USER}",
-      "authMethod": "key_pair",
-      "privateKeyPath": "${SNOWFLAKE_PRIVATE_KEY_PATH}",
-      "warehouse": "ANALYTICS_WH",
-      "database": "PROD",
-      "schema": "MARTS",
-      "role": "ANALYST"
-    }
-  }
-}
-```
-
-Per-driver options live in the [Connector reference](../reference/connectors.md).
-
-## 2. Install optional drivers
-
-Open the notebook connection panel and click **Install** for DuckDB or
-Snowflake. The driver is installed into the project under `.dql/connectors/`.
-Databricks does not need an extra package.
-
-CLI equivalents:
+The row changes to **Connector installed and ready**. The driver goes into
+`.dql/connectors/` in your project. From a terminal, the same thing is:
 
 ```bash
 npm install --prefix .dql/connectors duckdb          # DuckDB and local files
 npm install --prefix .dql/connectors snowflake-sdk   # Snowflake
 ```
 
-## 3. Export credentials
+## Import a dbt profile
 
-```bash
-export DATABRICKS_HOST=adb-123456789.0.azuredatabricks.net
-export DATABRICKS_WAREHOUSE_ID=9196548d010cf14d
-export DATABRICKS_TOKEN=...
-```
+If your project uses dbt, ZLens reads `profiles.yml` for you. It looks in
+`DBT_PROFILES_DIR`, the dbt project folder, the ZLens project folder and
+`~/.dbt`.
 
-or:
+1. Open **Settings → Database**.
+2. Under **dbt profiles**, find your profile and target. Each row says which
+   database and file it came from.
+3. Click **Import & test**.
 
-```bash
-export SNOWFLAKE_ACCOUNT=xy12345.us-east-1
-export SNOWFLAKE_USER=svc_dql
-export SNOWFLAKE_PRIVATE_KEY_PATH="$HOME/.ssh/snowflake_key.p8"
-```
+When the test passes, the status card shows **Test passed** and the
+connection is active. If your `profiles.yml` lives somewhere else, type its
+path under **Import dbt profiles.yml** and click **Find profiles**.
 
-## 4. Verify
+## Enter a connection by hand
 
-```bash
-zlens doctor
-```
+1. Open **Settings → Database**.
+2. Pick your database in **Warehouse**. ZLens supports DuckDB, Snowflake,
+   Databricks SQL, BigQuery, PostgreSQL, Amazon Redshift, MySQL / MariaDB,
+   SQL Server / Azure SQL, Trino / Starburst, ClickHouse, Amazon Athena,
+   Microsoft Fabric and SQLite.
+3. Fill in the fields. Required fields have a `*`. For DuckDB that is only
+   **DuckDB file path**.
+4. Click **Save connection**.
 
-If that passes, the notebook and CLI resolve table references against this
+ZLens tests the connection before it saves it:
+
+- **Test passed. Connection saved and activated.** You are done.
+- **Test failed. Previous connection preserved.** Nothing changed. Fix the
+  fields and save again.
+
+Use **Test connection** on the status card at any time to check the active
 connection.
 
-## 5. Apply a metadata scope
+## Where the connection is stored
 
-In **Settings → Database**, test the connection, then use **Metadata scope**:
-
-- **Use exact dbt project relations** is the recommended default when a current
-  dbt manifest is configured.
-- **dbt relations plus selected schemas** adds only the databases/catalogs and
-  schemas you name.
-- **Selected databases/catalogs and schemas** is the explicit non-dbt mode.
-
-After the connection test passes, **Find available databases & schemas** can
-perform a bounded, setup-only discovery of the database objects visible to the
-configured warehouse credentials. The list clearly distinguishes:
-
-- schemas already represented by the current dbt manifest, which are included
-  automatically and should not be selected again; and
-- additional schemas outside the dbt project, which remain optional until you
-  explicitly select and apply them.
-
-Discovery only shows the available scope. It does not save a selection, extract
-table or column metadata, or widen Ask access. Select an additional schema only
-when reporting needs relations outside the configured dbt project.
-
-Use one line per database or catalog:
-
-```text
-ANALYTICS_PROD: SALES, FINANCE
-REFERENCE_DATA: SHARED
-```
-
-**Apply and synchronize** validates the observed target and builds the local
-`.dql/cache/metadata.sqlite` generation. A failed, empty, or truncated refresh
-does not replace the previous valid generation. Normal warm Ask and schema UI
-reads use this local generation; ZLens does not enumerate every database in the
-account.
-
-## Multiple connections
+The connection goes into `dql.config.json` under `connections`, for example:
 
 ```json
-{
-  "connections": {
-    "default": { "driver": "databricks", "host": "${DATABRICKS_HOST}", "token": "${DATABRICKS_TOKEN}" },
-    "prod": { "driver": "snowflake", "account": "${SNOWFLAKE_ACCOUNT}" },
-    "local": { "driver": "duckdb", "filepath": "./warehouse.duckdb" }
-  }
+"connections": {
+  "jaffle_shop_dev": { "driver": "duckdb", "filepath": "../jaffle_shop.duckdb" }
 }
 ```
 
-Reference a non-default connection from a cell:
+`dql.config.json` is shared through git, so secrets do not go in it:
 
-```sql
--- @connection: prod
-select count(*) from analytics.orders
+- A password or token you type in the page is saved to
+  `.dql/local/private/connection-secrets.json`, which git ignores. The config
+  keeps a `${secret:<connection>.<field>}` reference instead.
+- You can also write `${ENV_VAR}` in the config and set the variable in your
+  shell.
+
+Every driver's fields are listed in the [Connectors reference](../reference/connectors.md).
+
+## Limit what ZLens indexes (optional)
+
+After a passing test, **Metadata scope** appears under the form. ZLens copies
+table and column names (never rows) into a local index so searches stay fast.
+
+1. Pick an **Index mode**:
+    - **Use exact dbt project relations (recommended)**: only the dbt project's
+      tables.
+    - **dbt relations plus selected schemas**: the dbt tables plus schemas you
+      name.
+    - **Selected databases/catalogs and schemas**: only what you name. Use this
+      without dbt.
+2. To see what you can pick, click **Find available databases & schemas**.
+3. Click **Apply and synchronize**.
+
+A failed or empty refresh keeps the previous index. **Refresh metadata**
+rebuilds it later.
+
+## Check from the terminal
+
+```bash
+npm run doctor
 ```
 
-Ask AI shows the active database connection beside the Thinking control. Pick a
-named connection there when reporting runs outside the default dbt target. One
-Ask run uses that same connection for metadata grounding, semantic compilation,
-certified/generated execution, and bounded validation; ZLens does not silently
-switch connections during a run.
-
-If a cached Snowflake or Databricks session is terminated while the Notebook is
-open, ZLens evicts that session and reconnects once for a single read-only
-`SELECT`/`WITH` statement. Mutating SQL and multi-statement scripts are never
-replayed automatically. A second connection failure remains visible and can be
-retried explicitly after the connection is checked.
+`zlens doctor` reports the default connection along with the rest of the
+project setup.
 
 ## Troubleshooting
 
-- **`driver package is not installed`** — open the notebook connection panel
-  and install the project-local driver for DuckDB or Snowflake.
-- **`connection refused`** — firewall, VPN, wrong host, or wrong port. Run
-  `zlens doctor` after checking the resolved environment variables.
-- **`terminated connection`** — ZLens retries one read-only query with a fresh
-  session. If it still fails, test the selected Ask/Notebook connection and
-  check the warehouse session, VPN, and authentication lifetime.
-- **`role does not have USAGE on schema`** — warehouse permissions. ZLens needs
-  `USAGE` on the schema and `SELECT` on queried objects.
-- **Snowflake key-pair auth** — set `authMethod` to `key_pair` and provide
-  `privateKeyPath` or `privateKey`. The public key belongs on the Snowflake
-  user, not in ZLens config.
-- **Databricks HTTP path** — paste the dbt/JDBC path
-  `/sql/1.0/warehouses/<id>` or the raw warehouse ID.
+- **The driver package is not installed.** Install it as shown at the top of
+  this page.
+- **Connection refused.** Check the host, port, firewall and VPN.
+- **Permission errors such as `role does not have USAGE on schema`.** ZLens
+  needs `USAGE` on the schema and `SELECT` on the tables it queries.
+- **Snowflake key-pair sign-in.** Set the authentication to key pair and give
+  the private key path. The public key belongs on the Snowflake user.
+- **Databricks HTTP path.** Paste the path `/sql/1.0/warehouses/<id>` or the
+  warehouse ID.
