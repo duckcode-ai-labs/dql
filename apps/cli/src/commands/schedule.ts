@@ -129,6 +129,15 @@ async function runScheduleList(flags: CLIFlags): Promise<void> {
   }
 }
 
+/**
+ * A block run needs the project's connection. Without one, say so plainly (the
+ * runtime answers the same state as 409 CONNECTION_NOT_CONFIGURED) instead of
+ * falling back to an in-memory DuckDB and reporting a missing driver (N2).
+ */
+export const NO_CONNECTION_FOR_SCHEDULE_RUN =
+  'No database connection is configured yet (CONNECTION_NOT_CONFIGURED). Run `zlens notebook`, open Connections, ' +
+  'add a warehouse or local DuckDB/file connection, then retry.';
+
 async function runScheduleRun(rest: string[], flags: CLIFlags): Promise<void> {
   const target = rest[0];
   if (!target) throw new Error('Usage: zlens schedule run <path-to-block.dql> | zlens schedule run <appId> [scheduleId]');
@@ -142,10 +151,8 @@ async function runScheduleRun(rest: string[], flags: CLIFlags): Promise<void> {
   }
 
   const projectConfig = loadProjectConfig(projectRoot);
-  const connection = normalizeProjectConnection(
-    projectConfig.defaultConnection ?? { driver: 'duckdb' },
-    projectRoot,
-  );
+  if (!projectConfig.defaultConnection) throw new Error(NO_CONNECTION_FOR_SCHEDULE_RUN);
+  const connection = normalizeProjectConnection(projectConfig.defaultConnection, projectRoot);
   const executor = new QueryExecutor();
 
   const record = await runBlock(absPath, {

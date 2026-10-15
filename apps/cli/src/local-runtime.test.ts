@@ -1440,7 +1440,7 @@ describe('local runtime network boundary', () => {
     }, {})).toEqual({ region: 'CA' });
   });
 
-  it('answers a starter query with no connection plainly instead of borrowing a global dbt profile (F11)', async () => {
+  it('answers a starter query with no connection plainly instead of borrowing a global dbt profile (F11, N2)', async () => {
     const projectRoot = mkdtempSync(join(tmpdir(), 'dql-starter-unconfigured-'));
     const profilesDir = mkdtempSync(join(tmpdir(), 'dql-starter-global-profiles-'));
     tempDirs.push(projectRoot, profilesDir);
@@ -1468,10 +1468,36 @@ describe('local runtime network boundary', () => {
         body: JSON.stringify({ sql: 'select 1 as customer_count', executionTarget: { target: 'connection' } }),
       });
       expect(response.status).toBe(409);
-      const body = await response.json() as { code?: string; error?: string };
+      const body = await response.json() as { code?: string; error?: string; details?: { phase?: string } };
       expect(body.code).toBe('CONNECTION_NOT_CONFIGURED');
+      expect(body.details?.phase).toBe('setup');
       expect(body.error).toContain('No database connection is configured yet');
       expect(body.error).not.toMatch(/PostgreSQL|54322/);
+
+      // The notebook's Run (the starter cell) is the same setup state, not a 500 COMPILATION_FAILED (N2).
+      const cellRun = await fetch(`http://127.0.0.1:${port}/api/notebook/execute`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          cell: { id: 'starter_query', type: 'sql', source: 'SELECT 1 AS ok' },
+          executionTarget: { target: 'connection' },
+          executionContext: { cellId: 'starter_query', runId: 'run-n2' },
+        }),
+      });
+      expect(cellRun.status).toBe(409);
+      const cellBody = await cellRun.json() as { code?: string; error?: string; details?: { phase?: string; executionContext?: { runId?: string } } };
+      expect(cellBody.code).toBe('CONNECTION_NOT_CONFIGURED');
+      expect(cellBody.details?.phase).toBe('setup');
+      expect(cellBody.details?.executionContext?.runId).toBe('run-n2');
+      expect(cellBody.error).toContain('No database connection is configured yet. Open Connections');
+
+      const exported = await fetch(`http://127.0.0.1:${port}/api/query/export`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sql: 'select 1 as ok', format: 'csv', executionTarget: { target: 'connection' } }),
+      });
+      expect(exported.status).toBe(409);
+      expect((await exported.json() as { code?: string }).code).toBe('CONNECTION_NOT_CONFIGURED');
       // No driver was installed for a connection nobody configured.
       expect(existsSync(join(projectRoot, '.dql', 'connectors'))).toBe(false);
     } finally {

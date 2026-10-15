@@ -2478,6 +2478,7 @@ function CellComponentInner({ cell, index, onStartResearch, researchState }: Cel
                 {cell.error && (
                   <ErrorOutput
                     message={cell.error}
+                    errorCode={cell.execution?.error?.code}
                     themeMode={state.themeMode}
                     onFix={cell.type === 'sql' ? handleFixAndRun : undefined}
                     onBackgroundRepair={canBackgroundRepairNotebookCell(cell)

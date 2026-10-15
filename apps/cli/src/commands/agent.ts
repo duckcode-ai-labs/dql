@@ -2105,7 +2105,15 @@ async function executeRuntimeCell(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ cell }),
   });
-  if (!response.ok) throw new Error(`Runtime returned ${response.status}: ${await response.text()}`);
+  if (!response.ok) {
+    // Prefer the runtime's own sentence and code (e.g. CONNECTION_NOT_CONFIGURED) over raw JSON.
+    const text = await response.text();
+    let failure: { error?: unknown; code?: unknown } | undefined;
+    try { failure = JSON.parse(text) as { error?: unknown; code?: unknown }; } catch { failure = undefined; }
+    throw new Error(typeof failure?.error === 'string'
+      ? `${failure.error}${typeof failure.code === 'string' ? ` (${failure.code})` : ''}`
+      : `Runtime returned ${response.status}: ${text}`);
+  }
   const payload = (await response.json()) as {
     result?: {
       columns?: unknown[];

@@ -6,7 +6,7 @@
 | **Status** | Draft / In review / Accepted / Implemented / Rejected / Superseded |
 | **Created** | YYYY-MM-DD |
 | **Targets** | DQL `<version range>` |
-| **Discussion** | <link to GitHub Discussion thread> |
+| **Discussion** | <link to the RFC issue> |
 | **Implementation** | <link to PR(s)> |
 | **Supersedes** | RFC NNNN (if any) |
 
@@ -62,8 +62,9 @@ counts in real projects, etc.
 1. Copy this template to `docs/rfcs/<NNNN>-<short-slug>.md` and PR it as
    **status: Draft**. The PR is for the doc only — implementation follows
    in a separate PR.
-2. Open a [GitHub Discussion](https://github.com/duckcode-ai-labs/zlens/discussions/categories/rfcs)
-   for community input. Link it in the table at the top.
+2. Open an [issue](https://github.com/duckcode-ai-labs/zlens/issues/new/choose)
+   titled `RFC <NNNN>: <title>` for community input (GitHub Discussions are
+   not enabled). Link it in the table at the top.
 3. Discussion stays open ≥ 14 days for non-trivial proposals.
 4. Maintainers move status to **Accepted** or **Rejected** with a brief
    rationale comment in the PR.
