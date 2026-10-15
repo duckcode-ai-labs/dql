@@ -1,0 +1,140 @@
+# Feature clips for the docs and README. Re-record with `pnpm docs:clips`
+# (see README.md in this folder). Each id has <id>.mp4, <id>.webm and a
+# <id>.png poster; caption and steps describe exactly what the clip shows and
+# are used as the accessible figcaption.
+
+lineage:
+  title: Trace lineage from dbt to an App
+  caption: >-
+    Lineage traces the certified monthly_revenue block end to end: the dbt
+    sources and models it reads on the left, the App page that shows it on the
+    right.
+  steps:
+    - Open Lineage from the left rail.
+    - Pick the monthly_revenue block to trace.
+    - The graph shows dbt sources and models upstream, the block in the middle, and its chart, dashboard and App downstream.
+    - Click the orders dbt model to highlight its path into the block.
+    - Click the Jaffle Growth Review App to highlight the path from the block to the App.
+
+ask-certified:
+  title: A certified answer
+  caption: >-
+    Asked how revenue changed by month, Ask answers from the certified
+    monthly_revenue block: the answer is labelled Certified answer, names the
+    block and its owner, and How it was answered shows each step.
+  steps:
+    - Open Ask from the left rail.
+    - Ask "How has revenue changed by month?".
+    - The answer is labelled Certified answer, from the monthly_revenue block, with its owner.
+    - The result table shows gross revenue and order count for each month.
+    - Switch the result to Visualization to see the monthly trend as a line chart.
+    - Open How it was answered to see the steps Ask took.
+
+ask-review:
+  title: An answer that needs review
+  caption: >-
+    No certified block answers average order value by store, so Ask writes the
+    SQL itself: the answer is labelled AI-generated, is saved as a draft block
+    that is not certified, and opens in Block Studio for review.
+  steps:
+    - Open Ask from the left rail.
+    - Ask "What is the average order value at each store?".
+    - The answer is labelled AI-generated answer and shows the two stores with their average order value.
+    - Below the result, Ask notes it saved the query for review as a draft block, not certified.
+    - Open draft to review opens the draft block in Block Studio, where it can be reviewed and certified.
+
+ask-refusal:
+  title: A refusal with a reason
+  caption: >-
+    Asked for an employee churn rate, Ask runs no query and says why: none of
+    the sample's tables hold employee data. How it was answered lists the
+    tables it searched.
+  steps:
+    - Open Ask from the left rail.
+    - Ask "What is our employee churn rate?".
+    - The answer is labelled Couldn't run this query.
+    - The reason says no table holds employee or HR data and lists the tables it searched.
+    - Open How it was answered to see each step and where it stopped.
+
+import-certify:
+  title: Import SQL, save a draft, certify
+  caption: >-
+    Paste SQL into Import SQL, generate a DQL draft and save it: saving never
+    certifies. Certify is a separate, explicit action, and the certified block
+    carries a receipt saying who certified it, when, and how.
+  steps:
+    - Open Blocks and start an import.
+    - Paste a SQL query that counts orders per store, and set the domain and owner.
+    - Generate DQL drafts; the draft gets a name, description, outputs and checks.
+    - Save draft; the draft is saved and marked needs review, and Certify becomes available.
+    - Certify the draft; it is now certified.
+    - Open the block in Block Studio; its receipt reads Certified by, with the date, via SQL import, under OSS rules.
+
+notebook:
+  title: A notebook with SQL and DQL cells
+  caption: >-
+    Create a shared notebook, run a SQL cell against the sample's DuckDB, add a
+    DQL cell that wraps the same query as a reusable block, run it, and save
+    the notebook to the project.
+  steps:
+    - Open Notebooks and create a new shared notebook named Store orders.
+    - Start a query cell and switch it to a SQL cell.
+    - Type a query that counts orders per store and run the cell; the result shows each store and its order count.
+    - Add a DQL cell and enter a block named orders_by_store with the same query and a bar chart.
+    - Run the DQL cell; it draws the bar chart.
+    - Save the notebook; it is stored as notebooks/store_orders.dqlnb.
+
+app-ask:
+  title: An App and Ask from the App
+  caption: >-
+    The Jaffle Growth Review App shows that all four of its tiles are
+    certified, each tile carries its own trust label, and Ask from the App is
+    scoped to that App: asked how revenue changed by month, it answers from the
+    certified block.
+  steps:
+    - Open the Jaffle Growth Review App from Apps.
+    - The header reads All data certified, and the page reads All 4 tiles certified.
+    - Scroll through the tiles; each one is labelled Certified.
+    - Ask "How has revenue changed by month?" in the App's Ask box.
+    - The answer opens beside the page, scoped to Jaffle Growth Review, labelled Certified answer, answered from a certified block.
+
+overview:
+  title: ZLens in under a minute
+  caption: >-
+    Ask a question and get an answer from a certified block, labelled Certified
+    answer; see how it was answered; open the App built from the same certified
+    blocks, where all data is certified; then trace lineage from the dbt
+    sources and models through the block to the App.
+  steps:
+    - Ask "How has revenue changed by month?".
+    - The answer is labelled Certified answer, from the monthly_revenue block, with a table and a line chart.
+    - How it was answered shows the steps Ask took.
+    - Open the Jaffle Growth Review App; it reads All data certified and every tile is labelled Certified.
+    - Open Lineage and trace monthly_revenue; the graph runs from dbt sources and models to the block, its dashboard and the App.
+
+quickstart:
+  title: Get started with the Jaffle Shop sample
+  caption: >-
+    Inside the Jaffle Shop sample, create-zlens-app scaffolds a ZLens workspace,
+    npm installs it and npm run notebook starts the workbench. Guided Setup
+    finds the dbt project, connects the sample's DuckDB file, skips the
+    optional AI step, and a first query runs in the starter notebook.
+  steps:
+    - In the jaffle-shop-duckdb folder, run npx create-zlens-app@latest dql; it detects the sibling dbt project and scaffolds the workspace.
+    - Run cd dql && npm install.
+    - Run npm run notebook; ZLens installs the DuckDB driver and prints the local URL.
+    - In the browser, Guided Setup shows the dbt project is ready.
+    - Enter ../jaffle_shop.duckdb as the DuckDB file path and save the connection; the test passes.
+    - Skip the optional AI step and finish setup.
+    - Open the welcome notebook, query dev.customers for the top five customers by lifetime spend, and run the cell; the result shows as a bar chart.
+
+mcp-connect:
+  title: Connect Claude Code over MCP
+  caption: >-
+    In the sample project, zlens connect claude-code writes the project's
+    .mcp.json and a CLAUDE.md guide so Claude Code loads the ZLens MCP server;
+    the written config runs zlens mcp for this project through npx.
+  steps:
+    - In the project folder, run npx zlens connect claude-code.
+    - ZLens reports that the project's .mcp.json and CLAUDE.md now point Claude Code at ZLens, and suggests zlens mcp test to verify.
+    - Run cat .mcp.json; the dql server runs npx -y --package=@zlens/cli zlens mcp with the project path.

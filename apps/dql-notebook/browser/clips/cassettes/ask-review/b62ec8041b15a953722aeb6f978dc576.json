@@ -1,0 +1,23 @@
+{
+  "key": "b62ec8041b15a953722aeb6f978dc576",
+  "operation": "generate",
+  "text": "```sql\nSELECT l.location_id, l.location_name, SUM(o.order_total) / NULLIF(COUNT(DISTINCT o.order_id), 0) AS average_order_value\nFROM \"jaffle_shop\".\"dev\".\"orders\" o\nJOIN \"jaffle_shop\".\"dev\".\"locations\" l ON o.location_id = l.location_id\nGROUP BY l.location_id, l.location_name\nORDER BY average_order_value DESC\n```",
+  "providerName": "claude",
+  "recordedAt": "2026-10-15T21:00:00.821Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 2,
+    "messageRoles": [
+      "system",
+      "user"
+    ],
+    "preCanonicalHash": "b62ec8041b15a953722aeb6f978dc5768ac2dccee669ca0b1824a2f7361c3840",
+    "postCanonicalHash": "b62ec8041b15a953722aeb6f978dc5768ac2dccee669ca0b1824a2f7361c3840",
+    "appliedRuleClasses": []
+  }
+}

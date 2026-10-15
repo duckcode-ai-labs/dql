@@ -1,9 +1,7 @@
-import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
-import { closeSync, cpSync, existsSync, mkdirSync, mkdtempSync, openSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
-import { createServer } from 'node:net';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
+import { buildCli, installDuckdbConnector, repoRoot, run, startNotebookServer } from './support/server';
 
 /**
  * Prepare and start the product the journeys test:
@@ -16,41 +14,12 @@ import { fileURLToPath } from 'node:url';
  * function stops the server and deletes the temp dir.
  */
 
-const here = dirname(fileURLToPath(import.meta.url));
-const repoRoot = resolve(here, '../../..');
 const fixtureDir = join(repoRoot, 'apps/cli/test/fixtures/jaffle-supply-chain');
-const cliEntry = join(repoRoot, 'apps/cli/dist/index.js');
-const DUCKDB_VERSION = '1.1.3';
-
-function run(command: string, args: string[], options: { cwd?: string } = {}): void {
-  const result = spawnSync(command, args, { cwd: options.cwd ?? repoRoot, stdio: 'inherit' });
-  if (result.status !== 0) {
-    throw new Error(`${command} ${args.join(' ')} failed with exit code ${result.status ?? 'none'}`);
-  }
-}
-
-function freePort(): Promise<number> {
-  return new Promise((resolvePort, reject) => {
-    const probe = createServer();
-    probe.once('error', reject);
-    probe.listen(0, '127.0.0.1', () => {
-      const address = probe.address();
-      const port = typeof address === 'object' && address ? address.port : 0;
-      probe.close(() => (port ? resolvePort(port) : reject(new Error('no free port'))));
-    });
-  });
-}
 
 function seedProject(projectDir: string): void {
   cpSync(fixtureDir, projectDir, { recursive: true });
 
-  // DuckDB is an optional connector dependency. Install it where the runtime
-  // looks first (<project>/.dql/connectors), the same way the Connections page does.
-  const connectorRoot = join(projectDir, '.dql', 'connectors');
-  mkdirSync(connectorRoot, { recursive: true });
-  writeFileSync(join(connectorRoot, 'package.json'), '{"private":true}\n');
-  run('npm', ['--prefix', connectorRoot, 'install', '--no-save', '--no-package-lock', '--workspaces=false', `duckdb@${DUCKDB_VERSION}`]);
-
+  const connectorRoot = installDuckdbConnector(projectDir);
   const warehouse = join(projectDir, 'jaffle_shop.duckdb');
   run('node', [join(repoRoot, 'scripts/seed-eval-warehouse.mjs'), '--connector-root', connectorRoot, '--out', warehouse, '--schema', 'dev']);
   if (!existsSync(warehouse) || statSync(warehouse).size < 1000) {
@@ -114,77 +83,30 @@ function seedProject(projectDir: string): void {
   }, null, 2)}\n`);
 }
 
-async function waitForHealth(baseUrl: string, server: ChildProcess, logPath: string): Promise<void> {
-  const deadline = Date.now() + 90_000;
-  while (Date.now() < deadline) {
-    if (server.exitCode !== null) break;
-    try {
-      const response = await fetch(`${baseUrl}/api/health`, { signal: AbortSignal.timeout(2_000) });
-      if (response.ok) return;
-    } catch {
-      // not listening yet
-    }
-    await new Promise((r) => setTimeout(r, 500));
-  }
-  const log = existsSync(logPath) ? readFileSync(logPath, 'utf8') : '(no server log)';
-  throw new Error(`zlens notebook did not become healthy at ${baseUrl}/api/health:\n${log}`);
-}
-
 export default async function globalSetup(): Promise<() => Promise<void>> {
-  if (process.env.E2E_SKIP_BUILD !== '1') {
-    run('pnpm', ['exec', 'turbo', 'run', 'build', '--filter=@zlens/cli...']);
-  }
-  if (!existsSync(cliEntry)) throw new Error(`Built CLI not found at ${cliEntry}; build it first.`);
+  buildCli();
 
   const workDir = mkdtempSync(join(tmpdir(), 'dql-browser-e2e-'));
   const projectDir = join(workDir, 'project');
-  seedProject(projectDir);
-
-  const port = await freePort();
-  const baseUrl = `http://127.0.0.1:${port}`;
-  const logPath = join(workDir, 'server.log');
-  const logFd = openSync(logPath, 'w');
-  const server = spawn('node', [cliEntry, 'notebook', projectDir, '--port', String(port), '--no-open'], {
-    cwd: workDir,
-    stdio: ['ignore', logFd, logFd],
-    env: {
-      ...process.env,
-      // Replay recorded model responses; a miss is an error and never reaches a live model.
-      ZLENS_EVAL_CASSETTE_DIR: join(projectDir, 'test-cassettes', 'answerability'),
-      ZLENS_EVAL_CASSETTE_MODE: 'replay',
-      // Native semantic engine only, so a developer's own `mf` cannot change the run.
-      ZLENS_METRICFLOW_BIN: join(workDir, 'no-metricflow', 'mf'),
-    },
-  });
-
-  closeSync(logFd); // the child keeps its own copy of the descriptor
-
-  const stop = async (): Promise<void> => {
-    if (server.exitCode === null) {
-      server.kill('SIGTERM');
-      await new Promise<void>((done) => {
-        const timer = setTimeout(() => { server.kill('SIGKILL'); done(); }, 5_000);
-        server.once('exit', () => { clearTimeout(timer); done(); });
-      });
-    }
-    rmSync(workDir, { recursive: true, force: true });
-  };
-
+  let server: Awaited<ReturnType<typeof startNotebookServer>>;
   try {
-    await waitForHealth(baseUrl, server, logPath);
-    // A fresh project opens the full-screen Guided Setup review once per CLI
-    // version. Acknowledge it the way finishing that review does, so the
-    // journeys land in the product rather than behind the setup dialog.
-    const ack = await fetch(`${baseUrl}/api/onboarding/acknowledge`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: '{}',
+    seedProject(projectDir);
+    server = await startNotebookServer({
+      projectDir,
+      workDir,
+      env: {
+        // Replay recorded model responses; a miss is an error and never reaches a live model.
+        ZLENS_EVAL_CASSETTE_DIR: join(projectDir, 'test-cassettes', 'answerability'),
+        ZLENS_EVAL_CASSETTE_MODE: 'replay',
+      },
     });
-    if (!ack.ok) throw new Error(`Acknowledging Guided Setup failed: HTTP ${ack.status} ${await ack.text()}`);
   } catch (error) {
-    await stop();
+    rmSync(workDir, { recursive: true, force: true });
     throw error;
   }
-  process.env.ZLENS_E2E_BASE_URL = baseUrl;
-  return stop;
+  process.env.ZLENS_E2E_BASE_URL = server.baseUrl;
+  return async () => {
+    await server.stop();
+    rmSync(workDir, { recursive: true, force: true });
+  };
 }

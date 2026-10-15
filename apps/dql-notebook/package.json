@@ -7,10 +7,12 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "test": "vitest run --passWithNoTests --hookTimeout 30000 --testTimeout 20000",
+    "test": "tsc -p tsconfig.browser.json && vitest run --passWithNoTests --hookTimeout 30000 --testTimeout 20000",
     "test:e2e": "playwright test",
     "preview": "vite preview",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist",
+    "typecheck:browser": "tsc -p tsconfig.browser.json",
+    "clips": "playwright test --config playwright.clips.config.ts"
   },
   "dependencies": {
     "@codemirror/autocomplete": "^6.20.1",
