@@ -69,3 +69,31 @@ import-certify:
     - Save draft; the draft is saved and marked needs review, and Certify becomes available.
     - Certify the draft; it is now certified.
     - Open the block in Block Studio; its receipt reads Certified by, with the date, via SQL import, under OSS rules.
+
+notebook:
+  title: A notebook with SQL and DQL cells
+  caption: >-
+    Create a shared notebook, run a SQL cell against the sample's DuckDB, add a
+    DQL cell that wraps the same query as a reusable block, run it, and save
+    the notebook to the project.
+  steps:
+    - Open Notebooks and create a new shared notebook named Store orders.
+    - Start a query cell and switch it to a SQL cell.
+    - Type a query that counts orders per store and run the cell; the result shows each store and its order count.
+    - Add a DQL cell and enter a block named orders_by_store with the same query and a bar chart.
+    - Run the DQL cell; it draws the bar chart.
+    - Save the notebook; it is stored as notebooks/store_orders.dqlnb.
+
+app-ask:
+  title: An App and Ask from the App
+  caption: >-
+    The Jaffle Growth Review App shows that all four of its tiles are
+    certified, each tile carries its own trust label, and Ask from the App is
+    scoped to that App: asked how revenue changed by month, it answers from the
+    certified block.
+  steps:
+    - Open the Jaffle Growth Review App from Apps.
+    - The header reads All data certified, and the page reads All 4 tiles certified.
+    - Scroll through the tiles; each one is labelled Certified.
+    - Ask "How has revenue changed by month?" in the App's Ask box.
+    - The answer opens beside the page, scoped to Jaffle Growth Review, labelled Certified answer, answered from a certified block.

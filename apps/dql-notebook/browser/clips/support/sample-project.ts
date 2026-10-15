@@ -64,11 +64,20 @@ function ensureSampleBuilt(cacheDir: string): string {
   return cloneDir;
 }
 
+/** The DuckDB driver range the sample's own setup.sh installs. */
+export const SAMPLE_DUCKDB_RANGE = '^1.1.0';
+
 /** The DuckDB connector, installed once and copied into each project. */
 function ensureConnectors(cacheDir: string): string {
   const holder = join(cacheDir, 'connector-holder');
   const connectors = join(holder, '.dql', 'connectors');
-  if (!existsSync(join(connectors, 'node_modules', 'duckdb'))) installDuckdbConnector(holder);
+  const stamp = join(holder, '.range');
+  const current = existsSync(stamp) ? readFileSync(stamp, 'utf8').trim() : '';
+  if (current !== SAMPLE_DUCKDB_RANGE || !existsSync(join(connectors, 'node_modules', 'duckdb'))) {
+    rmSync(holder, { recursive: true, force: true });
+    installDuckdbConnector(holder, SAMPLE_DUCKDB_RANGE);
+    writeFileSync(stamp, `${SAMPLE_DUCKDB_RANGE}\n`);
+  }
   return connectors;
 }
 
@@ -82,10 +91,15 @@ export interface PreparedSample {
 }
 
 /**
- * Build the template project the clips copy from. The only edit to the
- * sample is its `jaffle_shop_dev` connection, which points at an absolute path
- * on the sample author's machine; it is pointed at the sample's own
- * jaffle_shop.duckdb (the same file its `default` connection uses).
+ * Build the template project the clips copy from. Two edits to the sample,
+ * both fixes for bugs in the sample itself (to be fixed upstream):
+ *  - its `jaffle_shop_dev` connection points at an absolute path on the sample
+ *    author's machine; it is pointed at the sample's own jaffle_shop.duckdb
+ *    (the file its `default` connection uses);
+ *  - the certified beverage_revenue_by_product block orders by a bare
+ *    `product_name`, which both joined tables have; DuckDB up to 1.4 (the
+ *    driver the sample's setup.sh installs) rejects it as ambiguous, so the
+ *    App's tile is blocked. The ORDER BY is qualified as the SELECT already is.
  */
 export function prepareSample(cacheDir: string): PreparedSample {
   const cloneDir = ensureSampleBuilt(cacheDir);
@@ -105,6 +119,12 @@ export function prepareSample(cacheDir: string): PreparedSample {
     if (connection.driver === 'duckdb' && connection.filepath?.startsWith('/')) connection.filepath = 'jaffle_shop.duckdb';
   }
   writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`);
+
+  const beverageBlock = join(templateDir, 'domains', 'commerce', 'blocks', 'beverage_revenue_by_product.dql');
+  if (existsSync(beverageBlock)) {
+    const source = readFileSync(beverageBlock, 'utf8');
+    writeFileSync(beverageBlock, source.replace('ORDER BY beverage_revenue DESC, product_name', 'ORDER BY beverage_revenue DESC, products.product_name'));
+  }
 
   run('node', [cliEntry, 'compile', '.'], { cwd: templateDir });
   return { cloneDir, templateDir, connectorsDir };

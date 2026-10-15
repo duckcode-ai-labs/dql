@@ -46,11 +46,11 @@ export function buildCli(): void {
  * DuckDB is an optional connector dependency. Install it where the runtime
  * looks first (<project>/.dql/connectors), the same way the Connections page does.
  */
-export function installDuckdbConnector(projectDir: string): string {
+export function installDuckdbConnector(projectDir: string, version: string = DUCKDB_VERSION): string {
   const connectorRoot = join(projectDir, '.dql', 'connectors');
   mkdirSync(connectorRoot, { recursive: true });
   writeFileSync(join(connectorRoot, 'package.json'), '{"private":true}\n');
-  run('npm', ['--prefix', connectorRoot, 'install', '--no-save', '--no-package-lock', '--workspaces=false', `duckdb@${DUCKDB_VERSION}`]);
+  run('npm', ['--prefix', connectorRoot, 'install', '--no-save', '--no-package-lock', '--workspaces=false', `duckdb@${version}`]);
   return connectorRoot;
 }
 
