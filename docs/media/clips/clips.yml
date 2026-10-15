@@ -1,0 +1,17 @@
+# Feature clips for the docs and README. Re-record with `pnpm docs:clips`
+# (see README.md in this folder). Each id has <id>.mp4, <id>.webm and a
+# <id>.png poster; caption and steps describe exactly what the clip shows and
+# are used as the accessible figcaption.
+
+lineage:
+  title: Trace lineage from dbt to an App
+  caption: >-
+    Lineage traces the certified monthly_revenue block end to end: the dbt
+    sources and models it reads on the left, the App page that shows it on the
+    right.
+  steps:
+    - Open Lineage from the left rail.
+    - Pick the monthly_revenue block to trace.
+    - The graph shows dbt sources and models upstream, the block in the middle, and its chart, dashboard and App downstream.
+    - Click the orders dbt model to highlight its path into the block.
+    - Click the Jaffle Growth Review App to highlight the path from the block to the App.
