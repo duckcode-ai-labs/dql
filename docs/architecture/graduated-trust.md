@@ -147,6 +147,30 @@ from a table), and `zlens certify --from-draft`. Block Studio shows the receipt
 as *Certified by … · when · via …*. Changing a block's status away from
 certified removes the receipt.
 
+Certifying is the review, so it also removes the `review-required` lifecycle
+tag that SQL import, AI drafts and notebook research put on a draft (in the
+`.dql` and in the companion YAML). Ask never serves a block that is certified
+while its tags or description still say it needs review, so Certify refuses a
+description that says "review required" until it is edited. A block certified
+before this rule, which still carries the tag, is named with the reason when a
+question asks for it; certifying it again clears the tag.
+
+### Asking for a block by name
+
+A question that names a block as a block ("using the certified block *Top
+scorers*", "the *Top scorers* block") is answered by that block when its
+contract can answer: its declared parameters are bound from the question (a
+`LIMIT ${top_n}` takes the question's "top 5"), and a period its own SQL fixes
+(`EXTRACT(YEAR FROM game_date) BETWEEN 2016 AND 2017`) satisfies a question
+about exactly that period. When it cannot, the answer says why in the block's
+terms ("the block does not accept a filter on season", "the block is fixed to
+game_date from 2016-01-01 up to 2018-01-01") and what it does accept, and
+offers review-required exploration as an explicit next step. It is never
+handed to AI-written SQL on its own, and the words of a block's name are never
+treated as values the SQL must filter on. A follow-up that narrows a certified
+block's answer ("Only guards.") is held to that block the same way. Naming a
+draft or retired block says so at once, with what to do.
+
 ## Apps: one trust state per page
 
 An App page shows one aggregate data trust, derived from its current tiles'

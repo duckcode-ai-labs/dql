@@ -4,7 +4,7 @@ This playbook defines how maintainers, contributors, and coding agents deliver
 ZLens OSS changes from request to verified evidence. It is a documentation and
 handoff contract, not a new autonomous agent runtime.
 
-Start every task with [Current DQL truth](./current-dql-truth.md). Live
+Start every task with [Current ZLens truth](./current-dql-truth.md). Live
 repository state beats memory. The
 [DQL 2.0 handoff template](../specs/dql-2-domain-context/agent-handoff-template.md)
 adds stable acceptance IDs and workstream ownership when that program is in

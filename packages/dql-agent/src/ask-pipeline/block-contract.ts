@@ -56,6 +56,16 @@ export interface BlockContractV1 {
   parameters: string[];
   orderBy?: Array<{ column: string; direction: 'asc' | 'desc' }>;
   limit?: number;
+  /** The declared parameter the LIMIT is bound to (`LIMIT ${top_n}`): the block's row count is the caller's to choose. */
+  limitParameter?: string;
+  /**
+   * Periods the WHERE clause fixes on a date column (`EXTRACT(YEAR FROM d)
+   * BETWEEN 2016 AND 2017`, `d >= '2016-01-01' AND d < '2018-01-01'`), as
+   * half-open ISO dates. They stay in `scopeUnparsed` too: a block matched by
+   * its measures still needs that period asked for; this only lets a question
+   * that NAMES the block be compared with the period it is fixed to.
+   */
+  periods?: Array<{ column: string; start: string; end: string }>;
   grain?: string;
   entities: string[];
   relations: string[];
@@ -93,7 +103,8 @@ function splitAnd(text: string): string[] {
     if (char === "'" || char === '"') { quote = char; current += char; continue; }
     if (char === '(') depth += 1;
     if (char === ')') depth -= 1;
-    if (depth === 0 && upper.startsWith(' AND ', index)) { parts.push(current); current = ''; index += 4; continue; }
+    // `x BETWEEN a AND b` is one predicate: its AND does not split.
+    if (depth === 0 && upper.startsWith(' AND ', index) && !/\bBETWEEN\s+\S+\s*$/i.test(current)) { parts.push(current); current = ''; index += 4; continue; }
     current += char;
   }
   parts.push(current);
@@ -133,6 +144,47 @@ function parsePredicates(where: string | undefined): BlockContractPredicate[] {
   });
 }
 
+const ISO_DATE = /^(\d{4})-(\d{2})-(\d{2})/;
+const nextDay = (date: string): string => {
+  const [year, month, day] = date.split('-').map(Number) as [number, number, number];
+  return new Date(Date.UTC(year, month - 1, day + 1)).toISOString().slice(0, 10);
+};
+
+/** The periods a WHERE clause fixes on a date column, as half-open ISO date windows. */
+export function fixedPeriods(where: string | undefined, predicates: BlockContractPredicate[] = []): Array<{ column: string; start: string; end: string }> {
+  const periods: Array<{ column: string; start: string; end: string }> = [];
+  for (const part of where ? splitAnd(where) : []) {
+    const text = part.trim().replace(/\s+/g, ' ');
+    const yearOf = String.raw`(?:extract\s*\(\s*year\s+from\s+([A-Za-z_"][\w."]*)\s*\)|year\s*\(\s*([A-Za-z_"][\w."]*)\s*\)|date_part\s*\(\s*'year'\s*,\s*([A-Za-z_"][\w."]*)\s*\))`;
+    const between = new RegExp(`^${yearOf}\\s+between\\s+(\\d{4})\\s+and\\s+(\\d{4})$`, 'i').exec(text);
+    if (between) {
+      periods.push({ column: lastSegment(between[1] ?? between[2] ?? between[3]!).replace(/"/g, ''), start: `${between[4]}-01-01`, end: `${Number(between[5]) + 1}-01-01` });
+      continue;
+    }
+    const single = new RegExp(`^${yearOf}\\s*=\\s*(\\d{4})$`, 'i').exec(text);
+    if (single) {
+      periods.push({ column: lastSegment(single[1] ?? single[2] ?? single[3]!).replace(/"/g, ''), start: `${single[4]}-01-01`, end: `${Number(single[4]) + 1}-01-01` });
+      continue;
+    }
+    const dates = /^([A-Za-z_"][\w."]*)\s+between\s+'(\d{4}-\d{2}-\d{2})[^']*'\s+and\s+'(\d{4}-\d{2}-\d{2})[^']*'$/i.exec(text);
+    if (dates) periods.push({ column: lastSegment(dates[1]!).replace(/"/g, ''), start: dates[2]!, end: nextDay(dates[3]!) });
+  }
+  // `d >= '2016-01-01' AND d < '2018-01-01'`: two plain predicates on one column.
+  const byColumn = new Map<string, { start?: string; end?: string }>();
+  for (const predicate of predicates) {
+    const value = predicate.values[0];
+    if (!value || !ISO_DATE.test(value)) continue;
+    const bounds = byColumn.get(predicate.column) ?? {};
+    if (predicate.op === 'gte') bounds.start = value.slice(0, 10);
+    else if (predicate.op === 'gt') bounds.start = nextDay(value.slice(0, 10));
+    else if (predicate.op === 'lt') bounds.end = value.slice(0, 10);
+    else if (predicate.op === 'lte') bounds.end = nextDay(value.slice(0, 10));
+    byColumn.set(predicate.column, bounds);
+  }
+  for (const [column, bounds] of byColumn) if (bounds.start && bounds.end) periods.push({ column, start: bounds.start, end: bounds.end });
+  return periods;
+}
+
 /** Read the promise a block makes. Declared metadata always wins over what the SQL suggests. */
 export function extractBlockContract(block: BlockDeclarationLike): BlockContractV1 {
   const declaredOutputs = block.declaredOutputs ?? block.outputs?.map((output) => (typeof output === 'string' ? output : output.name)) ?? [];
@@ -143,6 +195,8 @@ export function extractBlockContract(block: BlockDeclarationLike): BlockContract
   const orderBy = isSimple ? clause(body, 'ORDER BY', ['LIMIT']) : undefined;
   const limitText = isSimple ? clause(body, 'LIMIT', []) : undefined;
   const limit = limitText && /^\d+$/.test(limitText.trim()) ? Number(limitText.trim()) : undefined;
+  const parameterNames = (block.parameters ?? []).map((parameter) => (typeof parameter === 'string' ? parameter : parameter.name));
+  const limitParameter = limitText ? /^\$\{\s*([A-Za-z_][A-Za-z0-9_]*)\s*\}$/.exec(limitText.trim())?.[1] : undefined;
   const declared = (output: string): Pick<BlockContractMeasure, 'declaredMetric'> => {
     const mapping = block.metricMappings?.find((candidate) => candidate.output.toLowerCase() === output.toLowerCase());
     if (!mapping) return {};
@@ -162,6 +216,7 @@ export function extractBlockContract(block: BlockDeclarationLike): BlockContract
   const fromMatch = fromText?.match(/^([A-Za-z_"`][\w."`$-]*)(?:\s+(?:as\s+)?[A-Za-z_]\w*)?$/i);
   const having = isSimple ? clause(body, 'HAVING', ['ORDER BY', 'LIMIT']) : undefined;
   const scope = parseScopePredicates(where);
+  const periods = fixedPeriods(where, scope.predicates);
   const plainItems = items.filter((item) => !item.aggregate);
   // The grain is what the SQL really groups by, not what it selects: a GROUP BY
   // wider than the plain SELECT items returns more rows than the contract states.
@@ -206,6 +261,8 @@ export function extractBlockContract(block: BlockDeclarationLike): BlockContract
       }
       : {}),
     ...(limit ? { limit } : {}),
+    ...(limitParameter && parameterNames.includes(limitParameter) ? { limitParameter } : {}),
+    ...(periods.length ? { periods } : {}),
     ...(block.grain ? { grain: block.grain } : {}),
     entities: block.entities ?? [],
     relations,

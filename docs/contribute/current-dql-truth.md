@@ -1,8 +1,8 @@
-# Current DQL truth
+# Current ZLens truth
 
-This document is the canonical starting point for planning changes in the DQL
-OSS repository. It separates verified current facts from accepted design,
-implemented-but-unverified work, and future scope.
+This document is the canonical starting point for planning changes in the
+ZLens open-source repository. It separates verified current facts from accepted
+design, implemented-but-unverified work, and future scope.
 
 It is a snapshot, not a substitute for checking the live repository. Before
 using any version, commit, package, test result, or acceptance status below,
@@ -30,16 +30,17 @@ authorization.
 
 ## Shipped OSS facts
 
-DQL OSS currently is:
+ZLens OSS currently is:
 
 - a local-first, single-user, dbt-first analytics-as-code workspace;
 - Git-versioned through DQL source files for blocks, notebooks, Apps, domains,
   skills, contracts, tests, related project metadata, and governed Hint Graph
   traces/hints/evaluations/reviews; rebuildable SQLite indexes remain local;
 - grounded in dbt artifacts and semantic metadata as the physical and semantic
-  source of truth, with DQL adding a sparse governed answer layer;
+  source of truth, with ZLens adding a sparse governed answer layer written as
+  DQL blocks;
 - distributed as synchronized npm packages, including the CLI and
-  `create-dql-app`;
+  `create-zlens-app`;
 - runnable locally with DuckDB/file data, Snowflake, Databricks SQL, and the
   documented semantic adapters, subject to connector-specific setup;
 - explicit about local trust states: generated or exploratory work is
@@ -113,7 +114,7 @@ remain open.
 
 ## Strict OSS boundary
 
-DQL OSS remains local-first, single-user, dbt-first, and Git-versioned. Local
+ZLens OSS remains local-first, single-user, dbt-first, and Git-versioned. Local
 certification, personas, policies, memory, and review flows are development and
 governance tools inside one user-controlled project; they are not hosted
 enterprise enforcement.

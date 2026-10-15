@@ -25,6 +25,8 @@ export interface EntailmentVerdict {
   identityNote?: string;
   /** The output column a time window is applied over, when the block has one. */
   windowColumn?: string;
+  /** The period the block's own WHERE fixes, when it is exactly the window asked for. */
+  fixedWindow?: { column: string; start: string; end: string };
   /** Block outputs matched by meaning to the question's own refs, so the rows can be read under the names the question used. */
   outputRefs?: Array<{ output: string; ref: string }>;
 }
@@ -100,11 +102,24 @@ export function entails(block: VocabularyEntry, intent: AnalyticalIntentV1, voca
   // the window's time column; a block with no such column cannot bound the
   // period, and a published SQL never has a window silently assumed.
   let windowColumn: string | undefined;
+  let fixedWindow: EntailmentVerdict['fixedWindow'];
   if (intent.time?.window) {
     const axis = intent.time.ref ? vocabulary.get(intent.time.ref) : undefined;
     const wanted = [axis?.physical?.column, axis?.name, intent.time.ref ? leaf(intent.time.ref) : undefined].filter((name): name is string => Boolean(name)).map(norm);
     windowColumn = contract.outputs.find((output) => wanted.includes(norm(output)));
-    if (!windowColumn) missing.push(`the block has no output for the time window ${intent.time.window.start}..${intent.time.window.end} (${wanted.join('/')}), so it cannot bound the period; the answer is composed from its measures instead`);
+    // A block the question NAMES may already be fixed to exactly the period
+    // asked for (`EXTRACT(YEAR FROM game_date) BETWEEN 2016 AND 2017` for
+    // "2016 and 2017"): that is the block answering, not a window assumed.
+    const fixed = windowColumn ? undefined : (contract.periods ?? []).find((period) => namesBlock || wanted.includes(norm(period.column)));
+    const window = intent.time.window;
+    if (!windowColumn && fixed && sameDay(fixed.start, window.start) && sameDay(fixed.end, window.end)) {
+      caveats.push(`the block is fixed to ${fixed.column} from ${fixed.start} up to ${fixed.end}, the period the question asks for`);
+      fixedWindow = fixed;
+    } else if (!windowColumn && fixed) {
+      missing.push(`the block is fixed to ${fixed.column} from ${fixed.start} up to ${fixed.end} and has no filter for another period (the question asks for ${window.start} up to ${window.end})`);
+    } else if (!windowColumn) {
+      missing.push(`the block has no output for the time window ${window.start}..${window.end} (${wanted.join('/')}), so it cannot bound the period; the answer is composed from its measures instead`);
+    }
   }
   // Every grouping and display column must be an output.
   for (const group of intent.groupBy) {
@@ -181,16 +196,20 @@ export function entails(block: VocabularyEntry, intent: AnalyticalIntentV1, voca
     if (!first || !sameColumn || first.direction !== intent.ordering.direction) missing.push('the block does not order the way the question asks');
   }
   if (intent.limit !== undefined) {
-    if (contract.limit === undefined) missing.push(`the block has no row limit; the question asks for ${intent.limit}`);
+    // `LIMIT ${top_n}`: the row count is a declared parameter, bound to the question's.
+    if (contract.limit === undefined && contract.limitParameter) caveats.push(`the row limit is the block's ${contract.limitParameter} parameter, bound to ${intent.limit}`);
+    else if (contract.limit === undefined) missing.push(`the block has no row limit; the question asks for ${intent.limit}`);
     else if (contract.limit !== intent.limit) missing.push(`the block returns ${contract.limit} rows; the question asks for ${intent.limit}`);
   } else if (contract.limit !== undefined) {
     caveats.push(`the block returns at most ${contract.limit} rows`);
   }
   if (!contract.structural) caveats.push('the block SQL could not be read structurally; only its declarations were checked');
-  return { ok: missing.length === 0, missing, caveats, ...(identityNote ? { identityNote } : {}), ...(windowColumn ? { windowColumn } : {}), ...(outputRefs.length ? { outputRefs } : {}) };
+  return { ok: missing.length === 0, missing, caveats, ...(identityNote ? { identityNote } : {}), ...(windowColumn ? { windowColumn } : {}), ...(fixedWindow ? { fixedWindow } : {}), ...(outputRefs.length ? { outputRefs } : {}) };
 }
 
 type ImpliedScope = BlockContractPredicate & { declared?: boolean };
+
+const sameDay = (left: string, right: string): boolean => left.slice(0, 10) === right.slice(0, 10);
 
 const AGGREGATE_WORDS: Record<string, string> = { sum: 'sums', avg: 'averages', count: 'counts every row of', count_distinct: 'counts distinct', min: 'takes the minimum of', max: 'takes the maximum of', median: 'takes the median of' };
 const aggregateWords = (aggregate: string | undefined) => (aggregate ? AGGREGATE_WORDS[aggregate] ?? aggregate : 'computes');
@@ -319,7 +338,7 @@ export function prepareCertified(intent: AnalyticalIntentV1, vocabulary: Vocabul
     const verdict = entails(block, intent, vocabulary);
     // The block is compiled and bound like every other surface runs it. The
     // raw-text path survives only for blocks without template parameters.
-    const prepared = deps.prepareBlock?.(block.ref, { question: intent.reading });
+    const prepared = deps.prepareBlock?.(block.ref, { question: intent.reading, ...(intent.limit !== undefined && block.contract?.limitParameter ? { parameters: { [block.contract.limitParameter]: intent.limit } } : {}) });
     if (prepared && 'error' in prepared) {
       refusals.push({ tier: 'certified', code: 'block_not_applicable', message: `${block.ref}: its parameters could not be bound: ${prepared.error}`, repairable: false, detail: { unresolved: prepared.unresolved ?? [] } });
       notUsed.push(`${block.ref}: its parameters could not be bound: ${prepared.error}`);
@@ -366,6 +385,7 @@ export function prepareCertified(intent: AnalyticalIntentV1, vocabulary: Vocabul
       const sql = applied.length ? `SELECT * FROM (\n${source.trim().replace(/;\s*$/, '')}\n) AS block\nWHERE ${applied.join(' AND ')}` : source;
       const candidate: PreparedCandidate = {
         tier: 'certified', trust: 'certified', sql, ...(params.length ? { params } : {}), sourceRef: block.ref, ...(block.owner ? { sourceOwner: block.owner } : {}),
+        ...(verdict.fixedWindow ? { fixedWindow: verdict.fixedWindow } : {}),
         // The DQL the answer ran is the certified block itself, as it is saved.
         ...(prepared && 'source' in prepared && prepared.source ? { artifact: { kind: 'certified_block', name: block.name, source: prepared.source, ...(prepared.sourcePath ? { sourcePath: prepared.sourcePath } : {}), persistence: 'saved', trustState: 'certified', compiledSql: sql } } : {}),
         ...(verdict.outputRefs ? { outputRefs: verdict.outputRefs } : {}),

@@ -6,6 +6,7 @@ import {
   applyCompanionCertification,
   buildCertificationReceipt,
   sourceSha256,
+  withBlockStatus,
   type CertificationReceipt,
 } from './certification-receipt.js';
 
@@ -282,7 +283,7 @@ function renderPromoted(
   let out = source;
 
   // Flip status.
-  out = out.replace(/status\s*=\s*"draft"/, 'status = "certified"');
+  out = withBlockStatus(out, 'certified');
 
   // M4 Dataset tile lineage is durable source provenance. Certification moves
   // the review draft but must not erase where the governed block came from.

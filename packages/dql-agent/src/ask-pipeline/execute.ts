@@ -636,10 +636,14 @@ export async function executeCandidate(candidate: PreparedCandidate, intent: Ana
   if (intent.time?.window) {
     const bounds = [intent.time.window.start, intent.time.window.end].map((bound) => bound.slice(0, 10).toLowerCase());
     const unbound = bounds.filter((bound) => !haystack.includes(bound));
-    if (unbound.length > 0) {
+    const fixed = candidate.tier === 'certified' ? candidate.fixedWindow : undefined;
+    if (unbound.length > 0 && fixed && fixed.start.slice(0, 10) === bounds[0] && fixed.end.slice(0, 10) === bounds[1]) {
+      proofs.push(`the time window ${bounds[0]}..${bounds[1]} is the period the certified block's own WHERE fixes on ${fixed.column}`);
+    } else if (unbound.length > 0) {
       return { ok: false, code: 'filter_not_applied', message: `the prepared query does not apply the time window ${intent.time.window.start}..${intent.time.window.end} (missing ${unbound.join(', ')}); nothing was executed`, proofs };
+    } else {
+      proofs.push(`the time window ${bounds[0]}..${bounds[1]} is bound in the executed query`);
     }
-    proofs.push(`the time window ${bounds[0]}..${bounds[1]} is bound in the executed query`);
   }
 
   if (candidate.fanoutProbeSql) {

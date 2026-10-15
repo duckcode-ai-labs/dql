@@ -2,6 +2,8 @@ import type { Cell } from '../store/types';
 
 const BLOCKED_FAILURE_CODES = new Set([
   'AMBIGUOUS_NOTEBOOK_DEPENDENCY',
+  // No connection yet: the next step is Connections, not a rewrite of this cell.
+  'CONNECTION_NOT_CONFIGURED',
   'CROSS_ENGINE_JOIN_REQUIRED',
   'EXECUTION_TARGET_MISMATCH',
   'SEMANTIC_SOURCE_DRIFT',
