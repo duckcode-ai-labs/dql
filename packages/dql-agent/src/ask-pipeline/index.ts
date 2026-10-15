@@ -7,6 +7,7 @@ export * from './resolve-intent.js';
 export * from './prior-values.js';
 export * from './prepare/index.js';
 export * from './prepare/sql-checks.js';
+export * from './named-blocks.js';
 export * from './execute.js';
 export * from './outcomes.js';
 export * from './policies.js';

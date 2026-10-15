@@ -63,6 +63,7 @@ import {
   missingStatedValues,
   requiredFilterFromText,
   statedValues,
+  blocksNamedByQuestion,
   withRowGuard,
   physicalRelationText,
   type PhysicalIdentifierPartV1,
@@ -73,7 +74,7 @@ import {
   priorWithoutValues,
   sqlStringValues,
 } from '@zlens/agent';
-import { buildProjectVocabulary, buildVocabularySource, embeddedManifestRelations, normalizeRelationName, type VocabularySourceInput } from './vocabulary-source.js';
+import { buildProjectVocabulary, buildVocabularySource, embeddedManifestRelations, namedBlockNotServed, normalizeRelationName, type VocabularySourceInput } from './vocabulary-source.js';
 import { businessIdentifierLine, businessIdentifiers, modelingEntityTexts, certifiedJoinViolations, classifySqlJoins, ledgerJoins, markerTableLine, markerTables, modeledJoinPaths, modelingRelationshipEdges, sameRelation, sharedParentShortcuts, type LedgerJoin } from './join-relationships.js';
 import { readEnv } from '@zlens/core';
 
@@ -1775,6 +1776,14 @@ export function createAskPipelineHost(deps: AskPipelineHostDeps): AskPipelineHos
     }
     const scopeMessage = askScopeProblem(deps.getManifest().manifest, request.workspaceContext, deps.getManifest().snapshotId);
     if (scopeMessage) return { blocked: scopeFailure(runId, scopeMessage, startedAt) };
+    // A question that names a block Ask does not answer from (a draft, a
+    // retired block, a certified block whose metadata contradicts itself) is
+    // told so at once, by name, with what to do. It is never sent on to
+    // AI-written SQL that treats the block's name as values to filter on.
+    // Where the host restricts which sources a person may see, a block's
+    // existence is not disclosed here.
+    const notServed = deps.admitSources ? undefined : namedBlockNotServed(request.question, deps.getManifest().manifest);
+    if (notServed) return { blocked: namedBlockFailure(runId, notServed, startedAt) };
     // Interpretation never needs a warehouse: a greeting, a definition, a
     // clarification or a modeling gap is answered without one. A missing
     // connection surfaces verbatim at the first execution instead.
@@ -2183,7 +2192,11 @@ export function createAskPipelineHost(deps: AskPipelineHostDeps): AskPipelineHos
       // join that repeats its key on both sides must not feed an aggregate.
       // One redraft names the failure; a failure that survives it is refused,
       // never run. What passes is row-guarded and says what it filters on.
-      const stated = statedValues(question, intent);
+      // A block the question names as a block is a project object, not a
+      // value: "Using the certified block Eligible Top Players" never asks the
+      // SQL to filter on "Eligible" or "Players".
+      const namedBlocks = blocksNamedByQuestion(question, Object.values(deps.getManifest().manifest?.blocks ?? {}).map((block) => block.name));
+      const stated = statedValues(question, intent, { namedBlocks });
       const requiredTexts = [...new Set([
         ...current.entries.filter((entry) => entry.kind === 'skill').flatMap((entry) => entry.skill?.requiredFilters ?? []),
         ...(view.pack?.domainBriefing?.requiredFilters ?? []),
@@ -2742,6 +2755,20 @@ function scopeFailure(runId: string, message: string, startedAt: number): AgentR
   };
 }
 
+function namedBlockFailure(runId: string, message: string, startedAt: number): AgentRouteExecutorResult {
+  const result = failure(runId, message, 'execution_error', startedAt);
+  const receipt = result.askPipelineReceipt as PipelineReceipt;
+  receipt.failure = { stage: 'prepare', reason: 'named_block_not_served', message };
+  receipt.tiers = [{ round: 0, tier: 'certified', outcome: 'refused', detail: message.slice(0, 580) }];
+  receipt.story = [{ version: 1, phase: 'tier', title: 'The block the question names is not one Ask answers from', detail: message, state: 'missed', at: Date.now() }];
+  return {
+    ...result,
+    answerRefusalCode: 'modeling_gap',
+    artifacts: (result.artifacts ?? []).map((artifact) => ({ ...artifact, title: 'The named block was not used' })),
+    nextActions: [],
+  };
+}
+
 function failure(runId: string, message: string, code: 'provider_error' | 'execution_error', startedAt: number): AgentRouteExecutorResult {
   // Even a run that stops before reading the question tells the reader where
   // it stopped and why, in its own words, never a generic "not worked out".
@@ -2880,7 +2907,7 @@ export function gapPresentation(gap: Extract<PipelineOutcome, { kind: 'gap' }>['
  * lowered by the DQL compiler to positional placeholders, and the bound
  * values in placeholder order. No template placeholder survives.
  */
-export function prepareBlockForAsk(projectRoot: string, entry: VocabularyEntry | undefined, context: { question?: string }, driver?: string): PreparedBlock | undefined {
+export function prepareBlockForAsk(projectRoot: string, entry: VocabularyEntry | undefined, context: { question?: string; parameters?: Record<string, unknown> }, driver?: string): PreparedBlock | undefined {
   if (!entry || entry.kind !== 'block') return undefined;
   if (!entry.sourcePath) {
     // No declaration on disk: the raw query is only usable without parameters.
@@ -2892,7 +2919,7 @@ export function prepareBlockForAsk(projectRoot: string, entry: VocabularyEntry |
   } catch (error) {
     return { error: `the block source could not be read (${entry.sourcePath}): ${error instanceof Error ? error.message : String(error)}` };
   }
-  const invocation = prepareBlockInvocation({ block: entry.name, source, question: context.question, surface: 'ask_ai' });
+  const invocation = prepareBlockInvocation({ block: entry.name, source, question: context.question, surface: 'ask_ai', ...(context.parameters ? { parameters: context.parameters, parameterSources: Object.fromEntries(Object.keys(context.parameters).map((name) => [name, 'question' as const])) } : {}) });
   if (invocation.errors.length) return { error: invocation.errors.join(' '), unresolved: invocation.unresolvedParameters };
   if (invocation.unresolvedParameters.length) return { error: `it still needs values for ${invocation.unresolvedParameters.join(', ')}`, unresolved: invocation.unresolvedParameters };
   let plan: ReturnType<typeof buildExecutionPlan>;

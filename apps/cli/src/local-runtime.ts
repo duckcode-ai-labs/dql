@@ -240,6 +240,7 @@ import {
   passedCheckNames,
   readCompanionCertification,
   sourceSha256,
+  withBlockStatus,
   type CertificationReceipt,
   type CertificationSurface,
 } from './certification-receipt.js';
@@ -41598,6 +41599,22 @@ function buildBlockStudioCertificationChecklist(input: {
       });
     }
   }
+  // Ask never serves a block whose own description says it still needs review
+  // as certified evidence (the contradiction rule of its vocabulary). Certifying
+  // it anyway would leave a "certified" block Ask silently skips, so the
+  // description is brought in line first. The review-required TAG is a draft
+  // lifecycle marker that Certify removes by itself.
+  if (/review[\s-]*required/i.test(parsed.description ?? '')) {
+    issues.push({
+      severity: 'error',
+      code: 'description_review_required',
+      title: 'The description says it needs review',
+      field: 'Metadata',
+      message: 'The description still says this block is review-required. Ask does not serve a certified block that says it needs review, so edit the description, save the draft, and certify again.',
+      correction: 'Describe what the block answers without "review required", save the draft, and certify again.',
+      action: 'edit_source',
+    });
+  }
   for (const blocker of input.extraBlockers ?? []) {
     issues.push({
       severity: 'error',
@@ -41673,10 +41690,7 @@ function extractSqlTablesLight(sql: string): string[] {
 }
 
 function setBlockStudioStatusInSource(source: string, newStatus: string): string {
-  if (/status\s*=\s*"[^"]*"/.test(source)) {
-    return source.replace(/status\s*=\s*"[^"]*"/, `status = "${newStatus}"`);
-  }
-  return source.replace(/block\s+"[^"]*"\s*\{/, (match) => `${match}\n  status = "${newStatus}"`);
+  return withBlockStatus(source, newStatus);
 }
 
 /**
@@ -42768,10 +42782,7 @@ function dqlGenerationConversionNotes(providerName: string): string[] {
 }
 
 function setBlockStudioSourceStatus(source: string, status: string): string {
-  if (/status\s*=\s*"[^"]*"/.test(source)) {
-    return source.replace(/status\s*=\s*"[^"]*"/, `status = "${status}"`);
-  }
-  return source.replace(/block\s+"[^"]*"\s*\{/, (match) => `${match}\n  status = "${status}"`);
+  return withBlockStatus(source, status);
 }
 
 async function buildBlockStudioAiAssistSummary(
