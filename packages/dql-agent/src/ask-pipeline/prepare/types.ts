@@ -30,6 +30,12 @@ export interface PreparedCandidate {
   proof: string[];
   /** The block ref for a certified candidate; the engine for a semantic one. */
   sourceRef?: string;
+  /**
+   * A certified block whose own WHERE fixes exactly the period asked for
+   * (read from its contract): the window is applied by the block itself, so
+   * the window proof reads it there instead of looking for the dates.
+   */
+  fixedWindow?: { column: string; start: string; end: string };
   /** The certified block's recorded `owner`; absent when the block names none. */
   sourceOwner?: string;
   engine?: string;
@@ -256,7 +262,7 @@ export interface PrepareDeps {
    * declared parameters with the value each received. Unresolved required
    * parameters are an error, not a guess.
    */
-  prepareBlock?: (blockRef: string, context: { question?: string }) => PreparedBlock | undefined;
+  prepareBlock?: (blockRef: string, context: { question?: string; /** Values the reading fixes for declared parameters (a ranking's row count). */ parameters?: Record<string, unknown> }) => PreparedBlock | undefined;
   /** Host-side policy check on a relation or column ref; a denial is terminal. */
   policyDenies?: (refs: string[]) => string | undefined;
   /** The semantic engine that will compile this run's semantic candidate, when the host knows it beforehand. */

@@ -3,11 +3,12 @@ import type { AgentProvider, ProviderRunOptions } from '../providers/types.js';
 import { executeCandidate, fillPeriodGaps, statementFailure, type ExecuteDeps, type ExecutedRows } from './execute.js';
 import { describeIntent, intentExecutionFingerprint, intentRefs, type AnalyticalIntentV1, type IntentPredicate } from './intent.js';
 import { composeAnsweredText, composeFailedText, composeGapText, describeResultColumns, labelFor, type AskStoryStepV1, type ContextLedgerV1, type GapKind, type PipelineOutcome, type PipelineReceipt } from './outcomes.js';
-import { prepare, type PrepareDeps, type PreparedCandidate, type PreparedRefusal, type PrepareResult } from './prepare/index.js';
+import { entails, prepare, type PrepareDeps, type PreparedCandidate, type PreparedRefusal, type PrepareResult } from './prepare/index.js';
+import { blocksNamedByQuestion } from './named-blocks.js';
 import { applySkillPolicies } from './policies.js';
 import { proveLiterals } from './literal-proof.js';
 import { prepareExploratory } from './prepare/exploratory.js';
-import { keepMembersApart, normalizeEffectiveIntent, resolveIntent, uncoveredQuestionTerms, coverageStates, unmetFacets, type IntentResolution, causalOperatorsIn, predictiveOperatorsIn, readingLane, validateIntentRefs } from './resolve-intent.js';
+import { isGovernedEntry, keepMembersApart, normalizeEffectiveIntent, resolveIntent, uncoveredQuestionTerms, coverageStates, unmetFacets, type IntentResolution, causalOperatorsIn, predictiveOperatorsIn, readingLane, validateIntentRefs } from './resolve-intent.js';
 import { buildVocabularyIndex, renderCard, type RenderedCards, type VocabularyDomainHeader, type VocabularyEntry, type VocabularyIndex } from './vocabulary.js';
 import { readByOwnWords } from './lexical-reading.js';
 import { mergePhysicalRelationBinding, physicalRelationIdentity, physicalRelationText, samePhysicalRelation } from './physical-binding.js';
@@ -423,6 +424,56 @@ export function retiredBlockNamedBy(question: string, entry: VocabularyEntry | u
     const name = words(retired.name);
     return name.trim().length > 0 && asked.includes(name);
   });
+}
+
+/**
+ * The certified block a question holds the answer to: the one it names as a
+ * block, or, for a follow-up, the block the previous answer ran when this
+ * reading still names it (by ref, or as a block in its own words).
+ */
+export function heldCertifiedBlock(input: Pick<RunAskPipelineInput, 'question' | 'vocabulary' | 'prior' | 'priorExecuted'>, intent: AnalyticalIntentV1): { entry: VocabularyEntry; how: 'named' | 'follow-up' } | undefined {
+  const blocks = input.vocabulary.entries.filter((entry) => entry.kind === 'block' && entry.certified);
+  if (blocks.length === 0) return undefined;
+  const byName = (names: string[]) => names.map((name) => blocks.find((block) => block.name === name)).find((block): block is VocabularyEntry => Boolean(block));
+  const named = byName(blocksNamedByQuestion(input.question, blocks.map((block) => block.name)));
+  if (named) return { entry: named, how: 'named' };
+  if (!input.prior || input.priorExecuted === false) return undefined;
+  const priorBlock = input.prior.measures.map((measure) => measure.ref).find((ref) => blocks.some((block) => block.ref === ref));
+  if (!priorBlock) return undefined;
+  const entry = blocks.find((block) => block.ref === priorBlock)!;
+  const keeps = intent.measures.some((measure) => measure.ref === entry.ref) || blocksNamedByQuestion(intent.reading, [entry.name]).length > 0;
+  return keeps ? { entry, how: 'follow-up' } : undefined;
+}
+
+/**
+ * The reading re-expressed as the named block's answer: the block is the one
+ * measure; the restrictions, groupings, period, ordering and row count the
+ * question asked for stay, so the block's contract decides whether it can
+ * honour them. Clauses that only name the block are not open questions.
+ */
+export function readAsBlock(intent: AnalyticalIntentV1, block: VocabularyEntry): AnalyticalIntentV1 {
+  return {
+    ...intent,
+    measures: [{ ref: block.ref }],
+    ...(intent.ordering ? { ordering: { ref: 'measure:0', direction: intent.ordering.direction } } : {}),
+    unresolved: intent.unresolved.filter((clause) => !nameWords(clause.clause).includes(nameWords(block.name))),
+    provenance: { ...intent.provenance, [block.ref]: intent.provenance[block.ref] ?? 'q:named block' },
+  };
+}
+
+const nameWords = (value: string): string => ` ${value.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()} `;
+
+/** Why a named certified block cannot answer, and what it does answer, in words. */
+export function heldBlockRefusal(block: VocabularyEntry, missing: string[]): string {
+  const contract = block.contract;
+  const accepts = [...new Set([...(contract?.allowedFilters ?? []), ...(contract?.parameters ?? [])])];
+  const fixed = (contract?.periods ?? []).map((period) => `${period.column} from ${period.start} up to ${period.end}`);
+  const returns = contract?.outputs.length ? ` It returns ${contract.outputs.join(', ')}${fixed.length ? ` for ${fixed.join(' and ')}` : ''}` : '';
+  const takes = returns ? `${accepts.length ? `, and accepts ${accepts.join(', ')}` : ', and accepts no filters'}.` : '';
+  // The entailment's reasons are written for the governed repair ("the answer
+  // is composed by entity key instead"); a refusal says only what is missing.
+  const reasons = [...new Set(missing.map((reason) => reason.replace(/;\s*the answer is composed[\s\S]*$/, '').replace(/, so it cannot bound the period$/, '')))];
+  return `The certified block "${block.name}" cannot answer this as asked: ${reasons.join('; ')}.${returns}${takes}`;
 }
 
 /** The sentence a run tells when it answers a retired block's question from its replacement. */
@@ -1089,7 +1140,39 @@ export async function runAskPipeline(input: RunAskPipelineInput): Promise<Pipeli
   let intent = resolution.intent;
   // The lane follows the final reading: a judgment question over the previous
   // analysis reaches here through a clarification, not the resolver's return.
-  const aiReading = resolution.status === 'resolved' && (resolution.lane === 'ai' || (aiSqlAvailable && readingLane(resolution.intent, input.vocabulary) === 'ai'));
+  let aiReading = resolution.status === 'resolved' && (resolution.lane === 'ai' || (aiSqlAvailable && readingLane(resolution.intent, input.vocabulary) === 'ai'));
+  // THE BLOCK THE PERSON ASKED FOR. A question that names a certified block
+  // ("using the certified block …"), or a follow-up that narrows that block's
+  // answer, is answered BY that block when its contract entails the reading,
+  // or the run says exactly why it cannot. It is never handed to AI-written
+  // SQL over other tables, which would answer a different question at a
+  // glance-alike confidence. Exploring the tables stays one explicit step away.
+  const held = !settled && !input.explorationOptIn && resolution.status === 'resolved' && intent.kind === 'analytics' ? heldCertifiedBlock(input, intent) : undefined;
+  if (held) {
+    const asked = readAsBlock(intent, held.entry);
+    const verdict = entails(held.entry, asked, input.vocabulary);
+    const open = asked.unresolved.filter((clause) => clause.material).map((clause) => `"${clause.clause}" is not something the block declares`);
+    const identityOnly = !verdict.ok && verdict.identityNote !== undefined && verdict.missing.length === 1;
+    // A follow-up is held to the block only where nothing governed reaches:
+    // a field that lives on a raw table. Anything the governed tiers can
+    // compose (a period, a key instead of a label, a row count) keeps the
+    // ordinary path, which re-reads the analysis by metrics and entities.
+    const ungoverned = [...asked.filters.map((predicate) => predicate.ref), ...asked.groupBy.map((group) => group.ref), ...asked.display]
+      .filter((ref) => { const entry = input.vocabulary.get(ref) ?? input.vocabulary.resolve(ref); return !entry || !isGovernedEntry(entry); });
+    if ((verdict.ok || identityOnly) && open.length === 0) {
+      intent = asked;
+      aiReading = false;
+    } else if (held.how === 'named' || ungoverned.length > 0) {
+      const governedNote = ungoverned.length ? [`${[...new Set(ungoverned.map((ref) => input.vocabulary.get(ref)?.name ?? ref.split('.').pop() ?? ref))].join(', ')} is not part of the project's governed data (no certified block or semantic field holds it)`] : [];
+      const message = heldBlockRefusal(held.entry, [...verdict.missing, ...open, ...governedNote]);
+      receipt.intent = asked; receipt.reading = asked.reading;
+      receipt.refusals.push({ tier: 'certified', code: 'block_not_applicable', message: `${held.entry.ref}: ${[...verdict.missing, ...open].join('; ')}`, repairable: false });
+      receipt.tiers.push({ round: 0, tier: 'certified', outcome: 'refused', detail: `${held.how === 'named' ? 'named block' : 'follow-up on the block'}: ${[...verdict.missing, ...open].join('; ').slice(0, 560)}` });
+      receipt.failure = { stage: 'prepare', reason: 'named_block_not_applicable', message };
+      step('tier', `Certified block ${held.entry.name}: cannot answer this as asked`, 'missed', { detail: message });
+      return { kind: 'gap', gap: 'not_modeled', message, nearest: [], text: `${message} Ask within what the block declares, or explore the tables for a review-required answer.`, receipt, intent: asked, offerExploration: true };
+    }
+  }
   // THE RELATIONS THE READING NAMES ARE DESCRIBED BEFORE ANYTHING IS PREPARED.
   // Context assembly hydrates only the few relations whose words match the
   // question; the reading may still lean on another (the facts a metric is

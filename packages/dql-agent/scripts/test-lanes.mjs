@@ -68,7 +68,8 @@ const REQUIRED_TEST_FILES = [
 // 185 with the renamed-dimension filter apply check (+1 file, +1 test);
 // 187 with the lexical reading of a governed metric and its dimensions (+2 files, +19 tests).
 // 188 with the identity-key warning of a labels-only block (+1 file, +6 tests).
-const EXPECTED_TEST_FILES = 188;
+// 189 with a question that names a certified block (named-block.test.ts, +1 file, +13 tests).
+const EXPECTED_TEST_FILES = 189;
 // Keep the aggregate receipt exact. The Ask pipeline suites (intent contract,
 // vocabulary, governed defaults and host proofs, prepare tiers), the engine,
 // observability, retrieval, semantic-proof, research-ledger, conversation and
@@ -103,10 +104,12 @@ const EXPECTED_TEST_FILES = 188;
 // no-tables failure and semantic-runtime fallback (ask-pipeline.test.ts, +3).
 // 2464 with story filter-scope cases (dashboard-story.test.ts, +2 tests).
 // 2467 with review-required answer drafts (drafts.test.ts, +3 tests).
-const EXPECTED_TESTS = 2467;
+// 2480 (189 files) with a question that names a certified block, its fixed period and its LIMIT parameter,
+// and a follow-up held to that block (named-block.test.ts, +13 tests).
+const EXPECTED_TESTS = 2480;
 // The heavy lane's share of EXPECTED_TESTS (catalog.test.ts 72 + project-state.test.ts 4), pinned so
 // a lane run on its own (CI runs the two lanes as separate steps) is audited as exactly as both together.
-// The ordinary lane's share is the difference: 2388.
+// The ordinary lane's share is the difference: 2404.
 const EXPECTED_HEAVY_TESTS = 76;
 
 const LANES = ['all', 'ordinary', 'heavy'];

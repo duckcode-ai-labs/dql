@@ -1,4 +1,5 @@
 import type { AnalyticalIntentV1 } from '../intent.js';
+import { withoutBlockNames } from '../named-blocks.js';
 
 /**
  * THE CHECKS AN AI-DRAFTED STATEMENT PASSES BEFORE IT RUNS.
@@ -38,8 +39,16 @@ function properNouns(text: string): string[] {
   return found;
 }
 
-/** The values a question (and its reading, when there is one) states and a correct statement must apply. */
-export function statedValues(question: string, intent?: AnalyticalIntentV1): StatedValue[] {
+/**
+ * The values a question (and its reading, when there is one) states and a
+ * correct statement must apply. `namedBlocks` are the blocks the question
+ * names as blocks ("using the certified block Eligible Top Players"): their
+ * names identify a project object, so their words are not values.
+ */
+export function statedValues(question: string, intent?: AnalyticalIntentV1, options: { namedBlocks?: string[] } = {}): StatedValue[] {
+  const named = options.namedBlocks ?? [];
+  if (named.length) question = withoutBlockNames(question, named);
+  const namedText = new Set(named.map((name) => name.trim().toLowerCase()));
   const values: StatedValue[] = [];
   const add = (value: string, kind: StatedValue['kind']) => {
     const trimmed = value.trim();
@@ -60,8 +69,8 @@ export function statedValues(question: string, intent?: AnalyticalIntentV1): Sta
     // A flag value the reading chose ("has_premium is true") is not a value
     // the question stated: the statement may apply it as a join, `= 1` or
     // the bare column, none of which spells the word.
-    for (const literal of literals) if (typeof literal === 'string' && /[A-Za-z]/.test(literal) && literal.length <= 80 && !NOT_VALUES.has(literal.toLowerCase()) && !/^(true|false|yes|no|y|n|t|f)$/i.test(literal.trim())) add(literal, 'text');
-    for (const clause of intent.unresolved) for (const word of properNouns(`x ${clause.clause}`)) add(word, 'text');
+    for (const literal of literals) if (typeof literal === 'string' && /[A-Za-z]/.test(literal) && literal.length <= 80 && !NOT_VALUES.has(literal.toLowerCase()) && !namedText.has(literal.trim().toLowerCase()) && !/^(true|false|yes|no|y|n|t|f)$/i.test(literal.trim())) add(literal, 'text');
+    for (const clause of intent.unresolved) for (const word of properNouns(`x ${named.length ? withoutBlockNames(clause.clause, named) : clause.clause}`)) add(word, 'text');
   }
   return values;
 }

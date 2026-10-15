@@ -52,6 +52,40 @@ export function demoteCertifiedSource(source: string): string {
   return source.replace(/(\bstatus\s*=\s*)"certified"/, '$1"draft"');
 }
 
+/**
+ * The lifecycle tag a draft carries while it waits for review. SQL import, AI
+ * drafts and notebook research all add it; Ask never serves a block tagged
+ * with it as certified evidence (a certified status beside "review required"
+ * is a contradiction). Certifying is the review, so it removes the tag.
+ */
+const REVIEW_PENDING_TAG = /^\s*review[\s_-]*required\s*$/i;
+
+export function isReviewPendingTag(tag: string): boolean {
+  return REVIEW_PENDING_TAG.test(tag);
+}
+
+/** The `tags = [ … ]` list of a `.dql` source without the review-pending lifecycle tag. */
+export function withoutReviewPendingTags(source: string): string {
+  return source.replace(/(\btags\s*=\s*\[)([^\]]*)(\])/, (whole, open: string, body: string, close: string) => {
+    const items = [...body.matchAll(/"((?:[^"\\]|\\.)*)"/g)].map((match) => match[1]!);
+    const kept = items.filter((tag) => !isReviewPendingTag(tag));
+    if (kept.length === items.length) return whole;
+    return `${open}${kept.map((tag) => `"${tag}"`).join(', ')}${close}`;
+  });
+}
+
+/**
+ * Set a `.dql` source's lifecycle status. Certifying also removes the
+ * review-pending tag, so a block certified through any surface is one Ask
+ * serves as certified, never one it silently skips as contradictory.
+ */
+export function withBlockStatus(source: string, status: string): string {
+  const next = /status\s*=\s*"[^"]*"/.test(source)
+    ? source.replace(/status\s*=\s*"[^"]*"/, `status = "${status}"`)
+    : source.replace(/block\s+"[^"]*"\s*\{/, (match) => `${match}\n  status = "${status}"`);
+  return status === 'certified' ? withoutReviewPendingTags(next) : next;
+}
+
 export function sourceSha256(source: string): string {
   return createHash('sha256').update(source.trimEnd() + '\n').digest('hex');
 }
@@ -101,6 +135,18 @@ export function passedCheckNames(checklist: unknown): string[] {
  * The companion files are written by ZLens with two-space indentation, so a
  * line-based edit keeps the rest of the hand-readable file untouched.
  */
+/** The companion's top-level `tags:` list without the review-pending lifecycle tag. */
+function withoutCompanionReviewPendingTags(yaml: string): string {
+  const lines = yaml.split(/\r?\n/);
+  let inTags = false;
+  return lines.filter((line) => {
+    if (/^\S/.test(line)) inTags = /^tags:\s*$/.test(line);
+    if (!inTags) return true;
+    const item = /^\s+-\s+["']?(.*?)["']?\s*$/.exec(line);
+    return !(item && isReviewPendingTag(item[1]!));
+  }).join('\n');
+}
+
 function removeTopLevelKey(yaml: string, key: string): string {
   const lines = yaml.split(/\r?\n/);
   const out: string[] = [];
@@ -130,6 +176,7 @@ export function applyCompanionCertification(
   receipt: CertificationReceipt | null | undefined,
 ): string {
   let next = removeTopLevelKey(removeTopLevelKey(companion, 'reviewStatus'), 'certification').trimEnd();
+  if (status === 'certified') next = withoutCompanionReviewPendingTags(next);
   next += `\nreviewStatus: ${status}\n`;
   if (status === 'certified' && receipt) {
     next += dumpYaml({ certification: receipt }, { lineWidth: 200, noRefs: true });

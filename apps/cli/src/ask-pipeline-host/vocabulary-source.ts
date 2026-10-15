@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { resolveBlockReplacement, type DQLManifest, type SemanticLayer, type WarehouseCatalogSnapshotV1 } from '@zlens/core';
-import { buildVocabularyIndex, extractBlockContract, parsePhysicalIdentifier, physicalRelationBinding, physicalRelationIdentity, physicalRelationText, mergePhysicalRelationBinding, renderPhysicalIdentifier, type PhysicalRelationBindingV1, type VocabularyEntry, type VocabularyIndex, type VocabularySource } from '@zlens/agent';
+import { blocksNamedByQuestion, buildVocabularyIndex, extractBlockContract, parsePhysicalIdentifier, physicalRelationBinding, physicalRelationIdentity, physicalRelationText, mergePhysicalRelationBinding, renderPhysicalIdentifier, type PhysicalRelationBindingV1, type VocabularyEntry, type VocabularyIndex, type VocabularySource } from '@zlens/agent';
 
 /**
  * The whole authorized vocabulary of a project, from the objects the host
@@ -24,6 +24,51 @@ export interface VocabularySourceInput {
   /** Snapshot and redacted target identity are carried with runtime observations. */
   snapshotId?: string;
   executionTargetFingerprint?: string;
+}
+
+/**
+ * Certification is one state. A block whose status says certified while its
+ * own description or tags say it still needs review is contradictory
+ * metadata, and a contradiction is never served as certified evidence. The
+ * reason is returned in words, so a question that names such a block is told
+ * why it was not used instead of being silently answered from elsewhere.
+ */
+export function certifiedBlockContradiction(block: { description?: string; tags?: string[] }): string | undefined {
+  if ((block.tags ?? []).some((tag) => /review[\s-]*required/i.test(tag))) {
+    return 'it is marked certified but still carries the review-required tag, so Ask does not serve it as certified. Certify it again in Block Studio (certifying removes the tag), or remove the tag from its source';
+  }
+  if (/review[\s-]*required/i.test(block.description ?? '')) {
+    return 'it is marked certified but its description says it is review-required, so Ask does not serve it as certified. Edit the description and certify it again';
+  }
+  return undefined;
+}
+
+/**
+ * Why a block a question names as a block ("using the certified block X") is
+ * not one Ask can answer from, in words, or undefined when it is served. A
+ * retired block with a replacement is answered from the replacement and is
+ * not reported here.
+ */
+export function namedBlockNotServed(question: string, manifest: DQLManifest | undefined): string | undefined {
+  const blocks = Object.values(manifest?.blocks ?? {});
+  if (blocks.length === 0) return undefined;
+  const named = blocksNamedByQuestion(question, blocks.map((block) => block.name));
+  for (const name of named) {
+    const block = blocks.find((candidate) => candidate.name === name)!;
+    const status = (block.status ?? 'draft').toLowerCase();
+    if (status === 'certified') {
+      const reason = certifiedBlockContradiction(block);
+      // A served certified block of the same name answers; this one is not the answer.
+      if (reason && !blocks.some((other) => other !== block && other.name === name && (other.status ?? '').toLowerCase() === 'certified' && !certifiedBlockContradiction(other))) return `The block "${block.name}" was not used: ${reason}.`;
+      continue;
+    }
+    if (status === 'deprecated') {
+      if (resolveBlockReplacement(blocks, block)?.replacement) continue;
+      return `The block "${block.name}" was not used: it is retired and names no replacement. Ask about what it measured without naming it, or restore it in Block Studio.`;
+    }
+    return `The block "${block.name}" was not used: it is a ${status === 'review' ? 'block in review' : 'draft'}, not certified, and Ask only answers from certified blocks. Certify it in Block Studio, or ask the question without naming the block for a review-required answer.`;
+  }
+  return undefined;
 }
 
 /** `"jaffle_shop"."dev"."customers"` and `jaffle_shop.dev.customers` become `dev.customers`. */
@@ -830,11 +875,7 @@ export function buildVocabularySource(input: VocabularySourceInput): VocabularyS
   for (const block of manifestBlocks) {
     const certified = (block.status ?? '').toLowerCase() === 'certified';
     if (!certified) continue;
-    // Certification is one state. A block whose status says certified while
-    // its own description or tags say it still needs review is contradictory
-    // metadata, and a contradiction is never served as certified evidence.
-    const reviewRequired = /review[\s-]*required/i.test(block.description ?? '') || (block.tags ?? []).some((tag) => /review[\s-]*required/i.test(tag));
-    if (reviewRequired) continue;
+    if (certifiedBlockContradiction(block)) continue;
     source.blocks!.push({
       name: block.name, ...(block.domain ? { domain: block.domain } : {}), ...(block.description ? { description: block.description } : {}), certified, status: block.status,
       ...(block.filePath ? { sourcePath: block.filePath } : {}),
