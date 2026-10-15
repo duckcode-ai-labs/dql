@@ -1469,7 +1469,7 @@ export function DashboardRenderer({
               title="Dashboard AI"
               scopeHint="Scoped to this App dashboard first"
               audience="stakeholder"
-              workspaceContext={{ appId, dashboardId: dashboard.id, dashboardContext: chatContext }}
+              workspaceContext={{ surface: 'apps', appId, dashboardId: dashboard.id, dashboardTitle: dashboard.metadata.title, dashboardFilters: runVariables, dashboardContext: chatContext, ...(run && !run.partial ? { dashboardRunId: run.runId } : {}) }}
               initialMode="auto"
               threadId={agentThread.threadId}
               onThreadIdChange={agentThread.onThreadIdChange}

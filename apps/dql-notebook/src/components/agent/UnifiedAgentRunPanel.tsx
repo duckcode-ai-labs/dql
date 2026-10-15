@@ -2702,7 +2702,9 @@ export function askArtifactMeta(artifact: AgentRunArtifact, payload: Record<stri
         // An investigation's figures can come from governed metrics; the report stays review-required.
         : artifact.kind === 'research_run' && investigationReportOf(payload)
           ? 'review required'
-          : 'AI-generated';
+          : isAppViewPayload(payload)
+            ? 'from this App · needs review'
+            : 'AI-generated';
   parts.push(provenance);
   return parts.join(' · ');
 }
@@ -3106,6 +3108,8 @@ function AskRunCard(props: AskRunCardProps) {
       ? 'Needs clarification'
       : certified
         ? 'Certified answer'
+        : readFromAppView(run)
+          ? (run.trustState === 'governed' ? 'Governed answer from this App' : 'Answer from this App · needs review')
         : run.artifacts.some((artifact) => artifact.kind === 'research_run' && investigationReportOf(payloadOf(artifact)))
           ? 'Research report'
           // A governed answer comes from approved semantic definitions, not AI-written SQL.
@@ -4997,7 +5001,7 @@ function AskInspector({
   });
   const activeTab = tabs.some((x) => x.id === tab) ? tab : tabs[0].id;
 
-  const badgeLabel = cancelled ? 'Cancelled' : blocked ? 'Blocked' : certified ? 'Certified' : artifact.trustState === 'governed' || artifact.trustState === 'grounded' ? 'Governed' : investigationReport ? 'Review required' : 'AI-generated';
+  const badgeLabel = cancelled ? 'Cancelled' : blocked ? 'Blocked' : certified ? 'Certified' : artifact.trustState === 'governed' || artifact.trustState === 'grounded' ? 'Governed' : investigationReport ? 'Review required' : isAppViewPayload(payload) ? 'Needs review' : 'AI-generated';
   const badgeColor = cancelled ? 'var(--text-tertiary)' : blocked ? 'var(--status-error)' : certified ? 'var(--status-success)' : artifact.trustState === 'governed' || artifact.trustState === 'grounded' ? 'var(--accent)' : 'var(--status-warning)';
   const badgeBg = cancelled ? 'var(--bg-3)' : blocked ? 'var(--status-error-bg)' : certified ? 'var(--status-success-bg)' : artifact.trustState === 'governed' || artifact.trustState === 'grounded' ? 'var(--accent-dim)' : 'var(--status-warning-bg)';
 
@@ -5653,6 +5657,11 @@ export function trustExplainer(run: AgentRun): string | null {
   if (run.trustState === 'review_required' && run.route === 'semantic_answer') {
     return 'Review required: ZLens inferred the semantic grouping for the requested dimension. Verify this business mapping before reuse.';
   }
+  if (readFromAppView(run)) {
+    if (run.trustState === 'certified') return 'Read from this App’s current results; every tile it read runs a certified source.';
+    if (run.trustState === 'governed') return 'Read from this App’s current results, from governed tiles.';
+    return 'Read from this App’s current results. A tile it read needs review: check its source before relying on it.';
+  }
   if (run.trustState === 'certified') return 'Answered from a certified block.';
   if (run.route === 'dql_block_draft') return 'Prepared an ownerless review draft. Add it to Block Studio when you are ready to save it.';
   if (run.trustState === 'governed') return 'Built from semantic metrics and dimensions.';
@@ -5695,6 +5704,7 @@ function isExploratoryDbtRun(run: AgentRun): boolean {
 function simpleRunTitle(run: AgentRun): string {
   if (run.status === 'cancelled' || run.stopReason === 'cancelled' || run.route === 'cancelled') return 'Stopped by user';
   if (run.trustState === 'certified') return 'Certified answer';
+  if (readFromAppView(run)) return 'Answer from this App';
   if (run.route === 'dql_block_draft') return 'Draft block';
   if (isExploratoryDbtRun(run)) return 'Exploratory DBT-grounded answer';
   if (run.route === 'semantic_answer') return 'Semantic answer';
@@ -6419,7 +6429,9 @@ function TrustBadge({ run, t }: { run: AgentRun; t: Theme }) {
         ? 'Needs input'
       : run.trustState === 'blocked'
         ? 'Refused'
-        : 'AI-generated';
+        : readFromAppView(run) && run.trustState === 'review_required'
+          ? 'Needs review'
+          : 'AI-generated';
   return (
     <span style={{ border: `1px solid ${color}55`, color, background: `${color}12`, borderRadius: 999, padding: '3px 7px', fontSize: 10, fontWeight: 850 }}>
       {label}
@@ -6792,6 +6804,18 @@ function CopyButton({ text, t, title = 'Copy' }: { text: string; t: Theme; title
       {copied ? 'Copied' : null}
     </button>
   );
+}
+
+/**
+ * An answer read from the App page it was asked on (N3): the server read the page run's tiles, sources and rows.
+ * It is labelled by the tiles it read — never "AI-generated SQL", and never certified unless every tile was.
+ */
+export function readFromAppView(run: Pick<AgentRun, 'artifacts'>): boolean {
+  return (run.artifacts ?? []).some((artifact) => isAppViewPayload(payloadOf(artifact)));
+}
+
+function isAppViewPayload(payload: Record<string, unknown>): boolean {
+  return Boolean(payload.appView && typeof payload.appView === 'object');
 }
 
 function payloadOf(artifact: AgentRunArtifact): Record<string, unknown> {

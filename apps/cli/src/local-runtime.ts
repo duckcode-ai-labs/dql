@@ -247,6 +247,7 @@ import {
 import { listBlockTemplates } from './block-templates.js';
 import { captureReviewRequiredDraft } from './review-draft-capture.js';
 import { scopeAppCopilotRequest } from './app-copilot-scope.js';
+import { answerFromAppView, appViewExecutorResult, asksAboutAppView, buildAppViewTiles, type AppViewContextV1, type AppViewTileV1 } from './app-view-answer.js';
 import { rethrowIfCancelled } from './llm/cancellation.js';
 import { fetchLatestPublishedDqlVersion, resolveDqlRuntimeVersionStatus } from './version-status.js';
 import { resolveRetrievalHealthStatus } from './retrieval-health.js';
@@ -5240,6 +5241,11 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
     tileTrust?: Record<string, ReaderTrustState | null>;
     /** The tables each finished tile read (null: ZLens cannot list them), for the model boundary (HH-5). */
     tileRelations?: Record<string, string[] | null>;
+    /**
+     * What "Ask about this App" may read of this run: each data tile's source, reader trust label and the rows it
+     * shows (bounded). Run-local memory only, found again by the person who ran it, like chartContexts.
+     */
+    appView?: { appName: string; dashboardTitle: string; tiles: AppViewTileV1[] };
     appId: string;
     dashboardId: string;
     snapshotId: string;
@@ -7699,11 +7705,90 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
     }).catch(() => undefined);
   };
 
+  /**
+   * "Ask about this App" (N3). The browser names the App, the page and the page run it shows
+   * (`workspaceContext.dashboardRunId`) and nothing else: the tiles, their sources, their reader trust labels, the
+   * filters and the rows come from this server's evidence of that run, found only by the person who ran it. A run
+   * id that is unknown, expired, another person's or another page's resolves to `unavailable`, never to a guess.
+   */
+  type AskedAppView = { context: AppViewContextV1 } | { unavailable: string; appId: string };
+  const appViewByAgentRun = new Map<string, AskedAppView>();
+  const resolveAskedAppView = (request: AgentRunRequest): AskedAppView | undefined => {
+    const workspace = request.workspaceContext;
+    if (!workspace || workspace.surface !== 'apps') return undefined;
+    const appId = typeof workspace.appId === 'string' ? workspace.appId.trim() : '';
+    if (!appId) return undefined;
+    const pageRunId = typeof workspace.dashboardRunId === 'string' ? workspace.dashboardRunId.trim() : '';
+    if (!pageRunId) return { appId, unavailable: 'this page had not run when the question was asked' };
+    const evidence = dashboardRunEvidence.get(pageRunId);
+    const askedPage = typeof workspace.dashboardId === 'string' ? workspace.dashboardId.trim() : '';
+    if (!evidence || evidence.expiresAt < Date.now() || evidence.appId !== appId || (askedPage && evidence.dashboardId !== askedPage) || !evidence.appView) {
+      return { appId, unavailable: 'the page run it was asked from is no longer available to Ask (a page keeps its results for Ask for 15 minutes, for the person who ran it)' };
+    }
+    const relations = evidence.appView.tiles.map((tile) => evidence.tileRelations?.[tile.tileId]);
+    return {
+      context: {
+        version: 1,
+        appId,
+        appName: evidence.appView.appName,
+        dashboardId: evidence.dashboardId,
+        dashboardTitle: evidence.appView.dashboardTitle,
+        runId: pageRunId,
+        filters: (evidence.pageFilters ?? []).map((filter) => ({ label: filter.label, value: filter.value })),
+        tiles: evidence.appView.tiles,
+        relations: relations.every((entry): entry is string[] => Array.isArray(entry)) ? [...new Set(relations.flat())] : null,
+      },
+    };
+  };
+  /** Answer a question about the App page from the results it shows, or undefined to ask the ordinary way. */
+  const answerFromAskedAppView = async (runId: string, request: AgentRunRequest, onStep?: (step: AskStoryStepV1) => void): Promise<AgentRouteExecutorResult | undefined> => {
+    const asked = appViewByAgentRun.get(runId);
+    if (!asked) return undefined;
+    const workspace = request.workspaceContext ?? {};
+    const scope = workspace.appScope as { originalQuestion?: unknown } | undefined;
+    const question = typeof scope?.originalQuestion === 'string' && scope.originalQuestion.trim() ? scope.originalQuestion : request.question;
+    const focusedTile = typeof workspace.tileId === 'string' || typeof workspace.blockId === 'string';
+    if (!asksAboutAppView(question, { focusedTile })) return undefined;
+    const startedAt = Date.now();
+    if ('unavailable' in asked) {
+      const text = `Ask can't see this page's current results: ${asked.unavailable}. Refresh the page, then ask again.`;
+      return {
+        summary: text, answer: text, answerKind: 'conversational', status: 'completed', trustState: 'not_applicable', stopReason: 'conversational_reply', resolvedRoute: 'conversation',
+        artifacts: [], evaluations: [], nextActions: [],
+        telemetry: { version: 1, stageDurationsMs: { total: 0 }, providerRoundTrips: 0, toolCalls: 0, sqlExecutions: 0, repairs: 0, egressReceipts: 0 },
+      };
+    }
+    onStep?.({ version: 1, phase: 'context', title: `Reading what “${asked.context.dashboardTitle}” shows: its tiles, their sources and trust, and the filters applied`, state: 'done', at: Date.now() });
+    const answered = await answerFromAppView({
+      context: asked.context,
+      question: request.question,
+      ...(request.signal ? { signal: request.signal } : {}),
+      resolveProvider: async () => {
+        const provider = await selectAskProvider(request).catch(() => undefined);
+        if (!provider) return null;
+        // The page's rows reach the model only inside the privacy boundary (HH-5), as for App stories and chart
+        // answers. Host-only test seam: without a host, the injected interpreter stands in for a model on this machine.
+        const mayReach = opts.askAnalyticalPlannerProviderFactory && !hostHooks ? true : valuesMayReachProvider({
+          selected: { id: askRequestProviders.get(request) ?? provider.name, provider },
+          projectRoot,
+          hosted: Boolean(hostHooks),
+          ...(asked.context.relations ? { relations: asked.context.relations } : {}),
+          withoutHost: 'this-machine',
+        });
+        return { provider: ledgeredProvider(provider, askDispatchOptions, request), valuesMayReachProvider: mayReach };
+      },
+    });
+    return answered ? appViewExecutorResult(runId, asked.context, answered, startedAt) : undefined;
+  };
+
   const answerRunExecutor: AgentRouteExecutor = async (executionContext) => {
     // THE ASK PIPELINE. One interpreter, every tier prepared before anything
     // is committed. This is the whole answer path for every analytical route.
     const { runId, request } = executionContext;
     if (!request.runId) request.runId = runId;
+    // A question about what the App page shows is answered from that page's own results first.
+    const fromAppView = await answerFromAskedAppView(request.runId ?? runId, request, (step) => executionContext.emit({ type: 'executor.started', message: step.title, route: executionContext.route, payload: { askStep: step } }));
+    if (fromAppView) return fromAppView;
     const result = await askPipelineExecutor(executionContext);
     // Then, when the person has knowledge sources, the team documents that
     // explain the question's terms — cited beside the answer, never a figure
@@ -16823,6 +16908,9 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
         // so no client-provided string can bind a SQL capability or operation.
         const runId = randomUUID();
         parsed.request.runId = runId;
+        // "Ask about this App": the page run the person is looking at, read from this server's own evidence of it.
+        const askedAppView = resolveAskedAppView(parsed.request);
+        if (askedAppView) appViewByAgentRun.set(runId, askedAppView);
         if (idempotencyKey) await agentRunStore.claimRequest(idempotencyKey, runId, requestFingerprint);
         // This is host-selected rollout state, never user ingress. In
         // particular, it lets `AgentRunEngine` route explicit Research through
@@ -16958,6 +17046,7 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
           res.end(serializeJSON({ run: slimAgentRunForTransport(completedRun) }));
         } finally {
         activeAgentRunControllers.delete(runId);
+        appViewByAgentRun.delete(runId);
         }
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
@@ -22614,6 +22703,14 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
             const tile = tilesWithFilters.find((candidate) => candidate.tileId === item.i);
             return [item.i, readerTileTrust(item as ReaderTrustItem, tile as ReaderTrustTile | undefined)?.state ?? null];
           })),
+          appView: {
+            appName: loaded.app?.name ?? appId,
+            dashboardTitle: loaded.dashboard.metadata.title ?? dashboardId,
+            tiles: buildAppViewTiles(
+              loaded.dashboard.layout.items as unknown as Parameters<typeof buildAppViewTiles>[0],
+              tilesWithFilters as unknown as Parameters<typeof buildAppViewTiles>[1],
+            ),
+          },
           expiresAt: Date.now() + 15 * 60_000,
         };
         if (!staleRun && !partialRun) dashboardRunEvidence.set(runId, runEvidence);
