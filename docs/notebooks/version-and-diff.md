@@ -1,94 +1,91 @@
-# Version & diff notebooks
+# Version and diff your work
 
-> ~4 minutes · ends with a clean PR-ready diff
+Notebooks, blocks and Apps are plain text files, so git is how you review
+and share them. ZLens adds a **Source control** page for people who do not
+use git every day, and a semantic diff for people who do.
 
-Notebooks are plain text in git. ZLens's job is to keep the diffs **readable**
-and the history **meaningful** — not line-noise from whitespace churn.
+## Share your work from the workbench
 
-## Canonical format
+1. In the left rail, under **Govern**, click **Source control**.
+2. The left side lists changed files in two groups: **Included** (part of your
+   next change) and **Needs review**. Click a file to see what changed. Use
+   **Include**, **Remove** or **Discard** on each file.
+3. The **Share your work** panel walks you through four steps:
+    1. **Pick what to share**.
+    2. **Describe your change** in plain words, or click **Write it for me from
+       the changes**.
+    3. **Share to your branch**: click **Share N changes**.
+    4. **Ask for review**: click **Open review request**. When it is open, you
+       see **Review request opened** and **View on GitHub**.
 
-Every `.dql` file starts with a version header:
+At the top, the branch menu has **Create new branch…**, and **Get updates** and
+**Send branch** pull and push.
 
-```dql
-// dql-format: 1
+If the project is not a git repository yet, the page offers **Initialize Git
+for this project**. With no remote, **Add remote** asks for the
+**Remote URL (origin)**.
 
-block "Revenue by segment" {
-  domain = "finance"
-  type = "custom"
-  status = "draft"
-  query = """SELECT 1 AS revenue"""
-}
-```
+## What goes into git
 
-`zlens fmt` normalizes whitespace, key order, and SQL formatting into a
-canonical form. Run it in a pre-commit hook (or enable notebook autosave —
-the notebook writes canonical on save).
+| Committed | Kept out of git |
+|---|---|
+| `.dql` blocks and their companion YAML | `.run.json` results |
+| `.dqlnb` notebooks | `.dql/` (settings, chats, caches, private work) |
+| Published Apps in `apps/` | `dql-manifest.json` (rebuilt by `zlens compile`) |
+| `dql.config.json` | DuckDB files, `node_modules/` |
 
-```bash
-zlens fmt blocks/**/*.dql            # format in place
-zlens fmt --check .                  # CI: non-zero exit if anything drifts
-```
+A notebook's results go in `<notebook>.run.json` beside it. When you reopen
+the notebook, cells show their last results with a `cached` chip, without
+running the queries again.
 
-## Semantic diff
+## See what changed in a block or notebook
 
-`git diff` works fine, but it's character-level. `zlens diff` is
-**AST-level** — it tells you *what changed semantically*, not *which bytes*.
-Works for both `.dql` blocks and `.dqlnb` notebooks.
-
-```bash
-zlens diff blocks/finance/revenue_by_segment.dql             # vs. HEAD (inside a git repo)
-zlens diff notebooks/overview.dqlnb                          # notebook vs. HEAD
-zlens diff before.dql after.dql                              # two files directly
-```
-
-Output:
-
-```
-~ block "Revenue by segment"
-    tags: ["revenue"] -> ["revenue", "certified"]
-    query:
-      - group by segment
-      + group by segment, region
-    visualization: bar -> stacked-bar
-```
-
-Exits **1** on differences (scriptable like `git diff`).
-
-## In-app git panel
-
-Open the notebook sidebar → **Git** (⌘⇧G). You get three tabs:
-
-- **Status** — porcelain view of the working tree, color-coded
-- **Log** — last 30 commits on this branch, click to diff
-- **Diff** — full or scoped to the active file
-
-Read-only in v1.0 (the panel shipped in the v0.12 milestone). Stage / commit /
-push are planned for the v0.13 milestone.
-
-## Run snapshots
-
-Executing cells writes a sibling `<notebook>.run.json` with the last
-results. On re-open, ZLens rehydrates status/result/error without re-running
-queries, and each rehydrated cell shows a subtle `cached` chip above its
-output until you re-run it.
-
-Snapshots are **git-ignored by default** — the first snapshot write appends
-`*.run.json` to the project's `.gitignore`. Un-ignore deliberately if you
-want to ship executed state in git.
-
-## Upgrading existing projects
-
-Files created before the canonical format can be upgraded in place:
+`git diff` shows changed characters. `zlens diff` shows what changed in
+meaning:
 
 ```bash
-zlens migrate format            # upgrade every .dql/.dqlnb in the project
-zlens migrate format --check    # dry run; exits 1 if anything would change
+zlens diff blocks/finance/revenue_by_segment.dql     # against the last commit
+zlens diff before.dql after.dql                      # two files
 ```
 
-Safe to re-run — files that are already canonical are skipped.
+Example output:
 
-## Verify it worked
+```text
+~ block "Top customers by lifetime spend"
+    query: select customer_name, … limit 10 → select customer_name, … limit 20
+    visualization.chart: "table" → "bar"
+```
 
-- `git diff` on a saved-but-unchanged notebook is empty (no whitespace churn)
-- `zlens fmt --check .` passes in CI
-- `zlens diff A B` produces a readable semantic report on two versions
+`zlens diff` exits with code 1 when there are differences, like `git diff`.
+
+## Keep files in one canonical format
+
+ZLens writes files in a canonical format, so saving an unchanged notebook does
+not create a diff. To check or fix a file by hand:
+
+```bash
+zlens fmt blocks/finance/revenue_by_segment.dql            # format in place
+zlens fmt --check blocks/finance/revenue_by_segment.dql    # exit 1 if it needs formatting
+```
+
+`zlens fmt` takes one file at a time. To check or upgrade every file in the
+project:
+
+```bash
+zlens migrate format --check    # report files that would change
+zlens migrate format            # rewrite them
+```
+
+## Prepare work for sharing
+
+`zlens promote` removes local run state and UI state from a file before you
+share it:
+
+```bash
+zlens promote notebook notebooks/customer_orders.dqlnb --to shared
+zlens promote app <app-id> --to shared
+```
+
+## Check the project in CI
+
+See [CI and zlens verify](../tutorials/05-ci-and-verify.md).
