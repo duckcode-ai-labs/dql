@@ -200,8 +200,9 @@ describe('dashboard business story', () => {
     it('names the player ranked first, on the measure the ranking is by, and sums nothing', () => {
       const result = buildDeterministicDashboardStory({ goal: 'Top 5 scorers', filters: {}, tiles: [rankedTile(ranked)] });
       const text = result.story.paragraphs.join(' ');
-      expect(text).toContain('James Harden: 5,534');
-      expect(text).toMatch(/ranked first by total points 2016 2017/);
+      expect(text).toContain('**James Harden** is ranked first, with **5,534** total points 2016 2017');
+      expect(result.facts[0]!.label).toMatch(/ranked first by total points 2016 2017/);
+      expect(result.facts[0]!.value).toBe('James Harden: 5,534');
       // No "rank is 15", no summed Top-N ("points 2016 is 13,480"), no fifth-ranked leader.
       expect(text).not.toMatch(/rank is/i);
       expect(text).not.toContain('15');
@@ -269,6 +270,107 @@ describe('dashboard business story', () => {
       });
       expect(result.facts.map((fact) => fact.id)).not.toContain('fg:value:fg_pct');
       expect(result.facts.find((fact) => fact.id === 'fg:value:made')?.value).toBe(30);
+    });
+  });
+
+  describe('a top-N list without a rank column is led by its first row, never summed', () => {
+    // The certified App nba-player-performance-stakeholders-using-certified:
+    // a top 5 with no rank column. It used to say "total points is 26,203".
+    const TOP5_SQL = `SELECT player_name, SUM(COALESCE(pts, 0)) AS total_points, COUNT(DISTINCT details_game_id) AS games_played
+FROM TRANSFORMED.int_player_stats
+WHERE EXTRACT(YEAR FROM game_date_est) BETWEEN \${season_start} AND \${season_end} AND player_name IS NOT NULL
+GROUP BY player_name
+ORDER BY total_points DESC, player_name ASC
+LIMIT \${top_n}`;
+    const top5 = [
+      { player_name: 'James Harden', total_points: 5534, games_played: 189 },
+      { player_name: 'LeBron James', total_points: 5331, games_played: 214 },
+      { player_name: 'Russell Westbrook', total_points: 5252, games_played: 198 },
+      { player_name: 'Stephen Curry', total_points: 5251, games_played: 201 },
+      { player_name: 'Kevin Durant', total_points: 4835, games_played: 188 },
+    ];
+    const tile = (extra: Record<string, unknown>) => ({
+      tileId: 'top-players', title: 'Scorers 2016 2017', status: 'ok', trustState: 'certified' as const,
+      result: { columns: ['player_name', 'total_points', 'games_played'], rows: top5 },
+      citation: { kind: 'block', name: 'Top Players By Total Points 2016 2017' },
+      ...extra,
+    });
+    const expectLedByHarden = (result: ReturnType<typeof buildDeterministicDashboardStory>) => {
+      const text = result.story.paragraphs.join(' ');
+      expect(text).toContain('**James Harden** leads with **5,534** total points');
+      expect(text).not.toContain('26,203');
+      expect(text).not.toContain('990');
+      expect(text).not.toMatch(/total points is/);
+      expect(result.facts.map((fact) => fact.id)).toEqual(['top-players:rank:1']);
+      expect(validateDashboardStoryBrief(result.story, result.facts)).toEqual({ ok: true, errors: [] });
+    };
+
+    it('ORDER BY … LIMIT in the block SQL', () => {
+      expectLedByHarden(buildDeterministicDashboardStory({
+        goal: 'Top scorers', filters: { top_n: 5 }, tiles: [tile({ source: { sql: TOP5_SQL }, filters: { top_n: 5 } })],
+      }));
+    });
+
+    it('a precomputed ordering from the server', () => {
+      expectLedByHarden(buildDeterministicDashboardStory({
+        goal: 'Top scorers', filters: {},
+        tiles: [tile({ ordering: { kind: 'top_n', reason: 'order_limit', orderColumn: 'total_points', direction: 'desc' } })],
+      }));
+    });
+
+    it('a "Top …" tile title alone', () => {
+      expectLedByHarden(buildDeterministicDashboardStory({
+        goal: 'Top scorers', filters: {}, tiles: [tile({ title: 'Top Players By Total Points 2016 2017' })],
+      }));
+    });
+
+    it('rows alone: one per player, sorted by points, five of them', () => {
+      expectLedByHarden(buildDeterministicDashboardStory({ goal: 'Top scorers', filters: {}, tiles: [tile({})] }));
+    });
+
+    it('a full additive breakdown (points by team, all teams) still sums', () => {
+      const teams = ['ATL', 'BOS', 'BKN', 'CHA', 'CHI', 'CLE', 'DAL', 'DEN', 'DET', 'GSW', 'HOU', 'IND', 'LAC', 'LAL', 'MEM', 'MIA', 'MIL', 'MIN', 'NOP', 'NYK', 'OKC', 'ORL', 'PHI', 'PHX', 'POR', 'SAC', 'SAS', 'TOR', 'UTA', 'WAS'];
+      const rows = teams.map((team, index) => ({ team, points: 9000 - index * 10 }));
+      const total = rows.reduce((sum, row) => sum + row.points, 0);
+      const result = buildDeterministicDashboardStory({
+        goal: 'Points by team', filters: {},
+        tiles: [{
+          tileId: 'teams', title: 'Points by team', status: 'ok', trustState: 'certified',
+          result: { columns: ['team', 'points'], rows },
+          source: { sql: 'SELECT team, SUM(pts) AS points FROM games GROUP BY team ORDER BY points DESC' },
+        }],
+      });
+      expect(result.facts.map((fact) => fact.id)).toEqual(['teams:value:points', 'teams:rank:1']);
+      expect(result.facts[0]!.value).toBe(total);
+      expect(result.story.paragraphs.join(' ')).toContain(`points is **${total.toLocaleString('en-US')}**`);
+      expect(result.facts[1]!.value).toBe('ATL: 9,000');
+    });
+
+    it('a small whole-population breakdown whose SQL has no limit still sums', () => {
+      const rows = [
+        { conference: 'East', points: 410 }, { conference: 'West', points: 395 }, { conference: 'Other', points: 300 },
+      ];
+      const result = buildDeterministicDashboardStory({
+        goal: 'Points by conference', filters: {},
+        tiles: [{
+          tileId: 'conf', title: 'Points by conference', status: 'ok', trustState: 'certified',
+          result: { columns: ['conference', 'points'], rows },
+          source: { sql: 'SELECT conference, SUM(pts) AS points FROM games GROUP BY 1 ORDER BY points DESC' },
+        }],
+      });
+      expect(result.facts.find((fact) => fact.id === 'conf:value:points')?.value).toBe(1105);
+    });
+
+    it('a LIMIT with no order is a sample: not summed', () => {
+      const result = buildDeterministicDashboardStory({
+        goal: 'Games', filters: {},
+        tiles: [{
+          tileId: 'sample', title: 'Some games', status: 'ok', trustState: 'certified',
+          result: { columns: ['game', 'points'], rows: [{ game: 'g1', points: 100 }, { game: 'g2', points: 120 }] },
+          source: { sql: 'SELECT game, points FROM games LIMIT 2' },
+        }],
+      });
+      expect(result.facts.map((fact) => fact.id)).toEqual(['sample:rank:1']);
     });
   });
 });

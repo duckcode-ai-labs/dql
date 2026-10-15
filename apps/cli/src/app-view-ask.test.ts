@@ -108,9 +108,57 @@ SELECT team, wins FROM team_wins_2017 ORDER BY wins DESC
   return root;
 }
 
+/** The certified App's top 5: no rank column, ordered and limited by its SQL. */
+const TOP5_UNRANKED = [
+  { player_name: 'James Harden', total_points: 5534, games_played: 189 },
+  { player_name: 'LeBron James', total_points: 5331, games_played: 214 },
+  { player_name: 'Russell Westbrook', total_points: 5252, games_played: 198 },
+  { player_name: 'Stephen Curry', total_points: 5251, games_played: 201 },
+  { player_name: 'Kevin Durant', total_points: 4835, games_played: 188 },
+];
+
+function writeUnrankedTopFiveApp(root: string): void {
+  writeFileSync(join(root, 'blocks', 'top_scorers.dql'), `block "Scorers 2016 2017" {
+  domain = "nba"
+  type = "custom"
+  status = "certified"
+  owner = "analytics"
+  description = "The five players with the most points across 2016 and 2017."
+  params {
+    top_n = 5
+  }
+  query = """
+SELECT player_name, SUM(COALESCE(pts, 0)) AS total_points, COUNT(DISTINCT game_id) AS games_played
+FROM int_player_stats
+WHERE EXTRACT(YEAR FROM game_date_est) BETWEEN 2016 AND 2017
+GROUP BY player_name
+ORDER BY total_points DESC, player_name ASC
+LIMIT \${top_n}
+  """
+  visualization { chart = "table" }
+}
+`);
+  const appDir = join(root, 'apps', 'certified-scorers');
+  mkdirSync(join(appDir, 'dashboards'), { recursive: true });
+  writeFileSync(join(appDir, 'dql.app.json'), JSON.stringify({
+    version: 1, id: 'certified-scorers', name: 'Certified Scorers', domain: 'nba', visibility: 'shared',
+    audience: 'stakeholders', lifecycle: 'draft', owners: ['analytics'], homepage: { type: 'dashboard', id: 'overview' },
+  }));
+  writeFileSync(join(appDir, 'dashboards', 'overview.dqld'), JSON.stringify({
+    version: 1,
+    id: 'overview',
+    metadata: { title: 'Scorers', domain: 'nba' },
+    layout: {
+      kind: 'grid', cols: 12, rowHeight: 80,
+      // A title with no "Top" in it: the block's ORDER BY … LIMIT says it is a top 5.
+      items: [{ i: 'scorers', x: 0, y: 0, w: 8, h: 4, block: { ref: 'blocks/top_scorers.dql' }, viz: { type: 'bar' }, title: 'Scorers 2016 2017' }],
+    },
+  }));
+}
+
 const executor = {
   executeQuery: async (sql: string) => {
-    const rows = /team_wins_2017/.test(sql) ? TEAMS : /player_points_ranked/.test(sql) ? TOP5 : [{ value: 1 }];
+    const rows = /team_wins_2017/.test(sql) ? TEAMS : /player_points_ranked/.test(sql) ? TOP5 : /int_player_stats/.test(sql) ? TOP5_UNRANKED : [{ value: 1 }];
     return { columns: Object.keys(rows[0]!), rows, rowCount: rows.length, sql };
   },
 } as unknown as QueryExecutor;
@@ -143,8 +191,9 @@ function appViewModel(seen: Seen): AgentProvider {
   };
 }
 
-async function start(options: { hostRule?: 'show' | 'withhold_review' } = {}) {
+async function start(options: { hostRule?: 'show' | 'withhold_review'; extend?: (root: string) => void } = {}) {
   const root = writeProject();
+  options.extend?.(root);
   const seen: Seen = { prompts: [] };
   const hostRule = options.hostRule;
   const priya: DqlPrincipal = { id: 'u-priya', kind: 'person', email: 'priya@harbor.example', source: 'host' };
@@ -317,10 +366,22 @@ describe('the App page story never treats a rank as a measure (0.1.0 re-test #1)
     const page = await post('/api/apps/give-me-top-5-players-who/dashboards/overview/run', { variables: {} });
     expect(page.status, page.text.slice(0, 400)).toBe(200);
     const story = [page.body.story?.headline, ...(page.body.story?.paragraphs ?? [])].join(' ');
-    expect(story).toContain('James Harden: 5,534');
+    expect(story).toContain('**James Harden** is ranked first, with **5,534** total points 2016 2017');
     expect(story).not.toMatch(/rank is/i);
     expect(story).not.toContain('Kevin Durant');
     // The certified tile beside it still reads normally.
     expect(story).toContain('Rockets: 79');
+  });
+
+  it('leads a top 5 with no rank column with its first row and never sums it', async () => {
+    const { post } = await start({ extend: writeUnrankedTopFiveApp });
+    const page = await post('/api/apps/certified-scorers/dashboards/overview/run', { variables: {} });
+    expect(page.status, page.text.slice(0, 400)).toBe(200);
+    expect(page.body.tiles[0].ordering).toMatchObject({ kind: 'top_n', reason: 'order_limit', orderColumn: 'total_points', direction: 'desc' });
+    const story = [page.body.story?.headline, ...(page.body.story?.paragraphs ?? [])].join(' ');
+    expect(story).toContain('**James Harden** leads with **5,534** total points');
+    // Not "total points is 26,203" (the five players summed), nor 990 games.
+    expect(story).not.toContain('26,203');
+    expect(story).not.toContain('990');
   });
 });
