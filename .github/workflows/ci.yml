@@ -95,7 +95,7 @@ jobs:
           ZLENS_SERVER_TOKEN: ci-health-check-token
         run: docker compose down
 
-  # --- docs: verify every relative markdown link under docs/ resolves ---
+  # --- docs: every relative link resolves; every documented command is real ---
   docs:
     name: docs link check
     runs-on: ubuntu-latest
@@ -106,6 +106,10 @@ jobs:
           node-version: 20
       - name: check relative links in docs/
         run: node scripts/check-doc-links.mjs
+      - name: check every documented zlens command and flag is real
+        run: |
+          node --test scripts/check-doc-commands.test.mjs
+          node scripts/check-doc-commands.mjs
 
   # --- zlens fmt --check across the repo ---
   # Gates canonical .dql serialization — catches whitespace churn before

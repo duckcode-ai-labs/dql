@@ -28,13 +28,13 @@ dashboard: {
 Or scaffold one:
 
 ```bash
-zlens dashboard new overview --from notebooks/jaffle-overview.dql
+zlens new dashboard overview
 ```
 
 ## 2. Compile
 
 ```bash
-zlens compile dashboards/overview.dql --out build/
+zlens build dashboards/overview.dql --out-dir build/
 # ✓ compiled 4 cells
 # ✓ emitted build/overview.html (312 KB, self-contained)
 ```

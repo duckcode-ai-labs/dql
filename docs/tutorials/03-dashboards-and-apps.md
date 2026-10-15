@@ -136,7 +136,7 @@ the dashboard.
 ## Step 5 — See the full lineage
 
 ```bash
-zlens lineage --app revenue-ops
+zlens lineage revenue-ops
 ```
 
 > **You should see** the complete chain:
