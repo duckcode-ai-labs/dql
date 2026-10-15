@@ -1,5 +1,8 @@
 /* Feature clips (scripts/mkdocs/clips.py). */
-.md-typeset .zlens-clip {
+.md-typeset figure.zlens-clip {
+  display: block;
+  width: 100%;
+  max-width: 100%;
   margin: 1.25em 0;
 }
 .md-typeset .zlens-clip video {
@@ -32,8 +35,7 @@
   align-items: center;
   justify-content: center;
   gap: 0.35em;
-  aspect-ratio: 16 / 10;
-  max-height: 16rem;
+  min-height: 6.5rem;
   width: 100%;
   border: 1px dashed var(--md-default-fg-color--lighter);
   border-radius: 6px;
