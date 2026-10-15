@@ -1,226 +1,106 @@
-# Block Studio dbt-first workflow
+# Block Studio
 
-> ~8 minutes · ends with one draft SQL block and one draft semantic block ready for certification
+Block Studio is where you write, run, review and certify blocks.
 
-Block Studio is the main workspace for turning dbt models, dbt semantic
-metrics, or legacy SQL into trusted DQL blocks.
+## Open it
 
-The intended flow is:
+In the left rail, click **Blocks**.
 
-```text
-Connect dbt -> Pick model or metric -> Build block -> Validate -> Save draft -> Certify -> Use in Apps
-```
+- With a block selected in the sidebar, Block Studio opens that block.
+- With nothing selected, it shows **Create DQL blocks** with three ways to
+  start:
 
-The editor toolbar keeps the two trust transitions separate: **Save draft**
-persists review-required work, while **Certify** runs the validation, execution,
-test, chart, and lineage gates before changing the status. A draft may be used
-inside Block Studio for authoring and review, but normal Ask retrieval does not
-offer it as answer evidence; Ask can route through a block only after that block
-is certified.
+| Card | Button | Use it to |
+|---|---|---|
+| **Ask AI** | **Describe block** | Describe what you need; AI drafts it from your blocks, models and metrics. |
+| **Import SQL** | **Start import** | Turn existing SQL into drafts. See [Import SQL](import-sql.md). |
+| **Build manually** | **Open builder** | Build a semantic block from metrics, dimensions, time grain and filters. |
 
-ZLens does not replace dbt. dbt owns models, transformations, tests, and semantic
-definitions. ZLens owns reusable answer blocks, chart configuration, notebooks,
-Apps, AI pins, certification labels, and answer-level lineage.
+Under **Manual options** you also find **Blank SQL block** (**Create**) and
+**Semantic block** (**Build**).
 
-## 1. Open Block Studio
+You can also click **New block** at any time. The **New Block** dialog asks for
+the type (**SQL Block** or **Semantic Block**), who it is for (**Shared with the
+team** or **Private to me**), a **Block Name**, a **Domain** and an optional
+**Folder**. Click **Create Block**.
 
-Start the notebook UI:
+## SQL block or semantic block
 
-```bash
-npx zlens notebook ./dql
-```
+- A **SQL block** runs SQL you write against dbt models or warehouse tables.
+- A **semantic block** asks for metrics and dimensions from the semantic
+  layer, so you do not write joins. Use it when the metric is already defined
+  in dbt.
 
-Click **Blocks**. If no block is selected, Block Studio shows four starting
-paths:
+## The block page
 
-- **Create SQL Block from dbt Model**
-- **Create Semantic Block from dbt Metric**
-- **Import SQL**
-- **Ask AI to Generate Block**
+When you open a block, you see its overview:
 
-The start page also shows dbt status: project path, `manifest.json`,
-`catalog.json`, `semantic_manifest.json`, and setup hints.
+- the name, a status badge such as **Draft** or **Certified**, the domain and
+  the owner;
+- for a certified block, the certification receipt under the name;
+- **Last run**, **Rows**, **Used in** and **Tests**;
+- **Outputs**, **Parameters**, the **DQL source**, tests and lineage.
 
-## 2. SQL block from a dbt model
+Buttons on the overview: **Open in builder** and **Run**.
 
-Use this when you need explicit SQL.
+The toolbar at the top has:
 
-1. Click **Create SQL Block from dbt Model**.
-2. Pick or type a block name.
-3. Use the schema/dbt explorer to insert tables and columns.
-4. Write normal SQL against warehouse tables or dbt-built models.
-5. Run, inspect results, then save as draft.
+| Button | Does |
+|---|---|
+| **New block** | Starts another block. |
+| **Ask AI** / **Modify with AI** | Has AI draft or change the block. |
+| **Run** | Runs the block and shows the rows in **Results**. |
+| **Save draft** | Saves your changes as a draft. Never certifies. |
+| **Certify** / **Re-certify** | Runs the certification checks. See [Save and certify](certify.md). |
+| **Delete** | Deletes a saved block. |
 
-Example:
+Switch between **Visual Builder** and **DQL Source** to edit the block in a
+form or as text. **Context** opens a panel with the block's context.
+
+The tabs at the bottom are **Results**, **Run inputs**, **Lineage**,
+**History** and **Metadata**.
+
+## Edit and save
+
+1. Click **Open in builder** (or switch to **DQL Source**).
+2. Change the query, the chart or the details. In the visual builder, the
+   **Details** box holds **Block name**, **Domain**, **Owner**, **Tags**,
+   **Folder** and **Description**.
+3. Click **Run** to check the rows.
+4. Click **Save draft**.
+
+Saving a certified block does not change the certified version: your edit is
+saved as a separate draft beside it until you certify it.
+
+## Add tests
+
+In the visual builder, use the **Tests** box ("Assertions checked on every run
+and required for certification"). In DQL source:
 
 ```dql
-block "Daily Transaction Volume" {
-  domain = "cards"
-  type = "custom"
-  status = "draft"
-  description = "Daily card transaction volume."
-  owner = "analytics"
-  tags = ["cards", "daily"]
-
-  query = """
-SELECT
-  transaction_date,
-  SUM(amount) AS transaction_volume
-FROM analytics.fct_card_transactions
-GROUP BY transaction_date
-ORDER BY transaction_date
-"""
-
-  visualization {
-    chart = "line"
-    x = transaction_date
-    y = transaction_volume
-  }
+tests {
+  assert row_count > 0
 }
 ```
 
-If you click a semantic metric while editing a SQL block, ZLens does not silently
-mix it into the query. The UI asks whether to create a Semantic Block or insert
-an advanced semantic reference explicitly.
+## Fill in the details that help Ask
 
-## 3. Semantic block from a metric
+Ask and your AI agents find blocks by what they say about themselves. In the
+**Metadata** tab or the DQL source, set:
 
-Use this when dbt Semantic Layer or DQL semantic metadata already defines the
-business metric.
+- a plain **description** of what the block answers,
+- `grain`: what one row is, such as `customer` or `day`,
+- `outputs`: the columns it returns,
+- `llmContext`: a short note for AI about when to use the block.
 
-1. Click **Create Semantic Block from dbt Metric**.
-2. Pick the metric.
-3. Add dimensions, optional time dimension, grain, and chart intent.
-4. Validate the generated DQL.
-5. Save as draft.
+Certification records these as warnings when they are missing.
 
-Example:
-
-```dql
-block "Approval Rate by Region" {
-  domain = "cards"
-  type = "semantic"
-  status = "draft"
-  description = "Approval rate by region from the dbt semantic layer."
-  owner = "analytics"
-  tags = ["cards", "approval"]
-
-  metric = "approval_rate"
-
-  visualization {
-    chart = "single_value"
-    y = approval_rate
-  }
-}
-```
-
-Semantic blocks hide raw `SELECT` editing by default. If you need custom SQL,
-create a SQL Block instead.
-
-## 4. AI Import legacy SQL
-
-Use **AI Import** when pasting SQL, uploading `.sql` files, migrating folders,
-or turning an agent-generated SQL answer into a reusable block draft.
-
-The wizard is:
-
-```text
-Source -> Analyze -> Reuse/parameterize -> Preview -> Certify
-```
-
-Supported first-pass sources:
-
-- paste SQL
-- upload one `.sql` file
-- upload multiple `.sql` files
-- project-relative folder path
-
-The importer splits semicolon-delimited statements, common `GO` batches, and
-repeated `-- name:` / `-- title:` query headers. For each statement it detects
-tables, joins, parameters, literals, grain, outputs, and source metadata.
-
-Before saving a new draft, ZLens runs a reuse-first check:
-
-- exact SQL match -> reuse the existing block
-- same SQL shape with different values -> reuse with new parameter values
-- same business intent -> prefer the certified block
-- close variant -> propose extending the existing block
-- genuinely new logic -> save a draft block
-
-Runtime-scope literals such as years, dates, `LIMIT`, IDs, segments, teams,
-players, regions, products, and comparison windows become DQL params when safe.
-Contiguous year lists become range parameters, non-contiguous year lists stay
-selected-set parameters, and filters such as `team IN ('LAL', 'BOS')` become
-array-backed params such as `team_set = ["LAL", "BOS"]`.
-Business constants stay static or review-required. Generated drafts include
-`parameterPolicy` and `filterBindings` so Apps can apply shared filters only to
-compatible blocks.
-
-For batch migration from the CLI:
+## From the terminal
 
 ```bash
-zlens import sql ./legacy-sql --domain finance --owner analytics
+zlens new block "Revenue by segment" --domain finance --owner you@example.com
 ```
 
-The import command autosaves valid candidates as `_drafts` blocks, reports
-similar certified blocks, and keeps `--save` only as a compatibility alias. Run
-the preview/tests and then certify the reviewed block.
-
-In the **Import SQL to DQL** screen, **Save draft** writes the candidate as a
-draft (the `.dql` status and its YAML both say `draft`) and never certifies it,
-even when every check would pass. **Certify** is a separate button: it runs the
-certification rules against the saved draft and, only when they pass, moves it
-to the canonical blocks folder as certified and records who certified it.
-
-## 5. Certify
-
-Certification is a trust label in OSS. It is not RBAC.
-
-Before clicking **Certify**, confirm:
-
-- metadata is present
-- validation has no errors
-- the block runs successfully
-- tests pass
-- chart config is valid
-- lineage is captured
-- AI-generated changes were reviewed
-
-Certification changes useful blocks from `draft` or `review` to `certified`.
-Certified blocks appear in the block library and can be added to App dashboard
-pages.
-
-Certify is the only way a block becomes certified: saving (here, from a notebook
-cell, from an Ask answer, or from an import) always writes a draft. A passing
-certification writes a receipt into the block's companion YAML — who certified
-it, when, from which surface, under which rules, and the hash of the exact
-source — and the block overview shows it as *Certified by … · when · via …*.
-From the CLI, `zlens certify --from-draft <path>` runs the same rules and
-leaves the same receipt.
-
-## 6. Lineage
-
-SQL blocks track detected tables and dbt model/source matches.
-
-Semantic blocks track:
-
-```text
-dbt source -> dbt model -> semantic metric -> DQL block -> dashboard page -> App
-```
-
-Run these commands after dbt artifacts change:
-
-```bash
-dbt build
-npx zlens compile ./dql
-npx zlens sync dbt ./dql
-cd dql && npx zlens agent reindex
-```
-
-## Verify it worked
-
-- Block Studio dbt status shows `manifest.json` present.
-- A SQL block validates and runs against a dbt model or warehouse table.
-- A semantic block validates from a metric without raw SQL editing.
-- Imported SQL saves as draft blocks instead of replacing current work.
-- The Lineage tab shows source/model/metric/block/App context after compile.
+This writes a draft block under `blocks/` (or `domains/finance/blocks/` if
+your project has domain folders) and prints its path. Open it in Block Studio
+to run and certify it.
