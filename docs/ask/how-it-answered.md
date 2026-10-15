@@ -1,89 +1,72 @@
-# Diagnose a local Ask AI failure with a trace
+# How Ask answered
 
-Use this workflow when an office project reports a bad routing decision,
-clarification loop, provider error, generated SQL failure, or incomplete
-Research answer. It is safe for local investigation; it does not upload data.
+Every Ask run is recorded on your machine. You can see, for any answer, which
+sources Ask looked at, what it skipped, the SQL that ran and the checks it
+passed.
 
-## 1. Capture the compact run context
+## From an answer
 
-Before re-running the question, record the ZLens binary path/version/commit and
-the selected project/connection. From the Ask result, open **How it was
-answered** and then **Open full trace**. Save the run ID, trace ID, status,
-selected tier, trust state, and provider phase/cause if present.
+1. Under the answer, click **How it was answered**.
+2. The panel opens on **How it answered**. It starts with the outcome, such as
+   **Answered from a certified block.**, and a line like
+   `Worked for 52 s · 6 steps · 1 AI call`.
+3. Read the steps in order:
+    - **Read the question**: how Ask understood it.
+    - **Certified blocks**: whether a certified block answers it.
+    - **Semantic layer**: whether metrics and dimensions could answer it.
+    - **Governed tables** and **AI wrote SQL**: used only when nothing more
+      trusted could answer.
+    - **Checked before running** and **Ran on the warehouse**.
+    - **Answer**, or **No answer** with the reason.
 
-Do not copy the office question, SQL, result rows, database names, local paths,
-provider request/response bodies, or credentials into an issue.
+    Each step is marked done or skipped. Click a step to see its details, such
+    as the AI calls and the SQL it wrote.
+4. Use the other tabs for the detail: **DQL**, **SQL**, **Data used** (the
+   certified block, metrics, dimensions, tables, joins and filters) and
+   **Checks**.
+5. Click **Open full trace** for the complete record.
 
-## 2. Read the trace from top to bottom
+## Ask observability
 
-The detail page starts with an answer-first incident summary. Read **What
-happened**, **Why**, **Impact on answer**, and **How to fix** before opening a
-detail pane. Those fields are derived from typed provider cause/safe action,
-coverage, cascade, SQL, and tool receipts; they do not expose provider bodies,
-SQL, or rows. Use **View related stage** to jump to the responsible evidence.
+In the left rail, under **Govern**, click **Ask observability**. It lists
+every local Ask run, newest first.
 
-In **Trace Tree** expand only the failed/terminal path first:
+Filter the list by:
 
-1. **Snapshot and retrieval** — inspect source coverage and candidate lifecycle.
-   An excluded or pruned candidate is evidence of package narrowing, not proof
-   that the model or field is unmodeled.
-2. **Meaning and cascade** — check the selected qualified IDs, cascade attempts,
-   and whether the plan froze. Pre-freeze unavailable/ineligible tiers may move
-   to a safe later tier; policy denial and post-freeze failure remain terminal.
-3. **Provider, tool, and SQL** — inspect phase, stable cause, safe action,
-   fingerprints, and reason codes. No payload includes the raw request, SQL, or
-   values.
-4. **Result/narration/persistence** — distinguish an execution failure from a
-   narration fallback or a local trace-store failure.
-5. **Research** — inspect each linked branch, validator, verdict, and synthesis
-   limitation. `inconclusive` is not a positive finding.
+- **Outcome**: completed, blocked, failed, cancelled and more.
+- **Mode**: Ask or Research.
+- **Selected tier**: **Certified**, **Semantic**, **Governed relational**,
+  **Exploratory SQL**, **Clarify or gap**.
+- **Trust**: **Certified**, **Governed**, **Review required**, **Blocked**.
 
-Use **Agent Graph** to understand physical dependencies plus dashed
-continuation/Research relationships and **Timeline** to locate a slow boundary.
-Search temporarily expands matching tree paths; clearing search restores the
-normal progressively disclosed view.
+Click **Open trace** on a run. The trace page has three views: **Trace Tree**
+(the steps, nested), **Agent Graph** (how the steps depend on each other) and
+**Timeline** (where the time went).
 
-## 3. Export a safe reproduction bundle
+The trace keeps what each AI call was for, how long it took and its reply,
+the checks, the SQL that ran and a sample of its rows. It does not keep full
+prompts, credentials or file paths.
 
-From a terminal in the project directory:
+## From the terminal
 
 ```bash
-zlens agent trace show <run-id> --format json
-zlens agent trace export <run-id> --out ./ask-trace-strict --profile strict
-zlens agent trace validate ./ask-trace-strict
-zlens agent trace replay ./ask-trace-strict --mode receipt
+zlens agent trace list
+zlens agent trace show <trace-id>
 ```
 
-The strict bundle pseudonymizes identifiers and refuses raw SQL, URLs, paths,
-secrets, and similar dangerous content. Validation/replay are offline-only.
-Do not use a support profile unless an authorized reviewer explicitly confirms
-that the qualified identifiers and any separately supplied reviewed question
-are safe to share.
+To share a run with a maintainer without sharing your data, export a
+**strict** bundle. It replaces identifiers with stand-ins and refuses raw
+SQL, URLs, paths and secrets:
 
-## 4. Share an actionable gap
+```bash
+zlens agent trace export <trace-id> --out ./ask-trace-strict --profile strict
+zlens agent trace validate ./ask-trace-strict
+```
 
-For a ZLens maintainer, share the strict bundle plus this redacted checklist:
-
-- ZLens version, binary path, package/commit SHA
-- provider/model/base-origin **fingerprints** and readiness status, not values
-- manifest/catalog/SQLite/vector/runtime-schema fingerprints and timestamps
-- trace/run IDs, selected tier, trust state, stop reason, and stable failure code
-- admitted/excluded candidate IDs and reason codes
-- cascade attempts, plan/SQL/result fingerprints, and redacted logs
-- a sanitized reproduction using the office-shaped fixture pattern
-
-If the trace store says unavailable or unsupported, that explains only missing
-diagnostic evidence. It does not explain a failed Ask answer by itself: trace
-recording is intentionally fail-open.
-
-## 5. Compare before and after a fix
-
-Export a strict receipt from each run, then compare structurally:
+Compare two runs, for example before and after a fix:
 
 ```bash
 zlens agent trace compare ./before ./after --mode compare
 ```
 
-Look for a change in source coverage, candidate role/reason counts, cascade
-attempts, provider/tool/SQL attempts, route/tier, trust, and timing. Do not use
-the text of an answer as the only proof of a routing fix.
+Command details: [Ask traces reference](../reference/ask-traces.md).
