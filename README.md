@@ -26,9 +26,10 @@
   <a href="./CONTRIBUTING.md"><b>Contributing</b></a>
 </p>
 
-<!-- overview.gif: add after #102 merges -->
 <p align="center">
-  <img src="docs/assets/readme/app.png" alt="A ZLens App page: the badge reads All data certified, an Ask box sits above the tiles, and every tile is labelled Certified" width="100%">
+  <a href="https://duckcode-ai-labs.github.io/zlens/">
+    <img src="docs/media/clips/overview.gif" alt="ZLens in under a minute: Ask 'How has revenue changed by month?' and get a Certified answer from the monthly_revenue block, see how it was answered, open the Jaffle Growth Review App where all data is certified, then trace lineage from the dbt sources through the block to the App" width="100%">
+  </a>
 </p>
 
 ## What is ZLens?
@@ -207,6 +208,10 @@ Build Apps from blocks for the people who read the numbers. Every tile carries
 its trust label and a receipt, and the page says how much of it is certified.
 Ask about an App and the answer reads that page's own results and filters, and
 takes the trust of the weakest tile it read.
+
+<p align="center">
+  <img src="docs/assets/readme/app.png" alt="A ZLens App page: the badge reads All data certified, an Ask box sits above the tiles, and every tile is labelled Certified" width="100%">
+</p>
 
 <p align="center">
   <img src="docs/assets/readme/app-ask.png" alt="The Jaffle Growth Review App, all data certified, with Ask about Jaffle Growth Review open: a Certified answer read from the App's current results, where every tile it read runs a certified source" width="100%">
