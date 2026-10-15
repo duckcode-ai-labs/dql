@@ -7,6 +7,12 @@ import { modelingJoinGraph, modelingJoinPaths } from './host.js';
 import { leafName, nativeAggregateBinding, nativeFormulaBinding, normalizeRelationName, parseMetricFilter, qualifyExpression, buildVocabularySource, columnLineageFromSql  } from './vocabulary-source.js';
 
 describe('vocabulary source helpers', () => {
+  it('reads a numeric measure expression (dbt `expr: 1`) instead of throwing', () => {
+    expect(() => nativeAggregateBinding(1, 'sum')).not.toThrow();
+    expect(nativeAggregateBinding(1, 'sum')).toEqual(nativeAggregateBinding('1', 'sum'));
+    expect(() => nativeFormulaBinding(1)).not.toThrow();
+  });
+
   it('qualifies bare columns in a measure expression, leaving keywords, functions and literals alone', () => {
     expect(qualifyExpression('case when is_drink_item then product_price else 0 end', 'dev.order_items', ['product_price']))
       .toBe('case when "dev"."order_items"."is_drink_item" then "dev"."order_items"."product_price" else 0 end');
