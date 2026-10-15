@@ -1,0 +1,23 @@
+{
+  "key": "53cb2e6336b3050691cf6a1ff5fc0d1c",
+  "operation": "generate",
+  "text": "NO_SQL: None of the listed relations holds employee or HR data such as employee IDs, hire dates, termination dates or headcount, so employee churn cannot be computed.",
+  "providerName": "claude",
+  "recordedAt": "2026-10-15T20:52:33.279Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 2,
+    "messageRoles": [
+      "system",
+      "user"
+    ],
+    "preCanonicalHash": "53cb2e6336b3050691cf6a1ff5fc0d1c16283fe77758ec64e3d707fc1b63fc06",
+    "postCanonicalHash": "53cb2e6336b3050691cf6a1ff5fc0d1c16283fe77758ec64e3d707fc1b63fc06",
+    "appliedRuleClasses": []
+  }
+}

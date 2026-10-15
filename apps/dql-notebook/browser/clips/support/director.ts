@@ -86,15 +86,21 @@ export class Director {
 
   /** Glide to an element (centre, or an offset inside it). */
   async point(target: Locator, offset?: { x: number; y: number }): Promise<void> {
-    await target.scrollIntoViewIfNeeded();
-    const box = await target.boundingBox();
+    await target.waitFor({ state: 'visible', timeout: 30_000 });
+    let box = await target.boundingBox();
+    const viewport = this.page.viewportSize() ?? { width: 1440, height: 900 };
+    // Keep targets clear of the edges, where sticky headers and the Ask composer float over content.
+    if (!box || box.y < 110 || box.y + box.height > viewport.height - 190) {
+      await target.evaluate((el) => el.scrollIntoView({ block: 'center', behavior: 'smooth' }));
+      await this.page.waitForTimeout(650);
+      box = await target.boundingBox();
+    }
     if (!box) throw new Error(`No bounding box for ${target.toString()}`);
     await this.moveTo(box.x + (offset?.x ?? box.width / 2), box.y + (offset?.y ?? box.height / 2));
   }
 
   /** Point at, then click, an element. */
   async click(target: Locator, options: { offset?: { x: number; y: number }; after?: number } = {}): Promise<void> {
-    await target.waitFor({ state: 'visible' });
     await this.point(target, options.offset);
     await this.page.waitForTimeout(220);
     await this.page.mouse.down();
