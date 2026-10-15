@@ -180,4 +180,95 @@ describe('dashboard business story', () => {
     expect(result.story.caveat).toContain('Season does not narrow any tile summarized here');
     expect(validateDashboardStoryBrief(result.story, result.facts).ok).toBe(true);
   });
+
+  describe('a rank, an id or a year is never a measure (0.1.0 re-test #1)', () => {
+    // The App give-me-top-5-players-who: rows ordered by rank, rank first.
+    const ranked = [
+      { rank: 1, player_name: 'James Harden', points_2016: 2646, points_2017: 2888, total_points_2016_2017: 5534, games_played_2016_2017: 189, player_id_count: 1 },
+      { rank: 2, player_name: 'LeBron James', points_2016: 2511, points_2017: 2820, total_points_2016_2017: 5331, games_played_2016_2017: 214, player_id_count: 1 },
+      { rank: 3, player_name: 'Russell Westbrook', points_2016: 2610, points_2017: 2642, total_points_2016_2017: 5252, games_played_2016_2017: 198, player_id_count: 1 },
+      { rank: 4, player_name: 'Stephen Curry', points_2016: 2863, points_2017: 2388, total_points_2016_2017: 5251, games_played_2016_2017: 201, player_id_count: 1 },
+      { rank: 5, player_name: 'Kevin Durant', points_2016: 2850, points_2017: 1985, total_points_2016_2017: 4835, games_played_2016_2017: 188, player_id_count: 1 },
+    ];
+    const rankedTile = (rows: Array<Record<string, unknown>>, extra: Record<string, unknown> = {}) => ({
+      tileId: 'top5', title: 'Top 5 players', status: 'ok', trustState: 'review_required' as const,
+      result: { columns: Object.keys(rows[0]!), rows },
+      citation: { kind: 'block', name: 'top_5_players_points_2016_2017' },
+      ...extra,
+    });
+
+    it('names the player ranked first, on the measure the ranking is by, and sums nothing', () => {
+      const result = buildDeterministicDashboardStory({ goal: 'Top 5 scorers', filters: {}, tiles: [rankedTile(ranked)] });
+      const text = result.story.paragraphs.join(' ');
+      expect(text).toContain('James Harden: 5,534');
+      expect(text).toMatch(/ranked first by total points 2016 2017/);
+      // No "rank is 15", no summed Top-N ("points 2016 is 13,480"), no fifth-ranked leader.
+      expect(text).not.toMatch(/rank is/i);
+      expect(text).not.toContain('15');
+      expect(text).not.toContain('13,480');
+      expect(text).not.toContain('Kevin Durant');
+      expect(result.facts.map((fact) => fact.id)).toEqual(['top5:rank:1']);
+      expect(validateDashboardStoryBrief(result.story, result.facts)).toEqual({ ok: true, errors: [] });
+    });
+
+    it('leads with the row ranked first even when the rows arrive in another order', () => {
+      const result = buildDeterministicDashboardStory({ goal: 'Top 5 scorers', filters: {}, tiles: [rankedTile([...ranked].reverse())] });
+      expect(result.facts[0]!.value).toBe('James Harden: 5,534');
+    });
+
+    it('prefers the measure the source declares', () => {
+      const result = buildDeterministicDashboardStory({
+        goal: 'Top 5 scorers', filters: {},
+        tiles: [rankedTile(ranked, { declaredMeasures: ['games_played_2016_2017'] })],
+      });
+      expect(result.facts[0]!.label).toMatch(/ranked first by games played 2016 2017/);
+      expect(result.facts[0]!.value).toBe('James Harden: 189');
+    });
+
+    it('treats a column contract that says dimension as one, whatever its name', () => {
+      const result = buildDeterministicDashboardStory({
+        goal: 'Revenue by store', filters: {},
+        tiles: [{
+          tileId: 'stores', title: 'Stores', status: 'ok', trustState: 'certified',
+          result: {
+            columns: ['store', 'store_size', 'revenue'],
+            columnsMeta: [{ name: 'store_size', kind: 'number', ref: 'dimension:stores.store_size' }, { name: 'revenue', kind: 'currency', unit: 'USD', ref: 'metric:revenue' }],
+            rows: [{ store: 'North', store_size: 3, revenue: 120 }, { store: 'South', store_size: 9, revenue: 80 }],
+          },
+        }],
+      });
+      expect(result.facts.map((fact) => fact.id)).toEqual(['stores:value:revenue', 'stores:rank:1']);
+      expect(result.facts[1]!.value).toBe('North: $120.00');
+    });
+
+    it('reports no figure for a table of only ids and years', () => {
+      const result = buildDeterministicDashboardStory({
+        goal: 'Players by season', filters: {},
+        tiles: [{
+          tileId: 'ids', title: 'Player seasons', status: 'ok', trustState: 'certified',
+          result: {
+            columns: ['player_id', 'team_id', 'season', 'game_year', 'jersey_number', 'team_code'],
+            rows: [
+              { player_id: 201935, team_id: 1610612745, season: 2016, game_year: 2017, jersey_number: 13, team_code: 1 },
+              { player_id: 2544, team_id: 1610612739, season: 2016, game_year: 2017, jersey_number: 23, team_code: 2 },
+            ],
+          },
+        }],
+      });
+      expect(result.facts).toEqual([]);
+      expect(result.story.paragraphs.join(' ')).not.toMatch(/\d{4,}/);
+    });
+
+    it('does not add a rate across rows', () => {
+      const result = buildDeterministicDashboardStory({
+        goal: 'Shooting', filters: {},
+        tiles: [{
+          tileId: 'fg', title: 'Field goals', status: 'ok', trustState: 'certified',
+          result: { columns: ['player', 'fg_pct', 'made'], rows: [{ player: 'A', fg_pct: 0.5, made: 10 }, { player: 'B', fg_pct: 0.4, made: 20 }] },
+        }],
+      });
+      expect(result.facts.map((fact) => fact.id)).not.toContain('fg:value:fg_pct');
+      expect(result.facts.find((fact) => fact.id === 'fg:value:made')?.value).toBe(30);
+    });
+  });
 });

@@ -2,6 +2,7 @@ import type { CellChartConfig, QueryResult } from '../../store/types';
 import type { DashboardDocumentResponse, DashboardRunResponse } from '../../api/client';
 import { coerceTrustState, getDashboardItemBlockId, getDqlGenUi, roleForDisplayComponent } from './dashboard-tile-model';
 import { settleGridLayout } from '@zlens/core/apps/grid-layout';
+import { nonMeasureColumnRole, isRankColumnName } from '@zlens/core/apps/result-measures';
 import { formatDashboardValue, formatGenUiLabel, isNumericColumn, type DashboardStory } from './dashboard-format';
 
 /**
@@ -188,8 +189,16 @@ export function buildDashboardStory(
   const genUi = getDqlGenUi(candidate.item);
   const labelColumn = pickStoryLabelColumn(columns, rows, genUi?.fieldHints?.label);
   const metricColumn = pickStoryMetricColumn(columns, rows, genUi?.fieldHints?.value ?? genUi?.fieldHints?.y);
-  const first = rows[0];
-  const second = rows[1];
+  // Who leads: the row ranked first when the result is a ranking, otherwise
+  // the largest value of the measure, never simply the first row returned.
+  const rankColumn = columns.find((column) => column !== metricColumn && isRankColumnName(column) && isNumericColumn(column, rows));
+  const ordered = rankColumn
+    ? [...rows].sort((a, b) => (toStoryNumber(a[rankColumn]) ?? Number.POSITIVE_INFINITY) - (toStoryNumber(b[rankColumn]) ?? Number.POSITIVE_INFINITY))
+    : metricColumn
+      ? [...rows].sort((a, b) => (toStoryNumber(b[metricColumn]) ?? Number.NEGATIVE_INFINITY) - (toStoryNumber(a[metricColumn]) ?? Number.NEGATIVE_INFINITY))
+      : rows;
+  const first = ordered[0]!;
+  const second = ordered[1];
   const labelValues = labelColumn ? rows.map((row) => row[labelColumn]) : [];
   const metricValues = metricColumn ? rows.map((row) => row[metricColumn]) : [];
   const firstLabel = labelColumn ? formatDashboardValue(labelColumn, first[labelColumn], labelValues) : 'The leading result';
@@ -259,8 +268,9 @@ function pickStoryLabelColumn(columns: string[], rows: QueryResult['rows'], hint
 function pickStoryMetricColumn(columns: string[], rows: QueryResult['rows'], hint?: string): string | undefined {
   const hinted = pickHintedColumn(columns, hint);
   if (hinted && isNumericColumn(hinted, rows)) return hinted;
+  // A rank, an id, a year or a code is numeric and still a label.
   return columns
-    .filter((column) => isNumericColumn(column, rows))
+    .filter((column) => isNumericColumn(column, rows) && nonMeasureColumnRole(column) === undefined)
     .sort((a, b) => storyMetricRank(a) - storyMetricRank(b))[0];
 }
 

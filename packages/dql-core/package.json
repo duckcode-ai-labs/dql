@@ -47,6 +47,10 @@
       "types": "./dist/apps/grid-layout.d.ts",
       "import": "./dist/apps/grid-layout.js"
     },
+    "./apps/result-measures": {
+      "types": "./dist/apps/result-measures.d.ts",
+      "import": "./dist/apps/result-measures.js"
+    },
     "./apps/story-bindings": {
       "types": "./dist/apps/story-bindings.d.ts",
       "import": "./dist/apps/story-bindings.js"

@@ -89,6 +89,22 @@ SELECT team, wins FROM team_wins_2017 ORDER BY wins DESC
       ],
     },
   }));
+  // A second App, certified, for the one-conversation-per-App checks.
+  const certifiedDir = join(root, 'apps', 'certified-team-wins');
+  mkdirSync(join(certifiedDir, 'dashboards'), { recursive: true });
+  writeFileSync(join(certifiedDir, 'dql.app.json'), JSON.stringify({
+    version: 1, id: 'certified-team-wins', name: 'Certified Team Wins', domain: 'business', visibility: 'shared',
+    audience: 'stakeholders', lifecycle: 'draft', owners: ['analytics'], homepage: { type: 'dashboard', id: 'overview' },
+  }));
+  writeFileSync(join(certifiedDir, 'dashboards', 'overview.dqld'), JSON.stringify({
+    version: 1,
+    id: 'overview',
+    metadata: { title: 'Team Overview', domain: 'business' },
+    layout: {
+      kind: 'grid', cols: 12, rowHeight: 80,
+      items: [{ i: 'team-wins', x: 0, y: 0, w: 6, h: 4, block: { ref: 'blocks/team_wins.dql' }, viz: { type: 'table' }, title: 'Team wins 2017' }],
+    },
+  }));
   return root;
 }
 
@@ -148,7 +164,12 @@ async function start(options: { hostRule?: 'show' | 'withhold_review' } = {}) {
     const text = await response.text();
     return { status: response.status, text, body: text ? JSON.parse(text) : undefined };
   };
-  return { post, seen };
+  const get = async (path: string) => {
+    const response = await fetch(`${base}${path}`);
+    const text = await response.text();
+    return { status: response.status, text, body: text ? JSON.parse(text) : undefined };
+  };
+  return { post, get, seen };
 }
 
 async function runPage(post: Awaited<ReturnType<typeof start>>['post']): Promise<string> {
@@ -250,5 +271,56 @@ describe('Ask from an App sees that App (N3)', () => {
     expect(asked.text).not.toContain('James Harden');
     expect(asked.text).not.toContain('2888');
     expect(asked.body.run.answer).toBe(WITHHELD_ANSWER);
+  });
+});
+
+describe('one Ask conversation per App page (0.1.0 re-test #2)', () => {
+  it('never continues, or saves into, the conversation of another App', async () => {
+    const { post, get } = await start();
+    const pageRunId = await runPage(post);
+    const created = await post('/api/agent/threads', { surface: 'apps', title: QUESTION });
+    expect(created.status, created.text.slice(0, 400)).toBeLessThan(300);
+    const threadId = created.body.thread.id as string;
+
+    const first = await post('/api/agent-runs', { ...appAsk(QUESTION, pageRunId), threadId });
+    expect(first.status, first.text.slice(0, 600)).toBe(201);
+    const afterFirst = await get(`/api/agent/threads/${threadId}`);
+    expect(afterFirst.body.thread.scopeKey).toBe('app:give-me-top-5-players-who:overview');
+    expect(afterFirst.body.turns).toHaveLength(1);
+
+    // The re-test: the certified App's question arrived on the first App's thread.
+    const other = await post('/api/agent-runs', {
+      question: 'Which team has the most wins on this page?',
+      requestedMode: 'ask',
+      audience: 'stakeholder',
+      threadId,
+      selectedObject: { kind: 'app', id: 'certified-team-wins', title: 'Certified Team Wins' },
+      workspaceContext: { surface: 'apps', appId: 'certified-team-wins', appName: 'Certified Team Wins', dashboardId: 'overview', dashboardTitle: 'Team Overview', dashboardFilters: {} },
+    });
+    expect(other.status, other.text.slice(0, 600)).toBe(201);
+    // The first App's answer was not its context, and its answer is not saved into the first App's thread.
+    expect(other.body.run.conversationBinding ?? 'none').toBe('none');
+    const afterOther = await get(`/api/agent/threads/${threadId}`);
+    expect(afterOther.body.turns).toHaveLength(1);
+    expect(afterOther.body.turns[0].question).toBe(QUESTION);
+
+    // The same App page continues its own thread.
+    const again = await post('/api/agent-runs', { ...appAsk('Which team has the most wins on this page?', pageRunId), threadId });
+    expect(again.status, again.text.slice(0, 600)).toBe(201);
+    expect((await get(`/api/agent/threads/${threadId}`)).body.turns).toHaveLength(2);
+  });
+});
+
+describe('the App page story never treats a rank as a measure (0.1.0 re-test #1)', () => {
+  it('names the player ranked first on total points, and sums no rank', async () => {
+    const { post } = await start();
+    const page = await post('/api/apps/give-me-top-5-players-who/dashboards/overview/run', { variables: {} });
+    expect(page.status, page.text.slice(0, 400)).toBe(200);
+    const story = [page.body.story?.headline, ...(page.body.story?.paragraphs ?? [])].join(' ');
+    expect(story).toContain('James Harden: 5,534');
+    expect(story).not.toMatch(/rank is/i);
+    expect(story).not.toContain('Kevin Durant');
+    // The certified tile beside it still reads normally.
+    expect(story).toContain('Rockets: 79');
   });
 });

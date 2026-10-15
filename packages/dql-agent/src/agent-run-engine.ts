@@ -79,7 +79,7 @@ import {
   recordExecutionAttemptSummaryV1,
 } from './ask-observability/index.js';
 import type { AskTraceObserverV1, AgentRunTraceReferenceV1, AskTraceSurfaceV1 } from './ask-observability/index.js';
-import { readEnv } from '@zlens/core';
+import { nonMeasureColumnRole, readEnv } from '@zlens/core';
 
 export type AgentRunRequestedMode = "auto" | "ask" | "research" | "sql" | "block" | "app" | "modeling" | "skill";
 
@@ -4808,7 +4808,11 @@ function deterministicResultAggregate(
     }
     // An identifier column is numeric too; require that it is mostly numbers
     // AND that the column is not obviously a key.
-    return present > 0 && numeric === present && !/(?:^|_)(?:id|key|number|year|month|day)(?:_|$)/i.test(column);
+    // A rank or position is numeric too, and summing one ("rank totals 15")
+    // or naming its largest value as the leader inverts a ranking.
+    return present > 0 && numeric === present
+      && !/(?:^|_)(?:id|key|number|year|month|day)(?:_|$)/i.test(column)
+      && nonMeasureColumnRole(column) === undefined;
   };
   // WHICH NUMBER IS THE ANSWER ABOUT?
   //

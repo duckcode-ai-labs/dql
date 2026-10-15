@@ -51,6 +51,19 @@ for 15 minutes, and only for the person who ran it: after that, or before the
 page has run, the box says Ask cannot see the results yet, and you refresh the
 page.
 
+Each App page has its own Ask conversation. A follow-up continues the
+conversation of the page you are on; opening another App starts that App's
+own conversation, and coming back to a page (even after a reload) resumes its
+conversation where you left it. A question asked on one App is never shown in,
+or used as context for, another App's conversation.
+
+The page's Business Story and the one-line caption under each tile talk about
+a measure: the one the tile's source declares (a block's metric mappings or
+output contract), otherwise a numeric column that is not a rank, a position,
+an id, a code or a year. A ranked table is described by the row ranked first
+and the measure it is ranked on ("James Harden is ranked first, with total
+points at 5.5K"); its rows are a top N, not the whole, so they are not added up.
+
 ## Who an App is for
 
 In an App, **Edit → ⋯ → App settings → Audience**: describe the audience in words and

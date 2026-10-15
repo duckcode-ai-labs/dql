@@ -612,6 +612,11 @@ export const APP_STYLES = `
 .dql-app-buildbar,
 .dql-app-view-topbar {
   min-height: 54px;
+  /* The bar is a row of the App grid. With a fixed min-height and no height,
+     the grid sized that row to the min-height, so when the actions wrapped
+     (a narrow page, or the Ask panel open) they spilled over the page title.
+     Size the row to the bar's wrapped content instead. */
+  height: max-content;
   display: flex;
   align-items: center;
   gap: 10px;

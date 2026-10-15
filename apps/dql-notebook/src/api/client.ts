@@ -2680,6 +2680,12 @@ export interface DashboardRunResponse {
     viz?: { type: string; options?: Record<string, unknown> };
     chartConfig?: Record<string, unknown>;
     result?: QueryResult;
+    /**
+     * Result columns the tile's source block declares as measures (its metric
+     * mappings or output contract). Captions and stories talk about these
+     * before guessing from names and values.
+     */
+    declaredMeasures?: string[];
     text?: { markdown: string };
     aiPin?: LocalAiPin;
     /**

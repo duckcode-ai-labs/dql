@@ -106,10 +106,12 @@ const EXPECTED_TEST_FILES = 189;
 // 2467 with review-required answer drafts (drafts.test.ts, +3 tests).
 // 2480 (189 files) with a question that names a certified block, its fixed period and its LIMIT parameter,
 // and a follow-up held to that block (named-block.test.ts, +13 tests).
-const EXPECTED_TESTS = 2480;
+// 2487 with stories that never treat a rank, an id or a year as a measure (dashboard-story.test.ts, +6)
+// and a conversation bound to its App page (session-store.test.ts, +1).
+const EXPECTED_TESTS = 2487;
 // The heavy lane's share of EXPECTED_TESTS (catalog.test.ts 72 + project-state.test.ts 4), pinned so
 // a lane run on its own (CI runs the two lanes as separate steps) is audited as exactly as both together.
-// The ordinary lane's share is the difference: 2404.
+// The ordinary lane's share is the difference: 2411.
 const EXPECTED_HEAVY_TESTS = 76;
 
 const LANES = ['all', 'ordinary', 'heavy'];

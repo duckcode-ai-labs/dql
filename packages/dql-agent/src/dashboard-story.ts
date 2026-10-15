@@ -4,6 +4,7 @@ import type {
   DashboardStoryClaim,
   DashboardStoryFact,
 } from '@zlens/core';
+import { columnNameTokens, resultLeaderRow, selectResultMeasures } from '@zlens/core';
 import { computeResultStats } from './synthesize.js';
 
 export interface DashboardStoryTileResult {
@@ -16,8 +17,14 @@ export interface DashboardStoryTileResult {
     columns?: unknown[];
     rows?: unknown[];
     rowCount?: number;
-    columnsMeta?: Array<{ name?: unknown; kind?: unknown; unit?: unknown; decimals?: unknown }>;
+    columnsMeta?: Array<{ name?: unknown; kind?: unknown; unit?: unknown; decimals?: unknown; ref?: unknown }>;
   };
+  /**
+   * Result columns the tile's source declares as measures (a block's metric
+   * mappings or output contract). Only measures are summed or reported as
+   * what a row leads on; a rank, an id or a year never is.
+   */
+  declaredMeasures?: string[];
   /**
    * Dataset tiles declare whether their rows are a whole-scope scalar or
    * observations at a selected grain. This prevents the story generator from
@@ -73,8 +80,21 @@ export function buildDeterministicDashboardStory(input: DashboardStoryBuildInput
     const tileFilters = tile.filters ?? input.filters;
     const evidenceRef = tile.citation?.path ?? `${tile.citation?.kind ?? 'dashboard'}:${tile.citation?.name ?? tile.tileId}`;
     const first = rows[0] ?? {};
-    const labelColumn = columns.find((column) => typeof first[column] === 'string');
-    const numericStats = stats.filter((stat) => stat.kind === 'numeric');
+    // Measures only: a rank, an id, a year or a code is numeric and still a
+    // label. Summing one ("rank is 15") or naming the row that maximizes it
+    // ("leader is … : 5" for the fifth-ranked row) misreports the page.
+    const selection = selectResultMeasures({
+      columns,
+      rows,
+      columnsMeta: tile.result.columnsMeta,
+      declaredMeasures: tile.declaredMeasures,
+    });
+    const measureColumns = new Set(selection.measures);
+    const labelColumn = selection.labelColumn ?? columns.find((column) => typeof first[column] === 'string');
+    const numericStats = stats
+      .filter((stat) => stat.kind === 'numeric' && measureColumns.has(stat.column))
+      // The summary measure leads, then the others in result order.
+      .sort((left, right) => Number(right.column === selection.primary) - Number(left.column === selection.primary));
     const columnMeta = new Map((tile.result.columnsMeta ?? [])
       .filter((meta): meta is { name: string; kind?: unknown; unit?: unknown; decimals?: unknown } => typeof meta?.name === 'string')
       .map((meta) => [meta.name, meta]));
@@ -115,34 +135,66 @@ export function buildDeterministicDashboardStory(input: DashboardStoryBuildInput
       }
       continue;
     }
+    const unitOf = (column: string) => storyFormatUnit(columnMeta.get(column));
+    const leader = resultLeaderRow({ rows }, selection);
+    const leaderLabel = leader && labelColumn && leader[labelColumn] !== undefined && leader[labelColumn] !== null
+      ? String(leader[labelColumn])
+      : undefined;
+    if (selection.rankColumn && rows.length > 1) {
+      // A ranking: the rows are a Top-N, not the whole, so nothing is summed.
+      // Its story is who is ranked first and on what measure.
+      if (leaderLabel) {
+        const leaderValue = selection.primary ? numericValue(leader![selection.primary]) : undefined;
+        facts.push({
+          id: `${tile.tileId}:rank:1`,
+          tileId: tile.tileId,
+          kind: 'rank',
+          label: selection.primary
+            ? `${tile.title} — ranked first by ${humanize(selection.primary)}`
+            : `${tile.title} — ranked first`,
+          value: leaderValue !== undefined
+            ? `${leaderLabel}: ${formatValue(leaderValue, unitOf(selection.primary!))}`
+            : leaderLabel,
+          grain: tile.grain,
+          filters: tileFilters,
+          evidenceRef,
+          trustState,
+        });
+      }
+      continue;
+    }
     for (const stat of numericStats.slice(0, 2)) {
-      const singleValue = rows.length === 1 && typeof first[stat.column] === 'number' ? first[stat.column] as number : undefined;
+      const singleValue = rows.length === 1 ? numericValue(first[stat.column]) : undefined;
+      // A rate, an average or a share does not add up across rows.
+      if (singleValue === undefined && isNonAdditiveMeasure(stat.column, columnMeta.get(stat.column))) continue;
       facts.push({
         id: `${tile.tileId}:value:${stat.column}`,
         tileId: tile.tileId,
         kind: drivers.has(tile.tileId) ? 'driver' : 'value',
         label: `${tile.title} — ${humanize(stat.column)}`,
         value: singleValue ?? stat.sum ?? null,
-        unit: storyFormatUnit(columnMeta.get(stat.column)),
+        unit: unitOf(stat.column),
         grain: tile.grain,
         filters: tileFilters,
         evidenceRef,
         trustState,
       });
     }
-    const numericColumn = numericStats[0]?.column;
-    if (labelColumn && numericColumn && first[labelColumn] !== undefined && first[numericColumn] !== undefined) {
-      facts.push({
-        id: `${tile.tileId}:rank:1`,
-        tileId: tile.tileId,
-        kind: 'rank',
-        label: `${tile.title} leader`,
-        value: `${String(first[labelColumn])}: ${formatValue(first[numericColumn], storyFormatUnit(columnMeta.get(numericColumn)))}`,
-        grain: tile.grain,
-        filters: tileFilters,
-        evidenceRef,
-        trustState,
-      });
+    if (rows.length > 1 && leaderLabel && selection.primary) {
+      const leaderValue = numericValue(leader![selection.primary]);
+      if (leaderValue !== undefined) {
+        facts.push({
+          id: `${tile.tileId}:rank:1`,
+          tileId: tile.tileId,
+          kind: 'rank',
+          label: `${tile.title} leader by ${humanize(selection.primary)}`,
+          value: `${leaderLabel}: ${formatValue(leaderValue, unitOf(selection.primary))}`,
+          grain: tile.grain,
+          filters: tileFilters,
+          evidenceRef,
+          trustState,
+        });
+      }
     }
   }
   // A selected page control can intentionally exclude a component. Preserve
@@ -287,6 +339,13 @@ function filterScope(filters: Record<string, unknown>): string {
 
 function humanize(value: string): string {
   return value.replace(/[_-]+/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+/** Measures whose row values cannot be summed into a page figure. */
+function isNonAdditiveMeasure(column: string, meta: { kind?: unknown } | undefined): boolean {
+  if (meta?.kind === 'percent') return true;
+  const tokens = columnNameTokens(column);
+  return tokens.some((token) => ['avg', 'average', 'mean', 'median', 'rate', 'ratio', 'pct', 'percent', 'percentage', 'share', 'per'].includes(token));
 }
 
 function numericValue(value: unknown): number | undefined {
