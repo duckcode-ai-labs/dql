@@ -1,226 +1,131 @@
-# Import a dbt project
+# Add ZLens to your dbt project
 
-> ~4 minutes · ends with dbt models and semantic metrics available to ZLens
+ZLens sits next to your dbt project. It reads dbt's artifacts and never
+changes your dbt files.
 
-ZLens reads dbt artifacts directly:
+## 1. Build the dbt manifest
 
-- `target/manifest.json` for models, sources, columns, lineage, exposures, and saved queries.
-- `target/semantic_manifest.json` for MetricFlow semantic models, metrics, measures, dimensions, and entities.
+From your dbt repo:
 
-## Recommended layouts
+```bash
+dbt parse      # or dbt build
+```
 
-For an existing single dbt repo, keep ZLens isolated under `dql/`:
+This writes `target/manifest.json`. ZLens also reads `catalog.json`
+(from `dbt docs generate`), `semantic_manifest.json` and `run_results.json`
+when they exist.
+
+## 2. Create the ZLens folder
+
+Keep ZLens in a `dql/` folder inside the dbt repo:
+
+```bash
+npx create-zlens-app@latest dql
+cd dql
+npm install
+```
+
+The scaffolder finds `dbt_project.yml` in the folder above and writes this to
+`dql.config.json`:
+
+```json
+"dbt": {
+  "projectDir": "..",
+  "manifestPath": "target/manifest.json"
+}
+```
+
+Your repo now looks like this:
 
 ```text
 my-dbt-repo/
 ├─ dbt_project.yml
 ├─ models/
-├─ macros/
-├─ seeds/
-├─ target/
-│  ├─ manifest.json
-│  └─ semantic_manifest.json
+├─ target/manifest.json
 └─ dql/
    ├─ dql.config.json
-   ├─ blocks/
    ├─ notebooks/
+   ├─ domains/
    ├─ apps/
-   │  └─ <app-id>/
-   │     ├─ dql.app.json
-   │     ├─ dashboards/*.dqld
-   │     ├─ notebooks/*.dqlnb
-   │     └─ drafts/*.dql
-   └─ .dql/
-      ├─ cache/
-      └─ local/apps.sqlite
+   └─ .dql/          (local state, git-ignored)
 ```
 
-This is the recommended default. dbt remains clean, and all DQL blocks,
-notebooks, Apps, imports, local cache, and AI pins stay in one obvious folder.
+!!! tip "Already have the CLI installed globally?"
+    `zlens init ./dql` from the dbt repo root does the same job. It also reads
+    your dbt profile and, for DuckDB, writes the connection for you.
 
-For a two-repo or two-folder workspace, keep dbt and ZLens as siblings:
+**Separate folders.** If dbt and ZLens live side by side (`analytics/dbt/`
+and `analytics/dql/`), run `create-zlens-app` from `analytics/`. It looks for
+`dbt_project.yml` one and two levels up and in a sibling `dbt/` folder. You
+can always set `dbt.projectDir` in `dql.config.json` yourself.
 
-```text
-analytics/
-├─ dbt/
-│  ├─ dbt_project.yml
-│  ├─ models/
-│  └─ target/manifest.json
-└─ dql/
-   ├─ dql.config.json
-   ├─ blocks/
-   ├─ notebooks/
-   └─ apps/
-```
-
-Use the sibling layout when ZLens Apps have a different repo, ownership model, or
-release cadence from dbt.
-
-## 1. Add ZLens to an existing dbt repo
-
-From the dbt repo root:
+## 3. Import dbt
 
 ```bash
-npm i -D @zlens/cli
-npx zlens init ./dql
+npm run sync
 ```
 
-If you installed the CLI globally, skip the local `npm i` and run:
+`zlens sync dbt` reads the manifest, compiles `dql-manifest.json` and
+rebuilds the search index. It prints the model and source counts and ends
+with `✓ dbt sync complete`.
+
+Run it again whenever dbt changes. To re-run it on every manifest change:
 
 ```bash
-zlens init ./dql
+npm exec -- zlens sync dbt --watch
 ```
 
-The install step only provides the command. The `init` step creates
-`dql.config.json`, `blocks/`, `terms/`, `business-views/`, `notebooks/`, and
-`apps/`.
-
-`zlens init ./dql` detects the parent `dbt_project.yml` and writes portable dbt
-wiring:
-
-```json
-{
-  "project": "dql",
-  "semanticLayer": {
-    "provider": "dbt",
-    "projectPath": ".."
-  },
-  "dbt": {
-    "projectDir": "..",
-    "manifestPath": "target/manifest.json"
-  }
-}
-```
-
-Add convenient scripts to `package.json` if your repo does not already have
-them:
-
-```json
-{
-  "scripts": {
-    "dql:doctor": "zlens doctor ./dql",
-    "dql:compile": "zlens compile ./dql",
-    "dql:sync": "zlens sync dbt ./dql",
-    "dql:reindex": "cd dql && zlens agent reindex",
-    "dql:notebook": "zlens notebook ./dql"
-  }
-}
-```
-
-## 2. Or point a sibling ZLens project at dbt
-
-Configure dbt in `dql.config.json`:
-
-```json
-{
-  "project": "my-dql-project",
-  "semanticLayer": {
-    "provider": "dbt",
-    "projectPath": "../my-dbt-project"
-  },
-  "dbt": {
-    "projectDir": "../my-dbt-project",
-    "manifestPath": "target/manifest.json"
-  }
-}
-```
-
-`create-zlens-app` will create this wiring automatically when it detects a sibling
-`dbt_project.yml`.
-
-## 3. Generate dbt artifacts
+## 4. Connect the database and open the workbench
 
 ```bash
-dbt build
+npm run notebook
 ```
 
-`dbt parse` or `dbt compile` is enough for `manifest.json`; use `dbt build` for
-the cleanest demo path because it also proves the project runs.
+In Guided Setup:
 
-## 4. Rebuild ZLens metadata
+1. On **Connect your dbt project**, click **Preview**, then **Apply project**.
+   This turns on the dbt-first features, such as browsing dbt models in the
+   notebook's **Database** tab.
+2. On **Connect your database**, your dbt profile is listed under
+   **dbt profiles**. Click **Import & test**.
 
-Run from the dbt repo root:
+You can do both later in **Settings → Project & dbt** and
+**Settings → Database**. See [Connect a database](connect-database.md) for other
+databases and for drivers.
 
-```bash
-zlens compile ./dql
-zlens sync dbt ./dql
-cd dql && zlens agent reindex
-```
+## Check that it worked
 
-`zlens compile` rebuilds `dql-manifest.json` and merges dbt lineage into the local
-ZLens graph. `zlens sync dbt` is a status/cache sync command: it verifies the
-resolved dbt artifact paths, reports model/source/metric counts, and updates the
-local cache when artifacts changed. `zlens agent reindex` refreshes the local
-SQLite + FTS knowledge graph used by governed agent answers.
+- `npm run doctor` passes its checks.
+- In **Notebooks**, the **Database** tab lists your dbt models.
+- In **Lineage**, picking a block shows the dbt models it reads.
 
-## 5. Verify it worked
+## dbt semantic metrics
 
-- Notebook Schema panel shows dbt models and sources.
-- Notebook Semantic panel shows dbt semantic models, metrics, measures, and dimensions.
-- Block Studio start page shows dbt artifact status and the model/metric block
-  creation paths.
-- `zlens lineage` prints dbt source/model nodes connected to DQL blocks and Apps.
-- Agent answers cite certified blocks first, then semantic/dbt metadata when no certified asset exists.
+If your dbt project has MetricFlow metrics, ZLens reads them from
+`semantic_manifest.json`.
 
-## 6. Build blocks from dbt
+- Simple metrics run with ZLens's built-in compiler.
+- Derived, ratio, cumulative and conversion metrics need a semantic runtime.
+  Open **Settings → Project & dbt** and click **Install local MetricFlow**, or
+  set up the dbt Cloud Semantic Layer on the same page.
 
-Open **Blocks** in the notebook UI.
+## Large dbt projects
 
-- Use **Create SQL Block from dbt Model** when you need explicit SQL against a
-  dbt-built table/view or warehouse table.
-- Use **Create Semantic Block from dbt Metric** when the business logic already
-  lives in `target/semantic_manifest.json`.
-- Use **Import SQL** only for one-time migration of existing queries. Review and
-  save the generated draft blocks before adding them to Apps.
-
-SQL blocks and semantic blocks are intentionally separate. Selecting a semantic
-metric while editing a SQL block prompts you to create a Semantic Block or
-explicitly insert an advanced semantic reference; ZLens does not silently mix
-semantic metrics into raw SQL.
-
-## What lineage tracks
-
-After `zlens compile .`, ZLens builds a local `dql-manifest.json` from dbt and DQL
-artifacts:
-
-```text
-dbt source
-  -> dbt model
-  -> semantic metric
-  -> DQL block
-  -> chart
-  -> dashboard page
-  -> App
-```
-
-ZLens does not copy dbt models. It reads the dbt manifest, resolves SQL table
-references from `.dql` blocks and `.dqlnb` notebooks, and connects matching dbt
-models/sources into the lineage graph. App dashboards add the consumption layer
-above blocks.
-
-For large dbt projects, ZLens imports the dbt subgraph anchored by DQL-referenced
-tables and optional `dbtImport` filters in `dql.config.json`:
+To import only part of a big project, add `dbtImport` filters to
+`dql.config.json` and run `npm run sync` again:
 
 ```json
-{
-  "dbtImport": {
-    "anchors": ["tag:cards", "fct_card_transactions"],
-    "include": ["path:models/marts/cards"],
-    "exclude": ["tag:deprecated"]
-  }
+"dbtImport": {
+  "anchors": ["tag:cards", "fct_card_transactions"],
+  "include": ["path:models/marts/cards"],
+  "exclude": ["tag:deprecated"]
 }
 ```
 
 ## Troubleshooting
 
-- **`manifest.json not found`** — run `dbt build`, `dbt compile`, or `dbt parse` first.
-- **Semantic metrics missing** — confirm `target/semantic_manifest.json` exists and your dbt version emits MetricFlow artifacts.
-- **Metric is visible but disabled** — simple metrics use ZLens's native compiler.
-  Derived, ratio, cumulative, conversion, and other MetricFlow-owned metrics
-  need a full semantic runtime. Open **Settings → Project & dbt**, then either
-  select **Install local MetricFlow** or connect and test dbt Cloud Semantic
-  Layer. The managed installer uses `.dql/runtimes/metricflow`, preserves system
-  Python, and refreshes metric readiness when its test finishes.
-- **Lineage is stale** — rerun `zlens compile .` and `zlens agent reindex`.
-- **Too much dbt metadata** — add `dbtImport` anchors/include/exclude filters
-  and rerun `zlens compile .`.
+- **`manifest.json not found`.** Run `dbt parse` in the dbt project first.
+- **Metrics missing.** Check that `target/semantic_manifest.json` exists.
+- **Lineage out of date.** Run `npm run sync`.
+
+Next: [Ask a question](../ask/index.md).

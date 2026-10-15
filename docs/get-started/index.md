@@ -85,8 +85,10 @@ opens it. Leave the terminal running.
 
 The first time, ZLens opens **Guided Setup** in four steps.
 
-1. **Connect your dbt project.** You see **dbt project ready**. Click
-   **Continue to database**.
+1. **Connect your dbt project.** You see **dbt project ready**, and the path
+   field shows `..`. Click **Preview**. ZLens shows the models, sources and
+   metrics it found and says **Nothing has changed yet**. Click
+   **Apply project**, then **Continue to database**.
 2. **Connect your database.** Under **dbt profiles**, the `jaffle_shop` profile
    is listed. Click **Import & test**. The status changes to
    **DuckDB · configured** and **Test passed**. Click **Continue to optional AI**.

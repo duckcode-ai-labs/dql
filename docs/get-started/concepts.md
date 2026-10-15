@@ -1,34 +1,16 @@
 # Concepts
 
-> ~4 minutes · the mental model behind every feature
+ZLens is a layer for analytics on top of dbt. dbt builds and tests your
+models. ZLens covers what people do with them next: the queries, dashboards
+and AI answers. Everything is a file in your project, so it can be reviewed
+in git.
 
-ZLens has six primitives. Once these click, the rest of the docs read like
-reference material.
+## Block
 
-## 1. Notebook
-
-A `.dqlnb` file containing an ordered list of cells. Cells can be:
-
-- **SQL** — free-form queries against any connected warehouse
-- **DQL** — reference blocks or semantic objects via `@block(name)`,
-  `@metric(name)`, and `@dim(name)`
-- **Markdown** — commentary, docs, dashboards-as-code
-- **Param** — text/select/date/number inputs wired into downstream cells
-
-Notebooks live in git. Results never do (they go in a sibling
-`.run.json` that's git-ignored by default — see [Run Snapshots](./reference/file-formats.md#run-snapshots)).
-
-Notebooks are also the research workspace for deeper SQL-to-DQL conversion.
-The Research panel turns source SQL cells into reviewable runs with metadata
-evidence, preview results, duplicate/reuse checks, parameter review, and a
-DQL-draft promotion path. See the [Notebook research engine](./guides/notebook-research.md)
-guide for the enterprise workflow.
-
-## 2. Block
-
-A **named, versioned, governed** analytics artifact. Think of a block as a
-trusted answer unit that ships with SQL or semantic intent, a chart spec, tests,
-lineage, and governance metadata.
+A **block** is a named, reusable query saved as a `.dql` file. Besides the
+SQL (or a semantic metric query), it records an owner, a domain, a
+description, tests and a chart. Blocks are what ZLens reuses, reviews and
+cites.
 
 ```dql
 block "Revenue by Segment" {
@@ -36,7 +18,7 @@ block "Revenue by Segment" {
   type = "custom"
   status = "draft"
   owner = "analytics@company.com"
-  tags = ["revenue", "certified"]
+  description = "Total order revenue by customer segment"
 
   query = """
 SELECT segment, SUM(amount) AS revenue
@@ -44,78 +26,87 @@ FROM analytics.orders
 GROUP BY 1
 """
 
-  visualization {
-    chart = "bar"
-    x = segment
-    y = revenue
+  tests {
+    assert row_count > 0
   }
 }
 ```
 
-Blocks are authored in **Block Studio**. Use a **SQL Block** when you want raw
-SQL against dbt models or database tables. Use a **Semantic Block** when you
-want a dbt/DQL metric plus dimensions, filters, grain, and chart intent. Both
-compile to executable SQL + a chart spec and are embeddable in notebooks,
-dashboard pages, Apps, or other blocks.
+## Draft and certified
 
-## 3. Semantic layer
+Every block has a status. The two that matter most:
 
-The shared vocabulary of the business — **metrics** (measures),
-**dimensions** (attributes), **hierarchies** (drill paths), **cubes**
-(pre-joined fact/dim sets). ZLens imports from dbt's semantic layer by default
-and lets you author the rest locally.
+- **Draft**: saved, but nobody has vouched for it yet.
+- **Certified**: a person checked it. Certifying runs the block and its tests
+  and records who certified it and when.
 
-In a DQL cell, `@metric("revenue")` and `@dim("customer.segment")` resolve
-against the semantic layer — no hand-written joins.
+**Saving never certifies.** Saving a block, importing SQL, or keeping an AI
+answer always makes a draft. Only a person clicking **Certify** (or running
+`zlens certify --from-draft`) makes a block certified.
 
-## 4. Lineage
+See [Save and certify](../blocks/certify.md).
 
-A graph of every **dbt/source/table -> semantic metric -> block -> notebook ->
-dashboard page -> App** edge in the project, built from AST-level SQL parsing
-and dbt artifacts. The lineage panel renders it with React Flow; the CLI
-exposes it via `zlens lineage impact <name>` and friends.
+## Trust labels
 
-Lineage answers three questions:
+Every answer and every App tile says how far to trust it:
 
-- *What depends on this table?* (impact analysis)
-- *Where did this number come from?* (trust chain)
-- *What's shared across teams?* (cross-domain detection)
+| Label | Means |
+|---|---|
+| **Certified** | It ran a certified block exactly as reviewed. |
+| **Governed** | It was built from semantic metrics and dimensions. |
+| **Needs review** / **AI-generated** | AI wrote the SQL. Check it before relying on it. |
+| A refusal | ZLens could not answer safely and says why, instead of guessing. |
 
-## 5. App
+See [Ask and trust](../ask/index.md).
 
-An App is the decision-facing package. In OSS it is a local file-backed folder
-under `apps/<app-id>/` with dashboard pages, attached notebooks, AI pins, and
-draft blocks. App metadata such as domain, subdomain, group, audience,
-visibility, and lifecycle is for organization and future upgrade paths; it is
-not enforced RBAC in OSS.
+## Notebook
 
-The UI has two modes:
+A **notebook** (`.dqlnb`) is a list of cells: SQL, DQL, notes and inputs. It
+is where you explore. Results are kept in a git-ignored `.run.json` file next
+to it, so they never end up in a commit. A useful cell becomes a block with
+**Save Block**. See [Notebooks](../notebooks/index.md).
 
-- **View** — clean consumer surface for dashboard pages, notebook previews, AI
-  conversations, and pinned summaries.
-- **Build** — creation surface for adding pages, blocks, notebooks, text tiles,
-  drafts, and settings.
+## Semantic layer
 
-## 6. Dashboard Page
+The shared business vocabulary: **metrics** (such as revenue) and
+**dimensions** (such as customer segment). ZLens imports dbt's semantic
+models, so a DQL cell can ask for `@metric(revenue)` by `@dim(segment)`
+without writing joins. See [Semantic layer](../reference/semantic-layer.md).
 
-A dashboard page is a curated grid inside an App, backed by `.dqld`. It composes
-block tiles, text tiles, KPI cards, charts, and table outputs. Older standalone
-notebook dashboards can still compile to static HTML, but Apps are the primary
-OSS consumption surface.
+## App
 
----
+An **App** is a set of dashboard and report pages for a decision or a team,
+built from blocks. Each tile shows its trust label, and readers can ask
+questions about the App. Published Apps live in `apps/<app-id>/`. See
+[Apps](../apps/index.md).
+
+## Manifest
+
+`dql-manifest.json` is ZLens's compiled view of the project: blocks,
+notebooks, Apps, metrics, the dbt models they read, and the links between
+them. `zlens compile` and `zlens sync dbt` write it.
+
+## Lineage
+
+**Lineage** is the graph from source tables and dbt models through blocks to
+the Apps that show them. It answers "where did this number come from?" and
+"what uses this model?". See [Lineage](../lineage/index.md).
 
 ## How they fit
 
-```
-dbt sources/models ──┐
-                     ├─▶ semantic layer ──▶ DQL blocks ──▶ notebooks
-warehouse tables ────┘                         │             │
-                                               ▼             ▼
-                                         dashboard pages ──▶ Apps
-                                               │
-                                               ▼
-                                          lineage DAG
+```text
+dbt sources and models ─┐
+                        ├─▶ semantic layer ─▶ blocks ─▶ notebooks
+warehouse tables ───────┘                       │
+                                                ▼
+                                               Apps ◀── Ask
+                                                │
+                                                ▼
+                                             lineage
 ```
 
-With that mental model loaded, [the guides](guides/README.md) all make sense.
+## What the open-source version is
+
+ZLens open source is a local, single-user workspace. Certification,
+personas and App visibility are local labels kept in your files; they are
+not a hosted permission system.
