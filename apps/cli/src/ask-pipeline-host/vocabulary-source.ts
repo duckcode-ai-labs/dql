@@ -305,8 +305,9 @@ const SAFE_FORMULA = /^[\sA-Za-z0-9_."'(),+\-*\/]+$/;
  * present; anything else (a subquery, a window, a CASE the formula regex
  * cannot vouch for) stays with the semantic engine.
  */
-export function nativeFormulaBinding(sql: string | undefined): string | undefined {
-  const text = (sql ?? '').trim();
+export function nativeFormulaBinding(sql: string | number | undefined): string | undefined {
+  // YAML hands a numeric expression (dbt's `expr: 1` count measure) over as a number.
+  const text = (sql == null ? '' : String(sql)).trim();
   if (!text || !SAFE_FORMULA.test(text) || !NESTED_AGGREGATE.test(text)) return undefined;
   if (/\b(select|from|where|over|partition|join|union|case|when|with|limit|order)\b/i.test(text)) return undefined;
   const functions = [...text.matchAll(/([A-Za-z_][A-Za-z0-9_]*)\s*\(/g)].map((match) => match[1]!.toLowerCase());
@@ -316,8 +317,9 @@ export function nativeFormulaBinding(sql: string | undefined): string | undefine
   return text;
 }
 
-export function nativeAggregateBinding(sql: string | undefined, declaredType: string | undefined): { expr: string; aggregate: string } | undefined {
-  const text = (sql ?? '').trim();
+export function nativeAggregateBinding(sql: string | number | undefined, declaredType: string | undefined): { expr: string; aggregate: string } | undefined {
+  // YAML hands a numeric expression (dbt's `expr: 1` count measure) over as a number.
+  const text = (sql == null ? '' : String(sql)).trim();
   if (!text) return undefined;
   const call = AGGREGATE_CALL.exec(text);
   if (call) {
