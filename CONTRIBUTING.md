@@ -23,7 +23,7 @@ Managed multi-tenancy, SSO/RBAC, centralized audit, managed secrets, hosted
 approvals, and other commercial control-plane behavior are not.
 
 Before a non-trivial change, read the
-[current DQL truth](./docs/contribute/current-dql-truth.md) and follow the
+[current ZLens truth](./docs/contribute/current-dql-truth.md) and follow the
 [OSS delivery orchestration playbook](./docs/contribute/delivery-orchestration.md).
 
 ---

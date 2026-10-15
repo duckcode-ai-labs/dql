@@ -8,12 +8,14 @@ import { useDispatch } from '../../store/NotebookStore';
  * The runtime's "no connection yet" refusal (a fresh project, F11). Repairing the
  * SQL cannot help; the next step is connecting DuckDB or a warehouse.
  */
-export function isMissingConnectionError(message: string): boolean {
-  return /No database connection is configured yet/i.test(message);
+export function isMissingConnectionError(message: string, code?: string): boolean {
+  return code === 'CONNECTION_NOT_CONFIGURED' || /No database connection is configured yet/i.test(message);
 }
 
 interface ErrorOutputProps {
   message: string;
+  /** The runtime's failure code (e.g. CONNECTION_NOT_CONFIGURED), when the run returned one. */
+  errorCode?: string;
   themeMode: ThemeMode;
   onFix?: () => void;
   onBackgroundRepair?: () => void;
@@ -53,6 +55,7 @@ function closestMatch(name: string, candidates: string[]): string | null {
 
 export function ErrorOutput({
   message,
+  errorCode,
   themeMode,
   onFix,
   onBackgroundRepair,
@@ -64,7 +67,7 @@ export function ErrorOutput({
   const t = themes[themeMode];
   const dispatch = useDispatch();
   const parsed = parseQueryError(message);
-  const missingConnection = isMissingConnectionError(message);
+  const missingConnection = isMissingConnectionError(message, errorCode);
   const openDatabaseSettings = () => {
     dispatch({ type: 'SET_SETTINGS_TAB', tab: 'database' });
     dispatch({ type: 'SET_MAIN_VIEW', view: 'settings' });

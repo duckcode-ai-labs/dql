@@ -25,6 +25,18 @@ const SECTIONS = [
 
 const CLI_REFERENCE_URL = 'https://github.com/duckcode-ai-labs/zlens/blob/main/docs/reference/cli.md';
 
+/**
+ * The rail's outside links. Every target must be a page that exists:
+ * GitHub Discussions are not enabled on the repository, so support goes to
+ * SUPPORT.md (which routes to the issue forms and the RFC process).
+ */
+export const HELP_LINKS = [
+  { label: 'Keyboard shortcuts', href: 'https://github.com/duckcode-ai-labs/zlens#readme' },
+  { label: 'CLI reference', href: CLI_REFERENCE_URL },
+  { label: 'Community & support', href: 'https://github.com/duckcode-ai-labs/zlens/blob/main/SUPPORT.md' },
+  { label: 'Report an issue', href: 'https://github.com/duckcode-ai-labs/zlens/issues/new/choose' },
+] as const;
+
 export function HelpDocsPage() {
   const { state, dispatch } = useNotebook();
   const t = themes[state.themeMode];
@@ -102,9 +114,9 @@ export function HelpDocsPage() {
         })}
         <div style={{ height: 1, background: 'var(--border-subtle)', margin: '12px 10px' }} />
         <div style={{ padding: '0 10px', display: 'flex', flexDirection: 'column', gap: 7, fontSize: 11.5 }}>
-          <a href="https://github.com/duckcode-ai-labs/zlens#readme" target="_blank" rel="noreferrer" style={{ color: t.accent, textDecoration: 'none' }}>Keyboard shortcuts</a>
-          <a href={CLI_REFERENCE_URL} target="_blank" rel="noreferrer" style={{ color: t.accent, textDecoration: 'none' }}>CLI reference</a>
-          <a href="https://github.com/duckcode-ai-labs/zlens/discussions" target="_blank" rel="noreferrer" style={{ color: t.accent, textDecoration: 'none' }}>Community &amp; support</a>
+          {HELP_LINKS.map((link) => (
+            <a key={link.label} href={link.href} target="_blank" rel="noreferrer" style={{ color: t.accent, textDecoration: 'none' }}>{link.label}</a>
+          ))}
         </div>
         <div style={{ flex: 1 }} />
         <div style={{ margin: '12px 10px 0', border: '1px solid var(--border-subtle)', borderRadius: 9, background: t.appBg, padding: '10px 11px', fontSize: 11, color: t.textMuted, lineHeight: 1.5 }}>
