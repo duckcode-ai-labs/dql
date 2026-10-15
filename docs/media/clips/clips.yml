@@ -97,3 +97,17 @@ app-ask:
     - Scroll through the tiles; each one is labelled Certified.
     - Ask "How has revenue changed by month?" in the App's Ask box.
     - The answer opens beside the page, scoped to Jaffle Growth Review, labelled Certified answer, answered from a certified block.
+
+overview:
+  title: ZLens in under a minute
+  caption: >-
+    Ask a question and get an answer from a certified block, labelled Certified
+    answer; see how it was answered; open the App built from the same certified
+    blocks, where all data is certified; then trace lineage from the dbt
+    sources and models through the block to the App.
+  steps:
+    - Ask "How has revenue changed by month?".
+    - The answer is labelled Certified answer, from the monthly_revenue block, with a table and a line chart.
+    - How it was answered shows the steps Ask took.
+    - Open the Jaffle Growth Review App; it reads All data certified and every tile is labelled Certified.
+    - Open Lineage and trace monthly_revenue; the graph runs from dbt sources and models to the block, its dashboard and the App.
