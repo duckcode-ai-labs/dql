@@ -1,66 +1,90 @@
-# ZLens
-
-[![CI](https://github.com/duckcode-ai-labs/zlens/actions/workflows/ci.yml/badge.svg)](https://github.com/duckcode-ai-labs/zlens/actions/workflows/ci.yml)
-[![npm](https://img.shields.io/npm/v/@zlens/cli?label=%40zlens%2Fcli)](https://www.npmjs.com/package/@zlens/cli)
-[![License](https://img.shields.io/badge/license-Apache--2.0-blue)](./LICENSE)
-[![Node](https://img.shields.io/badge/node-20%20%7C%2022%20%7C%2024%20LTS-green)](https://nodejs.org)
-
-**ZLens is a Git-versioned, governed analytics layer for
-dbt teams, with an AI agent that answers from reviewed context instead of
-guessing.** You write the analytics as blocks in DQL (Domain Query Language),
-ZLens's query language.
-
-It turns dbt models, semantic metrics, SQL, notebooks, and Apps into reviewable
-files, then answers business questions through a governed cascade — certified
-blocks first, semantic metrics next, generated SQL last — with every answer
-carrying a trust label. dbt stays the source of truth; the analytics layer on
-top becomes trustworthy too, with certified blocks, lineage, tests, and source
-control.
-
-**Why ZLens is different**
-
-- **Grounded, not hallucinated.** Generated SQL is grounded in your schema,
-  validated, and executed. A query that returns no rows or can't be grounded is
-  flagged **review-required** — never dressed up as a confident, "trusted" number.
-- **Works with your coding agent.** A built-in MCP server lets Claude Code,
-  Codex, Cursor, and Claude Desktop ask questions and build governed blocks with
-  the same trust guards as the UI → [Connect an AI agent](./docs/guides/mcp.md).
-- **Runs on your terms.** Use your Claude or ChatGPT subscription, an API key,
-  or a fully local model via Ollama.
-
-## Architecture flow
-
-ZLens turns governed analytics work into executable, reviewable files. Certified
-blocks serve trusted answers first; notebooks and AI-generated SQL stay
-review-required until promoted.
-
-> Click the diagram to open the full-size SVG in a browser tab, where you can
-> zoom or use full-screen mode.
-
 <p align="center">
-  <a href="docs/assets/architecture/dql-flow.svg">
-    <img src="docs/assets/architecture/dql-flow.svg" alt="ZLens architecture flow from dbt and optional DataLex context to certified blocks, manifest, apps, notebooks, agents, review drafts, and CI" width="100%" />
-  </a>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/brand/zlens-lockup-horizontal-reverse.svg">
+    <img alt="ZLens" src="docs/assets/brand/zlens-lockup-horizontal.svg" width="300">
+  </picture>
 </p>
 
-**Why users care:** ZLens makes dashboards, notebook research, and AI answers use
-the same reviewed assets, with clear labels when analysis is still draft.
+<h3 align="center">Certified, or it says so.</h3>
 
-## Start here
+<p align="center">
+  Governed analytics for dbt teams. Every answer says what it is built on:<br>
+  a certified block, your semantic metrics, or SQL that AI wrote and someone still needs to review.
+</p>
 
-Use one of these two paths.
+<p align="center">
+  <a href="https://github.com/duckcode-ai-labs/zlens/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/duckcode-ai-labs/zlens/actions/workflows/ci.yml/badge.svg"></a>
+  <a href="https://www.npmjs.com/package/@zlens/cli"><img alt="npm @zlens/cli" src="https://img.shields.io/npm/v/@zlens/cli?label=%40zlens%2Fcli"></a>
+  <a href="./LICENSE"><img alt="License: Apache-2.0" src="https://img.shields.io/badge/license-Apache--2.0-blue"></a>
+  <a href="https://nodejs.org"><img alt="Node 20 | 22 | 24" src="https://img.shields.io/badge/node-20%20%7C%2022%20%7C%2024-green"></a>
+</p>
 
-### Path 1: Try ZLens on the Jaffle Shop sample dbt project
+<p align="center">
+  <a href="https://duckcode-ai-labs.github.io/zlens/"><b>Docs</b></a> ·
+  <a href="#quickstart"><b>Quickstart</b></a> ·
+  <a href="https://duckcode-ai-labs.github.io/zlens/agents/"><b>AI agents (MCP)</b></a> ·
+  <a href="./CONTRIBUTING.md"><b>Contributing</b></a>
+</p>
 
-The sample is a plain dbt + DuckDB project in a separate repository. It does
-not ship a `dql/` folder, so you create one with `create-zlens-app`.
+<!-- overview.gif: add after #102 merges -->
+<p align="center">
+  <img src="docs/assets/readme/app.png" alt="A ZLens App page: the badge reads All data certified, an Ask box sits above the tiles, and every tile is labelled Certified" width="100%">
+</p>
+
+## What is ZLens?
+
+ZLens is a local, open-source workbench that sits on top of your dbt project.
+It turns the analytics people build on dbt (queries, notebooks, dashboards and
+AI answers) into files you review in git, and it tells you how far to trust
+each answer.
+
+When someone asks a question, ZLens tries the most trusted source first and
+labels what it used:
+
+| Label | Answered from | Means |
+|---|---|---|
+| ● **Certified** | a certified block | Ran a block a person reviewed and certified, exactly as certified. |
+| ◐ **Governed** | your semantic layer | Built from approved metrics and dimensions. |
+| ○ **Needs review** | SQL written by AI | Grounded in your schema and checked before it runs, then saved as a draft block until someone certifies it. |
+
+If none of these can answer safely, Ask refuses and says why. It never dresses
+an unreviewed number up as a trusted one.
+
+- **dbt stays the source of truth.** ZLens reads your manifest, semantic
+  models and profiles; it does not replace dbt.
+- **Everything is a file.** Blocks (`.dql`), notebooks (`.dqlnb`) and Apps live
+  in your repo, so they are diffed, reviewed and versioned like code.
+- **Works with your coding agent.** A built-in MCP server gives Claude Code,
+  Codex, Cursor and Claude Desktop the same certified-first answers and labels.
+- **Runs on your terms.** Use a Claude or ChatGPT subscription, an API key
+  (Anthropic, OpenAI, Gemini or any OpenAI-compatible endpoint), or a local
+  model through Ollama. No ZLens account or hosted service, and no usage telemetry.
+
+## Quickstart
+
+Run ZLens on the Jaffle Shop sample dbt project. It takes about ten minutes
+and needs Node.js 20 or newer, Python 3.9 to 3.13 and git. No warehouse
+account is needed.
+
+**1. Get the sample dbt project and build its DuckDB database**
 
 ```bash
 git clone https://github.com/duckcode-ai/jaffle-shop-duckdb.git
 cd jaffle-shop-duckdb
-./setup.sh                        # the example's own setup script
-dbt parse                         # only if target/manifest.json is missing
+python3 -m venv .venv
+.venv/bin/pip install -r requirements.txt
+.venv/bin/dbt deps --profiles-dir .
+.venv/bin/dbt seed --profiles-dir .
+.venv/bin/dbt build --profiles-dir . --exclude resource_type:seed
+```
 
+> [!NOTE]
+> The sample also has a `setup.sh` script. It installs an old pre-ZLens CLI,
+> so use the commands above instead.
+
+**2. Add ZLens, import the dbt project and open the workbench**
+
+```bash
 npx create-zlens-app@latest dql
 cd dql
 npm install
@@ -69,317 +93,247 @@ npm run sync
 npm run notebook
 ```
 
-Open the local URL printed in the terminal, usually `http://127.0.0.1:3474`.
+The terminal prints `Notebook ready: http://127.0.0.1:3474` and your browser
+opens it.
 
-What to check first:
+**3. Finish Guided Setup and run a query**
 
-1. Home shows dbt artifacts and the database connection.
-2. Lineage shows how the dbt models connect.
-3. In a notebook, run a query against a Jaffle Shop model.
+Guided Setup walks you through four steps: **Preview** and **Apply project**
+for the dbt project, **Import & test** for the `jaffle_shop` profile, an optional AI
+provider, then **Finish setup**. Then open **Notebooks → New Notebook**, click
+**Create DQL query → Switch to SQL cell**, and run this with **Shift+Enter**:
 
-The example repository pins an old release under the previous package name (`@duckcodeailabs/dql-cli`
-1.7.1, Node `>=20 <23`), so its own docs and tutorial may not match the current
-CLI. Use the commands above until it is updated.
-
-### Path 2: Add ZLens to your own dbt repo
-
-Run this from the root of an existing dbt project.
-
-```bash
-cd your-dbt-repo
-dbt parse
-
-npx create-zlens-app@latest dql
-cd dql
-npm install
-npm run doctor
-npm run sync
-npm run notebook
-
-# Optional, only before running queries with these drivers:
-# npm install --prefix .dql/connectors duckdb        # DuckDB or local files
-# npm install --prefix .dql/connectors snowflake-sdk # Snowflake
-# Databricks does not need an extra package.
+```sql
+select customer_name, count_lifetime_orders, lifetime_spend
+from dev.customers
+order by lifetime_spend desc
+limit 10
 ```
 
-`dbt parse` should create `target/manifest.json`. ZLens also reads dbt artifacts
-such as `catalog.json`, `semantic_manifest.json`, and `run_results.json` when
-they exist.
+Next: [ask a question in plain English](https://duckcode-ai-labs.github.io/zlens/ask/),
+[save the query as a block and certify it](https://duckcode-ai-labs.github.io/zlens/blocks/),
+or [add ZLens to your own dbt project](https://duckcode-ai-labs.github.io/zlens/get-started/your-dbt-project/).
+The full walkthrough is the [Quickstart guide](https://duckcode-ai-labs.github.io/zlens/get-started/).
 
-Install only the database driver your project uses:
+<details>
+<summary><b>Install the CLI globally, upgrade, or connect another database</b></summary>
 
-| Database | Extra install before running queries | Notes |
-| --- | --- | --- |
-| Databricks SQL | none | Built into ZLens through HTTPS |
-| DuckDB or local CSV/Parquet/JSON files | `npm install --prefix .dql/connectors duckdb` | Needed for `duckdb` and `file` connections |
-| Snowflake | `npm install --prefix .dql/connectors snowflake-sdk` | Needed for Snowflake password, key-pair, SSO, OAuth, PAT, MFA, and workload identity auth |
+<br>
 
-The notebook Connections page can also install DuckDB or Snowflake into
-`.dql/connectors/`. This keeps the base ZLens install fast while each project
-opts into the warehouse package it actually needs.
-
-If you installed the CLI globally, installation only gives you the `zlens`
-command. It does not create a `dql/` folder by itself. Bootstrap the folder
-explicitly:
+`create-zlens-app` installs the CLI into your project, so `npm run …` and
+`npx zlens …` use the version that project was tested with. To have a `zlens`
+command everywhere:
 
 ```bash
-cd your-dbt-repo
-zlens init ./dql
-cd dql
-zlens doctor
-zlens compile
-zlens sync dbt
-zlens notebook
-```
-
-## Install and upgrade the CLI
-
-ZLens is plain npm packages. Most users install the CLI project-locally (via
-`create-zlens-app`, above), but you can also install it globally:
-
-```bash
-npm i -g @zlens/cli        # install
+npm i -g @zlens/cli          # install or upgrade
 zlens --version
+cd your-dbt-repo && zlens init ./dql
 ```
 
-Upgrading is just re-installing the latest — there is no separate updater:
+Install only the driver your warehouse needs, into the project:
 
-```bash
-npm i -g @zlens/cli@latest # global
-npm i -D @zlens/cli@latest # project-local (then: npx zlens --version)
+| Database | Install before running queries |
+|---|---|
+| Databricks SQL | nothing (built in, over HTTPS) |
+| DuckDB, or local CSV / Parquet / JSON files | `npm install --prefix .dql/connectors duckdb` |
+| Snowflake | `npm install --prefix .dql/connectors snowflake-sdk` |
+
+The notebook's Connections page can install DuckDB or Snowflake for you. See
+[Install](https://duckcode-ai-labs.github.io/zlens/get-started/install/),
+[Connect a database](https://duckcode-ai-labs.github.io/zlens/get-started/connect-database/),
+[Connectors](https://duckcode-ai-labs.github.io/zlens/reference/connectors/) and
+[Troubleshooting](https://duckcode-ai-labs.github.io/zlens/guides/troubleshooting/).
+Coming from the `dql` command and `@duckcodeailabs/dql-cli`? Install
+`@zlens/cli`; the [install guide](https://duckcode-ai-labs.github.io/zlens/get-started/install/)
+covers the switch.
+
+</details>
+
+## Features
+
+### Ask, with a trust label and the receipts
+
+Ask a question in plain English. The answer opens with its trust label, the
+block or metrics it came from and their owner. **How it was answered** shows
+every step: the certified blocks it checked, the semantic layer, the checks
+before running, and the exact DQL and SQL that ran.
+
+<p align="center">
+  <img src="docs/assets/readme/ask-certified.png" alt="Ask answers 'How has revenue changed by month?' with a Certified answer from the monthly_revenue block; the How it answered panel lists Read the question, Certified blocks, Semantic layer skipped, Checked before running, Ran on the warehouse and Answer" width="100%">
+</p>
+
+When no certified block or metric fits, AI writes the SQL from your schema.
+ZLens checks it before it runs, labels the answer **AI-generated**, and saves
+it as a draft block for someone to review. It never certifies itself.
+
+<p align="center">
+  <img src="docs/assets/readme/ask-review.png" alt="An AI-generated answer with 4 checks passed, its result table, and the line Saved for review as a draft block (not certified)" width="85%">
+</p>
+
+[Ask a question](https://duckcode-ai-labs.github.io/zlens/ask/) ·
+[How Ask answered](https://duckcode-ai-labs.github.io/zlens/ask/how-it-answered/) ·
+[Answers that need review](https://duckcode-ai-labs.github.io/zlens/ask/needs-review/)
+
+### Blocks: save is a draft, certify is a person
+
+A block is a named, reusable query in a `.dql` file with an owner, a
+description, tests and a chart. Save a notebook cell with **Save Block**, and
+it is a draft. **Certify** runs the block and its checks; only if they pass
+does it become Certified, with a receipt of who certified it, when, and under
+which rules.
+
+<p align="center">
+  <img src="docs/assets/readme/block-certified.png" alt="Block Studio showing top_customers_by_spend as Certified, with the receipt line Certified by analytics@jaffle.shop via Block Studio, OSS rules, and a Block certified panel with Metadata, Validation, Run, Chart and Lineage checks" width="100%">
+</p>
+
+[Blocks](https://duckcode-ai-labs.github.io/zlens/blocks/) ·
+[Save and certify](https://duckcode-ai-labs.github.io/zlens/blocks/certify/)
+
+### Notebooks
+
+Explore with SQL, DQL, Ask AI, note and input cells against your warehouse.
+Results show with filters, pivots, charts and CSV or JSON export. The notebook
+is a `.dqlnb` file; results stay out of git.
+
+<p align="center">
+  <img src="docs/assets/readme/notebook.png" alt="A notebook with a warehouse SQL cell over dev.customers and its result table of ten customers" width="100%">
+</p>
+
+[Work in a notebook](https://duckcode-ai-labs.github.io/zlens/notebooks/)
+
+### Apps and dashboards
+
+Build Apps from blocks for the people who read the numbers. Every tile carries
+its trust label and a receipt, and the page says how much of it is certified.
+Ask about an App and the answer reads that page's own results and filters, and
+takes the trust of the weakest tile it read.
+
+<p align="center">
+  <img src="docs/assets/readme/app-ask.png" alt="The Jaffle Growth Review App, all data certified, with Ask about Jaffle Growth Review open: a Certified answer read from the App's current results, where every tile it read runs a certified source" width="100%">
+</p>
+
+[Read an App](https://duckcode-ai-labs.github.io/zlens/apps/) ·
+[Ask about an App](https://duckcode-ai-labs.github.io/zlens/apps/ask-about-an-app/)
+
+### Lineage, from dbt to the App
+
+Trace any block, App or notebook end to end: dbt sources and models, business
+terms, the block, its chart, the dashboard page and the App. Lineage is built
+from your dbt manifest and ZLens files, in the workbench or with
+`zlens lineage`.
+
+<p align="center">
+  <img src="docs/assets/readme/lineage.png" alt="End-to-end lineage of the monthly_revenue block: four dbt sources, staging models, order_items and orders, the Revenue and Order business terms, the block, its chart, the jaffle-growth overview dashboard and the Jaffle Growth Review App" width="100%">
+</p>
+
+[Lineage](https://duckcode-ai-labs.github.io/zlens/lineage/)
+
+### AI agents over MCP
+
+Point your coding agent at the project and it answers data questions the way
+Ask does: certified blocks first, the same trust labels, AI-written SQL kept
+as a draft for review.
+
+```console
+$ npm exec -- zlens connect claude-code
+
+  ZLens agent connection setup
+    Project: /path/to/jaffle-shop-duckdb/dql
+
+  ✓ Claude Code
+    Project .mcp.json and CLAUDE.md now point Claude Code at ZLens.
+    Next: Open Claude Code from this project and run /mcp to confirm the dql server is loaded.
+
+  Verify before asking an agent: zlens mcp test
 ```
 
-Coming from `@duckcodeailabs/dql-cli` and the `dql` command? See
-[Upgrading from the `dql` command](docs/03-install.md#upgrading-from-the-dql-command).
+`zlens connect` also supports `codex`, `cursor`, `claude-desktop` and `all`.
+Keep `npm run notebook` running while the agent works: it runs the queries.
 
-### How to run project-local and global commands
+[Connect your AI agent](https://duckcode-ai-labs.github.io/zlens/agents/) ·
+[MCP tools](https://duckcode-ai-labs.github.io/zlens/agents/tools/)
 
-Project-local installation is recommended because each repository keeps the
-CLI version it was tested with. npm links that CLI at
-`node_modules/.bin/zlens`; it does not add the link to your interactive shell's
-`PATH`.
+## How it works
 
-| Installation | Use | Example |
-| --- | --- | --- |
-| Scaffolded/project-local | A provided npm script | `npm run doctor` |
-| Project-local, any command | `npm exec -- zlens <command>` | `npm exec -- zlens model list` |
-| Project-local shorthand | `npx zlens <command>` | `npx zlens --help` |
-| Global | `zlens <command>` | `zlens doctor` |
+<p align="center">
+  <a href="docs/assets/architecture/dql-flow.svg">
+    <img src="docs/assets/architecture/dql-flow.svg" alt="ZLens architecture: a dbt project and an optional DataLex manifest feed Sync context and Certified blocks, which compile into the DQL manifest that serves Apps, notebooks, agents over MCP and CI verify; AI-written SQL enters as drafts for review" width="100%">
+  </a>
+</p>
 
-This means `npm run doctor` can work while a bare `zlens doctor` says
-`command not found`: the former uses the repository's local binary, while the
-latter requires the global installation shown above. Confirm which CLI you are
-using with:
+1. **Sync.** `zlens sync dbt` reads your dbt manifest, semantic models and
+   warehouse shape into a local index.
+2. **Certify.** Blocks are reviewed queries with an owner and tests.
+   Certifying records who vouched for them.
+3. **Compile.** `zlens compile` writes `dql-manifest.json`: every block,
+   metric, notebook and App, with lineage and trust.
+4. **Serve.** Apps, notebooks, Ask, your agent over MCP and `zlens verify` in
+   CI all use the same certified blocks instead of each inventing its own SQL.
 
-```bash
-npm exec -- zlens --version   # project-local
-zlens --version               # global, if installed
-```
+DQL is the query language ZLens blocks are written in. See
+[Concepts](https://duckcode-ai-labs.github.io/zlens/get-started/concepts/),
+[the DQL language](https://duckcode-ai-labs.github.io/zlens/reference/language/)
+and the [architecture overview](https://duckcode-ai-labs.github.io/zlens/architecture/overview/).
 
-The starter project includes scripts for the daily workflow. Use
-`npm exec -- zlens ...` for every other command:
+## Packages
 
-| Goal | Project-local command |
-| --- | --- |
-| Check installation and configuration | `npm run doctor` |
-| Open the notebook UI | `npm run notebook` |
-| Refresh dbt artifacts and indexes | `npm run sync` |
-| Compile and validate the project | `npm run compile` then `npm run validate` |
-| Inspect lineage | `npm run lineage` |
-| List or validate Domain Packages | `npm exec -- zlens model list` / `npm exec -- zlens model validate` |
-| Create or import governed content | `npm exec -- zlens new ...` / `npm exec -- zlens import sql ...` |
-| Format, diff, certify, and verify | `npm exec -- zlens fmt ...`, `npm exec -- zlens diff ...`, `npm exec -- zlens certify ...`, `npm exec -- zlens verify` |
-| Ask, evaluate, or connect an agent | `npm exec -- zlens agent ...`, `npm exec -- zlens eval ...`, `npm exec -- zlens connect ...` |
+ZLens ships as 18 npm packages. Most people only need `create-zlens-app` or
+`@zlens/cli`.
 
-Run `npm exec -- zlens --help` for the live command list, or use the
-[complete CLI reference](./docs/reference/cli.md) for commands, subcommands,
-flags, examples, and exit codes.
+<details>
+<summary><b>All packages</b></summary>
 
-> **Stuck on `zlens: command not found` after installing?** A failed
-> `npm i -g` never links the `zlens` binary. Reinstall `@latest` on any Node 20 or
-> newer. The escape hatch that needs no PATH setup at all is
-> `npx -p @zlens/cli@latest zlens notebook`.
-> More in the [install guide](docs/03-install.md#upgrade) and
-> [troubleshooting](docs/guides/troubleshooting.md#zlens-says-command-not-found).
+<br>
 
-## Before you install
+| Package | What it is |
+|---|---|
+| [`@zlens/cli`](./apps/cli) | The `zlens` command: workbench, sync, compile, certify, lineage, Ask and the MCP server |
+| [`create-zlens-app`](./packages/create-dql-app) | Scaffolds a ZLens project next to your dbt project |
+| [`@zlens/core`](./packages/dql-core) | DQL language core: lexer, parser, AST and semantic analysis |
+| [`@zlens/dql-compiler`](./packages/dql-compiler) | DQL compiler: IR lowering, Vega-Lite generation, HTML and CSS output |
+| [`@zlens/runtime`](./packages/dql-runtime) | Browser runtime: data fetching, Vega rendering, hot reload |
+| [`@zlens/project`](./packages/dql-project) | Project and block registry: block metadata, versions, sync and storage |
+| [`@zlens/governance`](./packages/dql-governance) | Block testing, certification, cost estimation and access policies |
+| [`@zlens/connectors`](./packages/dql-connectors) | Connectors for local files, SQL warehouses and lakehouse engines |
+| [`@zlens/notebook`](./packages/dql-notebook) | Notebook document model and execution helpers |
+| [`@zlens/agent`](./packages/dql-agent) | The agent: knowledge graph, Skills, block-first answer loop, LLM providers |
+| [`@zlens/mcp`](./packages/dql-mcp) | MCP server exposing certified blocks, semantic layer, lineage and governance |
+| [`@zlens/charts`](./packages/dql-charts) | React SVG chart components for blocks |
+| [`@zlens/ui`](./packages/dql-ui) | Design tokens, theme provider and headless UI primitives |
+| [`@zlens/dql-lsp`](./packages/dql-lsp) | DQL language server |
+| [`@zlens/slack`](./packages/dql-slack) | Slack slash-command bot that answers through the block-first agent loop |
+| [`@zlens/openlineage`](./packages/dql-openlineage) | OpenLineage events for block and notebook runs |
+| [`@zlens/plugin-api`](./packages/dql-plugin-api) | Plugin contracts: connectors, chart renderers, governance rule packs |
+| [`@zlens/telemetry`](./packages/dql-telemetry) | Deprecated and unused: ZLens sends no usage telemetry |
 
-- Use Node `20` or newer. CI tests Node 20, 22, and 24.
-- Use npm `10+`.
-- Use a dbt project if you want dbt import and lineage.
-- Python and native build tools are only needed when native database packages
-  cannot use prebuilt binaries.
-
-On macOS, if npm falls back to native compilation, install the command-line
-tools once:
-
-```bash
-xcode-select --install
-```
-
-## Why install can feel slow
-
-ZLens uses a flat CLI install by default. Heavy warehouse drivers are not bundled
-into the global install. Databricks SQL works through the built-in HTTP
-connector, while DuckDB and Snowflake can be installed project-locally from the
-notebook connection panel when needed.
-
-Most slow installs now come from optional native packages installed for a
-specific project, older Node versions, locked-down networks, or missing build
-tools.
-
-If install is slow, check this first:
-
-```bash
-node -v
-npm -v
-python3 --version
-# macOS only:
-xcode-select -p
-```
-
-Expected Node versions are `v20.x` or newer (`v22.x` and `v24.x` are tested).
-If an optional connector install shows `node-gyp rebuild`, switch to Node `22`
-LTS and retry:
-
-```bash
-rm -rf node_modules package-lock.json
-npm install --foreground-scripts
-```
-
-For Linux, install `python3`, `make`, and `g++`. For Windows, install the
-Microsoft C++ Build Tools.
-
-## First 10-minute tutorial
-
-1. Open Home.
-   Confirm ZLens found your dbt project and compiled artifacts.
-
-2. Connect the database.
-   If dbt `profiles.yml` or `profiles.yaml` exists, ZLens can read the connection
-   shape. Enter any local credentials that are not stored in the profile, then
-   test the connection.
-
-3. Review imported objects.
-   Check dbt models, sources, semantic metrics, and database tables before
-   building blocks.
-
-4. Create your first block.
-   Use a dbt model, a semantic metric, imported SQL, or the local AI builder.
-   Keep the block small and tied to one trusted business question.
-
-5. Run and certify.
-   Run the block, review results, add validation/tests where needed, then click
-   **Certify**. Saving never certifies: saved work is a draft until a person
-   certifies it, and certification records who did it.
-
-6. Use notebooks.
-   Search blocks, add cells, edit SQL/DQL, run research from source cells, and
-   promote reviewed SQL into draft DQL blocks.
-
-7. Push to an App.
-   Build a local App from certified blocks and notebooks so stakeholders see a
-   clean dashboard-style view.
-
-8. Check lineage and source control.
-   Confirm the path from source tables to dbt models, blocks, notebooks,
-   dashboards, and Apps. Review file changes before committing.
-
-## Daily commands
-
-Run these from the `dql/` workspace.
-
-```bash
-npm run notebook   # open the local UI
-npm run sync       # refresh dbt models, artifacts, and lineage
-npm run compile    # compile DQL files
-npm run validate   # validate blocks and project files
-npm run lineage    # inspect lineage from the CLI
-```
-
-## Connect AI agents
-
-ZLens includes an MCP server for Claude Code, Codex, Cursor, Claude Desktop, and
-other MCP clients. The server routes questions through certified blocks first,
-uses project metadata for safe generated SQL previews, and saves each
-review-required answer as a draft block for review (the same as Ask in the UI
-and `zlens agent ask`; repeats reuse the same draft).
-
-```bash
-npm exec -- zlens mcp test
-npm exec -- zlens connect claude-code   # writes .mcp.json and CLAUDE.md
-npm exec -- zlens connect codex         # writes .codex/config.toml and AGENTS.md
-```
-
-See [Connect an AI agent](./docs/guides/mcp.md) for Claude Desktop, Cursor,
-remote MCP server config, and SDK provider notes.
-
-## Core concepts
-
-- **Term**: a governed business definition.
-- **Block**: a reusable SQL or semantic answer with owner, description, tests,
-  chart intent, and AI context.
-- **Business view**: a composed business object that groups terms, blocks, and
-  nested views.
-- **Notebook**: analysis as code, with SQL/DQL cells and live results.
-- **App**: a stakeholder-facing local app built from governed blocks and
-  notebooks.
-- **Lineage**: the graph from source data to dbt models, DQL blocks, notebooks,
-  dashboards, and Apps.
-
-## Documentation
-
-All docs live in [`docs/`](./docs/). Start with these:
-
-- [Quickstart](./docs/01-quickstart.md)
-- [Install](./docs/03-install.md)
-- [Tutorials](./docs/tutorials/README.md)
-- [Import dbt](./docs/guides/import-dbt.md)
-- [Block Studio](./docs/guides/block-studio.md)
-- [Notebook research engine](./docs/guides/notebook-research.md)
-- [Author a block](./docs/guides/authoring-blocks.md)
-- [Connectors](./docs/reference/connectors.md)
-- [CLI reference](./docs/reference/cli.md)
-- [Troubleshooting](./docs/guides/troubleshooting.md)
-- [End-to-end Jaffle Shop example](https://github.com/duckcode-ai/jaffle-shop-duckdb/blob/main/docs/tutorials/jaffle/README.md)
-
-## What is included in OSS
-
-- Local notebook UI
-- Block Studio
-- dbt artifact import
-- dbt `profiles.yml` connection discovery
-- Database connectors for local and warehouse development
-- Apps
-- Lineage
-- Source control workflow
-- Local agent/MCP runtime
-- No usage telemetry
-
-ZLens OSS is a single-user local workspace. Hosted multi-user governance,
-managed secrets, audit logs, approval workflows, and permissions-aware team
-retrieval belong to the commercial product.
-
-## Privacy
-
-The ZLens CLI does not send usage telemetry. There is no `zlens telemetry` command.
-The unused `@duckcodeailabs/dql-telemetry` package is deprecated (see its
-[README](./packages/dql-telemetry/README.md)).
+</details>
 
 ## Contributing
 
-See [CONTRIBUTING.md](./CONTRIBUTING.md) and
-[docs/contribute/repo-layout.md](./docs/contribute/repo-layout.md). Bugs and
-feature requests: [open an issue](https://github.com/duckcode-ai-labs/zlens/issues).
+Contributions are welcome. Start with [CONTRIBUTING.md](./CONTRIBUTING.md) and
+the [repository layout](./docs/contribute/repo-layout.md); the
+[roadmap](./ROADMAP.md) shows what is planned. Please follow the
+[code of conduct](./CODE_OF_CONDUCT.md).
+
+## Community and support
+
+- **Bugs and feature requests:** [open an issue](https://github.com/duckcode-ai-labs/zlens/issues/new/choose).
+- **Questions and proposals:** see [SUPPORT.md](./SUPPORT.md) for where to go and how issues are triaged.
+- **Security issues:** follow [SECURITY.md](./SECURITY.md); do not open a public issue.
 
 ## License
 
-Every package in this repository is licensed under the
-[Apache License 2.0](./LICENSE); see also [NOTICE](./NOTICE). Each npm package
-ships both files. Third-party material and its licences are listed in
-[THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md).
+ZLens is licensed under the [Apache License 2.0](./LICENSE); see also
+[NOTICE](./NOTICE) and [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md).
+
+<details>
+<summary>Licences of releases before the ZLens rename</summary>
+
+<br>
 
 `create-dql-app`, `@duckcodeailabs/dql-openlineage`,
-`@duckcodeailabs/dql-plugin-api` and `@duckcodeailabs/dql-telemetry`
-(the package names before the ZLens rename) were published as MIT up to and including 1.17.2; every later release is
+`@duckcodeailabs/dql-plugin-api` and `@duckcodeailabs/dql-telemetry` were
+published as MIT up to and including 1.17.2; every later release is
 Apache-2.0. Versions already on npm keep the licence they were published under.
+
+</details>
