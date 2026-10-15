@@ -2187,6 +2187,10 @@ export function computeTileInsight(tile?: DashboardRunResponse['tiles'][number],
     columnsMeta: tile?.result?.columnsMeta,
     declaredMeasures: tile?.declaredMeasures,
     numericStrings: true,
+    // A top-N list (the source's ORDER BY … LIMIT, a "Top N" title) is led
+    // by its first row, on the measure it is ordered by.
+    ...(tile?.ordering ? { ordering: tile.ordering } : {}),
+    ...(item?.title ?? tile?.title ? { source: { title: String(item?.title ?? tile?.title) } } : {}),
   });
   const valueCol = selection.primary;
   const labelCol = selection.labelColumn;
@@ -2212,6 +2216,7 @@ export function computeTileInsight(tile?: DashboardRunResponse['tiles'][number],
   const formattedTopValue = formatMetric(leaderValue);
   // A ranking is led by the row ranked first, stated on the measure it ranks.
   if (selection.rankColumn) return `${label} is ranked first, with ${metricLabel} at ${formattedTopValue}.`;
+  if (selection.ranked && selection.ordering?.direction === 'asc') return `${label} is lowest, with ${metricLabel} at ${formattedTopValue}.`;
   // No share of a total: the visible rows are not known to add up (a COUNT
   // DISTINCT or a ratio does not, a Top-N result is not the whole, and a row
   // set may repeat a period per breakdown), so a percent would be made up.

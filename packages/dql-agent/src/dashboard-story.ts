@@ -3,6 +3,8 @@ import type {
   DashboardStoryBrief,
   DashboardStoryClaim,
   DashboardStoryFact,
+  ResultOrdering,
+  ResultSourceHint,
 } from '@zlens/core';
 import { columnNameTokens, resultLeaderRow, selectResultMeasures } from '@zlens/core';
 import { computeResultStats } from './synthesize.js';
@@ -25,6 +27,14 @@ export interface DashboardStoryTileResult {
    * what a row leads on; a rank, an id or a year never is.
    */
   declaredMeasures?: string[];
+  /**
+   * What produced the rows (the block's SQL, parameters and pattern), so a
+   * top-N list is told from a whole population even with no rank column. The
+   * tile title is always considered too ("Top 5 …").
+   */
+  source?: ResultSourceHint;
+  /** A precomputed ordering for the tile's source (wins over `source`). */
+  ordering?: ResultOrdering;
   /**
    * Dataset tiles declare whether their rows are a whole-scope scalar or
    * observations at a selected grain. This prevents the story generator from
@@ -70,6 +80,10 @@ export function buildDeterministicDashboardStory(input: DashboardStoryBuildInput
   const eligible = new Set(input.eligibleTileIds ?? input.tiles.map((tile) => tile.tileId));
   const drivers = new Set(input.driverTileIds ?? []);
   const facts: DashboardStoryFact[] = [];
+  // How a ranked list's fact reads in prose: "**James Harden** leads with
+  // **5,534** total points", not "… ranked first by total points is James
+  // Harden: 5,534".
+  const rankPhrases = new Map<string, string>();
   for (const tile of input.tiles) {
     if (!eligible.has(tile.tileId) || tile.status !== 'ok' || !tile.result) continue;
     const columns = (tile.result.columns ?? []).map((column) => typeof column === 'string' ? column : String((column as { name?: unknown })?.name ?? column));
@@ -88,6 +102,8 @@ export function buildDeterministicDashboardStory(input: DashboardStoryBuildInput
       rows,
       columnsMeta: tile.result.columnsMeta,
       declaredMeasures: tile.declaredMeasures,
+      source: { title: tile.title, ...(tile.source ?? {}) },
+      ...(tile.ordering ? { ordering: tile.ordering } : {}),
     });
     const measureColumns = new Set(selection.measures);
     const labelColumn = selection.labelColumn ?? columns.find((column) => typeof first[column] === 'string');
@@ -140,11 +156,17 @@ export function buildDeterministicDashboardStory(input: DashboardStoryBuildInput
     const leaderLabel = leader && labelColumn && leader[labelColumn] !== undefined && leader[labelColumn] !== null
       ? String(leader[labelColumn])
       : undefined;
-    if (selection.rankColumn && rows.length > 1) {
-      // A ranking: the rows are a Top-N, not the whole, so nothing is summed.
-      // Its story is who is ranked first and on what measure.
+    if (selection.ranked && rows.length > 1) {
+      // A ranking or a top-N list (a rank column, or an ORDER BY … LIMIT, a
+      // top_n parameter or a "Top N" title): the rows are a slice, not the
+      // whole, so nothing is summed. Its story is who leads and on what.
       if (leaderLabel) {
         const leaderValue = selection.primary ? numericValue(leader![selection.primary]) : undefined;
+        const formattedLeader = leaderValue !== undefined ? formatValue(leaderValue, unitOf(selection.primary!)) : undefined;
+        const bottom = !selection.rankColumn && selection.ordering?.direction === 'asc';
+        rankPhrases.set(`${tile.tileId}:rank:1`, formattedLeader !== undefined
+          ? `${tile.title}: **${leaderLabel}** ${selection.rankColumn ? 'is ranked first, with' : bottom ? 'is lowest, with' : 'leads with'} **${formattedLeader}** ${humanize(selection.primary!)}`
+          : `${tile.title}: **${leaderLabel}** is ranked first`);
         facts.push({
           id: `${tile.tileId}:rank:1`,
           tileId: tile.tileId,
@@ -163,7 +185,8 @@ export function buildDeterministicDashboardStory(input: DashboardStoryBuildInput
       }
       continue;
     }
-    for (const stat of numericStats.slice(0, 2)) {
+    // A limited slice (LIMIT without an order) is not the whole either.
+    for (const stat of selection.limited && rows.length > 1 ? [] : numericStats.slice(0, 2)) {
       const singleValue = rows.length === 1 ? numericValue(first[stat.column]) : undefined;
       // A rate, an average or a share does not add up across rows.
       if (singleValue === undefined && isNonAdditiveMeasure(stat.column, columnMeta.get(stat.column))) continue;
@@ -229,13 +252,13 @@ export function buildDeterministicDashboardStory(input: DashboardStoryBuildInput
       ? `${humanize(input.goal).replace(/[?.!]+$/, '')}: no tile reflects the current filters`
       : `No result is available yet for ${humanize(input.goal).replace(/[?.!]+$/, '')}`;
   const firstParagraph = primary.length
-    ? `For ${scope}, the clearest signals are ${joinFacts(primary)}. These figures come from tiles with this exact filter scope, so the summary and visible results stay aligned when filters change.`
+    ? `For ${scope}, the clearest signals are ${joinFacts(primary, rankPhrases)}. These figures come from tiles with this exact filter scope, so the summary and visible results stay aligned when filters change.`
     : onlyOutOfScope
       ? `None of the tiles on this page is narrowed by ${scope}, so this summary does not present their figures as results for that scope. Check each tile's own scope before using a figure for a decision.`
       : `The dashboard did not return enough governed evidence to summarize ${scope}. Apply a different filter range or review the unavailable sections before using this view for a decision.`;
   const driverFacts = scopedFacts.filter((fact) => fact.kind === 'driver');
   const secondParagraph = supporting.length
-    ? `${joinFacts(supporting)} add context across the rest of the view. ${driverFacts.length ? `The supported driver evidence points to ${joinFacts(driverFacts.slice(0, 2))}.` : 'The current view shows association and ranking, but it does not prove why the pattern occurred.'}`
+    ? `${joinFacts(supporting, rankPhrases)} add context across the rest of the view. ${driverFacts.length ? `The supported driver evidence points to ${joinFacts(driverFacts.slice(0, 2), rankPhrases)}.` : 'The current view shows association and ranking, but it does not prove why the pattern occurred.'}`
     : `The available evidence is concentrated in ${primary.length === 1 ? 'one business signal' : 'a small set of signals'}. Use Research deeper for a validated baseline or driver breakdown before describing the pattern as a cause.`;
   const claims: DashboardStoryClaim[] = [];
   if (primary.length) claims.push({ text: firstParagraph, factIds: primary.map((fact) => fact.id), kind: 'observation' });
@@ -316,8 +339,10 @@ export function validateDashboardStoryBrief(
   return { ok: errors.length === 0, errors };
 }
 
-function joinFacts(facts: DashboardStoryFact[]): string {
-  return facts.map((fact) => `${fact.label} is **${formatValue(fact.value, fact.unit)}**`).join(facts.length > 2 ? '; ' : ' and ');
+function joinFacts(facts: DashboardStoryFact[], phrases?: ReadonlyMap<string, string>): string {
+  return facts
+    .map((fact) => phrases?.get(fact.id) ?? `${fact.label} is **${formatValue(fact.value, fact.unit)}**`)
+    .join(facts.length > 2 ? '; ' : ' and ');
 }
 
 /** An empty multi-select is "All", not a filter. */

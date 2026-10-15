@@ -452,6 +452,15 @@ describe('tile captions never treat a rank, an id or a year as the measure (0.1.
       { player_id: 2544, season: 2016, game_year: 2017, team_code: 3 },
     ]))).toBeNull();
   });
+  it('a top 5 with no rank column is led on the measure its source orders by', async () => {
+    const { computeTileInsight } = await dashboardHelpers();
+    const top5 = ranked.map(({ player_name, total_points_2016_2017 }, index) => ({ player_name, total_points: total_points_2016_2017, games_played: 189 + index * 7 }));
+    expect(computeTileInsight(tile(top5, { ordering: { kind: 'top_n', reason: 'order_limit', orderColumn: 'total_points', direction: 'desc' } })))
+      .toMatch(/^James Harden leads Total Points at /);
+    // A bottom N is led by its smallest value, and says so.
+    expect(computeTileInsight(tile([...top5].reverse(), { ordering: { kind: 'top_n', reason: 'order_limit', orderColumn: 'total_points', direction: 'asc' } })))
+      .toMatch(/^Kevin Durant is lowest, with Total Points at /);
+  });
 });
 
 describe('Dashboard visualization vocabulary and icons (UI-004)', () => {

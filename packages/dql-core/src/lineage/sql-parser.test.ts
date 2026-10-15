@@ -323,6 +323,66 @@ describe('extractTablesFromSql', () => {
     `);
     expect(result.tables).toEqual(["read_csv_auto('./data/revenue.csv')"]);
   });
+
+  describe('FROM inside an expression is not a table', () => {
+    const tablesOf = (sql: string) => [...extractTablesFromSql(sql).tables].sort();
+
+    it('EXTRACT(part FROM column): the NBA top-scorers block', () => {
+      expect(tablesOf(`
+        SELECT player_name, SUM(COALESCE(pts, 0)) AS total_points
+        FROM TRANSFORMED.int_player_stats
+        WHERE EXTRACT(YEAR FROM game_date_est) BETWEEN \${season_start} AND \${season_end}
+        GROUP BY player_name
+        ORDER BY total_points DESC
+        LIMIT \${top_n}
+      `)).toEqual(['TRANSFORMED.int_player_stats']);
+      // Lowercase, extra spaces, and in the select list and GROUP BY.
+      expect(tablesOf('select extract ( month from o.created_at ) as m, count(*) from orders o group by extract(month from o.created_at)'))
+        .toEqual(['orders']);
+    });
+
+    it('SUBSTRING(s FROM n FOR m) and SUBSTRING(s FROM column)', () => {
+      expect(tablesOf('SELECT SUBSTRING(sku FROM 1 FOR 3), SUBSTRING(name FROM start_pos) FROM products')).toEqual(['products']);
+    });
+
+    it("TRIM([LEADING|TRAILING|BOTH] 'x' FROM column)", () => {
+      expect(tablesOf("SELECT TRIM(LEADING '0' FROM account_code), TRIM(BOTH FROM padded) FROM accounts a JOIN regions r ON a.r = r.id"))
+        .toEqual(['accounts', 'regions']);
+    });
+
+    it("OVERLAY(s PLACING 'x' FROM n) and POSITION('x' IN s)", () => {
+      expect(tablesOf("SELECT OVERLAY(phone PLACING '***' FROM offset_col FOR 3), POSITION('@' IN email) FROM customers"))
+        .toEqual(['customers']);
+    });
+
+    it('IS [NOT] DISTINCT FROM column', () => {
+      expect(tablesOf('SELECT * FROM a JOIN b ON a.k IS NOT DISTINCT FROM b.k WHERE a.v IS DISTINCT FROM previous_v'))
+        .toEqual(['a', 'b']);
+    });
+
+    it('a subquery nested in a function keeps its own FROM', () => {
+      expect(tablesOf('SELECT EXTRACT(YEAR FROM (SELECT MAX(d) FROM calendar)) AS y FROM facts'))
+        .toEqual(['calendar', 'facts']);
+    });
+
+    it('normal FROM, JOIN, subquery and CTE cases are unchanged', () => {
+      const result = extractTablesFromSql(`
+        WITH recent AS (
+          SELECT * FROM analytics.orders WHERE EXTRACT(YEAR FROM order_date) = 2024
+        )
+        SELECT c.name, SUM(r.amount)
+        FROM recent r
+        LEFT JOIN analytics.customers c ON c.id = r.customer_id
+        JOIN (SELECT id FROM analytics.segments) s ON s.id = c.segment_id
+        WHERE r.status IN (SELECT status FROM analytics.valid_statuses)
+        GROUP BY c.name
+      `);
+      expect([...result.tables].sort()).toEqual([
+        'analytics.customers', 'analytics.orders', 'analytics.segments', 'analytics.valid_statuses',
+      ]);
+      expect(result.ctes).toEqual(['recent']);
+    });
+  });
 });
 
 describe('analyzeSqlReferences', () => {

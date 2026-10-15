@@ -1,5 +1,6 @@
 import type { DashboardVizEncoding } from '@zlens/core/apps/viz-encoding';
 import type { DashboardVizStyle } from '@zlens/core/apps/viz-style';
+import type { ResultOrdering } from '@zlens/core/apps/result-measures';
 import type { TableDatasetProposal } from '@zlens/core/datasets/table-draft';
 
 export interface WarehouseTableSummary {
@@ -2686,6 +2687,12 @@ export interface DashboardRunResponse {
      * before guessing from names and values.
      */
     declaredMeasures?: string[];
+    /**
+     * Whether the tile's source block returns a top-N list (ORDER BY … LIMIT,
+     * a top_n parameter, a "Top N" title) or a whole population. A top-N list
+     * is led by its first row and never summed.
+     */
+    ordering?: ResultOrdering;
     text?: { markdown: string };
     aiPin?: LocalAiPin;
     /**

@@ -233,8 +233,8 @@ export {
   MAX_STORY_BLOCKS,
 } from './story-bindings.js';
 export type { StoryBinding, StoryBindingCatalog, StoryBindingTileInput, StoryTextIssue } from './story-bindings.js';
-export { columnNameTokens, isRankColumnName, nonMeasureColumnRole, resultLeaderRow, selectResultMeasures } from './result-measures.js';
-export type { ColumnNameRole, ResultColumnContract, ResultMeasureInput, ResultMeasureSelection } from './result-measures.js';
+export { columnNameTokens, detectResultOrdering, isRankColumnName, nonMeasureColumnRole, resultLeaderRow, selectResultMeasures } from './result-measures.js';
+export type { ColumnNameRole, ResultColumnContract, ResultMeasureInput, ResultMeasureSelection, ResultOrdering, ResultSourceHint } from './result-measures.js';
 
 export {
   checkCanvasHtml, fillCanvasHtml, escapeHtml, MAX_CANVAS_HTML, annotateCanvasHtml, canvasContainerPath, canvasNodeAt, canvasPieceKind,

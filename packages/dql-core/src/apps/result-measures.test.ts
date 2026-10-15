@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { nonMeasureColumnRole, resultLeaderRow, selectResultMeasures } from './result-measures.js';
+import { detectResultOrdering, nonMeasureColumnRole, resultLeaderRow, selectResultMeasures } from './result-measures.js';
 
 const ranked = [
   { rank: 1, player_name: 'James Harden', points_2016: 2646, points_2017: 2888, total_points_2016_2017: 5534, games_played_2016_2017: 189, player_id_count: 1 },
@@ -79,5 +79,117 @@ describe('result measures', () => {
     const selection = selectResultMeasures({ columns: ['team', 'wins'], rows, numericStrings: true });
     expect(selection.primary).toBe('wins');
     expect(resultLeaderRow({ rows, numericStrings: true }, selection)?.team).toBe('A');
+  });
+});
+
+/** The certified NBA block: a top 5 with no rank column. */
+const TOP5_SQL = `
+SELECT
+  player_name,
+  SUM(COALESCE(pts, 0)) AS total_points,
+  COUNT(DISTINCT details_game_id) AS games_played
+FROM TRANSFORMED.int_player_stats
+WHERE EXTRACT(YEAR FROM game_date_est) BETWEEN \${season_start} AND \${season_end}
+  AND player_name IS NOT NULL
+GROUP BY player_name
+ORDER BY total_points DESC, player_name ASC
+LIMIT \${top_n}
+`;
+const top5 = [
+  { player_name: 'James Harden', total_points: 5534, games_played: 189 },
+  { player_name: 'LeBron James', total_points: 5331, games_played: 214 },
+  { player_name: 'Russell Westbrook', total_points: 5252, games_played: 198 },
+  { player_name: 'Stephen Curry', total_points: 5251, games_played: 201 },
+  { player_name: 'Kevin Durant', total_points: 4835, games_played: 188 },
+];
+const TEAMS = ['ATL', 'BOS', 'BKN', 'CHA', 'CHI', 'CLE', 'DAL', 'DEN', 'DET', 'GSW', 'HOU', 'IND', 'LAC', 'LAL', 'MEM', 'MIA', 'MIL', 'MIN', 'NOP', 'NYK', 'OKC', 'ORL', 'PHI', 'PHX', 'POR', 'SAC', 'SAS', 'TOR', 'UTA', 'WAS'];
+const pointsByTeam = TEAMS.map((team, index) => ({ team, points: 9000 - index * 37 }));
+
+describe('top-N results without a rank column', () => {
+  it('reads ORDER BY … LIMIT n (templated) as a top N ordered on its measure', () => {
+    expect(detectResultOrdering({ sql: TOP5_SQL })).toEqual({ kind: 'top_n', reason: 'order_limit', orderColumn: 'total_points', direction: 'desc' });
+    expect(detectResultOrdering({ sql: 'select team, sum(pts) as pts from t group by 1 order by 2 desc limit 10' }))
+      .toMatchObject({ kind: 'top_n', limit: 10 });
+    expect(detectResultOrdering({ sql: 'SELECT TOP 5 name, revenue FROM accounts ORDER BY revenue DESC' }))
+      .toMatchObject({ kind: 'top_n', orderColumn: 'revenue', direction: 'desc' });
+    expect(detectResultOrdering({ sql: 'SELECT name, revenue FROM accounts ORDER BY revenue ASC FETCH FIRST 3 ROWS ONLY' }))
+      .toMatchObject({ kind: 'top_n', orderColumn: 'revenue', direction: 'asc' });
+  });
+
+  it('a window ORDER BY or a subquery LIMIT is not the outer ranking', () => {
+    expect(detectResultOrdering({ sql: 'SELECT team, SUM(points) AS points, ROW_NUMBER() OVER (ORDER BY SUM(points) DESC) AS r FROM games GROUP BY team' }))
+      .toEqual({ kind: 'complete', reason: 'sql' });
+    expect(detectResultOrdering({ sql: 'SELECT team, points FROM (SELECT * FROM games ORDER BY points DESC LIMIT 5) g' }))
+      .toEqual({ kind: 'complete', reason: 'sql' });
+    expect(detectResultOrdering({ sql: 'SELECT team, points FROM games LIMIT 100' })).toEqual({ kind: 'limited', reason: 'limit' });
+  });
+
+  it('reads a top_n parameter, a ranking pattern and a "Top N" title', () => {
+    expect(detectResultOrdering({ parameters: ['season_start', 'top_n'] })).toMatchObject({ kind: 'top_n', reason: 'top_n_parameter' });
+    expect(detectResultOrdering({ pattern: 'ranking' })).toMatchObject({ kind: 'top_n', reason: 'pattern' });
+    expect(detectResultOrdering({ title: 'Top 5 scorers' })).toMatchObject({ kind: 'top_n', reason: 'title', limit: 5 });
+    expect(detectResultOrdering({ title: 'top_5_players_points_2016_2017' })).toMatchObject({ kind: 'top_n', limit: 5 });
+    expect(detectResultOrdering({ title: 'Top Players By Total Points 2016 2017' })).toMatchObject({ kind: 'top_n', reason: 'title' });
+    expect(detectResultOrdering({ title: 'Bottom ten teams' })).toMatchObject({ kind: 'top_n', direction: 'asc', limit: 10 });
+    expect(detectResultOrdering({ title: 'Points by team' })).toBeUndefined();
+    expect(detectResultOrdering({ title: 'Top-line revenue' })).toBeUndefined();
+  });
+
+  it('a top 5 with no rank column is ranked: led by its first row, never summed', () => {
+    const selection = selectResultMeasures({ columns: ['player_name', 'total_points', 'games_played'], rows: top5, source: { sql: TOP5_SQL } });
+    expect(selection.rankColumn).toBeUndefined();
+    expect(selection.ranked).toBe(true);
+    expect(selection.limited).toBe(true);
+    expect(selection.primary).toBe('total_points');
+    expect(resultLeaderRow({ rows: top5 }, selection)?.player_name).toBe('James Harden');
+  });
+
+  it('the ORDER BY column is the measure the list is about', () => {
+    const selection = selectResultMeasures({
+      columns: ['player_name', 'total_points', 'games_played'],
+      rows: [...top5].sort((a, b) => b.games_played - a.games_played),
+      source: { sql: TOP5_SQL.replace('ORDER BY total_points DESC', 'ORDER BY games_played DESC') },
+    });
+    expect(selection.primary).toBe('games_played');
+    expect(resultLeaderRow({ rows: top5 }, selection)?.player_name).toBe('LeBron James');
+  });
+
+  it('a bottom N is led by its smallest value; a list ordered by name is a slice, not a ranking', () => {
+    const rows = [...top5].reverse();
+    const bottom = selectResultMeasures({
+      columns: ['player_name', 'total_points'],
+      rows,
+      source: { sql: 'SELECT player_name, total_points FROM s ORDER BY total_points ASC LIMIT 5' },
+    });
+    expect(bottom.ranked).toBe(true);
+    expect(resultLeaderRow({ rows }, bottom)?.player_name).toBe('Kevin Durant');
+    const byName = selectResultMeasures({
+      columns: ['player_name', 'total_points'],
+      rows: top5,
+      source: { sql: 'SELECT player_name, total_points FROM s ORDER BY player_name LIMIT 5' },
+    });
+    expect(byName.ranked).toBe(false);
+    expect(byName.limited).toBe(true);
+  });
+
+  it('with no source, five distinct rows sorted by the measure read as a top 5', () => {
+    const selection = selectResultMeasures({ columns: ['player_name', 'total_points', 'games_played'], rows: top5 });
+    expect(selection.ranked).toBe(true);
+    expect(selection.ordering?.reason).toBe('rows_sorted');
+  });
+
+  it('a full additive breakdown (points by team, all 30 teams) is not a top N', () => {
+    const unsourced = selectResultMeasures({ columns: ['team', 'points'], rows: pointsByTeam });
+    expect(unsourced.ranked).toBe(false);
+    expect(unsourced.limited).toBe(false);
+    const sourced = selectResultMeasures({
+      columns: ['team', 'points'],
+      rows: pointsByTeam.slice(0, 5),
+      source: { sql: 'SELECT team, SUM(pts) AS points FROM games GROUP BY team ORDER BY points DESC', title: 'Points by team' },
+    });
+    // The SQL says it is the whole population, so five sorted rows are not second-guessed.
+    expect(sourced.ordering).toEqual({ kind: 'complete', reason: 'sql' });
+    expect(sourced.ranked).toBe(false);
+    expect(sourced.limited).toBe(false);
   });
 });

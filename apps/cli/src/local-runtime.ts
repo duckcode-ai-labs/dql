@@ -225,7 +225,9 @@ import {
   renderTableDatasetBlock,
   resolveBlockReplacement,
   groupingIdentityGapOfSql,
+  detectResultOrdering,
   type RelationKeyKnowledge,
+  type ResultOrdering,
 } from '@zlens/core';
 import {
   prepareDatasetDeclarationPatch,
@@ -22300,11 +22302,19 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
         // mappings or output contract), so the page story and the tile caption
         // never take a rank, an id or a year for the number a row leads on.
         for (const tile of tiles) {
-          if (tile.tileType !== 'block' || tile.status !== 'ok') continue;
+          // A block tile that ran normally carries no tileType (only its
+          // repaired and fallback variants say 'block'), so test for "not
+          // another kind" rather than "says block".
+          if (tile.status !== 'ok' || (tile.tileType !== undefined && tile.tileType !== 'block')) continue;
           const item = executionItems.find((candidate) => candidate.i === tile.tileId);
           const block = item ? resolveDashboardItemBlock(item, manifest) : null;
           const declaredMeasures = block ? declaredBlockMeasureColumns(block) : [];
           if (declaredMeasures.length > 0) tile.declaredMeasures = declaredMeasures;
+          // Whether the block returns a top-N list (ORDER BY … LIMIT, a top_n
+          // parameter, a ranking pattern, a "Top N" title) or a whole
+          // population, so a top 5 with no rank column is never summed.
+          const ordering = block ? blockResultOrdering(block, typeof tile.title === 'string' ? tile.title : undefined) : undefined;
+          if (ordering) tile.ordering = ordering;
         }
         tiles.sort((left, right) => (tileOrder.get(left.tileId) ?? 0) - (tileOrder.get(right.tileId) ?? 0));
         localApps.current?.close();
@@ -22604,6 +22614,7 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
                 : tile.certificationStatus === 'certified' ? 'certified' : 'review_required') as DashboardDisplayTrustState,
               result: tile.result as { columns?: unknown[]; rows?: unknown[]; rowCount?: number; columnsMeta?: Array<{ name?: unknown; kind?: unknown; unit?: unknown; decimals?: unknown; ref?: unknown }> } | undefined,
               ...(Array.isArray(tile.declaredMeasures) ? { declaredMeasures: tile.declaredMeasures as string[] } : {}),
+              ...(isResultOrdering(tile.ordering) ? { ordering: tile.ordering } : {}),
               datasetScope,
               filters: effectiveStoryFilters,
               citation: tile.citation,
@@ -31122,6 +31133,32 @@ export function declaredBlockMeasureColumns(block: Pick<ManifestBlock, 'metricMa
       .map((output) => output.name),
   ].filter((name): name is string => typeof name === 'string' && name.trim().length > 0);
   return Array.from(new Set(names));
+}
+
+/** Top-N, limited or complete: what a block's own SQL and metadata say about its rows. */
+export function blockResultOrdering(
+  block: Pick<ManifestBlock, 'sql' | 'name' | 'pattern' | 'parameters'>,
+  title?: string,
+): ResultOrdering | undefined {
+  const parameters = (block.parameters ?? [])
+    .map((parameter) => (parameter as { name?: unknown }).name)
+    .filter((name): name is string => typeof name === 'string');
+  const fromSource = detectResultOrdering({
+    sql: block.sql,
+    title: title ?? block.name,
+    parameters,
+    ...(block.pattern ? { pattern: block.pattern } : {}),
+  });
+  // A title can say "Top" where the block's name does not, and vice versa.
+  if (fromSource?.kind === 'complete' && title && title !== block.name) {
+    return detectResultOrdering({ title: block.name }) ?? fromSource;
+  }
+  return fromSource;
+}
+
+function isResultOrdering(value: unknown): value is ResultOrdering {
+  const kind = (value as { kind?: unknown } | null)?.kind;
+  return kind === 'top_n' || kind === 'limited' || kind === 'complete';
 }
 
 function resolveDashboardItemBlock(

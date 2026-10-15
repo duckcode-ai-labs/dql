@@ -28,7 +28,10 @@ import type { CLIFlags } from '../args.js';
 // APP-034 adds compile-time Dataset source/field drift diagnostics. Bump the
 // semantic cache key so an older manifest cannot hide a newly-detected page
 // contract error behind a warm cache entry.
-const MANIFEST_COMPILER_CACHE_VERSION = 'dql2-qualified-domain-context-v3';
+// v4: lineage no longer reads `EXTRACT(YEAR FROM col)` (or SUBSTRING/TRIM/
+// OVERLAY ... FROM, IS DISTINCT FROM) as a source table, so a cached manifest
+// listing a column as a table must be rebuilt.
+const MANIFEST_COMPILER_CACHE_VERSION = 'dql2-qualified-domain-context-v4';
 
 export function manifestCacheTrackedFiles(inputFiles: string[], dqlVersion: string): TrackedFile[] {
   return [

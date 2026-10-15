@@ -6,6 +6,7 @@ export {
   buildGeneratedAnalyticalSqlSignature,
   buildSqlOutputExpressionSignature,
   extractTablesFromSql,
+  maskExpressionFromKeywords,
   type SqlColumnReference,
   type SqlParseResult,
   type SqlReferenceAnalysis,

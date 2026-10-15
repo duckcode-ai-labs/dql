@@ -167,8 +167,10 @@ export function extractTablesFromSql(sql: string): SqlParseResult {
   const withoutStringLiterals = stripStringLiterals(noComments);
   const refs = extractRefs(withoutStringLiterals);
 
-  // For table extraction, use the fully cleaned version
-  const cleaned = withoutStringLiterals;
+  // For table extraction, use the fully cleaned version. A FROM that belongs
+  // to an expression (`EXTRACT(YEAR FROM game_date_est)`, `TRIM(x FROM col)`,
+  // `a IS DISTINCT FROM b`) names a column, not a relation.
+  const cleaned = maskExpressionFromKeywords(withoutStringLiterals);
 
   const rawTables = new Set<string>();
 
@@ -1128,6 +1130,79 @@ function extractRefs(sql: string): string[] {
 }
 
 /** Strip comments only */
+/**
+ * SQL functions whose argument list uses the keyword FROM (or IN) between
+ * expressions: `EXTRACT(YEAR FROM d)`, `SUBSTRING(s FROM 2 FOR 3)`,
+ * `TRIM(LEADING 'x' FROM s)`, `OVERLAY(s PLACING 'x' FROM 2)`,
+ * `POSITION('x' IN s)`. What follows FROM there is a value, never a table.
+ */
+const FROM_KEYWORD_FUNCTIONS = new Set([
+  'EXTRACT', 'SUBSTRING', 'SUBSTR', 'TRIM', 'OVERLAY', 'POSITION',
+]);
+
+/**
+ * Blank every FROM keyword that is part of an expression rather than a FROM
+ * clause, so the relation scanners never read `EXTRACT(YEAR FROM
+ * game_date_est)` as `FROM game_date_est`:
+ *  - FROM directly inside the parentheses of an EXTRACT/SUBSTRING/TRIM/
+ *    OVERLAY/POSITION call (a subquery nested in that call keeps its own
+ *    FROM, because the innermost parenthesis is then the subquery's);
+ *  - FROM in `IS [NOT] DISTINCT FROM`.
+ *
+ * The lineage extractor stays a tolerant scanner rather than the full parser
+ * because block SQL is templated (`${param}`, `ref()`, `@metric()`), which
+ * node-sql-parser rejects. Offsets are preserved (FROM becomes four spaces).
+ * Expects comments and string literals to have been stripped already.
+ */
+export function maskExpressionFromKeywords(sql: string): string {
+  const token = /"(?:[^"]|"")*"|`[^`]*`|\[[^\]]*\]|[A-Za-z_][A-Za-z0-9_$]*|\(|\)/g;
+  const stack: string[] = [];
+  const blanks: number[] = [];
+  // Recent tokens (uppercased words, or "(" / ")") for look-behind.
+  const recent: string[] = [];
+  let lastWordEnd = -1;
+  let lastWord = '';
+  for (const match of sql.matchAll(token)) {
+    if (recent.length > 8) recent.splice(0, recent.length - 8);
+    const text = match[0];
+    const index = match.index ?? 0;
+    if (text === '(') {
+      // A call is a bare word immediately before "(" (whitespace allowed).
+      const opener = lastWordEnd >= 0 && /^\s*$/.test(sql.slice(lastWordEnd, index)) ? lastWord : '';
+      stack.push(opener);
+      recent.push('(');
+    } else if (text === ')') {
+      stack.pop();
+      recent.push(')');
+    } else if (/^[A-Za-z_]/.test(text)) {
+      const word = text.toUpperCase();
+      if (word === 'FROM') {
+        const inCall = stack.length > 0 && FROM_KEYWORD_FUNCTIONS.has(stack[stack.length - 1]!);
+        const prev = recent[recent.length - 1];
+        const isDistinctFrom = prev === 'DISTINCT'
+          && (recent[recent.length - 2] === 'IS' || (recent[recent.length - 2] === 'NOT' && recent[recent.length - 3] === 'IS'));
+        if (inCall || isDistinctFrom) blanks.push(index);
+      }
+      recent.push(word);
+      lastWord = word;
+      lastWordEnd = index + text.length;
+      continue;
+    } else {
+      recent.push(text);
+    }
+    lastWordEnd = -1;
+    lastWord = '';
+  }
+  if (blanks.length === 0) return sql;
+  let out = '';
+  let cursor = 0;
+  for (const index of blanks) {
+    out += sql.slice(cursor, index) + '    ';
+    cursor = index + 4;
+  }
+  return out + sql.slice(cursor);
+}
+
 function stripComments(sql: string): string {
   return sql
     .replace(/\/\*[\s\S]*?\*\//g, ' ')

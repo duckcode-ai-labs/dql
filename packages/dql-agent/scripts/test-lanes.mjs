@@ -108,10 +108,12 @@ const EXPECTED_TEST_FILES = 189;
 // and a follow-up held to that block (named-block.test.ts, +13 tests).
 // 2487 with stories that never treat a rank, an id or a year as a measure (dashboard-story.test.ts, +6)
 // and a conversation bound to its App page (session-store.test.ts, +1).
-const EXPECTED_TESTS = 2487;
+// 2494 with top-N lists that have no rank column led by their first row, never summed, and whole
+// breakdowns still summed (dashboard-story.test.ts, +7).
+const EXPECTED_TESTS = 2494;
 // The heavy lane's share of EXPECTED_TESTS (catalog.test.ts 72 + project-state.test.ts 4), pinned so
 // a lane run on its own (CI runs the two lanes as separate steps) is audited as exactly as both together.
-// The ordinary lane's share is the difference: 2411.
+// The ordinary lane's share is the difference: 2418.
 const EXPECTED_HEAVY_TESTS = 76;
 
 const LANES = ['all', 'ordinary', 'heavy'];

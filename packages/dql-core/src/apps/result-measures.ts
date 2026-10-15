@@ -15,6 +15,13 @@
  *     codes, years and other calendar parts are dimensions.
  *  3. Otherwise the values: a column of numbers is a measure.
  *
+ * The same module decides whether a result is the WHOLE of something (its
+ * rows may be summed) or a top-N / ordered-and-limited list (they may not:
+ * the five best scorers' points are not "total points"). A rank column says
+ * so; so does the source's `ORDER BY … LIMIT n`, a `top_n` parameter, a
+ * ranking pattern or a "Top N" title, and, failing any source, rows that are
+ * one per entity sorted by the measure in a typical top-N count.
+ *
  * Pure: no DOM, no I/O, safe in the browser and on the server.
  */
 
@@ -35,6 +42,42 @@ export interface ResultMeasureInput {
   declaredDimensions?: readonly string[];
   /** Accept numeric strings ("1,234", "$5") as numbers. Off by default: a code such as "0042" is text. */
   numericStrings?: boolean;
+  /**
+   * What produced the rows (its SQL, title, parameters, pattern), used to
+   * tell a top-N list from a whole population. See `detectResultOrdering`.
+   */
+  source?: ResultSourceHint;
+  /** A precomputed `detectResultOrdering` result (wins over `source`). */
+  ordering?: ResultOrdering | null;
+}
+
+/** What is known about the query or block that produced a result. */
+export interface ResultSourceHint {
+  /** The SQL that produced the rows (templated `${param}` placeholders are fine). */
+  sql?: string;
+  /** The tile, block or question title. */
+  title?: string;
+  /** Parameter names the source accepts (e.g. `top_n`). */
+  parameters?: readonly string[];
+  /** A declared block pattern (`ranking`, `trend`, …). */
+  pattern?: string;
+}
+
+/**
+ * Whether a result is the whole population or a slice of it.
+ *  - `top_n`: ordered and limited, a ranking: lead with the first row, never sum.
+ *  - `limited`: limited without an order (a sample): never sum.
+ *  - `complete`: the source SQL has no row limit, so its rows may be summed.
+ */
+export interface ResultOrdering {
+  kind: 'top_n' | 'limited' | 'complete';
+  reason: 'rank_column' | 'order_limit' | 'top_n_parameter' | 'pattern' | 'title' | 'rows_sorted' | 'limit' | 'sql';
+  /** The literal limit, when the SQL states one. */
+  limit?: number;
+  /** The first ORDER BY expression when it is a bare column (`total_points`). */
+  orderColumn?: string;
+  /** Its direction: `desc` is a top N, `asc` a bottom N. */
+  direction?: 'asc' | 'desc';
 }
 
 export interface ResultMeasureSelection {
@@ -48,6 +91,15 @@ export interface ResultMeasureSelection {
   labelColumn?: string;
   /** Whether the measures came from a declaration rather than names and values. */
   declared: boolean;
+  /**
+   * The rows are a ranking or a top-N list (a rank column, or the source /
+   * rows say so): lead with the first row and never sum them.
+   */
+  ranked: boolean;
+  /** The rows are not the whole population (ranked, or limited): never sum them. */
+  limited: boolean;
+  /** How the ordering was decided, when it was. */
+  ordering?: ResultOrdering;
 }
 
 /** Ordinal words: a column whose own word is one of these numbers rows by position. */
@@ -218,12 +270,176 @@ export function selectResultMeasures(input: ResultMeasureInput): ResultMeasureSe
     primary = pool.find((column) => columnNameTokens(column).includes('total')) ?? pool[0];
   }
   const labelColumn = labelColumnOf(input, new Set([...measures, ...(rankColumn ? [rankColumn] : [])]));
+
+  let ordering: ResultOrdering | undefined = input.ordering
+    ?? (input.source ? detectResultOrdering(input.source) : undefined);
+  if (rankColumn) {
+    ordering = { ...(ordering?.kind === 'top_n' ? ordering : {}), kind: 'top_n', reason: ordering?.kind === 'top_n' ? ordering.reason : 'rank_column' };
+  } else if (!ordering && primary && labelColumn && rowsLookLikeTopN(input.rows, labelColumn, primary, numericStrings)) {
+    // No source to ask: rows that are one per entity, sorted by the measure,
+    // in a typical top-N count, are a ranking. A source that states its SQL
+    // has no limit (`complete`) is never second-guessed this way.
+    ordering = { kind: 'top_n', reason: 'rows_sorted', orderColumn: primary, direction: 'desc' };
+  }
+  if (!rankColumn && ordering?.kind === 'top_n' && ordering.orderColumn) {
+    const orderKey = normalize(ordering.orderColumn);
+    const orderMeasure = measures.find((column) => normalize(column) === orderKey);
+    if (orderMeasure) {
+      // The ranking's own measure is what a ranked summary talks about.
+      primary = orderMeasure;
+    } else if (input.columns.some((column) => normalize(column) === orderKey)) {
+      // Ordered on a label (`ORDER BY player_name LIMIT 5`): a slice, not a
+      // ranking. Nothing is summed and nobody "leads".
+      ordering = { ...ordering, kind: 'limited' };
+    }
+  }
+  const ranked = ordering?.kind === 'top_n';
   return {
     measures,
     ...(primary ? { primary } : {}),
     ...(rankColumn ? { rankColumn } : {}),
     ...(labelColumn ? { labelColumn } : {}),
     declared: isDeclared,
+    ranked,
+    limited: ranked || ordering?.kind === 'limited',
+    ...(ordering ? { ordering } : {}),
+  };
+}
+
+/** Row counts a top-N list is usually asked for. */
+const TYPICAL_TOP_N_COUNTS = new Set([3, 5, 10, 15, 20, 25]);
+
+function rowsLookLikeTopN(
+  rows: ReadonlyArray<Record<string, unknown>>,
+  labelColumn: string,
+  measure: string,
+  numericStrings: boolean,
+): boolean {
+  if (!TYPICAL_TOP_N_COUNTS.has(rows.length)) return false;
+  const labels = new Set<string>();
+  let previous = Number.POSITIVE_INFINITY;
+  let strictlyLower = 0;
+  for (const row of rows) {
+    const label = row?.[labelColumn];
+    if (label === null || label === undefined || label === '') return false;
+    const key = String(label).trim().toLowerCase();
+    if (labels.has(key)) return false;
+    labels.add(key);
+    const value = toNumber(row?.[measure], numericStrings);
+    if (value === undefined || value > previous) return false;
+    if (value < previous) strictlyLower += 1;
+    previous = value;
+  }
+  // Sorted by the measure, not a constant column.
+  return strictlyLower > 1;
+}
+
+const NUMBER_WORDS: Record<string, number> = { three: 3, five: 5, ten: 10, twenty: 20 };
+
+/**
+ * Whether the source that produced a result is a top-N list, a limited
+ * sample or the whole population. Undefined when nothing is known.
+ *
+ *  - `ORDER BY <expr> [DESC] LIMIT n` (or `FETCH FIRST n ROWS`, `SELECT TOP n`)
+ *    at the outer level of the SQL: top N, ordered on that expression.
+ *  - a `top_n` / `bottom_n` parameter, a `ranking` pattern, or a title such
+ *    as "Top 5 …", "Top Players …", "Bottom 10 …", "Leaderboard": top N.
+ *  - `LIMIT n` without an ORDER BY: a limited sample.
+ *  - SQL with neither: the whole population (`complete`).
+ */
+export function detectResultOrdering(source: ResultSourceHint): ResultOrdering | undefined {
+  const sql = typeof source.sql === 'string' ? stripSqlNoise(source.sql) : '';
+  if (sql) {
+    const order = outerOrderLimit(sql);
+    if (order) return order;
+  }
+  const parameters = (source.parameters ?? []).map((name) => String(name).toLowerCase());
+  if (parameters.some((name) => /^(?:top|bottom)[_-]?(?:n|k|count|limit|rows)$/.test(name))) {
+    return { kind: 'top_n', reason: 'top_n_parameter' };
+  }
+  if (typeof source.pattern === 'string' && /^(?:ranking|top_n|leaderboard)$/i.test(source.pattern.trim())) {
+    return { kind: 'top_n', reason: 'pattern' };
+  }
+  const title = typeof source.title === 'string' ? source.title : '';
+  if (title) {
+    const spaced = title.replace(/[_-]+/g, ' ');
+    const numbered = spaced.match(/\b(top|bottom)\s*(\d+|n|three|five|ten|twenty)\b/i);
+    if (numbered) {
+      const count = /^\d+$/.test(numbered[2]!) ? Number(numbered[2]) : NUMBER_WORDS[numbered[2]!.toLowerCase()];
+      return {
+        kind: 'top_n',
+        reason: 'title',
+        ...(count ? { limit: count } : {}),
+        direction: numbered[1]!.toLowerCase() === 'bottom' ? 'asc' : 'desc',
+      };
+    }
+    // "Top Players By …", "Bottom Teams", "Leaderboard".
+    const plural = spaced.match(/\b(top|bottom)\s+[a-z]+s\b/i);
+    if (plural) return { kind: 'top_n', reason: 'title', direction: plural[1]!.toLowerCase() === 'bottom' ? 'asc' : 'desc' };
+    if (/\bleaderboard\b/i.test(spaced)) return { kind: 'top_n', reason: 'title', direction: 'desc' };
+  }
+  if (sql) {
+    if (/\blimit\b/i.test(sql) && hasOuterLimit(sql)) return { kind: 'limited', reason: 'limit' };
+    return { kind: 'complete', reason: 'sql' };
+  }
+  return undefined;
+}
+
+/** Comments and string literals removed; `${param}` placeholders kept. */
+function stripSqlNoise(sql: string): string {
+  return sql
+    .replace(/\/\*[\s\S]*?\*\//g, ' ')
+    .replace(/--[^\n]*/g, ' ')
+    .replace(/'(?:[^'\\]|\\.|'')*'/g, "''");
+}
+
+/** The SQL with every parenthesised group blanked, so only the outer query is left. */
+function outerLevel(sql: string): string {
+  let depth = 0;
+  let out = '';
+  for (let index = 0; index < sql.length; index += 1) {
+    const char = sql[index]!;
+    if (char === '(') { depth += 1; out += ' '; continue; }
+    if (char === ')') { depth = Math.max(0, depth - 1); out += ' '; continue; }
+    out += depth === 0 ? char : ' ';
+  }
+  return out;
+}
+
+const LIMIT_VALUE = String.raw`(\d+|\$\{[^}]+\}|\$\d+|\?|:[A-Za-z_]\w*|@[A-Za-z_]\w*)`;
+
+function hasOuterLimit(sql: string): boolean {
+  const outer = outerLevel(sql.replace(/\$\{[^}]*\}/g, (match) => match.replace(/[()]/g, ' ')));
+  return new RegExp(String.raw`\blimit\s+${LIMIT_VALUE}`, 'i').test(outer)
+    || /\bfetch\s+(?:first|next)\b/i.test(outer)
+    || /^\s*select\s+(?:distinct\s+)?top\s+/i.test(outer);
+}
+
+function outerOrderLimit(sql: string): ResultOrdering | undefined {
+  // Placeholders may hold parentheses-free text only; keep them intact.
+  const outer = outerLevel(sql.replace(/\$\{[^}]*\}/g, (match) => match.replace(/[()]/g, ' ')));
+  const orderAt = outer.search(/\border\s+by\b/i);
+  if (orderAt < 0) return undefined;
+  const afterOrder = outer.slice(orderAt).replace(/^order\s+by\s+/i, '');
+  const limitMatch = afterOrder.match(new RegExp(String.raw`\blimit\s+${LIMIT_VALUE}`, 'i'))
+    ?? afterOrder.match(/\bfetch\s+(?:first|next)\s+(\d+|\$\{[^}]+\})?/i);
+  const topMatch = outer.match(/^\s*select\s+(?:distinct\s+)?top\s+(\d+)/i);
+  if (!limitMatch && !topMatch) return undefined;
+  const limitText = limitMatch?.[1] ?? topMatch?.[1];
+  // The first ORDER BY item, read from the real SQL (the outer view blanks calls).
+  const orderText = sql.slice(orderAt).replace(/^order\s+by\s+/i, '');
+  const firstItem = orderText.split(/,|\blimit\b|\bfetch\b|\boffset\b|;/i)[0]!.trim();
+  const itemMatch = firstItem.match(/^("[^"]+"|`[^`]+`|[A-Za-z_][\w$]*(?:\.[A-Za-z_][\w$]*)*)\s*(asc|desc)?\s*(?:nulls\s+(?:first|last))?$/i);
+  const column = itemMatch ? itemMatch[1]!.replace(/^["`]|["`]$/g, '').split('.').pop() : undefined;
+  const direction = itemMatch?.[2]?.toLowerCase() === 'desc'
+    ? 'desc'
+    : itemMatch ? 'asc' : (/\bdesc\b/i.test(firstItem) ? 'desc' : undefined);
+  return {
+    kind: 'top_n',
+    reason: 'order_limit',
+    ...(limitText && /^\d+$/.test(limitText) ? { limit: Number(limitText) } : {}),
+    ...(column ? { orderColumn: column } : {}),
+    ...(direction ? { direction } : {}),
   };
 }
 
@@ -231,12 +447,14 @@ export function selectResultMeasures(input: ResultMeasureInput): ResultMeasureSe
  * The row a ranked or measured result is led by.
  *
  * With a rank column, the leader is the row ranked first (the lowest rank),
- * whatever the order of the rows. Without one, it is the row with the largest
- * value of the summary measure. Undefined when the result has neither.
+ * whatever the order of the rows. A top-N list ordered on another column is
+ * led by its first row, and a bottom N by its smallest value. Otherwise it is
+ * the row with the largest value of the summary measure. Undefined when the
+ * result has neither.
  */
 export function resultLeaderRow(
   input: Pick<ResultMeasureInput, 'rows' | 'numericStrings'>,
-  selection: Pick<ResultMeasureSelection, 'primary' | 'rankColumn'>,
+  selection: Pick<ResultMeasureSelection, 'primary' | 'rankColumn'> & Partial<Pick<ResultMeasureSelection, 'ordering'>>,
 ): Record<string, unknown> | undefined {
   const numericStrings = input.numericStrings ?? false;
   let best: { row: Record<string, unknown>; key: number } | undefined;
@@ -247,6 +465,23 @@ export function resultLeaderRow(
       if (!best || rank < best.key) best = { row, key: rank };
     }
     if (best) return best.row;
+  }
+  const ordering = selection.ordering;
+  if (ordering?.kind === 'top_n' && !selection.rankColumn) {
+    const orderedOnPrimary = Boolean(selection.primary && ordering.orderColumn
+      && normalize(ordering.orderColumn) === normalize(selection.primary));
+    // Ordered on something other than the summary measure: the list's own
+    // first row leads it.
+    if (!orderedOnPrimary && ordering.orderColumn) return input.rows[0];
+    // A bottom N is led by its smallest value.
+    if (orderedOnPrimary && ordering.direction === 'asc') {
+      for (const row of input.rows) {
+        const value = toNumber(row?.[selection.primary!], numericStrings);
+        if (value === undefined) continue;
+        if (!best || value < best.key) best = { row, key: value };
+      }
+      return best?.row;
+    }
   }
   if (!selection.primary) return undefined;
   for (const row of input.rows) {
