@@ -67,6 +67,7 @@ import { buildCombinedDatasetCell } from '../../utils/dataset-references';
 import { BlockParameterControls } from '../parameters/BlockParameterControls';
 import { NotebookDqlParameterEditor } from '../parameters/NotebookDqlParameterEditor';
 import { canBackgroundRepairNotebookCell, notebookRepairErrorMessage } from '../../utils/notebook-background-repair';
+import { DQL_CELL_EXAMPLE, dqlCellHoldsPlainSql, queryCellKindLabel } from '../../utils/dql-cell-content';
 
 interface CellProps {
   cell: Cell;
@@ -1969,6 +1970,22 @@ function CellComponentInner({ cell, index, onStartResearch, researchState }: Cel
           />
         )}
 
+        {cell.type === 'dql' && !cell.blockBinding && (
+          <DqlCellGuide
+            content={cell.content}
+            t={t}
+            onInsertExample={() => {
+              handleContentChange(DQL_CELL_EXAMPLE);
+              editorRef.current?.resetTo(DQL_CELL_EXAMPLE);
+            }}
+            onSwitchToSql={() => dispatch({
+              type: 'UPDATE_CELL',
+              id: cell.id,
+              updates: { type: 'sql', status: 'idle', error: undefined, result: undefined, execution: undefined },
+            })}
+          />
+        )}
+
         {/* Governance bar — shown for DQL cells that contain a block declaration */}
         {cell.type === 'dql' && (
           <BlockGovernanceBar
@@ -2582,6 +2599,65 @@ function makeLocalDatasetQueryCell(dataset: DatasetSource): Cell {
   return cell;
 }
 
+/**
+ * What a DQL cell expects, in the cell: an empty one shows a DQL example, and
+ * plain SQL gets a one-click switch to a SQL cell instead of a parse error.
+ */
+function DqlCellGuide({
+  content,
+  t,
+  onInsertExample,
+  onSwitchToSql,
+}: {
+  content: string;
+  t: Theme;
+  onInsertExample: () => void;
+  onSwitchToSql: () => void;
+}) {
+  const empty = !content.trim();
+  const holdsSql = dqlCellHoldsPlainSql(content);
+  if (!empty && !holdsSql) return null;
+  const buttonStyle: React.CSSProperties = {
+    background: t.btnBg,
+    color: t.textSecondary,
+    border: `1px solid ${t.btnBorder}`,
+    borderRadius: 5,
+    padding: "2px 8px",
+    font: `600 10.5px ${t.font}`,
+    cursor: "pointer",
+  };
+  return (
+    <div
+      role={holdsSql ? "alert" : "note"}
+      style={{
+        display: "flex",
+        alignItems: "center",
+        flexWrap: "wrap",
+        gap: 8,
+        padding: "6px 12px",
+        borderTop: `1px solid ${t.cellBorder}`,
+        background: holdsSql ? `${t.warning}14` : `${t.accent}0a`,
+        color: t.textSecondary,
+        font: `11px/1.45 ${t.font}`,
+      }}
+    >
+      <span style={{ flex: "1 1 260px" }}>
+        {holdsSql
+          ? <>This is a <strong>DQL cell</strong>, and this looks like plain SQL. Switch to a SQL cell to run it as SQL.</>
+          : <>A <strong>DQL cell</strong> holds a block, a named reusable query: <code style={{ fontFamily: t.fontMono }}>{'block "Name" { query = """SELECT …""" }'}</code>. For plain SQL, use a SQL cell.</>}
+      </span>
+      <button type="button" onClick={onSwitchToSql} style={{ ...buttonStyle, ...(holdsSql ? { color: t.accent, borderColor: t.accent } : {}) }}>
+        Switch to SQL cell
+      </button>
+      {empty && (
+        <button type="button" onClick={onInsertExample} style={buttonStyle}>
+          Insert DQL example
+        </button>
+      )}
+    </div>
+  );
+}
+
 function QueryTargetBar({
   cell,
   connectionNames,
@@ -2599,13 +2675,8 @@ function QueryTargetBar({
     cell.executionTarget?.target === "local"
       ? "local"
       : `connection:${cell.executionTarget?.connectionName ?? defaultConnection}`;
-  const governedKind = cell.blockBinding
-    ? "Certified or draft block"
-    : /@(?:metric|dim)\s*\(/i.test(cell.content)
-      ? "Semantic query"
-      : cell.executionTarget?.target === "local"
-        ? "Local dataset SQL"
-        : "Warehouse SQL";
+  // The label names the cell's language: a DQL cell never says "SQL".
+  const governedKind = queryCellKindLabel(cell);
   return (
     <div
       style={{

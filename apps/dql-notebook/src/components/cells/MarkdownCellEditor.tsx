@@ -211,9 +211,11 @@ function inlineMarkdown(text: string, t: Theme): React.ReactNode {
       break;
     }
 
-    // Pick the earliest match
+    // Pick the earliest match. On a tie the earlier, more specific pattern
+    // wins: "**bold**" also matches the italic pattern at the same index, and
+    // letting italic win rendered "*bold*" in italics with stray asterisks.
     const first = candidates.reduce((a, b) =>
-      (a.match.index ?? 0) < (b.match.index ?? 0) ? a : b
+      (a.match.index ?? 0) <= (b.match.index ?? 0) ? a : b
     );
 
     const idx = first.match.index ?? 0;

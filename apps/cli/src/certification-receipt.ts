@@ -64,6 +64,44 @@ export function isReviewPendingTag(tag: string): boolean {
   return REVIEW_PENDING_TAG.test(tag);
 }
 
+/**
+ * Wording in a human description that says the block still needs review. Ask
+ * never serves a certified block whose description says this, so Certify
+ * refuses it; review state belongs in the status and tags, not in prose.
+ */
+const REVIEW_PENDING_WORDING = /review[\s_-]*required/i;
+
+export function describesReviewPending(description: string | undefined): boolean {
+  return REVIEW_PENDING_WORDING.test(description ?? '');
+}
+
+/**
+ * The description with every statement of review status taken out, keeping
+ * what it says about the data: "Review required: ranks the top 5 …" becomes
+ * "Ranks the top 5 …", "… games played. Review required." loses its last
+ * sentence, "Review-required comparison of …" keeps the comparison, and
+ * "(review required)" asides go. Empty when nothing else is left.
+ */
+export function withoutReviewPendingWording(description: string): string {
+  let text = description
+    .replace(/\s*[([]\s*[^()[\]]*?review[\s_-]*required[^()[\]]*?[)\]]/gi, '')
+    .replace(/^\s*(?:this\s+(?:block|draft)\s+is\s+)?review[\s_-]*required\s*(?:[:.,;!-]|–|—)\s*/i, '')
+    // The hyphenated adjective: "Review-required comparison of …" → "Comparison of …".
+    .replace(/\breview[_-]required\s+(?=\w)/gi, '');
+  const sentences = text.split(/(?<=[.!?])\s+/);
+  text = sentences
+    .map((sentence) => sentence
+      // A trailing clause: "…, review required." / "… — review required"
+      .replace(/\s*(?:[,;:-]|–|—)\s*(?:this\s+(?:block|draft)\s+is\s+|and\s+)?review[\s_-]*required\s*([.!?]?)\s*$/i, '$1'))
+    .filter((sentence) => !REVIEW_PENDING_WORDING.test(sentence))
+    .join(' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!text) return '';
+  text = text.charAt(0).toUpperCase() + text.slice(1);
+  return /[.!?]$/.test(text) ? text : `${text}.`;
+}
+
 /** The `tags = [ … ]` list of a `.dql` source without the review-pending lifecycle tag. */
 export function withoutReviewPendingTags(source: string): string {
   return source.replace(/(\btags\s*=\s*\[)([^\]]*)(\])/, (whole, open: string, body: string, close: string) => {

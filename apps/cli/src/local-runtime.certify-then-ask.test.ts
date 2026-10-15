@@ -212,7 +212,8 @@ describe('a block certified through the product is the answer Ask gives first', 
     const projectRoot = project(source);
     const refused = await certifyThroughProduct(projectRoot, source);
     expect(refused.status).toBe(422);
-    expect(JSON.stringify(refused.body.blockers)).toMatch(/description still says this block is review-required/);
+    expect(JSON.stringify(refused.body.blockers)).toMatch(/description still says .{0,4}review required/);
+    expect(refused.body.checklist.issues).toEqual(expect.arrayContaining([expect.objectContaining({ code: 'description_review_required', action: 'fix_description' })]));
     expect(blockSourceStatus(readFileSync(join(projectRoot, DRAFT_PATH), 'utf-8'))).toBe('draft');
   }, 60_000);
 

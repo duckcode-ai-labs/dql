@@ -37,6 +37,7 @@ import {
   parseMetadataScopeEditor,
   toggleAdditionalMetadataScope,
 } from './connection-metadata-scope';
+import { projectDbtCard, projectReadsDbt } from './project-dbt-status';
 
 interface ConnectionInfo {
   default: string;
@@ -245,7 +246,10 @@ export function ConnectionPanel({
       .then(([providerResult, onboarding, dbt]) => {
         if (!alive) return;
         setProviderReadiness(providerResult.providers);
-        setDbtConfigured(onboarding.dbt?.configured === true || Boolean(dbt?.configured && dbt.artifacts.manifest.exists));
+        // The project reads dbt when its dbt artifacts are found, whether or not
+        // dql.config.json names the dbt project: that is what lineage, search
+        // and Ask use, so it is what this status reports.
+        setDbtConfigured(projectReadsDbt(onboarding.dbt, dbt));
         setDbtPreparation(onboarding.preparation ?? null);
       })
       .catch(() => undefined);
@@ -1462,12 +1466,7 @@ function SettingsOverview({
       icon: <GitBranch size={18} />,
     } : {
       title: 'Project & dbt',
-      detail: dbtPreparation?.message ?? (dbtConfigured ? 'Project configuration, dbt artifacts, and governed search indexes are ready.' : 'Choose a local dbt project or Git repository.'),
-      state: dbtPreparation?.status === 'failed' || dbtPreparation?.status === 'cancelled'
-        ? 'failed'
-        : dbtPreparation?.status === 'running' || dbtPreparation?.status === 'queued'
-          ? 'preparing'
-          : dbtConfigured ? 'configured' : 'missing',
+      ...projectDbtCard(dbtConfigured, dbtPreparation),
       tab: 'project',
       icon: <GitBranch size={18} />,
     },
@@ -2062,3 +2061,4 @@ function warehouseCatalogMessage(catalog: WarehouseCatalogSummary | undefined): 
   const review = drift?.affected.length ? `; review ${drift.affected.length} modeled object(s) in Modeling` : '';
   return ` · modeling catalog ${catalog.relations ?? 0} tables and views${warnings}${changes ? ` · changed since last sync: ${changes}${review}` : ''}`;
 }
+

@@ -16,6 +16,7 @@ import {
   findDatasetReferences,
   findWarehouseReferences,
 } from "../utils/dataset-references";
+import { DQL_CELL_PLAIN_SQL_MESSAGE, dqlCellHoldsPlainSql } from "../utils/dql-cell-content";
 
 interface RunningCellExecution {
   controller: AbortController;
@@ -286,6 +287,10 @@ export function useQueryExecution() {
       };
 
       try {
+        if (cell.type === "dql" && dqlCellHoldsPlainSql(cell.content)) {
+          // Plain SQL is not DQL; the cell offers a one-click switch to SQL.
+          return finishError(DQL_CELL_PLAIN_SQL_MESSAGE);
+        }
         if (cell.type === "dql") {
           const payload = await api.executeNotebookCell(
             cell,
