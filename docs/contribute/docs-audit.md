@@ -31,15 +31,15 @@ Decisions:
 | `guides/import-dbt.md` | merge | `get-started/your-dbt-project.md`, `lineage/index.md` |
 | `guides/authoring-blocks.md` | merge | `blocks/block-studio.md`, `blocks/certify.md` |
 | `guides/block-studio.md` | merge | `blocks/block-studio.md`, `blocks/import-sql.md` |
-| `guides/mcp.md` | merge | `agents/index.md`, `agents/tools.md` |
+| `guides/mcp.md` | merge | `agents/index.md`, `agents/tools.md`, `ask/team-documents.md` (knowledge sources) |
 | `guides/versioning.md` | merge | `notebooks/version-and-diff.md` |
 | `guides/ask-trace-observability.md` | merge | `ask/how-it-answered.md` |
 | `guides/home-and-following.md` | merge | `apps/index.md`, `apps/ask-about-an-app.md` (Home is no longer reachable in the UI; see the PR's open questions) |
 | `guides/notebook-research.md` | archive | `archive/` nav entry; the Research panel is mentioned on `notebooks/index.md` only |
 | `guides/dashboards.md` | archive | static `.dql` dashboards built with `zlens build`; Apps are the current path (`apps/`) |
-| `guides/troubleshooting.md` | keep | Reference nav; commands checked |
-| `guides/faq.md` | keep | Reference nav; commands checked |
-| `guides/migrate.md` | keep | Reference nav |
+| `guides/troubleshooting.md` | keep | Reference nav; commands checked; connection labels updated |
+| `guides/faq.md` | keep | Reference nav; commands checked; links and certification answer updated |
+| `guides/migrate.md` | rewrite in place | Reference nav. `zlens migrate looker/metabase/tableau` are scaffold-only and there is no `hex` source; the page now says so and points to Import SQL |
 | `guides/hosted-servers.md` | keep | Architecture nav (for host authors) |
 | `guides/agent-evals.yml` | keep | example file linked from the eval docs |
 | `tutorials/README.md` | archive | journey pages replace the tutorial track |
@@ -55,7 +55,8 @@ Decisions:
 New pages with no predecessor: `get-started/ai-provider.md`,
 `get-started/workbench.md`, `ask/index.md`, `ask/needs-review.md`,
 `ask/refusals.md`, `blocks/index.md`, `blocks/certify.md`,
-`notebooks/index.md`, `apps/build.md`, `lineage/index.md`, `agents/tools.md`.
+`notebooks/index.md`, `apps/build.md`, `lineage/index.md`, `agents/tools.md`,
+`ask/team-documents.md`, `archive.md`.
 
 ## Reference
 
