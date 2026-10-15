@@ -28621,9 +28621,11 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
             sql: typeof body.attemptedSql === 'string' ? body.attemptedSql : undefined,
           });
         }
-        res.writeHead(repairError.status ?? 500, { 'Content-Type': 'application/json; charset=utf-8' });
+        const notConfigured = isConnectionNotConfigured(error);
+        res.writeHead(repairError.status ?? (notConfigured ? 409 : 500), { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(serializeJSON({
           error: repairError.message,
+          ...(notConfigured ? { code: 'CONNECTION_NOT_CONFIGURED' } : {}),
           ...(repairError.warehouseFailure ? { warehouseFailure: repairError.warehouseFailure } : {}),
         }));
       }
@@ -28693,8 +28695,12 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
           return;
         }
         const refused = error instanceof DQLAccessDeniedError || isPolicyRefusal(error);
-        res.writeHead(refused ? 403 : 500, { 'Content-Type': 'application/json; charset=utf-8' });
-        res.end(serializeJSON({ error: personErrorText(error, 'An export failed'), ...(refused ? { code: 'EXPORT_REFUSED' } : {}) }));
+        const notConfigured = !refused && isConnectionNotConfigured(error);
+        res.writeHead(refused ? 403 : notConfigured ? 409 : 500, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(serializeJSON({
+          error: personErrorText(error, 'An export failed'),
+          ...(refused ? { code: 'EXPORT_REFUSED' } : notConfigured ? { code: 'CONNECTION_NOT_CONFIGURED' } : {}),
+        }));
       }
       return;
     }
@@ -28827,7 +28833,7 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
         // A refusal (the host's row policy or credentials, a connection the server chooses) is a 403, not a server error.
         const refused = isPolicyRefusal(error);
         // No connection yet (a fresh starter) is a setup state, not a server error (F11).
-        const notConfigured = !refused && analyticalErrorDetail(error)?.code === 'connection_not_configured';
+        const notConfigured = !refused && isConnectionNotConfigured(error);
         res.writeHead(refused ? 403 : notConfigured ? 409 : 500, { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(serializeJSON({
           columns: [],
@@ -28835,7 +28841,7 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
           error: errorText,
           code: refused ? 'POLICY_DENIED' : notConfigured ? 'CONNECTION_NOT_CONFIGURED' : classifyAnalyticalFailure(error),
           details: {
-            phase: 'execution',
+            phase: notConfigured ? 'setup' : 'execution',
             executionContext: notebookExecutionIdentity(execContext),
             executionTarget: executionTargetDescriptor(
               body && typeof body === 'object' ? body as Record<string, unknown> : {},
@@ -29918,7 +29924,13 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
           : undefined;
         const semanticCode = semanticExecutionFailureCode(error) ?? semanticRuntimeErrorCode(error);
         const refused = isPolicyRefusal(error);
-        const code = refused ? 'POLICY_DENIED' : internalRelationCode ?? semanticCode ?? classifyAnalyticalFailure(error);
+        // No connection yet is a setup state (N2): 409 with its own code, never COMPILATION_FAILED/500.
+        const notConfigured = !refused && !internalRelationCode && !semanticCode && isConnectionNotConfigured(error);
+        const code = refused
+          ? 'POLICY_DENIED'
+          : notConfigured
+            ? 'CONNECTION_NOT_CONFIGURED'
+            : internalRelationCode ?? semanticCode ?? classifyAnalyticalFailure(error);
         const semanticDetails = semanticExecutionFailureDetails(error) ?? semanticRuntimeErrorDetails(error);
         const details = semanticDetails && typeof semanticDetails === 'object' && !Array.isArray(semanticDetails)
           ? semanticDetails as Record<string, unknown>
@@ -29927,7 +29939,7 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
           ? 403
           : internalRelationCode
           ? 400
-          : code === 'EXECUTION_TARGET_MISMATCH' || code === 'SEMANTIC_SOURCE_DRIFT'
+          : notConfigured || code === 'EXECUTION_TARGET_MISMATCH' || code === 'SEMANTIC_SOURCE_DRIFT'
           ? 409
           : semanticCode
             ? 400
@@ -29940,9 +29952,11 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
             ...details,
             phase: typeof details.phase === 'string'
               ? details.phase
-              : internalRelationCode || semanticCode
-                ? 'compilation'
-                : 'execution',
+              : notConfigured
+                ? 'setup'
+                : internalRelationCode || semanticCode
+                  ? 'compilation'
+                  : 'execution',
             executionContext: notebookExecutionIdentity(execContext, body?.cell?.id),
             executionTarget: executionTargetDescriptor(
               body && typeof body === 'object' ? body as Record<string, unknown> : {},
@@ -49808,6 +49822,20 @@ function sendExportFile(res: ServerResponse, file: ExportFile): void {
     'X-Content-Type-Options': 'nosniff',
   });
   res.end(file.body);
+}
+
+/**
+ * No database connection is configured yet (a fresh starter, F11/N2). That is a
+ * setup step the person takes in Connections, not a compiler or server failure:
+ * surfaces answer it as 409 CONNECTION_NOT_CONFIGURED, however deep it was wrapped.
+ */
+function isConnectionNotConfigured(error: unknown): boolean {
+  let current: unknown = error;
+  for (let depth = 0; depth < 5 && current && typeof current === 'object'; depth += 1) {
+    if (analyticalErrorDetail(current)?.code === 'connection_not_configured') return true;
+    current = (current as { cause?: unknown }).cause;
+  }
+  return false;
 }
 
 /** A host's refusal (row policy or credentials), however deep it was wrapped. */

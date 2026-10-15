@@ -62,6 +62,35 @@ describe('ErrorOutput', () => {
     }))).toBe(true);
   });
 
+  it('answers a missing connection with Connect, not a repair (N2)', () => {
+    const message = 'No database connection is configured yet. Open Connections, add a warehouse or local DuckDB/file connection, then retry.';
+    for (const props of [{ message }, { message: 'Setup required.', errorCode: 'CONNECTION_NOT_CONFIGURED' }]) {
+      const markup = renderToStaticMarkup(
+        <ErrorOutput {...props} themeMode="paper" onBackgroundRepair={() => undefined} />,
+      );
+      expect(markup).toContain('Connect a database');
+      expect(markup).not.toContain('Fix and retry');
+    }
+    expect(canBackgroundRepairNotebookCell({
+      id: 'starter_query',
+      type: 'sql',
+      content: 'SELECT 1',
+      status: 'error',
+      error: message,
+      execution: {
+        version: 1,
+        runId: 'run_1',
+        cellId: 'starter_query',
+        route: 'notebook_sql_cell',
+        status: 'error',
+        startedAt: '2026-08-01T00:00:00.000Z',
+        completedAt: '2026-08-01T00:00:00.001Z',
+        durationMs: 1,
+        error: { code: 'CONNECTION_NOT_CONFIGURED', phase: 'setup', message },
+      },
+    })).toBe(false);
+  });
+
   it('shows the bounded repair cause instead of replacing it with a generic failure', () => {
     expect(notebookRepairErrorMessage(new Error('Column customer_name does not exist on dim_customers.')))
       .toBe('Column customer_name does not exist on dim_customers.');
