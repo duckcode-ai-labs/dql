@@ -111,3 +111,30 @@ overview:
     - How it was answered shows the steps Ask took.
     - Open the Jaffle Growth Review App; it reads All data certified and every tile is labelled Certified.
     - Open Lineage and trace monthly_revenue; the graph runs from dbt sources and models to the block, its dashboard and the App.
+
+quickstart:
+  title: Get started with the Jaffle Shop sample
+  caption: >-
+    Inside the Jaffle Shop sample, create-zlens-app scaffolds a ZLens workspace,
+    npm installs it and npm run notebook starts the workbench. Guided Setup
+    finds the dbt project, connects the sample's DuckDB file, skips the
+    optional AI step, and a first query runs in the starter notebook.
+  steps:
+    - In the jaffle-shop-duckdb folder, run npx create-zlens-app@latest dql; it detects the sibling dbt project and scaffolds the workspace.
+    - Run cd dql && npm install.
+    - Run npm run notebook; ZLens installs the DuckDB driver and prints the local URL.
+    - In the browser, Guided Setup shows the dbt project is ready.
+    - Enter ../jaffle_shop.duckdb as the DuckDB file path and save the connection; the test passes.
+    - Skip the optional AI step and finish setup.
+    - Open the welcome notebook, query dev.customers for the top five customers by lifetime spend, and run the cell; the result shows as a bar chart.
+
+mcp-connect:
+  title: Connect Claude Code over MCP
+  caption: >-
+    In the sample project, zlens connect claude-code writes the project's
+    .mcp.json and a CLAUDE.md guide so Claude Code loads the ZLens MCP server;
+    the written config runs zlens mcp for this project through npx.
+  steps:
+    - In the project folder, run npx zlens connect claude-code.
+    - ZLens reports that the project's .mcp.json and CLAUDE.md now point Claude Code at ZLens, and suggests zlens mcp test to verify.
+    - Run cat .mcp.json; the dql server runs npx -y --package=@zlens/cli zlens mcp with the project path.

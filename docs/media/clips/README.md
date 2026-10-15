@@ -20,7 +20,9 @@ prepares the Jaffle Shop sample (the project the README and quickstart point
 to: `github.com/duckcode-ai/jaffle-shop-duckdb`, pinned to one commit), serves
 it with the built `zlens notebook`, records each journey at 1440×900 in the
 Paper theme, and encodes the result into this folder. Waits on the server are
-shortened in the clip; a pointer shows what is clicked.
+shortened in the clip; a pointer shows what is clicked. The `quickstart` and
+`mcp-connect` terminals show commands the harness really runs, with their real
+output; the scratch folder they run in is shown as `~`.
 
 Flags: `--skip-build` (reuse `apps/cli/dist`), `--encode-only` (re-encode the
 last recordings), `--record-ask` (see below). The sample, the dbt build and
