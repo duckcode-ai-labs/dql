@@ -9,7 +9,7 @@
   },
   "scripts": {
     "build": "turbo run build",
-    "test": "node --test scripts/license-files.test.mjs scripts/release-workspace-ranges.test.mjs && turbo run test",
+    "test": "node --test scripts/license-files.test.mjs scripts/release-workspace-ranges.test.mjs scripts/docs-clips.test.mjs && turbo run test",
     "clean": "turbo run clean",
     "release:dry-run": "pnpm build && pnpm test && node ./scripts/release-packages.mjs --dry-run",
     "release:publish": "node ./scripts/release-packages.mjs --publish",
@@ -17,7 +17,8 @@
     "release:extension": "pnpm --filter dql-language-support package",
     "perf:scale:unit": "node --test scripts/performance/dql2-scale-fixture.test.mjs",
     "perf:scale": "node scripts/performance/dql2-scale-benchmark.mjs",
-    "test:perf:scale": "pnpm build && node scripts/performance/dql2-scale-benchmark.mjs --gate"
+    "test:perf:scale": "pnpm build && node scripts/performance/dql2-scale-benchmark.mjs --gate",
+    "docs:clips": "node scripts/docs-clips.mjs"
   },
   "dependencies": {
     "@zlens/cli": "workspace:*"

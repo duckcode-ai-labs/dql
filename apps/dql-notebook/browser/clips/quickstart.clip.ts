@@ -1,0 +1,115 @@
+import { chmodSync, cpSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { repoRoot } from '../support/server';
+import { clip, expect } from './support/clip-test';
+import { runCaptured, startCaptured, Terminal } from './support/terminal';
+
+const SAMPLE_EXCLUDES = new Set(['.git', '.venv', 'dbt_packages', 'logs', 'node_modules', '.dql', 'dql-manifest.json', '.zlens-clips-built']);
+
+/**
+ * Get started, as the README's first path does it: inside the Jaffle Shop
+ * sample (already built with its ./setup.sh), scaffold a ZLens workspace with
+ * create-zlens-app, install, start the notebook, walk Guided Setup (dbt
+ * project, then the sample's DuckDB file), and run a first query.
+ *
+ * Every command is really run. create-zlens-app runs from this repo
+ * (packages/create-dql-app, the same 0.1.0 npm serves) and, after the real
+ * `npm install`, the workspace's `zlens` command is pointed at this repo's build, so
+ * the workbench shown is the current source.
+ */
+clip('quickstart', async ({ page, sample, director }) => {
+  const sampleDir = join(sample.workDir, 'jaffle-shop-duckdb');
+  cpSync(sample.cloneDir, sampleDir, {
+    recursive: true,
+    filter: (source) => !SAMPLE_EXCLUDES.has(source.slice(sample.cloneDir.length + 1).split('/')[0] ?? ''),
+  });
+  const workspace = join(sampleDir, 'dql');
+  // No browser may open on the recording machine: `zlens notebook` opens one with `open`/`xdg-open`.
+  const shims = join(sample.workDir, 'shims');
+  mkdirSync(shims, { recursive: true });
+  for (const name of ['open', 'xdg-open']) {
+    writeFileSync(join(shims, name), '#!/bin/sh\nexit 0\n');
+    chmodSync(join(shims, name), 0o755);
+  }
+  const env = {
+    ...sample.gitEnv,
+    PATH: `${shims}:${process.env.PATH ?? ''}`,
+    ZLENS_METRICFLOW_BIN: join(sample.workDir, 'no-metricflow', 'mf'),
+    npm_config_update_notifier: 'false',
+  };
+  const terminal = new Terminal(page, director, [[dirname(sampleDir), '~']]);
+
+  await terminal.open('jaffle-shop-duckdb — zsh');
+  await director.recorder.begin();
+
+  await terminal.prompt('~/jaffle-shop-duckdb');
+  const scaffold = runCaptured(`node ${join(repoRoot, 'packages/create-dql-app/bin/create-zlens-app.mjs')} dql`, { cwd: sampleDir, env });
+  expect(scaffold.status, scaffold.output).toBe(0);
+  await terminal.type('npx create-zlens-app@latest dql');
+  await terminal.print(scaffold.output, 4);
+  await director.beat(1200);
+
+  await terminal.prompt('~/jaffle-shop-duckdb');
+  await terminal.type('cd dql && npm install');
+  director.recorder.cutStart();
+  const install = runCaptured('npm install --no-audit --no-fund', { cwd: workspace, env });
+  director.recorder.cutEnd();
+  expect(install.status, install.output).toBe(0);
+  await terminal.print(install.output);
+  // Show the current source: the workspace's `zlens` command runs this repo's build.
+  const bin = join(workspace, 'node_modules', '.bin', 'zlens');
+  rmSync(bin, { force: true });
+  writeFileSync(bin, `#!/bin/sh\nexec node ${JSON.stringify(join(repoRoot, 'apps', 'cli', 'dist', 'index.js'))} "$@"\n`);
+  chmodSync(bin, 0o755);
+
+  await terminal.prompt('~/jaffle-shop-duckdb/dql');
+  await terminal.type('npm run notebook');
+  director.recorder.cutStart();
+  const server = await startCaptured('npm run notebook', { cwd: workspace, env, ready: /Notebook ready: (http:\/\/127\.0\.0\.1:\d+)/ });
+  director.recorder.cutEnd();
+  try {
+    await terminal.print(server.output, 2);
+    await director.beat(1500);
+
+    // The workbench opens on Guided Setup.
+    await page.goto(server.match[1]!);
+    await expect(page.getByText('Connect your dbt project')).toBeVisible({ timeout: 60_000 });
+    await director.settlePointer();
+    await director.beat(1600);
+    await director.point(page.getByText('dbt project ready').first());
+    await director.beat(1200);
+    await director.click(page.getByRole('button', { name: 'Continue to database' }));
+
+    // Connect the sample's DuckDB file.
+    const path = page.getByPlaceholder('./local/dev.duckdb');
+    await director.type(path, '../jaffle_shop.duckdb');
+    await director.click(page.getByRole('button', { name: 'Save connection' }), { after: 300 });
+    await director.fastForward(() => expect(page.getByText(/Test passed/).first()).toBeVisible({ timeout: 60_000 }));
+    await path.evaluate(() => window.scrollTo({ top: 0, behavior: 'smooth' }));
+    await director.beat(600);
+    await director.point(page.getByText(/Test passed/).first());
+    await director.beat(1400);
+    await director.click(page.getByRole('button', { name: 'Continue to optional AI' }));
+    await director.click(page.getByRole('button', { name: 'Skip AI for now' }));
+    await director.click(page.getByRole('button', { name: 'Finish setup' }), { after: 900 });
+
+    // A first query against a dbt model, in the starter notebook.
+    await director.click(page.getByRole('button', { name: 'Notebooks', exact: true }).first());
+    await director.click(page.getByRole('button', { name: /^welcome/ }).first(), { after: 900 });
+    const editor = page.locator('.cm-content').first();
+    await editor.evaluate((el) => el.scrollIntoView({ block: 'center', behavior: 'smooth' }));
+    await director.beat(700);
+    await director.click(editor, { after: 200 });
+    await page.keyboard.press('ControlOrMeta+A');
+    await page.keyboard.type('select customer_name, lifetime_spend from dev.customers order by 2 desc limit 5', { delay: 20 });
+    await page.keyboard.press('Escape');
+    await director.press('Shift+Enter', 300);
+    await director.fastForward(() => expect(page.getByText('Trust & Steps').first()).toBeVisible({ timeout: 60_000 }));
+    await page.getByText('Trust & Steps').first().evaluate((el) => el.scrollIntoView({ block: 'center', behavior: 'smooth' }));
+    await director.beat(900);
+    director.poster();
+    await director.beat(2600);
+  } finally {
+    server.stop();
+  }
+});

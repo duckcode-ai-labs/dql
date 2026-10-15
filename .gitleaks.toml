@@ -49,6 +49,7 @@ condition = "AND"
 regexTarget = "match"
 paths = [
   '''(^|/)test-cassettes/.+\.json$''',
+  '''apps/dql-notebook/browser/clips/cassettes/.+\.json$''',
   '''apps/cli/src/commands/agent-eval-cassette\.test\.ts''',
 ]
 regexes = [
