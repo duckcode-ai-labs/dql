@@ -64,6 +64,12 @@ export interface ConversationThread {
    * Unset for conversations from the local single-user notebook.
    */
   ownerId?: string;
+  /**
+   * The App page this conversation is about (`app:<appId>:<pageId>`), bound
+   * by its first question asked from an App. A question asked from another
+   * App page never continues it: its turns never become that page's context.
+   */
+  scopeKey?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -290,6 +296,7 @@ export class ConversationStore {
     this.ensureColumn('conversation_threads', 'summary_json', "TEXT NOT NULL DEFAULT '{}'");
     this.ensureColumn('conversation_threads', 'favorite', 'INTEGER NOT NULL DEFAULT 0');
     this.ensureColumn('conversation_threads', 'owner_id', 'TEXT');
+    this.ensureColumn('conversation_threads', 'scope_key', 'TEXT');
     this.db.exec('CREATE INDEX IF NOT EXISTS idx_conversation_threads_owner ON conversation_threads(owner_id, archived, updated_at DESC)');
   }
 
@@ -309,6 +316,16 @@ export class ConversationStore {
       ) VALUES (?, ?, ?, ?, '{}', NULL, '{}', 0, 0, ?, ?, ?)
     `).run(thread.id, thread.surface, thread.title ?? null, thread.notebookPath ?? null, thread.ownerId ?? null, now, now);
     return thread;
+  }
+
+  /**
+   * Bind an unscoped conversation to the App page it is being asked from.
+   * Returns false when it is already bound (to that scope or another).
+   */
+  bindThreadScope(id: string, scopeKey: string): boolean {
+    const info = this.db.prepare('UPDATE conversation_threads SET scope_key = ? WHERE id = ? AND scope_key IS NULL')
+      .run(scopeKey, id) as { changes?: number };
+    return (info.changes ?? 0) > 0;
   }
 
   /** The conversation a run was answered in, for a link to that answer (`/ask?run=<id>`). */
@@ -586,6 +603,8 @@ export type ConversationStoreMethods = Pick<ConversationStore,
  */
 export type ConversationStoreLike = AwaitableMethods<ConversationStoreMethods> & {
   pruneThreads?(olderThanDays: number): Awaitable<number>;
+  /** Optional for a host's own store: without it, App-page scoping of a conversation is not recorded. */
+  bindThreadScope?(id: string, scopeKey: string): Awaitable<boolean>;
   close?(): Awaitable<void>;
 };
 
@@ -803,6 +822,7 @@ type ThreadRow = {
   /** Nullable on rows written before the column existed (see ensureColumn). */
   favorite?: number | null;
   owner_id?: string | null;
+  scope_key?: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -848,6 +868,7 @@ function rowToThread(row: ThreadRow): ConversationThread {
     archived: Boolean(row.archived),
     favorite: Boolean(row.favorite),
     ...(row.owner_id ? { ownerId: row.owner_id } : {}),
+    ...(row.scope_key ? { scopeKey: row.scope_key } : {}),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };

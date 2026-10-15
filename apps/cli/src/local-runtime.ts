@@ -248,6 +248,7 @@ import { listBlockTemplates } from './block-templates.js';
 import { captureReviewRequiredDraft } from './review-draft-capture.js';
 import { scopeAppCopilotRequest } from './app-copilot-scope.js';
 import { answerFromAppView, appViewExecutorResult, asksAboutAppView, buildAppViewTiles, type AppViewContextV1, type AppViewTileV1 } from './app-view-answer.js';
+import { appAskScopeKey, appAskThreadDecision } from './app-ask-scope.js';
 import { rethrowIfCancelled } from './llm/cancellation.js';
 import { fetchLatestPublishedDqlVersion, resolveDqlRuntimeVersionStatus } from './version-status.js';
 import { resolveRetrievalHealthStatus } from './retrieval-health.js';
@@ -16770,6 +16771,19 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
           res.end(serializeJSON({ error: 'Unknown thread id.' }));
           return;
         }
+        // One conversation per App page: a question from another App page
+        // never continues this thread, so neither its answers nor its result
+        // become context here, and this answer is not saved into it.
+        const askScope = appAskScopeKey(parsed.request.workspaceContext);
+        const threadDecision = appAskThreadDecision(requestedThread, askScope);
+        if (threadDecision === 'bind' && conversationStore && requestedThread && askScope) {
+          await conversationStore.bindThreadScope?.(requestedThread.id, askScope);
+        }
+        if (threadDecision === 'detach') {
+          delete parsed.request.threadId;
+          delete parsed.request.conversationContext;
+          if (parsed.request.history?.length) parsed.request.history = [];
+        }
         if (conversationStore && parsed.request.threadId && requestedThread) {
           parsed.request.conversationContext = await conversationContextFromThread(
             conversationStore,
@@ -22280,6 +22294,16 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
           }));
         }
         if (driverExpansion.runs.size > 0) foldDashboardDriverTiles(tiles, driverExpansion.runs);
+        // What each block tile's source declares as a measure (its metric
+        // mappings or output contract), so the page story and the tile caption
+        // never take a rank, an id or a year for the number a row leads on.
+        for (const tile of tiles) {
+          if (tile.tileType !== 'block' || tile.status !== 'ok') continue;
+          const item = executionItems.find((candidate) => candidate.i === tile.tileId);
+          const block = item ? resolveDashboardItemBlock(item, manifest) : null;
+          const declaredMeasures = block ? declaredBlockMeasureColumns(block) : [];
+          if (declaredMeasures.length > 0) tile.declaredMeasures = declaredMeasures;
+        }
         tiles.sort((left, right) => (tileOrder.get(left.tileId) ?? 0) - (tileOrder.get(right.tileId) ?? 0));
         localApps.current?.close();
         const completionSnapshot = projectSnapshot();
@@ -22576,7 +22600,8 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
               trustState: (tile.trustState === 'certified' || tile.trustState === 'review_required' || tile.trustState === 'draft_ready'
                 ? tile.trustState
                 : tile.certificationStatus === 'certified' ? 'certified' : 'review_required') as DashboardDisplayTrustState,
-              result: tile.result as { columns?: unknown[]; rows?: unknown[]; rowCount?: number; columnsMeta?: Array<{ name?: unknown; kind?: unknown; unit?: unknown; decimals?: unknown }> } | undefined,
+              result: tile.result as { columns?: unknown[]; rows?: unknown[]; rowCount?: number; columnsMeta?: Array<{ name?: unknown; kind?: unknown; unit?: unknown; decimals?: unknown; ref?: unknown }> } | undefined,
+              ...(Array.isArray(tile.declaredMeasures) ? { declaredMeasures: tile.declaredMeasures as string[] } : {}),
               datasetScope,
               filters: effectiveStoryFilters,
               citation: tile.citation,
@@ -31062,6 +31087,17 @@ function dashboardTileRetirement(
       ...(block.deprecatedOn ? { deprecatedOn: block.deprecatedOn } : {}),
     },
   };
+}
+
+/** Output columns a block declares as measures: its metric mappings and the metric roles of its output contract. */
+export function declaredBlockMeasureColumns(block: Pick<ManifestBlock, 'metricMappings' | 'outputContract'>): string[] {
+  const names = [
+    ...(block.metricMappings ?? []).map((mapping) => mapping.output),
+    ...(block.outputContract ?? [])
+      .filter((output) => output.role === 'metric' || output.role === 'measure')
+      .map((output) => output.name),
+  ].filter((name): name is string => typeof name === 'string' && name.trim().length > 0);
+  return Array.from(new Set(names));
 }
 
 function resolveDashboardItemBlock(

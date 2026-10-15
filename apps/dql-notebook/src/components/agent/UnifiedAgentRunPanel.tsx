@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { HostAnswerActions } from './HostAnswerActions';
 import { CitedDocuments, appliedListStyle, appliedTagStyle } from './CitedDocuments';
 import { hostAllows, hostReader, hostRefusal, useHostPage, useHostUi } from '../../host/host-ui';
@@ -555,6 +555,32 @@ export function UnifiedAgentRunPanel({
     [items, presentationContextKey],
   );
   const history = useMemo(() => agentRunHistoryFromItems(presentedItems), [presentedItems]);
+
+  // FOLLOW THE LATEST TURN. A new question, and then its answer, are brought
+  // into view (the question at the top, its answer below it). A reader who
+  // has scrolled up to an earlier turn is left where they are when an answer
+  // arrives; asking again always brings the new turn into view.
+  const railScrollRef = useRef<HTMLDivElement | null>(null);
+  const followTurnRef = useRef<FollowLatestTurnState>({ previousCount: 0, readingEarlier: false });
+  useLayoutEffect(() => {
+    const container = askLayout ? askScrollRef.current : railScrollRef.current;
+    const latestUserTurn = [...presentedItems].reverse().find((item) => item.kind === 'user');
+    const state = followTurnRef.current;
+    const action = followLatestTurnAction(state, { latestUserTurnId: latestUserTurn?.id, count: presentedItems.length });
+    state.previousUserTurnId = latestUserTurn?.id;
+    state.previousCount = presentedItems.length;
+    if (action !== 'scroll' || !container) return;
+    const bubble = latestUserTurnElement(container);
+    if (!bubble) return;
+    container.scrollTop += bubble.getBoundingClientRect().top - container.getBoundingClientRect().top - 12;
+    state.readingEarlier = false;
+  }, [askLayout, presentedItems]);
+  const onThreadScroll = useCallback((event: React.UIEvent<HTMLDivElement>) => {
+    const container = event.currentTarget;
+    const bubble = latestUserTurnElement(container);
+    followTurnRef.current.readingEarlier = Boolean(bubble)
+      && bubble!.getBoundingClientRect().top > container.getBoundingClientRect().bottom;
+  }, []);
 
   // Report thread changes to a host (for conversation persistence) without
   // re-subscribing when the callback identity changes each render.
@@ -1238,7 +1264,7 @@ export function UnifiedAgentRunPanel({
             <span style={{ fontSize: 11, color: t.textMuted, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>{reader ? 'Certified answers first, then approved metrics, then new SQL marked Needs review' : 'Certified first · semantic next · generated SQL last'}</span>
           </div>
 
-          <div ref={askScrollRef} style={{ flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'hidden', display: 'flex', flexDirection: 'column' }}>
+          <div ref={askScrollRef} onScroll={onThreadScroll} style={{ flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'hidden', display: 'flex', flexDirection: 'column' }}>
             <div style={{ width: 'min(720px, 100% - 48px)', margin: '0 auto', padding: '26px 0 12px', display: 'flex', flexDirection: 'column', gap: 26 }}>
               {presentedItems.length === 0 && !running && askRefusal ? (
                 <div role="note" style={{ margin: 'auto 0', display: 'grid', gap: 12, justifyItems: 'center', textAlign: 'center', color: t.textSecondary, paddingTop: 40 }}>
@@ -1268,7 +1294,7 @@ export function UnifiedAgentRunPanel({
               ) : null}
 
               {presentedItems.map((item) => item.kind === 'user' ? (
-                <div key={item.id} style={askUserBubbleStyle(t)}>{item.text}</div>
+                <div key={item.id} data-thread-user-turn={item.id} style={askUserBubbleStyle(t)}>{item.text}</div>
               ) : (
                 <AskRunCard
                   key={item.id}
@@ -1411,7 +1437,7 @@ export function UnifiedAgentRunPanel({
         @media (prefers-reduced-motion: reduce) { .dql-agent-thinking-dot, .dql-agent-activity { animation: none !important; } }
       `}</style>
 
-      <div style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div ref={railScrollRef} onScroll={onThreadScroll} style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 12 }}>
         {presentedItems.length === 0 && !running ? (
           <div style={{ margin: 'auto 0', display: 'grid', gap: 14, justifyItems: 'center', textAlign: 'center', color: t.textSecondary }}>
             <div style={largeIconShellStyle(t)}><Sparkles size={20} /></div>
@@ -1429,7 +1455,7 @@ export function UnifiedAgentRunPanel({
         ) : null}
 
         {presentedItems.map((item) => item.kind === 'user' ? (
-          <div key={item.id} style={userBubbleStyle(t)}>{item.text}</div>
+          <div key={item.id} data-thread-user-turn={item.id} style={userBubbleStyle(t)}>{item.text}</div>
         ) : answerFirstCards ? (
           <AskRunCard
             key={item.id}
@@ -6579,14 +6605,53 @@ function makeId(prefix: string): string {
   return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
+export interface FollowLatestTurnState {
+  previousUserTurnId?: string;
+  previousCount: number;
+  /** The reader scrolled up so the latest turn is below the visible area. */
+  readingEarlier: boolean;
+}
+
+/**
+ * Whether the thread scrolls to its latest turn after its items change.
+ * A new question (or a thread just loaded) always scrolls; an answer added to
+ * the latest question scrolls unless the reader is reading an earlier turn;
+ * anything else (an answer updating in place, a reload of the same turns)
+ * leaves the scroll position alone.
+ */
+export function followLatestTurnAction(
+  state: FollowLatestTurnState,
+  next: { latestUserTurnId?: string; count: number },
+): 'scroll' | 'stay' {
+  if (!next.latestUserTurnId || next.count <= state.previousCount) return 'stay';
+  if (next.latestUserTurnId !== state.previousUserTurnId) return 'scroll';
+  return state.readingEarlier ? 'stay' : 'scroll';
+}
+
+function latestUserTurnElement(container: HTMLElement): HTMLElement | null {
+  const bubbles = container.querySelectorAll<HTMLElement>('[data-thread-user-turn]');
+  return bubbles.length ? bubbles[bubbles.length - 1]! : null;
+}
+
+/**
+ * "review-required" reads as "AI-generated" to a stakeholder. The article
+ * before it changes with it: "a review-required answer" becomes "an
+ * AI-generated answer", never "a AI-generated answer".
+ */
+export function toAiGeneratedWording(text: string): string {
+  return text.replace(/\b(?:(an?)(\s+))?review-required\b/gi, (_match, article?: string, space?: string) => {
+    if (!article) return 'AI-generated';
+    return `${article.charAt(0) === 'A' ? 'An' : 'an'}${space ?? ' '}AI-generated`;
+  });
+}
+
 /** Strip the internal "Outcome: <reuse|draft|fix|...>" routing line meant for the
  *  notebook parser, plus markdown emphasis markers — stakeholders should see clean
  *  prose, not pipeline jargon or literal asterisks/backticks. */
 function cleanAnswerText(answer: string): string {
-  return answer
+  return toAiGeneratedWording(answer)
     .replace(/^\s*Outcome\s*:\s*[^\n]*\n+/i, '')
     .replace(/^\s*Review required:\s*/gim, '')
-    .replace(/\breview-required\b/gi, 'AI-generated')
     .replace(/\*\*(.+?)\*\*/g, '$1')
     .replace(/`([^`]+)`/g, '$1')
     .replace(/^_(.+?)_$/gm, '$1')
@@ -6594,9 +6659,8 @@ function cleanAnswerText(answer: string): string {
 }
 
 function cleanPresentationText(value: string): string {
-  return value
+  return toAiGeneratedWording(value)
     .replace(/^\s*Review required:\s*/gim, '')
-    .replace(/\breview-required\b/gi, 'AI-generated')
     .replace(/\bqueued for review\b/gi, 'saved as a draft')
     .trim();
 }

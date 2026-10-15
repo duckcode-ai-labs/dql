@@ -45,6 +45,7 @@ import { ShareLinkMenu } from './ShareLinkMenu';
 import { buildSnapshotBody, downloadFile, printSnapshot, snapshotToPng } from './snapshot-export';
 import { CanvasPageFrame } from './CanvasPageFrame';
 import { buildStoryBindingCatalog, type StoryBindingCatalog, type StoryBindingTileInput } from '@zlens/core/apps/story-bindings';
+import { resultLeaderRow, selectResultMeasures } from '@zlens/core/apps/result-measures';
 import { driverProbeFor } from './driver-probe';
 import { drillFilters } from './mark-actions';
 import { useMarkInteractions } from './useMarkInteractions';
@@ -2171,40 +2172,53 @@ export function computeTileInsight(tile?: DashboardRunResponse['tiles'][number],
   const rows = tile?.result?.rows;
   const columns = tile?.result?.columns;
   if (!Array.isArray(rows) || rows.length === 0 || !Array.isArray(columns) || columns.length === 0) return null;
-  const sample = rows[0] as Record<string, unknown>;
   const toNum = (v: unknown): number | undefined => {
     if (typeof v === 'number' && Number.isFinite(v)) return v;
     if (typeof v === 'string') { const n = Number(v.replace(/[$,%\s]/g, '')); return Number.isFinite(n) && v.trim() ? n : undefined; }
     return undefined;
   };
-  const valueCol = columns.find((c) => toNum(sample?.[c]) !== undefined);
-  const labelCol = columns.find((c) => c !== valueCol && typeof sample?.[c] === 'string');
-  if (!valueCol) return null;
-  const valueSamples = rows.map((row) => row[valueCol]);
-  const labelSamples = labelCol ? rows.map((row) => row[labelCol]) : [];
+  // The measure is what the source declares, else a numeric column that is
+  // not a rank, an id, a year or a code: "Kevin Durant leads Rank at 5" read
+  // the fifth-ranked row as the leader of a ranking.
+  const typedRows = rows as Array<Record<string, unknown>>;
+  const selection = selectResultMeasures({
+    columns,
+    rows: typedRows,
+    columnsMeta: tile?.result?.columnsMeta,
+    declaredMeasures: tile?.declaredMeasures,
+    numericStrings: true,
+  });
+  const valueCol = selection.primary;
+  const labelCol = selection.labelColumn;
+  const labelSamples = labelCol ? typedRows.map((row) => row[labelCol]) : [];
+  const leader = resultLeaderRow({ rows: typedRows, numericStrings: true }, selection);
+  const leaderLabel = leader && labelCol && leader[labelCol] !== undefined && leader[labelCol] !== null
+    ? formatDashboardValue(labelCol, leader[labelCol], labelSamples)
+    : undefined;
+  if (!valueCol) {
+    return selection.rankColumn && leaderLabel && rows.length > 1 ? `${leaderLabel} is ranked first.` : null;
+  }
+  const valueSamples = typedRows.map((row) => row[valueCol]);
   const metricLabel = formatGenUiLabel(valueCol);
   const valueMeta = tile?.result?.columnsMeta?.find((meta) => meta.name === valueCol);
   const formatMetric = (value: unknown, compact = true) => formatDisplayValue(valueCol, value, valueSamples, { compact, ...(valueMeta ? { meta: valueMeta } : {}) });
   if (rows.length === 1) {
-    const v = toNum((rows[0] as Record<string, unknown>)[valueCol]);
+    const v = toNum(typedRows[0]![valueCol]);
     return v !== undefined ? `${metricLabel}: ${formatMetric(v)}.` : null;
   }
-  const ranked = (rows as Array<Record<string, unknown>>)
-    .flatMap((r) => {
-      const value = toNum(r[valueCol]);
-      return value === undefined ? [] : [{ label: labelCol ? formatDashboardValue(labelCol, r[labelCol], labelSamples) : 'top', value }];
-    })
-    .sort((a, b) => b.value - a.value);
-  const top = ranked[0];
-  if (!top) return null;
-  const formattedTopValue = formatMetric(top.value);
+  const leaderValue = leader ? toNum(leader[valueCol]) : undefined;
+  if (!leader || leaderValue === undefined) return null;
+  const label = leaderLabel ?? 'top';
+  const formattedTopValue = formatMetric(leaderValue);
+  // A ranking is led by the row ranked first, stated on the measure it ranks.
+  if (selection.rankColumn) return `${label} is ranked first, with ${metricLabel} at ${formattedTopValue}.`;
   // No share of a total: the visible rows are not known to add up (a COUNT
   // DISTINCT or a ratio does not, a Top-N result is not the whole, and a row
   // set may repeat a period per breakdown), so a percent would be made up.
   if (item?.query?.dimensions?.length) {
-    return `${top.label} reports ${metricLabel} at ${formattedTopValue} for this grouped Dataset result.`;
+    return `${label} reports ${metricLabel} at ${formattedTopValue} for this grouped Dataset result.`;
   }
-  return `${top.label} leads ${metricLabel} at ${formattedTopValue}.`;
+  return `${label} leads ${metricLabel} at ${formattedTopValue}.`;
 }
 
 /**

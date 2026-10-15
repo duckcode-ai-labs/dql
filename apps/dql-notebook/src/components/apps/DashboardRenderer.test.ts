@@ -412,6 +412,48 @@ describe('App dashboard interaction contract', () => {
   });
 });
 
+describe('tile captions never treat a rank, an id or a year as the measure (0.1.0 re-test #1)', () => {
+  const ranked = [
+    { rank: 1, player_name: 'James Harden', points_2016: 2646, points_2017: 2888, total_points_2016_2017: 5534 },
+    { rank: 2, player_name: 'LeBron James', points_2016: 2511, points_2017: 2820, total_points_2016_2017: 5331 },
+    { rank: 3, player_name: 'Russell Westbrook', points_2016: 2610, points_2017: 2642, total_points_2016_2017: 5252 },
+    { rank: 4, player_name: 'Stephen Curry', points_2016: 2863, points_2017: 2388, total_points_2016_2017: 5251 },
+    { rank: 5, player_name: 'Kevin Durant', points_2016: 2850, points_2017: 1985, total_points_2016_2017: 4835 },
+  ];
+  const tile = (rows: Array<Record<string, unknown>>, extra: Record<string, unknown> = {}) => ({
+    status: 'ok',
+    result: { columns: Object.keys(rows[0]!), rows, rowCount: rows.length, executionTime: 1 },
+    ...extra,
+  }) as any;
+
+  it('a ranked top-N table is led by the player ranked first, on the measure it ranks', async () => {
+    const { computeTileInsight } = await dashboardHelpers();
+    const caption = computeTileInsight(tile(ranked));
+    expect(caption).toMatch(/^James Harden is ranked first, with Total Points 2016 2017 at /);
+    expect(caption).not.toMatch(/Rank at|Kevin Durant/);
+    // Row order does not decide who leads.
+    expect(computeTileInsight(tile([...ranked].reverse()))).toMatch(/^James Harden is ranked first/);
+  });
+
+  it('a declared measure is the one the caption reports', async () => {
+    const { computeTileInsight } = await dashboardHelpers();
+    expect(computeTileInsight(tile(ranked, { declaredMeasures: ['points_2017'] }))).toMatch(/^James Harden is ranked first, with Points 2017 at /);
+  });
+
+  it('a rank and a name alone say who is ranked first, with no number', async () => {
+    const { computeTileInsight } = await dashboardHelpers();
+    expect(computeTileInsight(tile(ranked.map(({ rank, player_name }) => ({ rank, player_name }))))).toBe('James Harden is ranked first.');
+  });
+
+  it('a table of only ids and years gets no caption', async () => {
+    const { computeTileInsight } = await dashboardHelpers();
+    expect(computeTileInsight(tile([
+      { player_id: 201935, season: 2016, game_year: 2017, team_code: 7 },
+      { player_id: 2544, season: 2016, game_year: 2017, team_code: 3 },
+    ]))).toBeNull();
+  });
+});
+
 describe('Dashboard visualization vocabulary and icons (UI-004)', () => {
   it('gives every renderable chart type its own icon', async () => {
     const { iconForChartType } = await dashboardHelpers();

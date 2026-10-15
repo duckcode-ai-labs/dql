@@ -11,6 +11,8 @@
  * only ever describes data the loop already executed against governed sources.
  */
 
+import { nonMeasureColumnRole } from '@zlens/core';
+
 export interface NarrateResultData {
   columns: string[];
   rows: Array<Record<string, unknown>>;
@@ -166,8 +168,9 @@ function pickColumns(result: NarrateResultData): { label?: string; value?: strin
   const sample = result.rows?.[0] ?? {};
   let value: string | undefined;
   let label: string | undefined;
+  // A rank, an id or a year is numeric and still a label: never the value.
   for (const column of columns) {
-    if (value === undefined && toNumber(sample[column]) !== undefined) value = column;
+    if (value === undefined && toNumber(sample[column]) !== undefined && nonMeasureColumnRole(column) === undefined) value = column;
   }
   for (const column of columns) {
     if (column !== value && typeof sample[column] === "string") { label = column; break; }

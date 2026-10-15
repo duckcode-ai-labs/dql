@@ -23,6 +23,16 @@ describe('ConversationStore', () => {
     rmSync(root, { recursive: true, force: true });
   });
 
+  it('binds a conversation to the App page it is first asked from, once', () => {
+    const thread = store.createThread({ surface: 'apps' });
+    expect(store.getThread(thread.id)?.scopeKey).toBeUndefined();
+    expect(store.bindThreadScope(thread.id, 'app:top-5:overview')).toBe(true);
+    expect(store.getThread(thread.id)?.scopeKey).toBe('app:top-5:overview');
+    // Never rebound to another App page.
+    expect(store.bindThreadScope(thread.id, 'app:certified:overview')).toBe(false);
+    expect(store.getThread(thread.id)?.scopeKey).toBe('app:top-5:overview');
+  });
+
   it('finds the conversation an answer was given in', () => {
     const thread = store.createThread({ surface: 'notebook' });
     store.appendTurn(thread.id, { question: 'claims by region', agentRunId: 'run-42' });
