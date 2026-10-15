@@ -1,108 +1,59 @@
 ---
 hide:
-  - navigation
   - toc
 ---
 
 # ZLens
 
-> **Bringing dbt's discipline to the analytics layer — built on top of dbt.**
+ZLens is an open-source analytics workbench on top of dbt. You build
+**blocks** (reviewed, reusable queries), turn them into **Apps**, and **Ask**
+questions in plain English. Every answer and every tile says how far to trust
+it: **Certified**, **Governed**, **Needs review**, or a refusal with the
+reason.
 
-dbt governs your models; the *answers* built on them — the query behind a
-dashboard tile, the metric pasted into Slack, the SQL an AI assistant just
-improvised against your warehouse — usually aren't reviewed, tested, or owned.
-ZLens carries that same discipline downstream: every answer becomes a
-**certified block** (SQL + owner, domain, tests, chart intent, and LLM
-context) in a git-tracked `.dql` file. Apps package certified blocks into
-decision-facing dashboard pages and notebooks. `zlens compile` generates a
-dbt-like manifest with lineage from sources and dbt models through blocks and
-Apps — and the agent/MCP server answers from certified blocks first, flagging
-anything improvised as *Uncertified*.
+Everything is a file in your project, so it is reviewed in git like your dbt
+code. ZLens runs on your machine; no hosted account is needed.
 
-No hosted account is required. Certification is a local trust label. Personas
-and policies are local previews, not hosted RBAC.
+{{ clip("overview") }}
 
-## Start Here
+## Start here
 
-From your dbt repo:
+1. [Quickstart](get-started/index.md): run ZLens on a sample dbt project and
+   get your first result in about ten minutes.
+2. [Ask a question](ask/index.md) and read its trust label.
+3. [Certify a block](blocks/certify.md) so Ask and Apps can trust it.
 
-```bash
-dbt parse                        # ensure target/manifest.json exists
-npx create-zlens-app@latest dql    # scaffolds ./dql, auto-wires dbt
-cd dql
-npm install
-npm run sync                     # import dbt models + lineage
-npm run notebook                 # http://127.0.0.1:3474
+## Follow the journey
 
-# Optional, only before running queries with these drivers:
-# npm install --prefix .dql/connectors duckdb        # DuckDB/local files
-# npm install --prefix .dql/connectors snowflake-sdk # Snowflake
-# Databricks does not need an extra package.
-```
-
-If you installed `zlens` globally, initialize the project
-folder first:
-
-```bash
-cd your-dbt-repo
-zlens init ./dql
-cd dql
-zlens doctor
-```
-
-Then run:
-
-```bash
-npm run compile
-npm run lineage
-```
-
-To see a finished DataLex + ZLens example, use the separate
-[jaffle-shop-duckdb tutorial](https://github.com/duckcode-ai/jaffle-shop-duckdb/blob/main/docs/tutorials/jaffle/README.md).
-
-## Why ZLens
-
-- **Certified blocks.** Save reusable answer units with metadata, tests, and
-  local trust status.
-- **Apps in git.** Package dashboard pages, notebooks, text, AI pins, and draft
-  blocks in local App folders.
-- **dbt-aware lineage.** Connect sources, dbt models, semantic metrics, DQL
-  blocks, dashboard pages, and Apps in `dql-manifest.json`.
-- **Agent-safe defaults.** Local agent and MCP tools prefer certified blocks and
-  label fallback generated SQL as uncertified.
-- **OSS boundary clarity.** Local single-user workflows are open source; hosted
-  auth, managed secrets, audit logs, organization RBAC, and approval workflows
-  are outside OSS.
-
-## Learn
-
-1. [Quickstart](01-quickstart.md) — add ZLens to a dbt repo
-2. [ZLens in 5 concepts](04-dql-in-5-concepts.md)
-3. [Tutorials](tutorials/README.md) — blocks → dashboards & Apps → agent → CI
-4. [Block Studio](guides/block-studio.md)
-5. [Notebook research engine](guides/notebook-research.md)
-6. [Author a certified block](guides/authoring-blocks.md)
-7. [Import dbt](guides/import-dbt.md)
-
-## What Ships
-
-```mermaid
-flowchart LR
-    Project["ZLens project"] --> Compiler["zlens compile"]
-    Compiler --> Manifest["dql-manifest.json"]
-    Manifest --> Lineage["zlens lineage"]
-    Manifest --> MCP["zlens mcp"]
-    Manifest --> Notebook["zlens notebook + Apps"]
-    Blocks["Certified blocks"] --> Apps["Apps"]
-    Apps --> Notebook
-```
-
-| Package | What it does |
+| | |
 |---|---|
-| [`@zlens/cli`](https://www.npmjs.com/package/@zlens/cli) | The `zlens` binary: notebook, compile, validate, certify, lineage, MCP |
-| [`@zlens/core`](https://www.npmjs.com/package/@zlens/core) | Parser, formatter, semantic analyzer, manifest builder, lineage |
-| [`@zlens/mcp`](https://www.npmjs.com/package/@zlens/mcp) | MCP tools for certified block search, query, certification, and lineage |
-| [`@zlens/dql-lsp`](https://www.npmjs.com/package/@zlens/dql-lsp) | LSP for `.dql` files |
-| [`@zlens/openlineage`](https://www.npmjs.com/package/@zlens/openlineage) | OpenLineage project snapshot events |
+| **[Get started](get-started/index.md)** | Install, open the workbench, connect a database and an AI provider, add ZLens to your dbt project. |
+| **[Ask and trust](ask/index.md)** | Certified answers, answers that need review and their saved drafts, refusals with a reason, and how each answer was made. |
+| **[Build blocks](blocks/index.md)** | Import SQL, work in Block Studio, save drafts and certify them. |
+| **[Notebooks](notebooks/index.md)** | SQL and DQL cells, results, saving a cell as a block, and sharing through git. |
+| **[Apps and dashboards](apps/index.md)** | Read an App and its trust labels, build and publish one, ask questions about it. |
+| **[Lineage](lineage/index.md)** | From dbt models to blocks to Apps, in the workbench and the terminal. |
+| **[Connect your AI agent](agents/index.md)** | Use ZLens from Claude Code, Codex, Cursor or Claude Desktop over MCP. |
+| **[Reference](reference/cli.md)** | CLI, DQL language, file formats, project layout, connectors. |
 
-[GitHub](https://github.com/duckcode-ai-labs/zlens) · [Roadmap](https://github.com/duckcode-ai-labs/zlens/blob/main/ROADMAP.md) · [Support](https://github.com/duckcode-ai-labs/zlens/blob/main/SUPPORT.md)
+## How trust works
+
+- **Saving never certifies.** Anything saved, imported or kept from an AI
+  answer is a draft until a person clicks **Certify**.
+- **Ask tries the most trusted source first**: a certified block, then the
+  semantic layer, then SQL written by AI, which is marked for review and saved
+  as a draft.
+- **When ZLens cannot answer safely, it says so**, and why, instead of
+  guessing.
+
+## Packages
+
+| Package | What it is |
+|---|---|
+| [`@zlens/cli`](https://www.npmjs.com/package/@zlens/cli) | The `zlens` command and the workbench |
+| [`create-zlens-app`](https://www.npmjs.com/package/create-zlens-app) | Creates a new ZLens project |
+| [`@zlens/mcp`](https://www.npmjs.com/package/@zlens/mcp) | The MCP server for AI agents |
+
+[GitHub](https://github.com/duckcode-ai-labs/zlens) ·
+[Roadmap](https://github.com/duckcode-ai-labs/zlens/blob/main/ROADMAP.md) ·
+[Support](https://github.com/duckcode-ai-labs/zlens/blob/main/SUPPORT.md)

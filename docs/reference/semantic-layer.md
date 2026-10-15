@@ -46,7 +46,7 @@ hierarchies:
 ## dbt import
 
 ZLens reads `target/manifest.json` directly — see
-[Import a dbt project](../guides/import-dbt.md). Imported metrics and
+[Import a dbt project](../get-started/your-dbt-project.md). Imported metrics and
 dimensions appear in the **Semantic** panel alongside DQL-local ones.
 
 ## CLI

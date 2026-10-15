@@ -67,7 +67,7 @@ edit `dql.config.json`:
 
 (Use your warehouse driver instead. Databricks is built in; DuckDB/local files
 and Snowflake use project-local drivers. See
-[connect-warehouse](../guides/connect-warehouse.md).)
+[connect-warehouse](../get-started/connect-database.md).)
 
 Install only the driver your project uses:
 

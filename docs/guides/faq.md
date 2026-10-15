@@ -4,7 +4,7 @@
 
 An open-source analytics language, CLI, and notebook. Every analytics answer
 — SQL, chart config, owner, tests, parameters — lives in a single `.dql`
-file in git. See [Concepts](../02-concepts.md).
+file in git. See [Concepts](../get-started/concepts.md).
 
 ## Do I need a cloud warehouse to try it?
 
@@ -24,7 +24,7 @@ No. ZLens works standalone. But if you already use dbt, `create-zlens-app`
 auto-detects a sibling dbt project. Run `dbt build`, then `zlens compile .`,
 `zlens sync dbt .`, and `zlens agent reindex` to refresh manifest metadata,
 semantic metrics, lineage, and the agent index. See
-[Import a dbt project](./import-dbt.md).
+[Import a dbt project](../get-started/your-dbt-project.md).
 
 ## How is this different from a Jupyter notebook?
 
