@@ -17,6 +17,8 @@ import {
   resolveDbtResumeStage,
   type DbtOnboardingStage,
 } from './setup-wizard-model';
+import { ModelSourceChooser } from './ModelSourceChooser';
+import { existingProjectFromStatus, type ModelSource } from './setup-model-source';
 
 type StartTarget = 'modeling' | 'skills' | 'ask' | 'block';
 
@@ -27,6 +29,11 @@ interface DbtOnboardingFlowProps {
   onClose: () => void;
   onComplete: () => void;
   onOpen: (target: StartTarget) => void;
+  /**
+   * The Welcome screen's "Where does your data model live?" answered with
+   * something other than dbt: Guided Setup continues with that choice.
+   */
+  onChooseModelSource?: (source: Exclude<ModelSource, 'dbt'>) => void;
 }
 
 const STAGES: Array<{ id: DbtOnboardingStage; label: string }> = [
@@ -77,6 +84,7 @@ export function DbtOnboardingFlow({
   onClose,
   onComplete,
   onOpen,
+  onChooseModelSource,
 }: DbtOnboardingFlowProps) {
   const [stage, setStage] = useState<DbtOnboardingStage>('connect');
   const [status, setStatus] = useState<DbtOnboardingStatusResponse | null>(null);
@@ -100,6 +108,7 @@ export function DbtOnboardingFlow({
   // Prototype story welcome: shown before the dbt steps for first-time setup;
   // resumed sessions (any stage beyond connect) skip straight to their step.
   const [showWelcome, setShowWelcome] = useState(true);
+  const [welcomeSource, setWelcomeSource] = useState<ModelSource>('dbt');
   useEffect(() => {
     if (stage !== 'connect') setShowWelcome(false);
   }, [stage]);
@@ -357,7 +366,20 @@ export function DbtOnboardingFlow({
 
       <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
       <div style={{ width: 'min(860px, 100% - 48px)', margin: '0 auto', padding: '26px 0 60px' }}>
-        {showWelcome ? <WelcomeStory t={t} /> : (
+        {showWelcome ? (
+          <WelcomeStory
+            t={t}
+            chooser={onChooseModelSource ? (
+              <ModelSourceChooser
+                name="welcome-model-source"
+                value={welcomeSource}
+                onChange={setWelcomeSource}
+                existing={existingProjectFromStatus(status)}
+                t={t}
+              />
+            ) : null}
+          />
+        ) : (
         <>
         {stage !== 'connect' && stage !== 'inspect' && stage !== 'building' ? null : null}
         {statusLoading && <Notice t={t} title="Checking existing setup…" body="You can resume from the first incomplete step." />}
@@ -536,7 +558,9 @@ export function DbtOnboardingFlow({
           {showWelcome ? '~2 minute read — or skip straight to setup' : 'Setup is resumable — you can save and come back any time.'}
         </span>
         <div style={{ display: 'flex', gap: 8 }}>
-          {showWelcome && <button onClick={() => setShowWelcome(false)} style={primaryButton(t)}>Next — connect your dbt project</button>}
+          {showWelcome && (welcomeSource === 'dbt' || !onChooseModelSource
+            ? <button onClick={() => setShowWelcome(false)} style={primaryButton(t)}>Next — connect your dbt project</button>
+            : <button onClick={() => onChooseModelSource(welcomeSource)} style={primaryButton(t)}>{welcomeSource === 'warehouse' ? 'Next — connect your database' : welcomeSource === 'both' ? 'Next — connect dbt and your database' : 'Next — open this project'}</button>)}
           {!showWelcome && stage === 'connect' && errorView?.code === 'DBT_MANIFEST_MISSING' && <button disabled={loading} onClick={() => void buildSnapshot(true)} style={secondaryButton(t)}>Build artifacts with DQL</button>}
           {!showWelcome && stage === 'connect' && <button disabled={loading || (sourceMode === 'repo' ? !repoUrl.trim() : !projectDir.trim())} onClick={() => void inspect()} style={primaryButton(t, loading || (sourceMode === 'repo' ? !repoUrl.trim() : !projectDir.trim()))}>{loading ? 'Inspecting…' : errorView?.code === 'DBT_MANIFEST_MISSING' ? 'I ran dbt parse — retry' : 'Inspect artifacts'}</button>}
           {!showWelcome && stage === 'inspect' && <button disabled={loading} onClick={() => void buildSnapshot(false)} style={primaryButton(t, loading)}>{loading ? 'Building…' : 'Apply & build snapshot'}</button>}
@@ -555,7 +579,7 @@ export function DbtOnboardingFlow({
 // ── Prototype story welcome (step 0) ────────────────────────────────────────
 // Hero + three chapters with the handoff's animations: floating answer card,
 // staggered pipeline stages, pulsing arrows, animated lineage + git rails.
-function WelcomeStory({ t }: { t: Theme }) {
+function WelcomeStory({ t, chooser }: { t: Theme; chooser?: React.ReactNode }) {
   const stageCard = (delay: number, opts: { border: string; bg: string; iconBg: string; iconColor: string; title: string; body: string; glow?: boolean }, icon: React.ReactNode) => (
     <div style={{ border: `1.5px solid ${opts.border}`, borderRadius: 10, background: opts.bg, padding: '11px 10px', textAlign: 'center', animation: 'dql-setup-stage 0.5s ease-out both', animationDelay: `${delay}s`, boxShadow: opts.glow ? '0 4px 18px rgba(107,93,211,0.12)' : 'none' }}>
       <div style={{ width: 26, height: 26, borderRadius: 7, background: opts.iconBg, color: opts.iconColor, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>{icon}</div>
@@ -603,7 +627,7 @@ function WelcomeStory({ t }: { t: Theme }) {
           </div>
           <h1 style={{ margin: '12px 0 0', fontSize: 27, fontWeight: 700, letterSpacing: '-0.02em', color: t.textPrimary, lineHeight: 1.25 }}>Analytics your AI<br />can&apos;t hallucinate</h1>
           <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 9 }}>
-            {check('Sits on your dbt project — models and tests stay yours')}
+            {check('Sits on your dbt project or straight on your database — your models stay yours')}
             {check(<>Questions route through <strong>certified blocks</strong> before AI writes SQL</>)}
             {check('Every answer carries a trust label your stakeholders can read')}
           </div>
@@ -622,6 +646,16 @@ function WelcomeStory({ t }: { t: Theme }) {
           </div>
         </div>
       </div>
+
+      {chooser ? (
+        <section aria-labelledby="welcome-model-source-title" style={{ border: '1px solid var(--border-subtle)', borderRadius: 14, background: t.cellBg, padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div>
+            <h2 id="welcome-model-source-title" style={{ margin: 0, fontSize: 16, fontWeight: 700, color: t.textPrimary, letterSpacing: '-0.01em' }}>Where does your data model live?</h2>
+            <div style={{ fontSize: 12, color: t.textMuted, marginTop: 2 }}>ZLens works on a dbt project or straight on your database — with or without dbt.</div>
+          </div>
+          {chooser}
+        </section>
+      ) : null}
 
       {/* chapter 01 · pipeline */}
       <div style={{ marginTop: 14, display: 'flex', alignItems: 'baseline', gap: 10 }}>

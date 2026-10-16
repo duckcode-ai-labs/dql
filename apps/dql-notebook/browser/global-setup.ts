@@ -20,6 +20,8 @@ function seedProject(projectDir: string): void {
   cpSync(fixtureDir, projectDir, { recursive: true });
 
   const connectorRoot = installDuckdbConnector(projectDir);
+  // Journeys that build their own project (database-only.journey.ts) reuse this install.
+  process.env.ZLENS_E2E_DUCKDB_CONNECTORS = connectorRoot;
   const warehouse = join(projectDir, 'jaffle_shop.duckdb');
   run('node', [join(repoRoot, 'scripts/seed-eval-warehouse.mjs'), '--connector-root', connectorRoot, '--out', warehouse, '--schema', 'dev']);
   // The fixture's certified blocks read unqualified tables (top_customers:
