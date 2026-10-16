@@ -709,10 +709,10 @@
       ]
     },
     "jaffle-golden:live": {
-      "commit": "2217172ad2c447768e1a6e27b0217bf066cdf91f",
+      "commit": "eecdb98d643a131ed66e9430728548908bdd302e",
       "dirty": false,
       "provider": "live",
-      "passed": 43,
+      "passed": 41,
       "total": 46,
       "cases": [
         {
@@ -855,7 +855,7 @@
           "route": "clarify",
           "trust": "not_applicable",
           "reasons": [
-            "no result rows: clarify/needs_clarification/needs_clarification \u2014 Do you mean the unit supply cost to make each product (supplies table), or the total supply cost actually incurred across sold order items?\nDo you mean the unit supply cost t"
+            "no result rows: clarify/needs_clarification/needs_clarification \u2014 Do you mean each product's unit supply cost (sum of its supply lines in supplies), or the total supply cost incurred across items actually sold (order_items.supply_cost)?\nDo "
           ]
         },
         {
@@ -889,9 +889,12 @@
         {
           "lane": "questions",
           "id": "customers-with-most-orders",
-          "pass": true,
+          "pass": false,
           "route": "generated_answer",
-          "trust": "review_required"
+          "trust": "review_required",
+          "reasons": [
+            "rows differ from reference: column order_count (aliases order_count, orders, count_lifetime_orders) not in result columns customer_id, customer_name, orders_placed"
+          ]
         },
         {
           "lane": "questions",
@@ -993,9 +996,12 @@
         {
           "lane": "questions",
           "id": "region-why-invest",
-          "pass": true,
-          "route": "clarify",
-          "trust": "not_applicable"
+          "pass": false,
+          "route": "generated_answer",
+          "trust": "review_required",
+          "reasons": [
+            "expected an honest gap, got generated_answer/completed with 12 rows"
+          ]
         },
         {
           "lane": "questions",
@@ -1029,8 +1035,8 @@
           "lane": "conversation",
           "id": "q3-beverage-correction",
           "pass": true,
-          "route": "generated_answer",
-          "trust": "governed"
+          "route": "clarify",
+          "trust": "not_applicable"
         },
         {
           "lane": "conversation",
