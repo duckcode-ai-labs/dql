@@ -146,8 +146,9 @@ async function runValidateRelationship(rest: string[], flags: CLIFlags): Promise
     modelImportError(flags, 'PROJECT_NOT_FOUND', `No ZLens project found at ${projectRoot} (missing dql.config.json).`);
     return;
   }
-  const { QueryExecutor } = await import('@zlens/connectors');
-  const executor = new QueryExecutor();
+  // A running workbench holds a DuckDB file open; the check then runs through it.
+  const { WorkbenchRoutedQueryExecutor } = await import('../workbench-query-route.js');
+  const executor = new WorkbenchRoutedQueryExecutor(projectRoot, { onRoute: (via) => { if (flags.format !== 'json') console.error(`  Running the relationship check through ${via}, which has the DuckDB file open.`); } });
   try {
     const outcome = await validateProjectRelationships(projectRoot, {
       ...(all ? { all: true } : { ids: [id!] }),

@@ -105,7 +105,8 @@ It still serves on localhost; the URL is printed in the console output.
 
 DuckDB lets only one process open a database file at a time. While
 `zlens notebook` is running on the project, `zlens certify`,
-`zlens model discover --validate` and `zlens sync warehouse` send their
+`zlens model discover --validate`, `zlens model validate-relationship`,
+`zlens sync warehouse` and `zlens doctor` send their
 read-only queries to it instead of opening the file again, and print
 `Running … through zlens notebook (pid …)`. You see this error when the file
 is held by something else: a workbench from an older ZLens, a workbench on a
