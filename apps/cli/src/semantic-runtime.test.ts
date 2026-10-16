@@ -2,7 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createWarehouseTargetIdentity, SemanticLayer } from '@zlens/core';
+import { fileURLToPath } from 'node:url';
+import { createWarehouseTargetIdentity, DbtProvider, SemanticLayer } from '@zlens/core';
 import { physicalRelationBinding } from '@zlens/agent';
 import { saveTestedSemanticRuntimeSettings } from './semantic-runtime-settings.js';
 import {
@@ -582,6 +583,21 @@ describe('describeRuntimeCompatibility (native cascade fallback)', () => {
     const { describeRuntimeCompatibility } = await import('./semantic-runtime.js');
     const result = await describeRuntimeCompatibility(root, bcmLayer(), ['nope']);
     expect(result.incompatible).toContainEqual({ name: 'nope', qualifiedName: undefined, reason: 'metric_unresolved' });
+  });
+
+  it('offers only dimensions the composer accepts, and says which are one-to-many (jaffle-golden)', async () => {
+    const { describeRuntimeCompatibility } = await import('./semantic-runtime.js');
+    const layer = new DbtProvider().load({ provider: 'dbt' }, fileURLToPath(new URL('../test/fixtures/jaffle-golden', import.meta.url)));
+    const result = await describeRuntimeCompatibility(root, layer, ['order_total']);
+    // orders → order_item runs one-to-many, so products is out of reach.
+    expect(result.dimensions.find((d) => d.name === 'product_name')).toBeUndefined();
+    expect(result.incompatible.find((d) => d.name === 'product_name')?.reason).toBe('one_to_many_only');
+    expect(layer.explainDimensionGap(['order_total'], 'product_name')).toContain('orders → order_item');
+    // Many-to-one reach is kept.
+    expect(result.dimensions.find((d) => d.name === 'customer_name')).toBeTruthy();
+    for (const dimension of result.dimensions) {
+      expect(layer.composeQuery({ metrics: ['order_total'], dimensions: [dimension.qualifiedName ?? dimension.name] }), dimension.name).not.toBeNull();
+    }
   });
 });
 

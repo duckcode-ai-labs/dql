@@ -242,6 +242,13 @@ export interface JoinDefinition {
   reversed?: boolean;
 }
 
+/** Why a dimension cannot group a metric set; see {@link SemanticLayer.explainCompatibleDimensions}. */
+export type DimensionIncompatibilityReason =
+  | 'no_join_path'
+  | 'one_to_many_only'
+  | 'not_shared_across_metrics'
+  | 'metric_unresolved';
+
 export interface TimeDimensionDefinition extends DimensionDefinition {
   granularities: ('day' | 'week' | 'month' | 'quarter' | 'year')[];
   /**
@@ -2099,12 +2106,18 @@ export class SemanticLayer {
    * Reasons:
    *   - `no_join_path`             the dimension's model is unreachable from
    *                                every selected metric's model.
-   *   - `not_shared_across_metrics` reachable from some but not all metrics.
+   *   - `one_to_many_only`         reachable, but only by walking an entity
+   *                                join backwards (one-to-many), which would
+   *                                repeat each metric row; the composer and
+   *                                MetricFlow both refuse it.
+   *                                {@link explainDimensionGap} names the step.
+   *   - `not_shared_across_metrics` reachable many-to-one from some but not
+   *                                all metrics.
    *   - `metric_unresolved`         a requested metric name is unknown.
    */
   explainCompatibleDimensions(metricNames: string[]): {
     compatible: Array<DimensionDefinition & { qualifiedName?: string; entityPath?: string[] }>;
-    incompatible: Array<{ name: string; qualifiedName?: string; reason: 'no_join_path' | 'not_shared_across_metrics' | 'metric_unresolved' }>;
+    incompatible: Array<{ name: string; qualifiedName?: string; reason: DimensionIncompatibilityReason }>;
   } {
     // Order-independent: compatibility is an intersection over the metric set.
     const cacheKey = [...new Set(metricNames)].sort().join('\u0000');
@@ -2117,7 +2130,7 @@ export class SemanticLayer {
 
   private computeCompatibleDimensions(metricNames: string[]): {
     compatible: Array<DimensionDefinition & { qualifiedName?: string; entityPath?: string[] }>;
-    incompatible: Array<{ name: string; qualifiedName?: string; reason: 'no_join_path' | 'not_shared_across_metrics' | 'metric_unresolved' }>;
+    incompatible: Array<{ name: string; qualifiedName?: string; reason: DimensionIncompatibilityReason }>;
   } {
     const resolvedMetrics = metricNames
       .map((name) => this.metricForReference(name))
@@ -2187,6 +2200,29 @@ export class SemanticLayer {
       return Array.from(names);
     };
 
+    const walkJoins = (seedTables: Set<string>, followOneToMany: boolean): Set<string> => {
+      const reached = new Set(seedTables);
+      for (const table of seedTables) {
+        const cubeName = resolveCubeNameForTable(table);
+        if (!cubeName) continue;
+        const queue = [cubeName];
+        const visited = new Set<string>(queue);
+        while (queue.length > 0) {
+          const current = queue.shift()!;
+          const cube = this.cubes.get(current);
+          if (cube?.table) reached.add(cube.table);
+          for (const join of this.joinGraph.get(current) ?? []) {
+            if (!followOneToMany && join.reversed && join.entity) continue;
+            const next = join.right;
+            if (visited.has(next)) continue;
+            visited.add(next);
+            queue.push(next);
+          }
+        }
+      }
+      return reached;
+    };
+
     const metricTables = resolvedMetrics.map((metric) => {
       const reachableTables = new Set<string>();
       const measureNames = new Set<string>();
@@ -2221,35 +2257,27 @@ export class SemanticLayer {
         }
       }
 
-      for (const table of Array.from(reachableTables)) {
-        const cubeName = resolveCubeNameForTable(table);
-        if (!cubeName) continue;
-        const queue = [cubeName];
-        const visited = new Set<string>(queue);
-        while (queue.length > 0) {
-          const current = queue.shift()!;
-          const cube = this.cubes.get(current);
-          if (cube?.table) reachableTables.add(cube.table);
-          const joins = this.joinGraph.get(current) ?? [];
-          for (const join of joins) {
-            const next = join.right;
-            if (visited.has(next)) continue;
-            visited.add(next);
-            queue.push(next);
-          }
-        }
-      }
-      return reachableTables;
+      // `safe` follows joins the way findJoinPath does (never an entity join
+      // walked backwards, which multiplies the metric's rows); `any` follows
+      // every edge. The gap between them earns `one_to_many_only`.
+      return {
+        safe: walkJoins(reachableTables, false),
+        any: walkJoins(reachableTables, true),
+      };
     });
 
     // Shared = reachable for EVERY metric (intersection); union = reachable for
     // at least one. The gap between them is what earns `not_shared_across_metrics`.
-    const sharedTables = metricTables.slice(1).reduce((common, tables) => {
-      for (const table of common) if (!tables.has(table)) common.delete(table);
+    const sharedTables = metricTables.slice(1).reduce((common, { safe }) => {
+      for (const table of common) if (!safe.has(table)) common.delete(table);
       return common;
-    }, new Set(metricTables[0]));
+    }, new Set(metricTables[0].safe));
     const unionTables = new Set<string>();
-    for (const tables of metricTables) for (const t of tables) unionTables.add(t);
+    const fanOutTables = new Set<string>();
+    for (const { safe, any } of metricTables) {
+      for (const t of safe) unionTables.add(t);
+      for (const t of any) fanOutTables.add(t);
+    }
 
     // Entity path from a metric's model to a dimension's cube, along join
     // `entity` links — the head of a MetricFlow multi-hop group-by name.
@@ -2268,6 +2296,9 @@ export class SemanticLayer {
         while (queue.length > 0) {
           const { cube, trail } = queue.shift()!;
           for (const join of this.joinGraph.get(cube) ?? []) {
+            // Never walk an entity join backwards: that path is refused by the
+            // composer (see findJoinPath), so it cannot name a group-by.
+            if (join.reversed && join.entity) continue;
             // A one-to-one join stays on the same entity (policy → the
             // policy's agent row), which MetricFlow does not spell twice.
             const nextTrail = join.entity && trail[trail.length - 1] !== join.entity ? [...trail, join.entity] : trail;
@@ -2298,7 +2329,7 @@ export class SemanticLayer {
     };
 
     const compatible: Array<DimensionDefinition & { qualifiedName?: string; entityPath?: string[] }> = [];
-    const incompatible: Array<{ name: string; qualifiedName?: string; reason: 'no_join_path' | 'not_shared_across_metrics' | 'metric_unresolved' }> = [];
+    const incompatible: Array<{ name: string; qualifiedName?: string; reason: DimensionIncompatibilityReason }> = [];
     for (const name of unresolved) incompatible.push({ name, reason: 'metric_unresolved' });
 
     const seenReferences = new Set<string>();
@@ -2316,6 +2347,8 @@ export class SemanticLayer {
         compatible.push({ ...resolved, qualifiedName, entityPath: cube ? entityPathTo(cube) : undefined });
       } else if (unionTables.has(resolved.table)) {
         incompatible.push({ name: resolved.name, qualifiedName, reason: 'not_shared_across_metrics' });
+      } else if (fanOutTables.has(resolved.table)) {
+        incompatible.push({ name: resolved.name, qualifiedName, reason: 'one_to_many_only' });
       } else {
         incompatible.push({ name: resolved.name, qualifiedName, reason: 'no_join_path' });
       }

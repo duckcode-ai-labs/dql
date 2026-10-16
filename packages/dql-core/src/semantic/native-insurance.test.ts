@@ -320,6 +320,16 @@ describe('native semantic engine on an insurance book', () => {
       expect(layer.explainDimensionGap(['incurred_losses'], 'line_of_business')).toBeUndefined();
     });
 
+    it('does not list a bridge dimension as compatible with a claim metric', () => {
+      const { compatible, incompatible } = layer.explainCompatibleDimensions(['incurred_losses']);
+      expect(compatible.find((dimension) => dimension.name === 'party_role')).toBeUndefined();
+      expect(incompatible.find((dimension) => dimension.name === 'party_role')?.reason).toBe('one_to_many_only');
+      // Every dimension compatibility offers is one the composer accepts.
+      for (const dimension of compatible) {
+        expect(layer.composeQuery({ metrics: ['incurred_losses'], dimensions: [dimension.qualifiedName ?? dimension.name] }), dimension.name).not.toBeNull();
+      }
+    });
+
     it('reaches the agent through a one-row-per-policy model keyed by policy', () => {
       // Policies stay the target of every foreign `policy` entity.
       expect(layer.getCube('insurance_claims')!.joins.map((join) => join.right)).toEqual(['insurance_policies']);
