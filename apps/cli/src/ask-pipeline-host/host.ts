@@ -75,6 +75,7 @@ import {
   sqlStringValues,
 } from '@zlens/agent';
 import { buildProjectVocabulary, buildVocabularySource, embeddedManifestRelations, namedBlockNotServed, normalizeRelationName, type VocabularySourceInput } from './vocabulary-source.js';
+import { groupingKeyLabels, keyLabelLine, keyLabels, unnamedGroupingKeys, unnamedKeyFailure, type EntityKey, type KeyLabel, type KeyReference } from './key-labels.js';
 import { businessIdentifierLine, businessIdentifiers, modelingEntityTexts, certifiedJoinViolations, classifySqlJoins, ledgerJoins, markerTableLine, markerTables, modeledJoinPaths, modelingRelationshipEdges, sameRelation, sharedParentShortcuts, type LedgerJoin } from './join-relationships.js';
 import { readEnv } from '@zlens/core';
 
@@ -1226,7 +1227,7 @@ interface AskRunState {
   draftDispatches: Array<{ purpose: string; ms: number; reply?: string; promptChars?: number; at?: number; attempt?: number; label?: 'draft' | 'redraft' | 'fix' | 'retry_empty' | 'widen'; outcome?: 'sql' | 'declined' | 'rejected' | 'error' }>;
   // The checks drafted SQL was held to, recorded for the run views (the
   // notes sent back to the model are built separately and never from these).
-  hostChecks: Array<{ id: 'stated_values' | 'required_filters' | 'join_fanout' | 'certified_joins' | 'catalog_columns' | 'read_only'; label: string; passed: boolean; message: string; attempt: number }>;
+  hostChecks: Array<{ id: 'stated_values' | 'required_filters' | 'join_fanout' | 'certified_joins' | 'catalog_columns' | 'read_only' | 'key_labels'; label: string; passed: boolean; message: string; attempt: number }>;
   /** The joins the last checked AI-written statement made, each with the Modeling relationship behind it (or none). */
   hostJoins?: LedgerJoin[];
   checkRound: number;
@@ -2009,6 +2010,49 @@ export function createAskPipelineHost(deps: AskPipelineHostDeps): AskPipelineHos
           }
         } catch { /* the tables chosen so far stand */ }
       }
+      // NAMES, NOT KEYS (key-labels.ts). The reading groups by a thing's key
+      // (a store's location_id on the orders); the table that names those rows
+      // is found from the Modeling map, the semantic entities or the column
+      // names, read as the warehouse table, never a semantic model's bare name
+      // (`locations` is not a table the warehouse has). When the chosen tables
+      // do not already include it, it is added and the join is spelled out, so
+      // the draft can show names. A statement that still groups by a bare key
+      // is sent back once (finalize below).
+      const qualifiedText = (item: NonNullable<VocabularySource['relations']>[number]) => item.binding ? physicalRelationText(item.binding) : [item.schema, item.name].filter(Boolean).join('.');
+      const physicalTables = (draftSource?.relations ?? []).map(qualifiedText).filter((name) => parsePhysicalIdentifier(name).length >= 2);
+      const warehouseTable = (name: string): string | undefined => {
+        if (parsePhysicalIdentifier(name).length >= 2) {
+          const exact = physicalTables.find((table) => physicalRelationIdentity(table) === physicalRelationIdentity(name));
+          if (exact) return exact;
+        }
+        const matches = physicalTables.filter((table) => sameRelation(table, name));
+        return matches.length === 1 ? matches[0] : undefined;
+      };
+      const knownColumns = (relation: string): string[] => {
+        const fromEntries = current.entries
+          .filter((item) => item.kind === 'column' && (() => { const physical = entryPhysicalRelation(item); return physical !== undefined && physicalRelationIdentity(physical) === physicalRelationIdentity(relation); })())
+          .map((item) => item.physical?.column ?? item.name.split('.').pop()!);
+        return [...new Set([...sourceColumns(relation), ...fromEntries])];
+      };
+      const entityKeys: EntityKey[] = current.entries
+        .filter((entry) => entry.kind === 'entity' && entry.physical?.relation && entry.physical.column)
+        .map((entry) => ({ name: entry.ref.split('.').pop()!, type: entry.entityType ?? '', relation: entry.physical!.relation, column: entry.physical!.column! }));
+      const labelsFor = (keys: KeyReference[]): KeyLabel[] => keyLabels(keys, { edges: mapEdges, entities: entityKeys, relations: physicalTables, columnsOf: knownColumns, resolve: warehouseTable });
+      const readingKeys: KeyReference[] = (intent?.groupBy ?? []).flatMap((group) => {
+        const entry = current.get(group.ref) ?? current.resolve(group.ref);
+        const keyLike = group.role === 'key' || entry?.kind === 'entity' || entry?.roles.includes('key');
+        if (!entry || !keyLike || !entry.physical?.column) return [];
+        const table = warehouseTable(entry.physical.relation) ?? entryPhysicalRelation(entry);
+        return table ? [{ relation: table, column: entry.physical.column }] : [];
+      });
+      const keyLines: string[] = [];
+      const namingTables: string[] = [];
+      for (const item of labelsFor(readingKeys)) {
+        const missing = [item.keyRelation, item.labelRelation].filter((relation) => !relations.some((known) => physicalRelationIdentity(known) === physicalRelationIdentity(relation)));
+        if (missing.length === 0) continue;
+        for (const relation of missing) { relations.push(relation); namingTables.push(relation); }
+        keyLines.push(keyLabelLine(item));
+      }
       const needsColumns = relations.filter((relation) => {
         const entry = current.entries.find((item) => item.kind === 'relation' && entryPhysicalRelation(item) !== undefined && physicalRelationIdentity(entryPhysicalRelation(item)!) === physicalRelationIdentity(relation));
         return !entry || entry.physical?.binding?.columnCompleteness !== 'complete' || !current.entries.some((item) => item.kind === 'column' && samePhysicalEntry(item, entry));
@@ -2019,7 +2063,7 @@ export function createAskPipelineHost(deps: AskPipelineHostDeps): AskPipelineHos
         // number described stays as it was — describing more tables leaves
         // more columns in the request's vocabulary, and a later question then
         // reads wider than the certified block that answers it.
-        const ordered = [...needsColumns.filter((relation) => bridged.includes(relation)), ...needsColumns.filter((relation) => !bridged.includes(relation))];
+        const ordered = [...needsColumns.filter((relation) => bridged.includes(relation) || namingTables.includes(relation)), ...needsColumns.filter((relation) => !bridged.includes(relation) && !namingTables.includes(relation))];
         try {
           const found = await describeRelations(ordered);
           if (found.length > 0) {
@@ -2031,7 +2075,7 @@ export function createAskPipelineHost(deps: AskPipelineHostDeps): AskPipelineHos
       // Only tables whose columns are known can be drafted over.
       relations = relations.filter((relation) => current.entries.some((item) => item.kind === 'column' && (() => { const physical = entryPhysicalRelation(item); return physical !== undefined && physicalRelationIdentity(physical) === physicalRelationIdentity(relation); })()));
       if (relations.length === 0) return { unavailable: true, error: 'the tables that match the question could not be described on this connection' };
-      hostStep({ phase: 'schema', title: `Chose ${relations.length === 1 ? 'the table' : 'the tables'} ${relations.join(', ')}`, state: 'done', detail: `picked from ${refs.length ? 'the fields the reading named' : 'the words of the question'}${catalogPicked.length ? `; found by the catalog search: ${catalogPicked.join(', ')}` : ''}${bridged.length ? `; added to connect them over modeled relationships: ${bridged.join(', ')}` : ''}${needsColumns.length ? `; columns of ${needsColumns.slice(0, 4).join(', ')} read from the warehouse` : ''}` });
+      hostStep({ phase: 'schema', title: `Chose ${relations.length === 1 ? 'the table' : 'the tables'} ${relations.join(', ')}`, state: 'done', detail: `picked from ${refs.length ? 'the fields the reading named' : 'the words of the question'}${catalogPicked.length ? `; found by the catalog search: ${catalogPicked.join(', ')}` : ''}${bridged.length ? `; added to connect them over modeled relationships: ${bridged.join(', ')}` : ''}${namingTables.length ? `; added because they name what the answer groups by: ${namingTables.join(', ')}` : ''}${needsColumns.length ? `; columns of ${needsColumns.slice(0, 4).join(', ')} read from the warehouse` : ''}` });
       // THE CONTEXT THE DRAFT READS: what the user said, the previous reading,
       // and what the project says about this data (domain notes, business
       // terms the question uses, approved hints).
@@ -2094,6 +2138,7 @@ export function createAskPipelineHost(deps: AskPipelineHostDeps): AskPipelineHos
         ...termLines,
         ...metricLines,
         ...joinLines,
+        ...keyLines,
         ...markerLines,
         ...identifierLines,
         ...skillLines,
@@ -2291,6 +2336,30 @@ export function createAskPipelineHost(deps: AskPipelineHostDeps): AskPipelineHos
         );
         return failures;
       };
+      // A statement that groups by a key whose rows have a reachable name it
+      // does not show (key-labels.ts), recorded as a check for the run views.
+      const unnamedKeysOf = (sql: string): KeyLabel[] => {
+        const grouped = groupingKeyLabels(sql, question, labelsFor, knownColumns);
+        const found = unnamedGroupingKeys(sql, question, labelsFor, knownColumns);
+        if (grouped.length > 0) {
+          state.hostChecks.push({ id: 'key_labels', label: 'Shows names, not bare keys', passed: found.length === 0, message: found.length ? unnamedKeyFailure(found[0]!) : `shows ${[...new Set(grouped.map((item) => item.label))].join(', ')} for what it groups by`, attempt: state.checkRound });
+        }
+        return found;
+      };
+      const includeRelations = async (wanted: string[]): Promise<void> => {
+        const fresh = [...new Set(wanted)].filter((relation) => !relations.some((known) => physicalRelationIdentity(known) === physicalRelationIdentity(relation)));
+        if (fresh.length === 0) return;
+        const undescribed = fresh.filter((relation) => !current.entries.some((item) => item.kind === 'column' && (() => { const physical = entryPhysicalRelation(item); return physical !== undefined && physicalRelationIdentity(physical) === physicalRelationIdentity(relation); })()));
+        if (undescribed.length > 0) {
+          try {
+            const described = await describeRelations(undescribed);
+            if (described.length > 0) { current = mergeDiscoveredRelations(current, described); requestVocabulary = current; }
+          } catch { /* drafted over what is described */ }
+        }
+        for (const relation of fresh) {
+          if (current.entries.some((item) => item.kind === 'column' && (() => { const physical = entryPhysicalRelation(item); return physical !== undefined && physicalRelationIdentity(physical) === physicalRelationIdentity(relation); })())) relations.push(relation);
+        }
+      };
       type Drafted = Awaited<ReturnType<typeof attemptDraft>>;
       const finalize = async (drafted: Drafted): Promise<Drafted> => {
         // A statement rejected before running (a column the tables do not have,
@@ -2306,13 +2375,28 @@ export function createAskPipelineHost(deps: AskPipelineHostDeps): AskPipelineHos
         if (!drafted || !('sql' in drafted)) return drafted;
         let chosen = drafted;
         let failures = await failedChecks(chosen.sql);
-        if (failures.length > 0) {
-          hostStep({ phase: 'schema', title: 'The drafted SQL failed a check: asking the AI to fix it', state: 'failed', detail: failures.join('; ') });
-          const repaired = await attemptDraft(`The previous statement was not run because ${failures.join('; ')}. Fix exactly that and keep everything else the question asks.`);
-          if (!repaired || !('sql' in repaired)) return repaired;
-          chosen = repaired;
-          failures = await failedChecks(chosen.sql);
-          if (failures.length > 0) return { refused: failures.join('; ') };
+        let unnamed = unnamedKeysOf(chosen.sql);
+        if (failures.length > 0 || unnamed.length > 0) {
+          const problems = [...failures, ...unnamed.map(unnamedKeyFailure)];
+          hostStep({ phase: 'schema', title: 'The drafted SQL failed a check: asking the AI to fix it', state: 'failed', detail: problems.join('; ') });
+          // The tables that name those keys are drafted over the second time.
+          await includeRelations(unnamed.flatMap((item) => [item.keyRelation, item.labelRelation]));
+          const repaired = await attemptDraft(`The previous statement was not run because ${problems.join('; ')}. Fix exactly that and keep everything else the question asks.`);
+          // Bare keys alone never refuse a statement that is otherwise right:
+          // when the fix fails, the first statement runs and the answer says
+          // what identifies its rows.
+          const keysOnly = failures.length === 0;
+          if (!repaired || !('sql' in repaired)) {
+            if (!keysOnly) return repaired;
+          } else {
+            const repairedFailures = await failedChecks(repaired.sql);
+            if (repairedFailures.length === 0) chosen = repaired;
+            else if (!keysOnly) return { refused: repairedFailures.join('; ') };
+            // The first statement stands; its own checks are the ones recorded last.
+            else await failedChecks(chosen.sql);
+          }
+          failures = [];
+          unnamed = unnamedKeysOf(chosen.sql);
         }
         const applied = appliedConditions(chosen.sql);
         hostStep({ phase: 'schema', title: 'Checked the drafted SQL', state: 'done', detail: [stated.length ? `applies ${stated.map((item) => item.value).join(', ')}` : '', required.length ? `required filters present: ${required.map((item) => item.text).join(', ')}` : '', applied ? `filters on ${applied}` : ''].filter(Boolean).join('; ') || 'read-only and in scope' });
@@ -2325,6 +2409,7 @@ export function createAskPipelineHost(deps: AskPipelineHostDeps): AskPipelineHos
             ...(stated.length ? [`stated values applied: ${stated.map((item) => item.value).join(', ')}`] : []),
             ...(required.length ? [`required filters present: ${required.map((item) => item.text).join(', ')}`] : []),
             ...joinHints.filter((hint) => joinHintUsed(chosen.sql, hint.keys)).map((hint) => `joined as the ${hint.certified ? 'certified' : 'declared (not validated)'} relationship ${hint.name} says`),
+            ...unnamed.map((item) => `caveat: the rows are grouped by ${item.key}, an internal key; ${item.labelRelation.split('.').pop()!.replace(/"/g, '')}.${item.label} names them, and the statement could not be made to show it`),
           ],
         };
       };

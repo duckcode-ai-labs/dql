@@ -20,8 +20,15 @@ install.
 
 ## Do I need dbt?
 
-No. ZLens works standalone. But if you already use dbt, `create-zlens-app`
-auto-detects a sibling dbt project. Run `dbt build`, then `zlens compile .`,
+No. ZLens works on a dbt project or straight on your database. Without dbt,
+it reads your tables' columns, keys and comments, drafts models and joins,
+and you certify them: see
+[No dbt? Start from your database](../get-started/no-dbt.md).
+`npx create-zlens-app my-app --warehouse <driver>` creates a database-only
+project, and Guided Setup offers **Database only** as its first choice.
+
+If you already use dbt, `create-zlens-app` auto-detects a sibling dbt
+project (or takes `--dbt <path>`). Run `dbt build`, then `zlens compile .`,
 `zlens sync dbt .`, and `zlens agent reindex` to refresh manifest metadata,
 semantic metrics, lineage, and the agent index. See
 [Add ZLens to your dbt project](../get-started/your-dbt-project.md).

@@ -1,12 +1,30 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { ZLensMark } from '../shell/ZLensMark';
 import { ArrowLeft, ArrowRight, Boxes, FileText, LayoutDashboard, MessageCircleQuestion, Sparkles } from 'lucide-react';
-import { api, type ProviderSettings, type SetupLaunchResponse } from '../../api/client';
+import { api, type ProviderSettings, type SetupLaunchResponse, type WarehouseCatalogSummary } from '../../api/client';
 import { useNotebook } from '../../store/NotebookStore';
 import { themes } from '../../themes/notebook-theme';
 import { ConnectionPanel } from '../panels/ConnectionPanel';
 import { ConnectionRuntimeSettings } from '../settings/SettingsPage';
 import { DbtProjectEditor, type DbtProjectConfigured } from '../settings/DbtProjectEditor';
+import { DraftModelsCard, ExistingProjectSyncCard, ModelSourceChooser } from './ModelSourceChooser';
+import {
+  draftErrorMessage,
+  draftOutcome,
+  draftsFromWarehouse,
+  existingProjectFromStatus,
+  initialModelSource,
+  modelingModeForSource,
+  rememberProposalForModeling,
+  setupStepTitles,
+  stepOneBlocker,
+  stepTwoCopy,
+  synchronizeExistingProject,
+  type DraftOutcome,
+  type ExistingProject,
+  type ModelSource,
+  type ProjectSyncStep,
+} from './setup-model-source';
 
 type SetupState = 'missing' | 'configured' | 'passed';
 type SetupTarget = 'domains' | 'ask' | 'notebook' | 'apps';
@@ -48,25 +66,20 @@ export function SetupOnboarding({
   const [acknowledging, setAcknowledging] = useState(false);
   const [upgradeReapplied, setUpgradeReapplied] = useState(!launch?.requiresDbtReapply);
   const [acknowledgeError, setAcknowledgeError] = useState<string | null>(null);
-  // RFC 0007: a team without dbt models its warehouse's own tables.
-  const [warehouseChosen, setWarehouseChosen] = useState(false);
-  const [warehouseBusy, setWarehouseBusy] = useState(false);
-  const [warehouseError, setWarehouseError] = useState<string | null>(null);
-  const chooseWarehouse = async () => {
-    setWarehouseBusy(true);
-    setWarehouseError(null);
-    try {
-      await api.enableWarehouseModeling();
-      setWarehouseChosen(true);
-      setProjectState('configured');
-      setProjectDetail('Warehouse modeling · no dbt project');
-      setStep(2);
-    } catch (error) {
-      setWarehouseError(error instanceof Error ? error.message : String(error));
-    } finally {
-      setWarehouseBusy(false);
-    }
-  };
+  // Step 1, "Where does your data model live?" (RFC 0007 §8): dbt, the
+  // database's own tables, both, or a project this folder already is.
+  const [source, setSource] = useState<ModelSource | null>(null);
+  const [existing, setExisting] = useState<ExistingProject | null>(null);
+  const [connectionId, setConnectionId] = useState<string | null>(null);
+  const [continuing, setContinuing] = useState(false);
+  const [continueError, setContinueError] = useState<string | null>(null);
+  const [catalogReady, setCatalogReady] = useState(false);
+  const [drafting, setDrafting] = useState(false);
+  const [draft, setDraft] = useState<DraftOutcome | null>(null);
+  const [syncing, setSyncing] = useState(false);
+  const [syncSteps, setSyncSteps] = useState<ProjectSyncStep[] | null>(null);
+  const [environment, setEnvironment] = useState<Array<{ name: string; set: boolean }>>([]);
+  const requestedSource = state.setupModelSource;
 
   const requiresUpgradeReapply = Boolean(
     launch?.reason === 'version_upgrade'
@@ -77,7 +90,10 @@ export function SetupOnboarding({
   useEffect(() => {
     setUpgradeReapplied(!launch?.requiresDbtReapply);
     setAcknowledgeError(null);
-    if (launch?.requiresDbtReapply) setStep(1);
+    if (launch?.requiresDbtReapply) {
+      setStep(1);
+      setSource('dbt');
+    }
   }, [launch?.requiresDbtReapply, launch?.version]);
 
   useEffect(() => {
@@ -93,14 +109,27 @@ export function SetupOnboarding({
         setProjectState(onboarding?.modeling?.snapshotState === 'ready' ? 'passed' : 'configured');
         setProjectDetail(onboarding?.preparation?.message || onboarding?.dbt?.repoUrl || onboarding?.dbt?.projectDir || dbt?.projectPath || 'dbt project configured');
       }
-      if (connectionInfo && hasRealConnection(connectionInfo.connections ?? {})) {
+      const realConnection = Boolean(connectionInfo && hasRealConnection(connectionInfo.connections ?? {}));
+      if (connectionInfo && realConnection) {
         setDatabaseState('configured');
         const active = connectionInfo.connections?.[connectionInfo.default];
         const driver = active && typeof active === 'object'
           ? String((active as Record<string, unknown>).driver ?? (active as Record<string, unknown>).type ?? 'Database')
           : 'Database';
         setDatabaseDetail(`${driver} configured — test to verify reachability.`);
+        setConnectionId(connectionInfo.default);
       }
+      setEnvironment(connectionInfo?.environmentReferences ?? []);
+      const catalog = (connectionInfo as { warehouseCatalog?: WarehouseCatalogSummary } | null)?.warehouseCatalog;
+      if (catalog?.relations && !catalog.error) setCatalogReady(true);
+      const project = existingProjectFromStatus(onboarding, realConnection ? connectionInfo : null);
+      setExisting(project);
+      setSource((current) => current ?? initialModelSource({
+        requested: requestedSource,
+        requiresDbtReapply: Boolean(launch?.requiresDbtReapply),
+        existing: project,
+        dbtProjectFound: Boolean(onboarding?.dbt?.projectFound),
+      }));
       const provider = providerInfo?.providers.find((candidate) => candidate.active && candidate.configured)
         ?? providerInfo?.providers.find((candidate) => candidate.enabled && candidate.configured)
         ?? null;
@@ -152,17 +181,85 @@ export function SetupOnboarding({
     setAiProvider(provider);
   };
 
+  const chooseSource = (next: ModelSource) => {
+    setSource(next);
+    setContinueError(null);
+  };
+  const stepOneBlocked = stepOneBlocker({
+    source,
+    requiresDbtReapply: requiresUpgradeReapply,
+    dbtConfigured: projectState !== 'missing',
+  });
+  /** Leave step 1: turn on warehouse-first or hybrid modeling when the answer needs it. */
+  const continueFromStepOne = async () => {
+    if (!source || stepOneBlocked) return;
+    const mode = modelingModeForSource(source);
+    if (!mode) {
+      setStep(2);
+      return;
+    }
+    setContinuing(true);
+    setContinueError(null);
+    try {
+      await api.enableWarehouseModeling(mode);
+      if (source === 'warehouse') {
+        setProjectState('configured');
+        setProjectDetail('Database only · no dbt project');
+      }
+      setStep(2);
+    } catch (error) {
+      setContinueError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setContinuing(false);
+    }
+  };
+  const draftModels = async () => {
+    setDrafting(true);
+    setDraft(null);
+    try {
+      const outcome = draftOutcome(await api.draftWarehouseModel({ validate: true }));
+      if (outcome.proposalId) rememberProposalForModeling(outcome.proposalId);
+      setDraft(outcome);
+    } catch (error) {
+      setDraft({ ok: false, message: draftErrorMessage(error) });
+    } finally {
+      setDrafting(false);
+    }
+  };
+  const synchronize = async () => {
+    if (!existing) return;
+    setSyncing(true);
+    setSyncSteps(null);
+    try {
+      const latest = await api.getConnections().catch(() => null);
+      const references = latest?.environmentReferences ?? environment;
+      setEnvironment(references);
+      setSyncSteps(await synchronizeExistingProject(existing, latest?.default ?? connectionId, api, references));
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  const drafted = Boolean(draft?.proposalId);
+  const stepTwo = stepTwoCopy(source, existing);
   const hint = useMemo(() => {
     if (loading) return 'Loading existing project-local configuration…';
-    if (step === 1) return requiresUpgradeReapply
-      ? `Required for ZLens ${launch?.version}: Preview and Reapply the prefilled dbt project.`
-      : projectState === 'missing'
-      ? 'Preview before applying; existing dbt settings stay untouched.'
-      : `${projectState === 'passed' ? 'Ready' : 'Configured'} · ${projectDetail}`;
-    if (step === 2) return databaseState === 'passed' ? `Test passed · ${databaseDetail}` : databaseState === 'configured' ? databaseDetail : 'A failed test rolls back to the previous connection.';
+    if (step === 1) {
+      if (requiresUpgradeReapply) return `Required for ZLens ${launch?.version}: Preview and Reapply the prefilled dbt project.`;
+      if (stepOneBlocked) return stepOneBlocked;
+      if (source === 'warehouse') return 'Database only · ZLens reads tables, columns, keys and comments — never rows.';
+      if (source === 'existing') return `Existing project · ${existing?.label ?? 'configured'}`;
+      return projectState === 'missing'
+        ? 'Preview before applying; existing dbt settings stay untouched.'
+        : `${projectState === 'passed' ? 'Ready' : 'Configured'} · ${projectDetail}`;
+    }
+    if (step === 2) {
+      if (draftsFromWarehouse(source) && draft?.ok && draft.proposalId) return 'Models drafted · review and certify them in Modeling.';
+      return databaseState === 'passed' ? `Test passed · ${databaseDetail}` : databaseState === 'configured' ? databaseDetail : 'A failed test rolls back to the previous connection.';
+    }
     if (step === 3) return aiSkipped ? 'AI skipped · limited-AI mode remains available.' : aiState === 'missing' ? 'Optional · skip for now or configure a provider.' : `${aiState === 'passed' ? 'Test passed' : 'Configured'} · ${providerSummary(aiProvider)}`;
     return 'Setup complete';
-  }, [aiProvider, aiSkipped, aiState, databaseDetail, databaseState, launch?.version, loading, projectDetail, projectState, requiresUpgradeReapply, step]);
+  }, [aiProvider, aiSkipped, aiState, databaseDetail, databaseState, draft, existing, launch?.version, loading, projectDetail, projectState, requiresUpgradeReapply, source, step, stepOneBlocked]);
 
   const supportingText = t.textSecondary;
   const primaryButton: React.CSSProperties = {
@@ -185,8 +282,13 @@ export function SetupOnboarding({
       ? `ZLens was updated${launch.acknowledgedVersion ? ` from ${launch.acknowledgedVersion}` : ''} to ${launch.version}. Reapply the prefilled dbt project to rebuild its OSS governed snapshot with this version. Saved paths and credentials remain unchanged until Apply succeeds.`
       : `ZLens was updated${launch.acknowledgedVersion ? ` from ${launch.acknowledgedVersion}` : ''} to ${launch.version}. The dbt project was reapplied with this version; review the remaining saved connections before finishing.`
     : launch?.reason === 'first_install'
-      ? `ZLens ${launch.version} is installed. Connect the project and database before entering the workspace; AI remains optional.`
+      ? `ZLens ${launch.version} is installed. Tell it where your data model lives and connect the database before entering the workspace; AI remains optional.`
       : null;
+  const nextDisabled = step === 1 && (Boolean(stepOneBlocked) || continuing || loading);
+  const nextLabel = step === 1
+    ? (continuing ? 'Setting up…' : source === 'existing' ? 'Continue to credentials' : 'Continue to database')
+    : step === 2 ? 'Continue to optional AI' : 'Continue to finish';
+  const finishTarget: SetupTarget = drafted ? 'domains' : aiState === 'missing' || aiSkipped ? 'domains' : 'ask';
 
   return (
     <div role="dialog" aria-modal="true" aria-label="Guided Setup" style={{ position: 'fixed', inset: 0, zIndex: 1000, background: t.appBg, color: t.textPrimary, display: 'flex', flexDirection: 'column', fontFamily: t.font }}>
@@ -194,7 +296,7 @@ export function SetupOnboarding({
         <span style={{ display: 'inline-flex', color: t.textPrimary, flexShrink: 0 }}><ZLensMark size={27} /></span>
         <div>
           <div style={{ fontSize: 13.5, fontWeight: 700 }}>{launchTitle}</div>
-          <div style={{ fontSize: 10.5, color: t.textMuted }}>Project → Database → optional AI → Finish</div>
+          <div style={{ fontSize: 10.5, color: t.textMuted }}>{setupStepTitles(source)}</div>
         </div>
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10 }}>
           <span style={{ fontSize: 11.5, color: t.textMuted }}>Step {step} of 4</span>
@@ -212,31 +314,50 @@ export function SetupOnboarding({
             </div>
           ) : null}
           {step === 1 ? (
-            <SetupSection eyebrow="Step 1 of 4" title="Connect your dbt project" description="Preview a local project or Git repository, then apply it only after the manifest is valid." t={t}>
-              <DbtProjectEditor compact reapplyRequired={requiresUpgradeReapply} onConfigured={onProjectConfigured} />
-              {projectState === 'missing' && !requiresUpgradeReapply ? (
-                <div style={{ border: `1px solid ${t.headerBorder}`, background: t.cellBg, borderRadius: 10, padding: '12px 13px', display: 'flex', alignItems: 'center', gap: 12 }}>
-                  <div style={{ flex: 1, fontSize: 11.5, color: supportingText, lineHeight: 1.55 }}>
-                    <strong style={{ color: t.textPrimary }}>No dbt project?</strong> Model your warehouse directly. ZLens reads your tables' columns, keys and comments — never their rows — and drafts models and joins for you to review.
-                    {warehouseError ? <div role="alert" style={{ color: 'var(--status-error)', marginTop: 6 }}>{warehouseError}</div> : null}
+            <SetupSection eyebrow="Step 1 of 4" title="Where does your data model live?" description="ZLens works on a dbt project or straight on your database. You can add the other later in Settings." t={t}>
+              {loading ? null : (
+                <ModelSourceChooser value={source} onChange={chooseSource} existing={existing} dbtOnly={requiresUpgradeReapply} t={t} />
+              )}
+              {source === 'dbt' || source === 'both' ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  <div>
+                    <h3 style={{ margin: 0, fontSize: 14.5, fontWeight: 750, color: t.textPrimary }}>Connect your dbt project</h3>
+                    <div style={{ marginTop: 4, fontSize: 11.5, color: supportingText, lineHeight: 1.55 }}>
+                      {source === 'both'
+                        ? "Preview a local project or Git repository and apply it. The next step adds the warehouse schemas dbt doesn't cover."
+                        : 'Preview a local project or Git repository, then apply it only after the manifest is valid.'}
+                    </div>
                   </div>
-                  <button type="button" disabled={warehouseBusy} onClick={() => void chooseWarehouse()} style={{ ...secondaryButton, opacity: warehouseBusy ? 0.6 : 1 }}>
-                    {warehouseBusy ? 'Setting up…' : 'Use my warehouse'}
-                  </button>
+                  <DbtProjectEditor compact reapplyRequired={requiresUpgradeReapply} onConfigured={onProjectConfigured} />
                 </div>
               ) : null}
+              {source === 'warehouse' ? (
+                <div style={{ border: `1px solid ${t.headerBorder}`, background: t.cellBg, borderRadius: 10, padding: '12px 13px', fontSize: 11.5, color: supportingText, lineHeight: 1.55 }}>
+                  <strong style={{ color: t.textPrimary }}>Next:</strong> connect your database, choose the schemas to model, Apply and synchronize, then Draft my models. You review and certify the drafts in Modeling before Ask relies on them.
+                </div>
+              ) : null}
+              {continueError ? <div role="alert" style={{ color: 'var(--status-error)', fontSize: 11.5, lineHeight: 1.5 }}>{continueError}</div> : null}
             </SetupSection>
           ) : null}
 
           {step === 2 ? (
-            <SetupSection eyebrow="Step 2 of 4" title="Connect your database" description={warehouseChosen ? 'Connect and test the warehouse, choose the schemas to model, then Apply and synchronize. ZLens reads their tables, columns, keys and comments.' : 'Use the same profile import, enterprise authentication fields, test, and rollback flow available in Settings.'} t={t}>
+            <SetupSection eyebrow="Step 2 of 4" title={stepTwo.title} description={stepTwo.description} t={t}>
               <ConnectionPanel
                 variant="setup"
                 onConfigured={(detail) => {
                   setDatabaseState('passed');
                   setDatabaseDetail(detail);
                 }}
+                onMetadataSynced={(result) => {
+                  if (result.warehouseCatalog?.relations && !result.warehouseCatalog.error) setCatalogReady(true);
+                }}
               />
+              {draftsFromWarehouse(source) ? (
+                <DraftModelsCard busy={drafting} canDraft={catalogReady} outcome={draft} onDraft={() => void draftModels()} t={t} />
+              ) : null}
+              {source === 'existing' && existing ? (
+                <ExistingProjectSyncCard project={existing} busy={syncing} steps={syncSteps} environment={environment} onSync={() => void synchronize()} t={t} />
+              ) : null}
             </SetupSection>
           ) : null}
 
@@ -258,8 +379,13 @@ export function SetupOnboarding({
                 {aiState === 'missing' || aiSkipped ? <div style={{ fontSize: 12, color: t.textMuted, marginTop: 7 }}>AI is not configured. Deterministic and non-AI workflows remain available; return to Settings when you want governed Ask.</div> : null}
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: 11 }}>
-                <StartCard icon={<LayoutDashboard size={17} />} title="Build a dashboard" body="Pick a table from your database and publish a page with live, checked numbers." action="Build an App" onClick={() => finishTo('apps')} t={t} primary />
-                <StartCard icon={<Boxes size={17} />} title="Build your domain" body="Add models, relationships, business terms, and skills." action="Open Modeling" onClick={() => finishTo('domains')} t={t} />
+                {drafted ? (
+                  <StartCard icon={<Boxes size={17} />} title="Review drafted models" body="Check the drafted models and joins, certify the ones that are right, then Ask." action="Open Modeling" onClick={() => finishTo('domains')} t={t} primary />
+                ) : null}
+                <StartCard icon={<LayoutDashboard size={17} />} title="Build a dashboard" body="Pick a table from your database and publish a page with live, checked numbers." action="Build an App" onClick={() => finishTo('apps')} t={t} primary={!drafted} />
+                {drafted ? null : (
+                  <StartCard icon={<Boxes size={17} />} title="Build your domain" body="Add models, relationships, business terms, and skills." action="Open Modeling" onClick={() => finishTo('domains')} t={t} />
+                )}
                 <StartCard icon={<MessageCircleQuestion size={17} />} title="Ask" body={aiState === 'missing' || aiSkipped ? 'Open Ask in limited mode; configure AI before a governed model answer.' : 'Ask a business question grounded in your governed context.'} action="Open Ask" onClick={() => finishTo('ask')} t={t} />
                 <StartCard icon={<FileText size={17} />} title="Research notebook" body="Work with SQL, DQL, and charts, then save reusable blocks." action="New notebook" onClick={() => finishTo('notebook')} t={t} />
               </div>
@@ -285,11 +411,11 @@ export function SetupOnboarding({
                 : 'Close setup'}
         </button>
         {step < 4 ? (
-          <button type="button" disabled={step === 1 && requiresUpgradeReapply} onClick={() => setStep((current) => Math.min(4, current + 1))} style={{ ...primaryButton, opacity: step === 1 && requiresUpgradeReapply ? 0.5 : 1, cursor: step === 1 && requiresUpgradeReapply ? 'not-allowed' : 'pointer' }}>
-            {step === 1 ? 'Continue to database' : step === 2 ? 'Continue to optional AI' : 'Continue to finish'} <ArrowRight size={13} />
+          <button type="button" disabled={nextDisabled} onClick={() => { if (step === 1) void continueFromStepOne(); else setStep((current) => Math.min(4, current + 1)); }} style={{ ...primaryButton, opacity: nextDisabled ? 0.5 : 1, cursor: nextDisabled ? 'not-allowed' : 'pointer' }}>
+            {nextLabel} <ArrowRight size={13} />
           </button>
         ) : (
-          <button type="button" disabled={acknowledging} onClick={() => finishTo(aiState === 'missing' || aiSkipped ? 'domains' : 'ask')} style={{ ...primaryButton, opacity: acknowledging ? 0.65 : 1 }}><Sparkles size={13} /> Finish setup</button>
+          <button type="button" disabled={acknowledging} onClick={() => finishTo(finishTarget)} style={{ ...primaryButton, opacity: acknowledging ? 0.65 : 1 }}><Sparkles size={13} /> Finish setup</button>
         )}
       </footer>
     </div>

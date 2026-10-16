@@ -86,6 +86,8 @@ export async function startNotebookServer(input: {
   projectDir: string;
   workDir: string;
   env?: NodeJS.ProcessEnv;
+  /** false leaves the first-run Guided Setup open, for journeys that walk it. */
+  acknowledgeSetup?: boolean;
 }): Promise<NotebookServer> {
   const port = await freePort();
   const baseUrl = `http://127.0.0.1:${port}`;
@@ -116,12 +118,14 @@ export async function startNotebookServer(input: {
 
   try {
     await waitForHealth(baseUrl, server, logPath);
-    const ack = await fetch(`${baseUrl}/api/onboarding/acknowledge`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: '{}',
-    });
-    if (!ack.ok) throw new Error(`Acknowledging Guided Setup failed: HTTP ${ack.status} ${await ack.text()}`);
+    if (input.acknowledgeSetup !== false) {
+      const ack = await fetch(`${baseUrl}/api/onboarding/acknowledge`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: '{}',
+      });
+      if (!ack.ok) throw new Error(`Acknowledging Guided Setup failed: HTTP ${ack.status} ${await ack.text()}`);
+    }
   } catch (error) {
     await stop();
     throw error;

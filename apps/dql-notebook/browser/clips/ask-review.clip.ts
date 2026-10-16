@@ -12,8 +12,11 @@ clip('ask-review', async ({ page, sample, director }) => {
 
   const label = page.getByText('AI-generated answer', { exact: true }).first();
   await expect(label).toBeVisible();
-  // The stores are shown by name (the recorded reading groups by location name).
+  // The stores are shown by name, in the table and in the answer, never by their UUID keys.
   await expect(page.getByText('Philadelphia', { exact: true }).first()).toBeVisible();
+  await expect(page.getByText('Brooklyn', { exact: true }).first()).toBeVisible();
+  await expect(page.getByText(/Leading rows: (Philadelphia|Brooklyn) · /).first()).toBeVisible();
+  await expect(page.getByText(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/)).toHaveCount(0);
   await director.point(label);
   await director.beat(1400);
   director.poster();

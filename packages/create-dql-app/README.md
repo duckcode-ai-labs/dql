@@ -1,6 +1,6 @@
 # create-zlens-app
 
-The fastest way to start a ZLens project.
+The fastest way to start a ZLens project. Governed analytics on your warehouse — with or without dbt.
 
 ```bash
 npx create-zlens-app@latest my-analytics
@@ -17,9 +17,44 @@ clean machine. No global install required; the template installs
 `zlens` locally and exposes it through npm scripts.
 
 The scaffolded project is a clean starter: `dql.config.json`, a welcome
-notebook, and npm scripts for `notebook`, `compile`, `lineage`, `doctor`, and
-`validate`. If a sibling dbt project is detected, it is wired into
-`dql.config.json` automatically so `zlens sync dbt` works out of the box.
+notebook, and npm scripts for `notebook`, `sync`, `compile`, `lineage`,
+`doctor`, and `validate`.
+
+## With or without dbt
+
+ZLens works on your warehouse with or without dbt. The scaffolder picks one of
+two workspace shapes:
+
+- **dbt project.** `dql.config.json` gets a `dbt` block pointing at your dbt
+  project and `npm run sync` runs `zlens sync dbt`. Pass the project with
+  `--dbt <path>`, or let the scaffolder find it: it looks for
+  `dbt_project.yml` next to the new folder (one and two levels up, and in a
+  sibling `dbt/` folder) and in the folder you run it from and its parent.
+- **Database only.** Pass `--warehouse <driver>`. `dql.config.json` gets
+  `"manifestVersion": 3`, `"modeling": { "mode": "warehouse-first" }`, no dbt
+  block, and a `default` connection stub for that driver, with secrets as
+  `${ENV_VAR}` placeholders. `npm run sync` runs `zlens sync warehouse`.
+
+```bash
+npx create-zlens-app@latest my-analytics --dbt ../my-dbt-project
+npx create-zlens-app@latest my-analytics --warehouse snowflake
+npx create-zlens-app@latest my-analytics --warehouse duckdb --database-path ./warehouse.duckdb
+```
+
+With neither flag and no dbt project found, an interactive run asks
+"dbt project, or a database only?" (then the dbt project path, or the
+database and, for DuckDB or SQLite, its file). A non-interactive run (CI,
+piped input) keeps the old default: a dbt config pointing at
+`../my-dbt-project` for you to edit.
+
+Next steps for a database-only workspace (also in its generated README):
+
+```bash
+# 1. Fill the "default" connection in dql.config.json (or Settings → Database)
+npx zlens sync warehouse --schemas analytics   # 2. first time; then: npm run sync
+npx zlens model discover --validate            # 3. preview the drafted model
+npm run notebook                               # 4. review and certify in Modeling, then Ask
+```
 
 Database drivers are project-local so the base install stays fast:
 
@@ -42,7 +77,12 @@ command. From an existing dbt repo, run `zlens init ./dql` before `cd dql`.
 
 | Flag | Default | Meaning |
 | --- | --- | --- |
+| `--dbt <path>` | detected | Use the dbt project at `<path>` (the folder with `dbt_project.yml`) |
+| `--warehouse <driver>` | — | Database only, no dbt. One of `duckdb`, `postgresql` (or `postgres`), `snowflake`, `bigquery`, `databricks`, `redshift`, `mysql`, `mssql`, `fabric`, `clickhouse`, `trino`, `athena`, `sqlite` |
+| `--database-path <file>` | `./warehouse.duckdb` | With `--warehouse duckdb` or `sqlite`: the database file, relative to where you run the command |
 | `--template <name>` | `starter` | Starter template |
+
+`--dbt` and `--warehouse` cannot be combined.
 
 ## Docs
 

@@ -1,0 +1,23 @@
+{
+  "key": "7cfb5b5ad39a24237f11f0ca1847be85",
+  "operation": "generate",
+  "text": "NO_SQL: No listed relation or column holds employee or HR data (headcount, hires, or departures), so employee churn rate cannot be computed from these commerce tables.",
+  "providerName": "claude",
+  "recordedAt": "2026-10-16T02:47:21.414Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 2,
+    "messageRoles": [
+      "system",
+      "user"
+    ],
+    "preCanonicalHash": "7cfb5b5ad39a24237f11f0ca1847be8527ad4fdfd35dece62d811e47d03b47d9",
+    "postCanonicalHash": "7cfb5b5ad39a24237f11f0ca1847be8527ad4fdfd35dece62d811e47d03b47d9",
+    "appliedRuleClasses": []
+  }
+}

@@ -1,8 +1,9 @@
 # Concepts
 
-ZLens is a layer for analytics on top of dbt. dbt builds and tests your
-models. ZLens covers what people do with them next: the queries, dashboards
-and AI answers. Everything is a file in your project, so it can be reviewed
+ZLens is a layer for analytics on your warehouse, with or without dbt. With
+dbt, dbt builds and tests your models; without it, ZLens models your
+database's own tables (see [No dbt?](no-dbt.md)). ZLens covers what people
+do with the data next: the queries, dashboards and AI answers. Everything is a file in your project, so it can be reviewed
 in git.
 
 ## Block

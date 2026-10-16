@@ -110,10 +110,12 @@ const EXPECTED_TEST_FILES = 189;
 // and a conversation bound to its App page (session-store.test.ts, +1).
 // 2494 with top-N lists that have no rank column led by their first row, never summed, and whole
 // breakdowns still summed (dashboard-story.test.ts, +7).
-const EXPECTED_TESTS = 2494;
+// 2496 with drafted SQL that names what it groups by: GROUP BY read by column (sql-checks.test.ts, +1)
+// and answers that never read raw UUIDs out (ask-pipeline.test.ts, +1).
+const EXPECTED_TESTS = 2496;
 // The heavy lane's share of EXPECTED_TESTS (catalog.test.ts 72 + project-state.test.ts 4), pinned so
 // a lane run on its own (CI runs the two lanes as separate steps) is audited as exactly as both together.
-// The ordinary lane's share is the difference: 2418.
+// The ordinary lane's share is the difference: 2420.
 const EXPECTED_HEAVY_TESTS = 76;
 
 const LANES = ['all', 'ordinary', 'heavy'];

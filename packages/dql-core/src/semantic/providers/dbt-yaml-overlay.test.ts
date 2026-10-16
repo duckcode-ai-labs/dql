@@ -116,4 +116,52 @@ describe('dbt YAML overlay on the manifest', () => {
     expect(result.errors).toEqual([]);
     expect(result.layer!.getMetric('claimed_amount')).toBeDefined();
   });
+
+  it('a semantic model read from a newer YAML keeps the warehouse table dbt resolved its ref to', () => {
+    // Copying a project (the docs clips, a fresh template) refreshes every file time, so the YAML reads as edited
+    // after the manifest. The model must still sit on "harbor"."dev"."claims", never on a bare `claims` the
+    // warehouse does not have.
+    const root = mkdtempSync(join(tmpdir(), 'dql-dbt-overlay-relation-'));
+    roots.push(root);
+    mkdirSync(join(root, 'models'), { recursive: true });
+    mkdirSync(join(root, 'target'), { recursive: true });
+    writeFileSync(join(root, 'dbt_project.yml'), 'name: harbor\nversion: 1\n');
+    const relation = { alias: 'claims', schema_name: 'dev', database: 'harbor', relation_name: '"harbor"."dev"."claims"' };
+    writeFileSync(join(root, 'target', 'manifest.json'), JSON.stringify({
+      nodes: {
+        'model.harbor.claims': { unique_id: 'model.harbor.claims', resource_type: 'model', name: 'claims', alias: 'claims', schema: 'dev', database: 'harbor', relation_name: '"harbor"."dev"."claims"' },
+        'model.harbor.adjusters': { unique_id: 'model.harbor.adjusters', resource_type: 'model', name: 'adjusters', alias: 'adjusters', schema: 'dev', database: 'harbor', relation_name: '"harbor"."dev"."adjusters"' },
+      },
+      semantic_models: {
+        'semantic_model.harbor.claims': {
+          name: 'claims', model: "ref('claims')", node_relation: relation, defaults: { agg_time_dimension: 'reported_date' },
+          entities: [{ name: 'claim', type: 'primary', expr: 'claim_id' }],
+          dimensions: [{ name: 'product', type: 'categorical' }, { name: 'reported_date', type: 'time', type_params: { time_granularity: 'day' } }],
+          measures: [{ name: 'claimed_amount', agg: 'sum' }],
+        },
+      },
+      metrics: { 'metric.harbor.claimed_amount': { name: 'claimed_amount', type: 'simple', type_params: { measure: { name: 'claimed_amount' } } } },
+    }));
+    const yamlPath = join(root, 'models', 'claims_semantic.yml');
+    writeFileSync(yamlPath, [
+      ...BASE_YAML,
+      '      - { name: adjuster_id, type: categorical }',
+      '  - name: adjusters',
+      "    model: ref('adjusters')",
+      '    entities: [{ name: adjuster, type: primary, expr: adjuster_id }]',
+      '    dimensions: [{ name: adjuster_name, type: categorical }]',
+      'metrics:',
+      '  - { name: claimed_amount, type: simple, type_params: { measure: claimed_amount } }',
+      '',
+    ].join('\n'));
+    utimesSync(yamlPath, new Date(Date.now() + 60_000), new Date(Date.now() + 60_000));
+
+    const layer = resolveSemanticLayerWithDiagnostics({ provider: 'dbt' }, root).layer!;
+    expect(Object.fromEntries(layer.listCubes().map((cube) => [cube.name, cube.table]))).toEqual({
+      // Edited in YAML: the relation dbt resolved is kept.
+      claims: '"harbor"."dev"."claims"',
+      // Only in YAML: its ref is resolved through the manifest's model nodes.
+      adjusters: '"harbor"."dev"."adjusters"',
+    });
+  });
 });
