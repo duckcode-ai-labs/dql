@@ -2635,12 +2635,12 @@ export function createAskPipelineHost(deps: AskPipelineHostDeps): AskPipelineHos
       if (second && 'declined' in second) return { declined: `${second.declined.replace(/[.\s]+$/, '')} (searched ${relations.join(', ')})` };
       return finalize(second);
     };
-    // THE SECOND LOOK at an AI-drafted result, on warehouse-first projects:
-    // one small call that sees the question, the SQL and the result's SHAPE
-    // (row count, each column's distinct and NULL counts, repeated rows),
-    // never a value from it, and names one defect or none. dbt projects keep
-    // their recorded prompts.
-    const makeResultReview = (state: AskRunState): AskPipelineRunInput['reviewResult'] => !warehouseFirstCatalog(deps.getManifest().manifest, deps.projectRoot) ? undefined : async ({ question, sql, result }) => {
+    // THE SECOND LOOK at an AI-drafted result, on every project: one small
+    // call that sees the question, the SQL and the result's SHAPE (row count,
+    // each column's distinct and NULL counts, repeated rows), never a value
+    // from it, and names one defect or none. Certified and governed answers
+    // are not reviewed: their SQL was compiled from definitions, not drafted.
+    const makeResultReview = (state: AskRunState): NonNullable<AskPipelineRunInput['reviewResult']> => async ({ question, sql, result }) => {
       const messages: AgentMessage[] = [
         { role: 'system', content: RESULT_REVIEW_SYSTEM },
         { role: 'user', content: `QUESTION: ${question}\nSQL:\n${shownToModel(sql)}\nRESULT:\n${resultShapeForReview(result)}` },
@@ -2681,7 +2681,7 @@ export function createAskPipelineHost(deps: AskPipelineHostDeps): AskPipelineHos
       // ZLENS_ASK_DRAFT_FIRST=0 keeps the reading step first, for comparison.
       ...(readEnv('ZLENS_ASK_DRAFT_FIRST') !== '0' && warehouseFirstCatalog(deps.getManifest().manifest, deps.projectRoot) && !currentVocabulary().entries.some((entry) => entry.kind === 'block' || entry.kind === 'metric' || entry.kind === 'measure') ? { draftFirst: true } : {}),
       prepareDeps: { ...prepareDeps(connection ?? { driver: 'duckdb' } as ConnectionConfig, currentVocabulary, engine, request.signal), draftSql: makeDraftSql(state) },
-      ...((): Partial<AskPipelineRunInput> => { const reviewResult = readEnv('ZLENS_ASK_RESULT_REVIEW') !== '0' ? makeResultReview(state) : undefined; return reviewResult ? { reviewResult } : {}; })(),
+      ...(readEnv('ZLENS_ASK_RESULT_REVIEW') !== '0' ? { reviewResult: makeResultReview(state) } : {}),
       executeDeps: {
         maxRows: deps.maxRows ?? 500,
         ...(request.signal ? { signal: request.signal } : {}),
@@ -3283,7 +3283,7 @@ export function resultShapeForReview(result: { columns?: Array<string | { name: 
   return lines.join('\n');
 }
 
-const RESULT_REVIEW_SYSTEM = 'You check one query result against the question it should answer. You see the question, the SQL and the shape of what it returned. Reply with JSON only: {"answers": true} when the result can answer the question as asked, or {"answers": false, "problem": "<one sentence: the concrete defect and what to change>"}. Report a defect only when the shape shows it: a column that is entirely NULL (a date that did not parse, a join that matched nothing), more or fewer rows than the question asks for (one number, a top 5, one row per season), a column the question asks for that is missing (a name, a count), repeated rows, or a total at another level than asked (per invoice where the question asks per country). Never question a definition, filter or formula the question leaves open; when in doubt, it answers.';
+const RESULT_REVIEW_SYSTEM = 'You check one query result against the question it should answer. You see the question, the SQL and the shape of what it returned. Reply with JSON only: {"answers": true} when the result can answer the question as asked, or {"answers": false, "problem": "<one sentence: the concrete defect and what to change>"}. Report a defect only when the shape shows it: a column that is entirely NULL (a date that did not parse, a join that matched nothing), a row count that contradicts a number the question itself states (it asks for one number, a top 5 or the single best, and the result has another count), a column the question asks for that is missing (a name, a count), repeated rows, or a total at another level than asked (per invoice where the question asks per country). You cannot see the data, so never assume how many rows it holds: a breakdown "by X" lists the X that have data, and fewer rows than you would expect is not a defect. Never question a definition, filter or formula the question leaves open; when in doubt, it answers.';
 
 /**
  * What a draft for an engine must know that the model gets wrong by default.

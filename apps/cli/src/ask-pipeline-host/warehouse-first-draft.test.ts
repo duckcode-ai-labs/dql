@@ -36,7 +36,7 @@ interface Setup {
   /** A value profile in the project's cache (what a sync with agent.valueProfile writes), and whether the project allows it now. */
   valueProfile?: { written: boolean; allowed?: boolean; fingerprint?: string };
   /** What the result review answers (default: it answers). */
-  review?: (prompt: string) => string;
+  review?: (prompt: string, system: string) => string;
 }
 
 function project(setup: Setup) {
@@ -99,7 +99,7 @@ async function ask(setup: Setup, question: string, draft: (prompt: string) => st
     selectProvider: async () => ({
       name: 'ollama', available: async () => true,
       generate: async (messages: AgentMessage[]) => {
-        if (isReview(messages)) { reviews.push(messages[1]!.content); return setup.review?.(messages[1]!.content) ?? '{"answers": true}'; }
+        if (isReview(messages)) { reviews.push(messages[1]!.content); return setup.review?.(messages[1]!.content, messages[0]!.content) ?? '{"answers": true}'; }
         if (!isDraft(messages)) { readings += 1; return READING; }
         const prompt = messages.map((message) => message.content).join('\n');
         prompts.push(prompt);
@@ -265,7 +265,7 @@ describe('the value profile reaches the drafter only when the project allows it'
   });
 });
 
-describe('an AI-drafted answer on a warehouse-first project gets a review of its result, which sees its shape and never its values', () => {
+describe('every AI-drafted answer gets a review of its result, which sees its shape and never its values', () => {
   const question = 'The median of the invoice totals per customer country';
   const perCountry = 'SELECT c.country, SUM(i.total) AS total FROM main.invoices i JOIN main.customers c ON c.customer_id = i.customer_id GROUP BY c.country';
   const median = 'WITH t AS (SELECT c.country, SUM(i.total) AS total FROM main.invoices i JOIN main.customers c ON c.customer_id = i.customer_id GROUP BY c.country) SELECT AVG(total) AS median_total FROM t';
@@ -319,10 +319,19 @@ describe('an AI-drafted answer on a warehouse-first project gets a review of its
     }
   });
 
-  it('a dbt project keeps its recorded prompts: no review', async () => {
+  it('a dbt project\'s AI-drafted answer is reviewed too', async () => {
     const { reviews, readings, result } = await ask({ project: 'dbt' }, question, () => perCountry, rows);
     expect(readings).toBeGreaterThan(0);
-    expect(reviews).toHaveLength(0);
+    expect(reviews).toHaveLength(1);
+    expect(reviews[0]).toContain(`QUESTION: ${question}`);
     expect(result.status).toBe('completed');
+  });
+
+  it('the reviewer is told it cannot see the data: a breakdown lists what has data, and only a stated count is checked', async () => {
+    let system = '';
+    await ask({ review: (_prompt, told) => { system = told; return '{"answers": true}'; } }, question, () => perCountry, rows);
+    expect(system).toContain('You cannot see the data, so never assume how many rows it holds');
+    expect(system).toContain('a row count that contradicts a number the question itself states');
+    expect(system).not.toContain('more or fewer rows than the question asks for');
   });
 });
