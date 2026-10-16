@@ -321,6 +321,11 @@ const LOAD_SQLITE = `node -e "const D = require('better-sqlite3'); new D(':memor
 const LOAD_DUCKDB = `node -e "const d = require('./.dql/connectors/node_modules/duckdb'); new d.Database(':memory:').close(); console.log('duckdb loads')"`;
 const BLOCKED_SCRIPTS = /install-scripts[^\n]*(better-sqlite3|duckdb)@/g;
 
+/** The `zlens x.y.z` line of `npx zlens --version` (npm 12 also prints "npm notice run …" lines). */
+function versionLine(output) {
+  return output.split('\n').map((line) => line.trim()).find((line) => /^zlens \d/.test(line)) ?? output.trim();
+}
+
 /** The packages whose install scripts npm said it blocked. */
 function blockedScripts(output) {
   return [...new Set([...output.matchAll(BLOCKED_SCRIPTS)].map((match) => match[1]))];
@@ -482,7 +487,7 @@ async function sampleFlow(gate, sample, ctx, lane) {
     const installed = JSON.parse(readFileSync(path.join(projectDir, 'node_modules', '@zlens', 'cli', 'package.json'), 'utf8')).version;
     const zlens = await run('npx zlens --version', 'npm-install');
     expectRun(zlens, 'npx zlens --version');
-    if (zlens.output.trim() !== `zlens ${version}` || installed !== version) throw new Error(`installed ${installed}, \`npx zlens --version\` says ${zlens.output.trim()}`);
+    if (versionLine(zlens.output) !== `zlens ${version}` || installed !== version) throw new Error(`installed ${installed}, \`npx zlens --version\` says ${versionLine(zlens.output)}`);
     const lock = readFileSync(path.join(projectDir, 'package-lock.json'), 'utf8');
     if (!lock.includes(`${registryUrl}-/gate/zlens-cli-${version}.tgz`)) throw new Error('package-lock.json does not resolve @zlens/cli to the packed tarball');
     const blocked = blockedScripts(install.output);
@@ -610,9 +615,9 @@ async function createFlow(gate, ctx, lane) {
     if (blocked.length) throw new Error(`npm blocked the install script of ${blocked.join(', ')}`);
     const zlens = await sh('npx zlens --version', { cwd: appDir, env, logFile: log });
     expectRun(zlens, 'npx zlens --version');
-    if (zlens.output.trim() !== `zlens ${version}`) throw new Error(`npx zlens --version says ${zlens.output.trim()}`);
+    if (versionLine(zlens.output) !== `zlens ${version}`) throw new Error(`npx zlens --version says ${versionLine(zlens.output)}`);
     expectRun(await sh(LOAD_SQLITE, { cwd: appDir, env, logFile: log }), 'require better-sqlite3 + open :memory:');
-    return `${zlens.output.trim()}; better-sqlite3 opens a database`;
+    return `${versionLine(zlens.output)}; better-sqlite3 opens a database`;
   }, { evidence: `logs/${logName}` }))) return;
   await gate.check(area, 'printed driver step: npm install --prefix .dql/connectors duckdb; duckdb loads', async () => {
     const install = await sh('npm install --prefix .dql/connectors duckdb', { cwd: appDir, env, logFile: log });
