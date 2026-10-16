@@ -299,7 +299,7 @@ export function proseColumns(columns: string[], rows: Array<Record<string, unkno
 }
 
 /** Deterministic answer prose from the rows themselves: no claim without a cell behind it. */
-export function composeAnsweredText(intent: AnalyticalIntentV1, result: ExecutedRows, vocabulary: VocabularyIndex, trust: string, extras: { notes?: string[]; caveats?: string[]; /** The prepared candidate's tier: a certified block served as evidence is named as the block. */ tier?: string } = {}): string {
+export function composeAnsweredText(intent: AnalyticalIntentV1, result: ExecutedRows, vocabulary: VocabularyIndex, trust: string, extras: { notes?: string[]; caveats?: string[] } = {}): string {
   const reading = intent.reading || describeIntent(intent, labelFor(vocabulary));
   const lines: string[] = [`I read this as: ${reading.replace(/[.\s]+$/, '')}.`];
   const columns = result.columns;
@@ -347,10 +347,7 @@ export function composeAnsweredText(intent: AnalyticalIntentV1, result: Executed
     .filter((entry, index, all): entry is NonNullable<typeof entry> => Boolean(entry && entry.kind === 'dimension' && entry.description && all.indexOf(entry) === index))
     .slice(0, 2);
   if (defined.length) lines.push(`Definitions: ${defined.map((entry) => `${entry.label ?? entry.name}: ${entry.description!.replace(/\s+/g, ' ').slice(0, 200).replace(/[.\s]+$/, '')}`).join('; ')}.`);
-  // The source line names where the figures came from: a certified block
-  // served as published for a question it is not certified for is still the
-  // block, never "the semantic layer".
-  lines.push(trust === 'certified' ? 'Source: a certified block.' : extras.tier === 'certified' ? 'Source: a certified block, served as published (not certified for this exact question).' : trust === 'governed' ? 'Source: the semantic layer.' : 'Source: SQL written by AI from the schema (review before relying on it).');
+  lines.push(trust === 'certified' ? 'Source: a certified block.' : trust === 'governed' ? 'Source: the semantic layer.' : 'Source: SQL written by AI from the schema (review before relying on it).');
   for (const caveat of extras.caveats ?? []) lines.push(caveat.replace(/[.\s]+$/, '') + '.');
   return lines.join(' ');
 }

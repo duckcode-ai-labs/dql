@@ -136,7 +136,7 @@ describe('a ref outside the envelope is explained as out of scope, never as none
   it('a certified block served as evidence is titled by the same trust decision as the run, never "certified" unless the run is', () => {
     const intent = { version: 1, kind: 'analytics', reading: 'Beverage revenue by product.', measures: [{ ref: 'metric:commerce.revenue' }], groupBy: [], display: [], filters: [], expectedShape: 'table', unresolved: [], provenance: {} } as unknown as AnalyticalIntentV1;
     const outcome = (uncovered: string[]) => ({
-      kind: 'answered', intent, text: 'Beverage revenue by product. Source: a certified block, served as published (not certified for this exact question).',
+      kind: 'answered', intent, text: 'Beverage revenue by product.',
       result: { columns: ['product_name', 'beverage_revenue'], rows: [{ product_name: 'vanilla ice', beverage_revenue: 84474 }], rowCount: 1, executionTimeMs: 1 },
       candidate: { tier: 'certified', trust: 'governed', sql: 'SELECT 1', sourceRef: 'block:commerce.beverage_revenue_by_product', proof: [] },
       receipt: { version: 1, vocabularyFingerprint: 'test', dispatches: [], candidates: [], refusals: [], tiers: [], timings: {}, uncovered, coverage: uncovered.map((word) => ({ word, state: 'unsatisfied' })) },
