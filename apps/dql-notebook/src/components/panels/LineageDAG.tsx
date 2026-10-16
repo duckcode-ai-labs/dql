@@ -37,6 +37,7 @@ import {
   type LineageEdge,
   type LineageLayerName,
 } from '../lineage/lineage-constants';
+import { lineageSourcesLabel, lineageSourcesOf } from '../lineage/lineage-sources';
 
 type LayoutMode = 'flow' | 'layered';
 type Direction = 'LR' | 'TB';
@@ -218,6 +219,10 @@ export function LineageDAG() {
       window.removeEventListener('dql:block-library-invalidated', reload);
     };
   }, [loadFullGraph]);
+
+  // What the project's lineage was built from: the dbt manifest, the synced
+  // warehouse catalog, or both (never dbt on a project that does not use it).
+  const lineageSources = useMemo(() => lineageSourcesOf(fullGraph.nodes), [fullGraph.nodes]);
 
   // Blocks, apps, and notebooks the user can trace lineage from.
   const entities = useMemo(
@@ -688,7 +693,7 @@ export function LineageDAG() {
         <span>{activePreset === 'custom' ? 'Custom' : LINEAGE_PRESETS.find((preset) => preset.key === activePreset)?.label} lineage of {focalName} · {filteredGraph.nodes.length} nodes · {filteredGraph.edges.length} edges{scopeLoading ? ' · loading…' : ''}</span>
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
           <span style={{ width: 6, height: 6, borderRadius: 999, background: 'var(--status-success)' }} />
-          Compiled from the dbt manifest
+          {lineageSourcesLabel(lineageSources)}
         </span>
         <div style={{ flex: 1 }} />
         <span>Click a node to focus its path · click the canvas to clear</span>
