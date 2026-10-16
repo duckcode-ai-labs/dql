@@ -119,14 +119,14 @@ describe('a ref outside the envelope is explained as out of scope, never as none
       receipt: { version: 1, vocabularyFingerprint: 'test', dispatches: [], candidates: [], refusals: [], tiers: [], timings: {}, uncovered, coverage: uncovered.map((word) => ({ word, state: 'unsatisfied' })) },
     }) as unknown as Parameters<typeof toExecutorResult>[1];
     const downgraded = toExecutorResult('run:coverage', outcome(['premium']), Date.now());
-    const payload = downgraded.artifacts[0]!.payload as Record<string, unknown> & { result: { trustState: string } };
+    const payload = downgraded.artifacts![0]!.payload as Record<string, unknown> & { result: { trustState: string } };
     expect(downgraded).toMatchObject({ trustState: 'review_required', stopReason: 'generated_review_required', resolvedRoute: 'semantic_answer' });
     // No field may go on calling it governed; the route still says where it came from.
     expect(payload).toMatchObject({ trustState: 'review_required', certification: 'review_required', reviewStatus: 'review_required', sourceTier: 'semantic_layer' });
     expect(payload.result.trustState).toBe('review_required');
     const governed = toExecutorResult('run:governed', outcome([]), Date.now());
     expect(governed).toMatchObject({ trustState: 'governed', stopReason: 'governed_semantic_answer' });
-    expect(governed.artifacts[0]!.payload).toMatchObject({ trustState: 'governed', certification: 'governed', reviewStatus: 'governed' });
+    expect(governed.artifacts![0]!.payload).toMatchObject({ trustState: 'governed', certification: 'governed', reviewStatus: 'governed' });
   });
 });
 
