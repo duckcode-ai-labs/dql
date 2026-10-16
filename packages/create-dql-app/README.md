@@ -1,6 +1,6 @@
 # create-zlens-app
 
-The fastest way to start a ZLens project. Governed analytics on your warehouse — with or without dbt.
+The fastest way to start a ZLens project: certified answers on your warehouse.
 
 ```bash
 npx create-zlens-app@latest my-analytics
@@ -20,10 +20,10 @@ The scaffolded project is a clean starter: `dql.config.json`, a welcome
 notebook, and npm scripts for `notebook`, `sync`, `compile`, `lineage`,
 `doctor`, and `validate`.
 
-## With or without dbt
+## dbt project or database only
 
-ZLens works on your warehouse with or without dbt. The scaffolder picks one of
-two workspace shapes:
+ZLens works on your warehouse, from a dbt project or straight from the
+database. The scaffolder picks one of two workspace shapes:
 
 - **dbt project.** `dql.config.json` gets a `dbt` block pointing at your dbt
   project and `npm run sync` runs `zlens sync dbt`. Pass the project with

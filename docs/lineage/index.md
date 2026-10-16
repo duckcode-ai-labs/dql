@@ -1,8 +1,9 @@
 # Lineage
 
-Lineage shows where a number comes from and what uses it: from source tables
-and dbt models, through blocks, to the dashboards and Apps that show them.
-ZLens builds it from your dbt manifest and your ZLens files, so it is always
+Lineage shows where a number comes from and what uses it: from your warehouse
+tables (and, if you use dbt, the sources and models behind them), through
+blocks, to the dashboards and Apps that show them. ZLens builds it from your
+synced warehouse catalog or dbt manifest plus your ZLens files, so it is always
 up to date after `npm run sync` (or `zlens compile`).
 
 {{ clip("lineage") }}
