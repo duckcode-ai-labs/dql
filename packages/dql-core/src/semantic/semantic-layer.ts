@@ -242,6 +242,13 @@ export interface JoinDefinition {
   reversed?: boolean;
 }
 
+/** Why a dimension cannot group a metric set; see {@link SemanticLayer.explainCompatibleDimensions}. */
+export type DimensionIncompatibilityReason =
+  | 'no_join_path'
+  | 'one_to_many_only'
+  | 'not_shared_across_metrics'
+  | 'metric_unresolved';
+
 export interface TimeDimensionDefinition extends DimensionDefinition {
   granularities: ('day' | 'week' | 'month' | 'quarter' | 'year')[];
   /**
@@ -393,6 +400,15 @@ export function parseDimensionDefinition(raw: Record<string, unknown>): Dimensio
     cube: raw.cube ? String(raw.cube) : undefined,
     expr: raw.expr ? String(raw.expr) : undefined,
     isTimeDimension: Boolean(raw.isTimeDimension ?? raw.is_time_dimension ?? false),
+    // The entity-qualified name an imported dbt dimension is addressed by
+    // (`<primary_entity>__<name>`). Written by `dql semantic import`; without
+    // it only the `<semantic_model>__<name>` spelling resolved natively.
+    ...(typeof (raw.qualified_name ?? raw.qualifiedName) === 'string' && String(raw.qualified_name ?? raw.qualifiedName).trim()
+      ? { qualifiedName: String(raw.qualified_name ?? raw.qualifiedName).trim() }
+      : {}),
+    ...(typeof (raw.entity_link ?? raw.entityLink) === 'string' && String(raw.entity_link ?? raw.entityLink).trim()
+      ? { entityLink: String(raw.entity_link ?? raw.entityLink).trim() }
+      : {}),
     typeParams: parseRecord(raw.typeParams ?? raw.type_params),
     source: parseSourceMetadata(raw.source),
   };
@@ -605,6 +621,12 @@ export class SemanticLayer {
   private savedQueries: Map<string, SavedQueryDefinition> = new Map();
   // cube-name → list of joins for that cube (adjacency list)
   private joinGraph: Map<string, JoinDefinition[]> = new Map();
+  /**
+   * Request-scoped inputs of a ratio metric whose numerator or denominator
+   * carries its own filter. They exist only while one composition runs (see
+   * `composeRatioQuery`) and are never listed, searched, or persisted.
+   */
+  private ratioInputMetrics: Map<string, MetricDefinition> = new Map();
 
   /** Notes from loading, e.g. metrics read from dbt YAML instead of the manifest. Not errors. */
   private diagnostics: string[] = [];
@@ -732,6 +754,8 @@ export class SemanticLayer {
    * ordering changes.
    */
   private metricForReference(reference: string): MetricDefinition | undefined {
+    const ratioInput = this.ratioInputMetrics.get(reference);
+    if (ratioInput) return ratioInput;
     const direct = this.metrics.get(reference);
     if (direct) return direct;
     const exact = Array.from(this.metricVariants.values()).flat()
@@ -840,6 +864,12 @@ export class SemanticLayer {
     const resolveTable = (name: string): string => tableMapping?.[name] ?? name;
     if (metrics.length === 0) return null;
 
+    // A ratio metric is numerator / denominator of two other metrics. Compose
+    // those inputs at the requested grain, then divide once per output row.
+    const ratioPlan = this.planNativeRatioMetrics(metrics);
+    if (ratioPlan === null) return null;
+    if (ratioPlan) return this.composeRatioQuery(options, ratioPlan);
+
     // Resolve metric definitions
     const resolvedMetrics = metrics
       .map((m) => this.resolveComposableMetric(m))
@@ -884,11 +914,29 @@ export class SemanticLayer {
     // Find the primary table (from first metric)
     const primaryTable = resolvedMetrics[0].table;
 
+    // A metric's own filter may read a dimension of another model — the claim
+    // a claim amount belongs to, the policy a premium row is on. That table has
+    // to be JOINED for the predicate to mean anything, so it is collected here
+    // with the requested dimensions. The join path is the same many-to-one walk
+    // (`findJoinPath` never follows an entity join backwards), so joining it
+    // cannot multiply the metric's rows; a table with no such path still
+    // refuses below, as does a filter dimension that reads no column at all.
+    const metricFilterDimensions: DimensionDefinition[] = [];
+    for (const metric of resolvedMetrics) {
+      if (metric.filter === undefined || metric.filter === null) continue;
+      renderFilterSpec(metric.filter, (ref) => {
+        const dimension = this.resolveDimensionForMetrics(ref, resolvedMetrics);
+        if (dimension) metricFilterDimensions.push(dimension);
+        return ref;
+      });
+    }
+
     // Collect all tables referenced
     const allTables = new Set<string>([primaryTable]);
     for (const m of resolvedMetrics) allTables.add(m.table);
     for (const d of resolvedDimensions) allTables.add(d.table);
     for (const d of resolvedFilterDimensions) allTables.add(d.table);
+    for (const d of metricFilterDimensions) allTables.add(d.table);
     if (timeDimDef) allTables.add(timeDimDef.table);
 
     // Find which cube corresponds to a table
@@ -925,6 +973,9 @@ export class SemanticLayer {
     const joinsUsed: JoinDefinition[] = [];
     const joinedTables = new Set<string>([primaryTable]);
     const unjoinedTables = new Set<string>();
+    // A joined-side key column per joined table: non-null exactly when the
+    // LEFT JOIN matched. See `dimensionSql`.
+    const presenceColumns = new Map<string, string>();
 
     for (const table of allTables) {
       if (table === primaryTable) continue;
@@ -941,6 +992,11 @@ export class SemanticLayer {
           if (leftCube?.table) joinedTables.add(leftCube.table);
           const leftAlias = aliasForCube(join.left);
           const rightAlias = aliasForCube(join.right);
+          const presenceKey = join.sql.match(/\$\{right\}\.([A-Za-z_][A-Za-z0-9_$]*)/)?.[1];
+          if (presenceKey) {
+            presenceColumns.set(join.right, `${rightAlias}.${presenceKey}`);
+            if (joinedCube?.table) presenceColumns.set(joinedCube.table, `${rightAlias}.${presenceKey}`);
+          }
           qualifierAliases.set(join.left, leftAlias);
           qualifierAliases.set(join.right, rightAlias);
           if (leftCube?.table) qualifierAliases.set(leftCube.table, leftAlias);
@@ -966,18 +1022,28 @@ export class SemanticLayer {
     // apply it or refuse to compose (null) — the caller then falls through to
     // generated SQL rather than surfacing a governed-but-wrong answer.
     // A filter dimension on another table only means something in that
-    // table's rows: `has_loss_payment = 1` is true exactly for the claim
-    // amounts loss_payment holds. The query does not join that table for a
-    // metric's own filter, so the predicate would read a column that is not
-    // there, or (a constant such as `1`) be true for every row and silently
-    // widen the metric to all rows. Either way the composition refuses.
+    // table's rows. Its table is joined above when a many-to-one path exists;
+    // without one the predicate would read a column that is not there. A
+    // dimension that reads no column (a constant such as `has_loss_payment =
+    // 1`) is true for every row after a LEFT JOIN, matched or not, and would
+    // silently widen the metric to all rows. Either way the composition refuses.
+    // A dimension that reads no column (`has_loss_payment: 1`, a subtype
+    // flag) means "this model has a row here". On a joined model it is
+    // rendered as MetricFlow evaluates it — the value when the LEFT JOIN
+    // matched, NULL when it did not — instead of a constant true for every row.
+    const dimensionSql = (dimension: DimensionDefinition): string => {
+      const qualified = qualifyForTable(dimension.sql, dimension.table);
+      if (dimension.table === primaryTable || !readsNoColumn(dimension.sql)) return qualified;
+      const presence = presenceColumns.get(dimension.table);
+      return presence ? `CASE WHEN ${presence} IS NOT NULL THEN ${qualified} END` : qualified;
+    };
     let filterOutsideQuery = false;
     const resolveFilterColumn = (ref: string): string => {
       const dim = this.resolveDimensionForMetrics(ref, resolvedMetrics);
       if (dim?.sql) {
         const onPrimary = dim.table === primaryTable;
-        if (!onPrimary && (!joinedTables.has(dim.table) || !/[A-Za-z_]/.test(dim.sql.replace(/'[^']*'/g, '')))) filterOutsideQuery = true;
-        return qualifyForTable(dim.sql, dim.table);
+        if (!onPrimary && (!joinedTables.has(dim.table) || (readsNoColumn(dim.sql) && !presenceColumns.has(dim.table)))) filterOutsideQuery = true;
+        return useStableAliases ? dimensionSql(dim) : qualifyForTable(dim.sql, dim.table);
       }
       const column = ref.includes('__') ? ref.split('__').pop() ?? ref : ref;
       return qualifyForTable(column, primaryTable);
@@ -1000,7 +1066,7 @@ export class SemanticLayer {
     // Add dimensions
     for (const d of resolvedDimensions) {
       const prefix = !useStableAliases && d.table !== primaryTable ? `${d.table}.` : '';
-      const sql = useStableAliases ? qualifyForTable(d.sql, d.table) : d.sql.includes('.') ? d.sql : `${prefix}${d.sql}`;
+      const sql = useStableAliases ? dimensionSql(d) : d.sql.includes('.') ? d.sql : `${prefix}${d.sql}`;
       selectParts.push(`${sql} AS ${d.name}`);
     }
 
@@ -1051,7 +1117,7 @@ export class SemanticLayer {
     const groupByParts: string[] = [];
     for (const d of resolvedDimensions) {
       const prefix = !useStableAliases && d.table !== primaryTable ? `${d.table}.` : '';
-      const sql = useStableAliases ? qualifyForTable(d.sql, d.table) : d.sql.includes('.') ? d.sql : `${prefix}${d.sql}`;
+      const sql = useStableAliases ? dimensionSql(d) : d.sql.includes('.') ? d.sql : `${prefix}${d.sql}`;
       groupByParts.push(sql);
     }
     if (timeDimDef && timeDimension) {
@@ -1071,7 +1137,7 @@ export class SemanticLayer {
       // whose column is `player_name`, and the warehouse would rightly reject it.
       if (!dimDef) return null;
       const dimSql = useStableAliases
-        ? qualifyForTable(dimDef.sql, dimDef.table)
+        ? dimensionSql(dimDef)
         : (dimDef.sql.includes('.') || dimDef.table === primaryTable ? dimDef.sql : `${dimDef.table}.${dimDef.sql}`);
       const v0 = f.values?.[0] ?? '';
       const v1 = f.values?.[1] ?? '';
@@ -1158,7 +1224,7 @@ export class SemanticLayer {
     for (const o of orderBy ?? []) {
       const target = timeAlias && (o.name === timeDimDef?.name || o.name === timeDimension?.name)
         ? timeAlias
-        : o.name;
+        : this.projectedOrderAlias(o.name, resolvedMetrics, resolvedDimensions) ?? o.name;
       // Semantic registry paths (for example `customer__customer_name`) are
       // lookup identities, not necessarily SQL identifiers. ORDER BY is
       // executable only when it names a projected alias or exactly repeats a
@@ -1211,7 +1277,242 @@ export class SemanticLayer {
    * of metrics, while full composition is reserved for a selected metric.
    */
   canComposeMetric(name: string): boolean {
-    return Boolean(this.resolveComposableMetric(name));
+    if (this.resolveComposableMetric(name)) return true;
+    const ratio = this.ratioInputs(name);
+    return Boolean(ratio && ratio.every((input) => this.resolveComposableMetric(input.name)));
+  }
+
+  /**
+   * Why the native compiler cannot run a metric, in words a modeler can act
+   * on, or undefined when it can. Callers use this instead of assuming the
+   * project has dbt: a warehouse-first project has no MetricFlow to fall back
+   * to, and "run dbt parse" is not an answer there.
+   */
+  explainNativeMetricGap(name: string): string | undefined {
+    if (this.canComposeMetric(name)) return undefined;
+    const metric = this.metricForReference(name);
+    if (!metric) return `${name} is not a metric in the semantic layer.`;
+    const kind = (metric.metricType ?? '').toLowerCase();
+    if (kind === 'ratio') {
+      const inputs = this.ratioInputs(name);
+      if (!inputs) return `${name} is a ratio metric without a numerator and a denominator.`;
+      const missing = inputs.filter((input) => !this.resolveComposableMetric(input.name)).map((input) => input.name);
+      return `${name} is a ratio metric; the DQL native semantic engine runs a ratio of two simple metrics, and ${missing.join(' and ')} ${missing.length === 1 ? 'is' : 'are'} not one.`;
+    }
+    if (kind && kind !== 'simple') {
+      return `${name} is a ${kind} metric; the DQL native semantic engine runs simple and ratio metrics only.`;
+    }
+    return `${name} does not name a measure with a table and a supported aggregation, so the DQL native semantic engine cannot compose it.`;
+  }
+
+  /**
+   * Why a dimension cannot group these metrics, in words a modeler can act on,
+   * or undefined when it can. The case worth naming is a bridge: claim money
+   * reaches the policy, but a policy has several party roles (holder, agent),
+   * so reaching the agent walks policy → policy_party_role one-to-many and
+   * every amount would repeat once per role. No engine can compose that as a
+   * dimension (MetricFlow refuses it too, and caps paths at two hops).
+   */
+  explainDimensionGap(metricNames: string[], dimensionReference: string): string | undefined {
+    const inputNames = metricNames.flatMap((name) => this.ratioInputs(name)?.map((input) => input.name) ?? [name]);
+    const inputs = inputNames.map((name) => this.resolveComposableMetric(name));
+    if (inputs.some((metric) => !metric)) return undefined;
+    const target = this.resolveDimensionForMetrics(dimensionReference, inputs as MetricDefinition[]);
+    if (!target) return `${dimensionReference} is not a dimension in the semantic layer.`;
+    const targetCube = target.cube ?? this.cubeNameForTable(target.table);
+    if (!targetCube) return undefined;
+    for (const metric of inputs as MetricDefinition[]) {
+      const metricCube = metric.cube ?? this.cubeNameForTable(metric.table);
+      if (!metricCube || metricCube === targetCube || this.findJoinPath(metricCube, targetCube).length > 0) continue;
+      const step = this.oneToManyStep(metricCube, targetCube);
+      if (step) {
+        return `${dimensionReference} lives on ${targetCube}, which ${metric.name} reaches only through ${step.from} → ${step.to}: one ${step.from} row has many ${step.to} rows, so every ${metric.name} value would repeat once per ${step.to} row. Model the rows you need as one row per ${step.from}, keyed (type: unique) by the entity ${step.from} is keyed by; that model joins one-to-one.`;
+      }
+      return `${dimensionReference} lives on ${targetCube}, which ${metric.name} has no declared many-to-one join to.`;
+    }
+    return undefined;
+  }
+
+  /**
+   * The entity join a path from `fromCube` to `toCube` must walk backwards.
+   * Everything reachable without one is explored first, so a one-to-one join
+   * (whose reverse copy is also marked reversed) is never blamed for a fan-out
+   * that happens further along.
+   */
+  private oneToManyStep(fromCube: string, toCube: string): { from: string; to: string } | undefined {
+    if (!fromCube || fromCube === toCube) return undefined;
+    const fansOut = (join: JoinDefinition) => Boolean(join.reversed && join.entity);
+    const reachable = new Set<string>([fromCube]);
+    const forward = [fromCube];
+    while (forward.length > 0) {
+      const cube = forward.shift()!;
+      for (const join of this.joinGraph.get(cube) ?? []) {
+        if (fansOut(join) || reachable.has(join.right)) continue;
+        reachable.add(join.right);
+        forward.push(join.right);
+      }
+    }
+    if (reachable.has(toCube)) return undefined;
+    const visited = new Set(reachable);
+    const queue: Array<{ cube: string; step?: { from: string; to: string } }> = [...reachable].map((cube) => ({ cube }));
+    while (queue.length > 0) {
+      const { cube, step } = queue.shift()!;
+      for (const join of this.joinGraph.get(cube) ?? []) {
+        if (visited.has(join.right)) continue;
+        const nextStep = step ?? { from: join.left, to: join.right };
+        if (join.right === toCube) return nextStep;
+        visited.add(join.right);
+        queue.push({ cube: join.right, step: nextStep });
+      }
+    }
+    return undefined;
+  }
+
+  /**
+   * The numerator and denominator of a ratio metric, or undefined when the
+   * metric is not a ratio (or does not declare both sides). Inputs are metric
+   * names, optionally with their own filter and alias (MetricFlow's
+   * `{name, filter, alias}` form).
+   */
+  private ratioInputs(name: string): Array<{ name: string; filter?: MetricDefinition['filter'] }> | undefined {
+    const metric = this.metricForReference(name);
+    if (!metric || (metric.metricType ?? '').toLowerCase() !== 'ratio') return undefined;
+    const typeParams = (metric.typeParams ?? {}) as Record<string, unknown>;
+    const read = (value: unknown): { name: string; filter?: MetricDefinition['filter'] } | undefined => {
+      if (typeof value === 'string') return value.trim() ? { name: value.trim() } : undefined;
+      if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+      const raw = value as Record<string, unknown>;
+      const inputName = typeof raw.name === 'string' ? raw.name.trim() : '';
+      if (!inputName) return undefined;
+      const filter = parseSemanticFilter(raw.filter);
+      return filter === undefined ? { name: inputName } : { name: inputName, filter };
+    };
+    const numerator = read(typeParams.numerator);
+    const denominator = read(typeParams.denominator);
+    return numerator && denominator ? [numerator, denominator] : undefined;
+  }
+
+  /**
+   * Split a metric request into the plain metrics and ratio metrics it holds.
+   * undefined: no ratio metric was asked for. null: a ratio metric was, and
+   * one of its sides is not a simple metric this compiler can aggregate
+   * (another ratio, a derived metric, an unknown name) — refuse, never guess.
+   */
+  private planNativeRatioMetrics(metrics: string[]): NativeRatioPlan | null | undefined {
+    if (!metrics.some((name) => this.ratioInputs(name))) return undefined;
+    const outputs: NativeRatioPlan['outputs'] = [];
+    const inputs = new Map<string, MetricDefinition>();
+    const inputAlias = (ratioName: string, side: 'numerator' | 'denominator', input: { name: string; filter?: MetricDefinition['filter'] }): string | null => {
+      const base = this.resolveComposableMetric(input.name);
+      if (!base || this.ratioInputs(input.name)) return null;
+      if (input.filter === undefined) {
+        inputs.set(base.name, base);
+        return base.name;
+      }
+      const alias = `${sanitizeSqlAlias(ratioName)}__${side}`;
+      inputs.set(alias, { ...base, name: alias, filter: combineMetricFilters(base.filter, input.filter), objectKind: 'metric' });
+      return alias;
+    };
+    for (const name of metrics) {
+      const ratio = this.ratioInputs(name);
+      if (!ratio) {
+        if (!this.resolveComposableMetric(name)) return null;
+        outputs.push({ kind: 'metric', name });
+        continue;
+      }
+      const numerator = inputAlias(name, 'numerator', ratio[0]!);
+      const denominator = inputAlias(name, 'denominator', ratio[1]!);
+      if (!numerator || !denominator) return null;
+      outputs.push({ kind: 'ratio', name: this.metricForReference(name)!.name, numerator, denominator });
+    }
+    return { outputs, inputs };
+  }
+
+  /**
+   * Compose ratio metrics natively. The numerator and denominator are ordinary
+   * governed metrics, so they are composed exactly as they would be alone — at
+   * the requested dimensions, time grain, and filters, each in its own
+   * aggregate island when they live on different fact tables — and the ratio
+   * is taken per output row: SUM(losses) / SUM(premium), never an average of
+   * per-row ratios. A zero denominator yields NULL, not an error.
+   */
+  private composeRatioQuery(options: ComposeQueryOptions, plan: NativeRatioPlan): ComposeQueryResult | null {
+    const dialect = options.dialect ?? getDialect(options.driver);
+    const innerMetrics = Array.from(new Set([
+      ...plan.outputs.filter((output) => output.kind === 'metric').map((output) => output.name),
+      ...plan.inputs.keys(),
+    ]));
+    const ephemeral = [...plan.inputs.entries()].filter(([alias, metric]) => metric.name === alias && !this.metrics.has(alias));
+    for (const [alias, metric] of ephemeral) this.ratioInputMetrics.set(alias, metric);
+    let inner: ComposeQueryResult | null;
+    try {
+      inner = this.composeQuery({ ...options, metrics: innerMetrics, orderBy: undefined, limit: undefined });
+    } finally {
+      for (const [alias] of ephemeral) this.ratioInputMetrics.delete(alias);
+    }
+    if (!inner) return null;
+
+    const source = 'ratio_inputs';
+    const grainKeys = inner.grainKeys ?? [];
+    const outputName = (name: string): string => this.metricForReference(name)?.name ?? name;
+    const select = [
+      ...grainKeys.map((key) => `${source}.${key} AS ${key}`),
+      ...plan.outputs.map((output) => output.kind === 'metric'
+        ? `${source}.${outputName(output.name)} AS ${outputName(output.name)}`
+        : `1.0 * ${source}.${output.numerator} / NULLIF(${source}.${output.denominator}, 0) AS ${output.name}`),
+    ];
+    // Aggregate islands arrive as `WITH <islands> SELECT ...`. Some warehouses
+    // (SQL Server) reject a WITH inside a derived table, so the islands stay
+    // top-level CTEs and the division reads one more CTE after them.
+    const islands = inner.sql.startsWith('WITH ') ? inner.sql.search(/\nSELECT\n/) : -1;
+    let sql = islands > 0
+      ? `${inner.sql.slice(0, islands)},\n${source} AS (\n${indentSql(inner.sql.slice(islands + 1))}\n)\nSELECT\n  ${select.join(',\n  ')}\nFROM ${source}`
+      : `SELECT\n  ${select.join(',\n  ')}\nFROM (\n${indentSql(inner.sql)}\n) AS ${source}`;
+
+    if ((options.orderBy ?? []).length > 0) {
+      const timeName = options.timeDimension?.name;
+      // Both composition strategies project the time grain last.
+      const timeAlias = timeName ? grainKeys[grainKeys.length - 1] : undefined;
+      const outputs = new Map<string, string>();
+      for (const key of grainKeys) outputs.set(normalizeSemanticOrderTarget(key), key);
+      for (const output of plan.outputs) {
+        const name = output.kind === 'metric' ? outputName(output.name) : output.name;
+        outputs.set(normalizeSemanticOrderTarget(name), name);
+        outputs.set(normalizeSemanticOrderTarget(output.name), name);
+      }
+      const parts: string[] = [];
+      for (const order of options.orderBy!) {
+        const dimension = order.name === timeName ? undefined : this.resolveGroupBy(order.name);
+        const target = order.name === timeName && timeAlias
+          ? timeAlias
+          : outputs.get(normalizeSemanticOrderTarget(order.name))
+            ?? (dimension ? outputs.get(normalizeSemanticOrderTarget(dimension.name)) : undefined);
+        if (!target) return null;
+        parts.push(`${target} ${order.direction.toUpperCase()}`);
+      }
+      sql += `\nORDER BY ${parts.join(', ')}`;
+    }
+    if (options.limit) sql += `\n${dialect.limitClause(options.limit)}`;
+    return { ...inner, sql };
+  }
+
+  /**
+   * The output alias an ORDER BY name refers to, when it names a selected
+   * metric or dimension by any of its references (`claim_status`,
+   * `claim__claim_status`, `claims.claim_status`). Undefined leaves the name
+   * as written, which the caller then checks against what was projected.
+   */
+  private projectedOrderAlias(
+    name: string,
+    metrics: MetricDefinition[],
+    dimensions: DimensionDefinition[],
+  ): string | undefined {
+    const metric = this.metricForReference(name);
+    if (metric && metrics.some((candidate) => candidate.name === metric.name)) return metric.name;
+    const dimension = this.resolveDimensionForMetrics(name, metrics);
+    if (!dimension) return undefined;
+    const identity = semanticDimensionIdentity(dimension);
+    return dimensions.find((candidate) => semanticDimensionIdentity(candidate) === identity)?.name;
   }
 
   /**
@@ -1411,10 +1712,17 @@ export class SemanticLayer {
         ...grainKeys.map(normalizeSemanticOrderTarget),
         ...metrics.map((metric) => normalizeSemanticOrderTarget(metric.name)),
       ]);
-      if (options.orderBy!.some((order) => !outputAliases.has(normalizeSemanticOrderTarget(order.name)))) {
+      const timeAlias = timeDimension && options.timeDimension ? grainKeys[grainKeys.length - 1] : undefined;
+      const orderBy = options.orderBy!.map((order) => ({
+        ...order,
+        name: timeAlias && (order.name === timeDimension?.name || order.name === options.timeDimension?.name)
+          ? timeAlias
+          : this.projectedOrderAlias(order.name, metrics, dimensions) ?? order.name,
+      }));
+      if (orderBy.some((order) => !outputAliases.has(normalizeSemanticOrderTarget(order.name)))) {
         return null;
       }
-      body += `\nORDER BY ${options.orderBy!.map((order) => {
+      body += `\nORDER BY ${orderBy.map((order) => {
         const qualified = grainKeySet.has(order.name.toLowerCase()) ? `grain_keys.${order.name}` : order.name;
         return `${qualified} ${order.direction.toUpperCase()}`;
       }).join(', ')}`;
@@ -1815,12 +2123,18 @@ export class SemanticLayer {
    * Reasons:
    *   - `no_join_path`             the dimension's model is unreachable from
    *                                every selected metric's model.
-   *   - `not_shared_across_metrics` reachable from some but not all metrics.
+   *   - `one_to_many_only`         reachable, but only by walking an entity
+   *                                join backwards (one-to-many), which would
+   *                                repeat each metric row; the composer and
+   *                                MetricFlow both refuse it.
+   *                                {@link explainDimensionGap} names the step.
+   *   - `not_shared_across_metrics` reachable many-to-one from some but not
+   *                                all metrics.
    *   - `metric_unresolved`         a requested metric name is unknown.
    */
   explainCompatibleDimensions(metricNames: string[]): {
     compatible: Array<DimensionDefinition & { qualifiedName?: string; entityPath?: string[] }>;
-    incompatible: Array<{ name: string; qualifiedName?: string; reason: 'no_join_path' | 'not_shared_across_metrics' | 'metric_unresolved' }>;
+    incompatible: Array<{ name: string; qualifiedName?: string; reason: DimensionIncompatibilityReason }>;
   } {
     // Order-independent: compatibility is an intersection over the metric set.
     const cacheKey = [...new Set(metricNames)].sort().join('\u0000');
@@ -1833,7 +2147,7 @@ export class SemanticLayer {
 
   private computeCompatibleDimensions(metricNames: string[]): {
     compatible: Array<DimensionDefinition & { qualifiedName?: string; entityPath?: string[] }>;
-    incompatible: Array<{ name: string; qualifiedName?: string; reason: 'no_join_path' | 'not_shared_across_metrics' | 'metric_unresolved' }>;
+    incompatible: Array<{ name: string; qualifiedName?: string; reason: DimensionIncompatibilityReason }>;
   } {
     const resolvedMetrics = metricNames
       .map((name) => this.metricForReference(name))
@@ -1903,6 +2217,29 @@ export class SemanticLayer {
       return Array.from(names);
     };
 
+    const walkJoins = (seedTables: Set<string>, followOneToMany: boolean): Set<string> => {
+      const reached = new Set(seedTables);
+      for (const table of seedTables) {
+        const cubeName = resolveCubeNameForTable(table);
+        if (!cubeName) continue;
+        const queue = [cubeName];
+        const visited = new Set<string>(queue);
+        while (queue.length > 0) {
+          const current = queue.shift()!;
+          const cube = this.cubes.get(current);
+          if (cube?.table) reached.add(cube.table);
+          for (const join of this.joinGraph.get(current) ?? []) {
+            if (!followOneToMany && join.reversed && join.entity) continue;
+            const next = join.right;
+            if (visited.has(next)) continue;
+            visited.add(next);
+            queue.push(next);
+          }
+        }
+      }
+      return reached;
+    };
+
     const metricTables = resolvedMetrics.map((metric) => {
       const reachableTables = new Set<string>();
       const measureNames = new Set<string>();
@@ -1937,35 +2274,27 @@ export class SemanticLayer {
         }
       }
 
-      for (const table of Array.from(reachableTables)) {
-        const cubeName = resolveCubeNameForTable(table);
-        if (!cubeName) continue;
-        const queue = [cubeName];
-        const visited = new Set<string>(queue);
-        while (queue.length > 0) {
-          const current = queue.shift()!;
-          const cube = this.cubes.get(current);
-          if (cube?.table) reachableTables.add(cube.table);
-          const joins = this.joinGraph.get(current) ?? [];
-          for (const join of joins) {
-            const next = join.right;
-            if (visited.has(next)) continue;
-            visited.add(next);
-            queue.push(next);
-          }
-        }
-      }
-      return reachableTables;
+      // `safe` follows joins the way findJoinPath does (never an entity join
+      // walked backwards, which multiplies the metric's rows); `any` follows
+      // every edge. The gap between them earns `one_to_many_only`.
+      return {
+        safe: walkJoins(reachableTables, false),
+        any: walkJoins(reachableTables, true),
+      };
     });
 
     // Shared = reachable for EVERY metric (intersection); union = reachable for
     // at least one. The gap between them is what earns `not_shared_across_metrics`.
-    const sharedTables = metricTables.slice(1).reduce((common, tables) => {
-      for (const table of common) if (!tables.has(table)) common.delete(table);
+    const sharedTables = metricTables.slice(1).reduce((common, { safe }) => {
+      for (const table of common) if (!safe.has(table)) common.delete(table);
       return common;
-    }, new Set(metricTables[0]));
+    }, new Set(metricTables[0].safe));
     const unionTables = new Set<string>();
-    for (const tables of metricTables) for (const t of tables) unionTables.add(t);
+    const fanOutTables = new Set<string>();
+    for (const { safe, any } of metricTables) {
+      for (const t of safe) unionTables.add(t);
+      for (const t of any) fanOutTables.add(t);
+    }
 
     // Entity path from a metric's model to a dimension's cube, along join
     // `entity` links — the head of a MetricFlow multi-hop group-by name.
@@ -1984,7 +2313,12 @@ export class SemanticLayer {
         while (queue.length > 0) {
           const { cube, trail } = queue.shift()!;
           for (const join of this.joinGraph.get(cube) ?? []) {
-            const nextTrail = join.entity ? [...trail, join.entity] : trail;
+            // Never walk an entity join backwards: that path is refused by the
+            // composer (see findJoinPath), so it cannot name a group-by.
+            if (join.reversed && join.entity) continue;
+            // A one-to-one join stays on the same entity (policy → the
+            // policy's agent row), which MetricFlow does not spell twice.
+            const nextTrail = join.entity && trail[trail.length - 1] !== join.entity ? [...trail, join.entity] : trail;
             if (join.right === targetCube) {
               if (!best
                 || nextTrail.length < best.length
@@ -2012,7 +2346,7 @@ export class SemanticLayer {
     };
 
     const compatible: Array<DimensionDefinition & { qualifiedName?: string; entityPath?: string[] }> = [];
-    const incompatible: Array<{ name: string; qualifiedName?: string; reason: 'no_join_path' | 'not_shared_across_metrics' | 'metric_unresolved' }> = [];
+    const incompatible: Array<{ name: string; qualifiedName?: string; reason: DimensionIncompatibilityReason }> = [];
     for (const name of unresolved) incompatible.push({ name, reason: 'metric_unresolved' });
 
     const seenReferences = new Set<string>();
@@ -2030,6 +2364,8 @@ export class SemanticLayer {
         compatible.push({ ...resolved, qualifiedName, entityPath: cube ? entityPathTo(cube) : undefined });
       } else if (unionTables.has(resolved.table)) {
         incompatible.push({ name: resolved.name, qualifiedName, reason: 'not_shared_across_metrics' });
+      } else if (fanOutTables.has(resolved.table)) {
+        incompatible.push({ name: resolved.name, qualifiedName, reason: 'one_to_many_only' });
       } else {
         incompatible.push({ name: resolved.name, qualifiedName, reason: 'no_join_path' });
       }
@@ -2240,6 +2576,34 @@ function renderFilterSpec(
   return null;
 }
 
+interface NativeRatioPlan {
+  /** Requested metrics in order: plain metrics pass through, ratios divide two inputs. */
+  outputs: Array<
+    | { kind: 'metric'; name: string }
+    | { kind: 'ratio'; name: string; numerator: string; denominator: string }
+  >;
+  /** Input alias → the simple metric composed for it (with any input filter applied). */
+  inputs: Map<string, MetricDefinition>;
+}
+
+/**
+ * AND two metric filters together (a base metric's own filter and the filter a
+ * ratio puts on that metric as its numerator or denominator). Strings become
+ * `{ sql }` items, which `renderObjectFilter` renders as a raw predicate.
+ */
+function combineMetricFilters(
+  left: MetricDefinition['filter'],
+  right: MetricDefinition['filter'],
+): MetricDefinition['filter'] {
+  const items = (filter: MetricDefinition['filter']): Array<Record<string, unknown>> => {
+    if (filter === undefined || filter === null) return [];
+    if (typeof filter === 'string') return filter.trim() ? [{ sql: filter }] : [];
+    return Array.isArray(filter) ? filter : [filter];
+  };
+  const combined = [...items(left), ...items(right)];
+  return combined.length === 0 ? undefined : combined;
+}
+
 /** Compute a metric's scoped-filter predicate, distinguishing none / ok / unrenderable. */
 function computeMetricFilterPredicate(
   metric: MetricDefinition,
@@ -2435,7 +2799,7 @@ function rewriteSqlQualifiers(sql: string, aliases: Map<string, string>): string
  * untouched while qualifying physical member references such as
  * `SUM(product_price)` and `CASE WHEN is_food_item THEN product_price END`.
  */
-function qualifyBareSqlIdentifiers(sql: string, alias: string): string {
+export function qualifyBareSqlIdentifiers(sql: string, alias: string): string {
   let output = '';
   let index = 0;
   let quote: "'" | '"' | '`' | undefined;
@@ -2481,6 +2845,12 @@ function qualifyBareSqlIdentifiers(sql: string, alias: string): string {
     index = end;
   }
   return output;
+}
+
+/** True when an expression reads no column: only literals and SQL keywords. */
+function readsNoColumn(sql: string): boolean {
+  const identifiers = sql.replace(/'(?:[^']|'')*'/g, '').match(/[A-Za-z_][A-Za-z0-9_$]*/g) ?? [];
+  return identifiers.every((token) => SQL_EXPRESSION_KEYWORDS.has(token.toLowerCase()));
 }
 
 function indentSql(sql: string): string {

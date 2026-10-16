@@ -1,0 +1,23 @@
+{
+  "key": "acc063e28595067e0a2d48532af7cd2b",
+  "operation": "generate",
+  "text": "{\"version\":1,\"kind\":\"analytics\",\"reading\":\"The cohort average order value (lifetime pre-tax spend divided by lifetime orders) for customers whose first order was placed in 2024.\",\"measures\":[{\"ref\":\"metric:customers.average_order_value\"}],\"groupBy\":[],\"display\":[],\"filters\":[],\"time\":{\"ref\":\"dimension:customers.first_ordered_at\",\"window\":{\"start\":\"2024-01-01\",\"end\":\"2025-01-01\",\"expression\":\"first acquired in 2024\"}},\"expectedShape\":\"scalar\",\"unresolved\":[],\"provenance\":{\"metric:customers.average_order_value\":\"q:average order value\",\"dimension:customers.first_ordered_at\":\"q:customers first acquired in 2024\"}}",
+  "providerName": "claude",
+  "recordedAt": "2026-10-16T18:09:26.609Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 2,
+    "messageRoles": [
+      "system",
+      "user"
+    ],
+    "preCanonicalHash": "acc063e28595067e0a2d48532af7cd2b3389a74a20859ad52b973f1953ddecb9",
+    "postCanonicalHash": "acc063e28595067e0a2d48532af7cd2b3389a74a20859ad52b973f1953ddecb9",
+    "appliedRuleClasses": []
+  }
+}

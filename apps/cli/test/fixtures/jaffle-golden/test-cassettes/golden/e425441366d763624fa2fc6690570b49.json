@@ -1,0 +1,24 @@
+{
+  "key": "e425441366d763624fa2fc6690570b49",
+  "operation": "generate",
+  "text": "{\"version\":1,\"kind\":\"analytics\",\"reading\":\"Same ranking as before — top 10 customers by beverage revenue with beverage order count and product variety — with the customer name shown; the certified block already returns customer_name as its first column, so the analysis is unchanged.\",\"measures\":[{\"ref\":\"block:commerce.top_beverage_customers\"}],\"groupBy\":[],\"display\":[],\"filters\":[],\"expectedShape\":\"ranking\",\"unresolved\":[],\"provenance\":{\"block:commerce.top_beverage_customers\":\"inherited\"}}",
+  "providerName": "claude",
+  "recordedAt": "2026-10-16T18:12:51.286Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 3,
+    "messageRoles": [
+      "system",
+      "user",
+      "user"
+    ],
+    "preCanonicalHash": "e425441366d763624fa2fc6690570b490c4d7e27c8869d6a14b047357be64d68",
+    "postCanonicalHash": "e425441366d763624fa2fc6690570b490c4d7e27c8869d6a14b047357be64d68",
+    "appliedRuleClasses": []
+  }
+}

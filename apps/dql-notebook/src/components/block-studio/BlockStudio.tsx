@@ -40,6 +40,7 @@ const RUNTIME_ENGINE_LABEL: Record<string, string> = {
 function describeIncompatibility(reason: string): string {
   switch (reason) {
     case 'no_join_path': return 'No join path from this metric’s model to this dimension.';
+    case 'one_to_many_only': return 'Reachable only through a one-to-many join, which would repeat each metric value.';
     case 'not_shared_across_metrics': return 'Not reachable from every selected metric.';
     case 'metric_unresolved': return 'The selected metric could not be resolved.';
     default: return 'Not compatible with the selected metrics.';

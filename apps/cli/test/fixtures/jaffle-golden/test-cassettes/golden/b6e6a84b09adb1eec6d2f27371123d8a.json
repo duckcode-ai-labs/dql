@@ -1,0 +1,23 @@
+{
+  "key": "b6e6a84b09adb1eec6d2f27371123d8a",
+  "operation": "generate",
+  "text": "NO_SQL: No listed column holds weather data (temperature, conditions, forecast) for Chicago or any location; the customers table added in the note has no weather fields either.",
+  "providerName": "claude",
+  "recordedAt": "2026-10-16T18:08:06.609Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 2,
+    "messageRoles": [
+      "system",
+      "user"
+    ],
+    "preCanonicalHash": "b6e6a84b09adb1eec6d2f27371123d8ade5d426c726a5cf3dedc3fc93338eb33",
+    "postCanonicalHash": "b6e6a84b09adb1eec6d2f27371123d8ade5d426c726a5cf3dedc3fc93338eb33",
+    "appliedRuleClasses": []
+  }
+}

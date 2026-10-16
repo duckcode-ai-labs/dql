@@ -1,0 +1,23 @@
+{
+  "key": "4f9ed52104c0171cce3941987e7459a1",
+  "operation": "generate",
+  "text": "SELECT SUM(CASE WHEN \"jaffle_shop\".\"dev\".\"order_items\".\"ordered_at\" >= '2025-07-01' AND \"jaffle_shop\".\"dev\".\"order_items\".\"ordered_at\" < '2025-08-01' THEN \"jaffle_shop\".\"dev\".\"order_items\".\"product_price\" ELSE 0 END) AS revenue_2025_07, SUM(CASE WHEN \"jaffle_shop\".\"dev\".\"order_items\".\"ordered_at\" >= '2025-08-01' AND \"jaffle_shop\".\"dev\".\"order_items\".\"ordered_at\" < '2025-09-01' THEN \"jaffle_shop\".\"dev\".\"order_items\".\"product_price\" ELSE 0 END) AS revenue_2025_08, (SUM(CASE WHEN \"jaffle_shop\".\"dev\".\"order_items\".\"ordered_at\" >= '2025-08-01' AND \"jaffle_shop\".\"dev\".\"order_items\".\"ordered_at\" < '2025-09-01' THEN \"jaffle_shop\".\"dev\".\"order_items\".\"product_price\" ELSE 0 END) - SUM(CASE WHEN \"jaffle_shop\".\"dev\".\"order_items\".\"ordered_at\" >= '2025-07-01' AND \"jaffle_shop\".\"dev\".\"order_items\".\"ordered_at\" < '2025-08-01' THEN \"jaffle_shop\".\"dev\".\"order_items\".\"product_price\" ELSE 0 END)) * 100.0 / NULLIF(SUM(CASE WHEN \"jaffle_shop\".\"dev\".\"order_items\".\"ordered_at\" >= '2025-07-01' AND \"jaffle_shop\".\"dev\".\"order_items\".\"ordered_at\" < '2025-08-01' THEN \"jaffle_shop\".\"dev\".\"order_items\".\"product_price\" ELSE 0 END), 0) AS revenue_growth_pct FROM \"jaffle_shop\".\"dev\".\"order_items\" WHERE \"jaffle_shop\".\"dev\".\"order_items\".\"ordered_at\" >= '2025-07-01' AND \"jaffle_shop\".\"dev\".\"order_items\".\"ordered_at\" < '2025-09-01'",
+  "providerName": "claude",
+  "recordedAt": "2026-10-16T18:10:41.518Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 2,
+    "messageRoles": [
+      "system",
+      "user"
+    ],
+    "preCanonicalHash": "4f9ed52104c0171cce3941987e7459a1b31c786e805da8c2afdbdb6d2049d590",
+    "postCanonicalHash": "4f9ed52104c0171cce3941987e7459a1b31c786e805da8c2afdbdb6d2049d590",
+    "appliedRuleClasses": []
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "key": "de1fe845fe6d29b09c32c9f4eea26e54",
+  "operation": "generate",
+  "text": "NO_SQL: No listed column holds weather data (temperature, conditions, forecast) for Chicago or any location; the project only contains Jaffle Shop commerce data.",
+  "providerName": "claude",
+  "recordedAt": "2026-10-16T18:07:59.412Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 2,
+    "messageRoles": [
+      "system",
+      "user"
+    ],
+    "preCanonicalHash": "de1fe845fe6d29b09c32c9f4eea26e547ff281ce9cc94251f0687276124d6afc",
+    "postCanonicalHash": "de1fe845fe6d29b09c32c9f4eea26e547ff281ce9cc94251f0687276124d6afc",
+    "appliedRuleClasses": []
+  }
+}

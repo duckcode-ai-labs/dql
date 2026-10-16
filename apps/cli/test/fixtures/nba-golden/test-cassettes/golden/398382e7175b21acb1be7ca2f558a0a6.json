@@ -1,0 +1,24 @@
+{
+  "key": "398382e7175b21acb1be7ca2f558a0a6",
+  "operation": "generate",
+  "text": "{\"version\":1,\"kind\":\"conversation\",\"reading\":\"The user asks for a subjective recommendation (which of the ten ranked players to build a team around, and why), which is a judgment call rather than a governed measurement.\",\"measures\":[],\"groupBy\":[],\"display\":[],\"filters\":[],\"expectedShape\":\"lookup\",\"unresolved\":[],\"provenance\":{},\"reply\":\"\\\"Who to build a team around\\\" is a judgment call that this project can't settle on its own — it holds box-score lines for calendar 2016–2017 (points, rebounds, assists, steals, blocks, shooting, turnovers, results), not contracts, age, injuries, salary, or fit. What the previous result does show: James Harden led the 2017 top ten in points per game (30.08) with strong assists (9.79); Russell Westbrook averaged a triple-double (29.03 / 10.14 / 10.02); LeBron James combined 28.20 points with the most games played (100), i.e., the most durable. If you want the data to narrow the choice, I can extend the same ranking with shooting efficiency (field goals made ÷ attempted, three-point rate), turnovers per game, steals and blocks per game, or the team's win rate in games each player played — just say which criteria matter to you.\"}",
+  "providerName": "claude",
+  "recordedAt": "2026-10-16T18:24:14.201Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 3,
+    "messageRoles": [
+      "system",
+      "user",
+      "user"
+    ],
+    "preCanonicalHash": "398382e7175b21acb1be7ca2f558a0a627ae3671326dff4e1a23877c1edb2b99",
+    "postCanonicalHash": "398382e7175b21acb1be7ca2f558a0a627ae3671326dff4e1a23877c1edb2b99",
+    "appliedRuleClasses": []
+  }
+}

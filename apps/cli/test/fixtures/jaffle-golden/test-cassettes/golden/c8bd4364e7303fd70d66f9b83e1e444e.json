@@ -1,0 +1,24 @@
+{
+  "key": "c8bd4364e7303fd70d66f9b83e1e444e",
+  "operation": "generate",
+  "text": "{\"version\":1,\"kind\":\"analytics\",\"reading\":\"Top 10 customers ranked by beverage (drink) revenue, with the count of their orders containing beverages and the number of distinct beverage products they bought, grouped by customer key with the customer name shown — the same ranking as before, expressed with metric, entity and dimension refs because the certified block cannot be applied.\",\"measures\":[{\"ref\":\"metric:order_item.drink_revenue\",\"alias\":\"beverage_revenue\"},{\"ref\":\"entity:order_item.order_id\",\"aggregation\":\"count_distinct\",\"alias\":\"beverage_orders\",\"scope\":[{\"ref\":\"dimension:products.is_drink_item\",\"op\":\"is_true\",\"values\":[true],\"source\":\"question\"}]},{\"ref\":\"entity:order_item.product\",\"aggregation\":\"count_distinct\",\"alias\":\"beverage_product_types\",\"scope\":[{\"ref\":\"dimension:products.is_drink_item\",\"op\":\"is_true\",\"values\":[true],\"source\":\"question\"}]}],\"groupBy\":[{\"ref\":\"entity:orders.customer\",\"role\":\"key\"}],\"display\":[\"dimension:customers.customer_name\"],\"filters\":[],\"ordering\":{\"ref\":\"metric:order_item.drink_revenue\",\"direction\":\"desc\"},\"limit\":10,\"expectedShape\":\"ranking\",\"unresolved\":[],\"provenance\":{\"block:commerce.top_beverage_customers\":\"removed:block not applicable (groups by label without identity key); decomposed into metric, entity and dimension refs\",\"metric:order_item.drink_revenue\":\"q:bevereage catogery\",\"entity:order_item.order_id\":\"inherited\",\"entity:order_item.product\":\"inherited\",\"dimension:products.is_drink_item\":\"q:bevereage catogery\",\"entity:orders.customer\":\"inherited\",\"dimension:customers.customer_name\":\"inherited\"}}",
+  "providerName": "claude",
+  "recordedAt": "2026-10-16T18:13:43.324Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 3,
+    "messageRoles": [
+      "system",
+      "user",
+      "user"
+    ],
+    "preCanonicalHash": "c8bd4364e7303fd70d66f9b83e1e444ec873c971be356f5aed6964dc0f361a27",
+    "postCanonicalHash": "c8bd4364e7303fd70d66f9b83e1e444ec873c971be356f5aed6964dc0f361a27",
+    "appliedRuleClasses": []
+  }
+}

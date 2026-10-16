@@ -1,0 +1,23 @@
+{
+  "key": "c85bfd8de4b08503be95486c8a83c447",
+  "operation": "generate",
+  "text": "{\"version\":1,\"kind\":\"analytics\",\"reading\":\"Total supply cost (sum of supply line costs from the supplies table) broken down by product, labeled with the product name.\",\"measures\":[{\"ref\":\"column:dev.supplies.supply_cost\",\"aggregation\":\"sum\",\"alias\":\"supply_cost\"}],\"groupBy\":[{\"ref\":\"dimension:supplies.product_id\",\"role\":\"key\"}],\"display\":[\"dimension:products.product_name\"],\"filters\":[],\"ordering\":{\"ref\":\"column:dev.supplies.supply_cost\",\"direction\":\"desc\"},\"expectedShape\":\"grouped\",\"unresolved\":[{\"clause\":\"supply cost\",\"options\":[\"column:dev.supplies.supply_cost\",\"column:dev.order_items.supply_cost\"],\"material\":false,\"question\":\"Do you want the per-product unit supply cost from the supplies table (used here), or the supply cost actually incurred on sold order items?\"}],\"provenance\":{\"column:dev.supplies.supply_cost\":\"q:supply cost\",\"dimension:supplies.product_id\":\"q:by product\",\"dimension:products.product_name\":\"q:by product\"}}",
+  "providerName": "claude",
+  "recordedAt": "2026-10-16T18:20:33.976Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 2,
+    "messageRoles": [
+      "system",
+      "user"
+    ],
+    "preCanonicalHash": "c85bfd8de4b08503be95486c8a83c447bf2459c13787308d5355a6129eb06b6f",
+    "postCanonicalHash": "c85bfd8de4b08503be95486c8a83c447bf2459c13787308d5355a6129eb06b6f",
+    "appliedRuleClasses": []
+  }
+}

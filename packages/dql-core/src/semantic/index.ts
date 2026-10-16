@@ -31,6 +31,7 @@ export type {
   HierarchyRollupType,
   SemanticLayerConfig,
   JoinDefinition,
+  DimensionIncompatibilityReason,
   TimeDimensionDefinition,
   CubeDefinition,
   ComposeQueryOptions,

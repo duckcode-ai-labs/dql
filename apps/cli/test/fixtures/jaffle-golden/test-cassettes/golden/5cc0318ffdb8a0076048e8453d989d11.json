@@ -1,0 +1,23 @@
+{
+  "key": "5cc0318ffdb8a0076048e8453d989d11",
+  "operation": "generate",
+  "text": "NO_SQL: No listed column holds a churn status or churn definition, and no listed column holds a geographic region (only Jaffle Shop location_name exists).",
+  "providerName": "claude",
+  "recordedAt": "2026-10-16T18:07:44.372Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 2,
+    "messageRoles": [
+      "system",
+      "user"
+    ],
+    "preCanonicalHash": "5cc0318ffdb8a0076048e8453d989d1187f9f7bff617e29c5b74b301cf824558",
+    "postCanonicalHash": "5cc0318ffdb8a0076048e8453d989d1187f9f7bff617e29c5b74b301cf824558",
+    "appliedRuleClasses": []
+  }
+}

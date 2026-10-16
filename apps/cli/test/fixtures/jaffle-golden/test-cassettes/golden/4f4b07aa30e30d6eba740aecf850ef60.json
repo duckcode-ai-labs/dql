@@ -1,0 +1,23 @@
+{
+  "key": "4f4b07aa30e30d6eba740aecf850ef60",
+  "operation": "generate",
+  "text": "{\"version\":1,\"kind\":\"analytics\",\"reading\":\"The total revenue across all orders as a single number, with no breakdown or time window.\",\"measures\":[{\"ref\":\"metric:order_item.revenue\"}],\"groupBy\":[],\"display\":[],\"filters\":[],\"expectedShape\":\"scalar\",\"unresolved\":[{\"clause\":\"total revenue\",\"options\":[\"metric:order_item.revenue\",\"metric:orders.order_total\"],\"material\":true,\"question\":\"Do you mean product revenue excluding tax (order items) or the gross order total including tax (orders mart)?\"}],\"provenance\":{\"metric:order_item.revenue\":\"q:total revenue\",\"metric:orders.order_total\":\"q:total revenue\"}}",
+  "providerName": "claude",
+  "recordedAt": "2026-10-16T18:04:02.815Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 2,
+    "messageRoles": [
+      "system",
+      "user"
+    ],
+    "preCanonicalHash": "4f4b07aa30e30d6eba740aecf850ef6052081f78fb679677c92990b1cef1dd9a",
+    "postCanonicalHash": "4f4b07aa30e30d6eba740aecf850ef6052081f78fb679677c92990b1cef1dd9a",
+    "appliedRuleClasses": []
+  }
+}
