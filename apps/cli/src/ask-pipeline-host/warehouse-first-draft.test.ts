@@ -9,7 +9,8 @@ import { createAskPipelineRouteExecutor } from './host.js';
 /**
  * A warehouse-first project (no dbt): the synced catalog is the whole account
  * of the data. The drafter reads every table of it when it fits, with the keys
- * the warehouse declares.
+ * the warehouse declares, and where nothing is governed it drafts from the
+ * question itself.
  */
 type Table = { columns: string[]; primaryKey?: string[]; foreignKeys?: Array<{ columns: string[]; references: { relation: string; columns: string[] } }> };
 
@@ -134,5 +135,40 @@ describe('a warehouse-first draft reads the whole schema with its declared keys'
     const prompt = prompts[0] ?? '';
     expect((prompt.match(/executable relation:/g) ?? []).length).toBeLessThanOrEqual(8);
     expect(prompt).toContain('executable relation:main.customers');
+  });
+});
+
+describe('where nothing is governed, the SQL is drafted from the question itself', () => {
+  const sql = 'SELECT c.country, SUM(i.total) AS total FROM main.invoices i JOIN main.customers c ON c.customer_id = i.customer_id GROUP BY c.country';
+  const rows = [{ country: 'NO', total: 10 }];
+
+  it('a warehouse-first project with no block, metric or measure drafts without the reading call', async () => {
+    const { result, prompts, readings } = await ask({}, 'Total invoice amount for each customer country', () => sql, rows);
+    expect(readings).toBe(0);
+    expect(prompts[0]).toContain('QUESTION: Total invoice amount for each customer country');
+    expect(prompts[0]).not.toContain('READING:');
+    expect(result.status).toBe('completed');
+    expect(result.trustState).toBe('review_required');
+  });
+
+  it('a question the drafter declines is read first, as before', async () => {
+    let calls = 0;
+    const { readings } = await ask({}, 'Total invoice amount for each customer country', () => (calls++ === 0 ? 'NO_SQL: no column holds it.' : sql), rows);
+    expect(readings).toBeGreaterThan(0);
+  });
+
+  it('ZLENS_ASK_DRAFT_FIRST=0 keeps the reading first', async () => {
+    vi.stubEnv('ZLENS_ASK_DRAFT_FIRST', '0');
+    try {
+      const { readings } = await ask({}, 'Total invoice amount for each customer country', () => sql, rows);
+      expect(readings).toBeGreaterThan(0);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it('a project with a certified block is read first', async () => {
+    const { readings } = await ask({ blocks: [{ name: 'invoice_totals', description: 'Invoice totals by country.', sql: 'SELECT c.country, SUM(i.total) AS total FROM main.invoices i JOIN main.customers c ON c.customer_id = i.customer_id GROUP BY 1', certified: true }] }, 'Total invoice amount for each customer country', () => sql, rows);
+    expect(readings).toBeGreaterThan(0);
   });
 });

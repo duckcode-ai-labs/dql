@@ -3158,3 +3158,62 @@ describe('a retired block is answered from its replacement, and the run says so'
     expect(outcome.receipt.story?.some((step) => /was retired/.test(step.title))).toBe(false);
   });
 });
+
+describe('draft first where nothing is governed', () => {
+  const vocabulary = buildVocabularyIndex({
+    relations: [{ schema: 'dev', name: 'orders', columnCompleteness: 'complete', columns: [{ name: 'amount', dataType: 'NUMBER' }, { name: 'status', dataType: 'VARCHAR' }] }],
+  });
+  const reading = JSON.stringify({ version: 1, kind: 'analytics', reading: 'Amount by status.', measures: [{ ref: 'column:dev.orders.amount', aggregation: 'sum' }], groupBy: [{ ref: 'column:dev.orders.status', role: 'categorical' }], display: [], filters: [], unresolved: [], provenance: {}, expectedShape: 'grouped' });
+  const run = (question: string, draft: (question: string) => { sql: string; relations: string[]; proof: string[] } | { declined: string }, extra: Partial<Parameters<typeof runAskPipeline>[0]> = {}) => {
+    const reads: number[] = [];
+    const drafted: string[] = [];
+    const provider: AgentProvider = { name: 'ollama', available: async () => true, generate: async () => { reads.push(1); return reading; } };
+    const outcome = runAskPipeline({
+      question, vocabulary, provider, clauseCoverage: false, explorationAuto: true, draftFirst: true,
+      prepareDeps: { draftSql: async (input) => { drafted.push(input.question); return draft(input.question); } },
+      executeDeps: { run: async () => ({ columns: ['status', 'amount'], rows: [{ status: 'open', amount: 3 }], rowCount: 1, executionTimeMs: 1 }) },
+      ...extra,
+    });
+    return { outcome, reads, drafted };
+  };
+  const ok = { sql: 'SELECT status, SUM(amount) AS amount FROM dev.orders GROUP BY status', relations: ['dev.orders'], proof: [] };
+
+  it('drafts from the question as asked, without the reading call', async () => {
+    const { outcome, reads, drafted } = run('total amount by status', () => ok);
+    const answered = await outcome;
+    expect(answered.kind).toBe('answered');
+    expect(reads).toHaveLength(0);
+    expect(drafted).toEqual(['total amount by status']);
+  });
+
+  it('a question the drafter declines is read as before', async () => {
+    let declines = 1;
+    const { outcome, reads } = run('total amount by status', () => (declines-- > 0 ? { declined: 'no column holds it' } : ok));
+    const answered = await outcome;
+    expect(reads.length).toBeGreaterThan(0);
+    expect(answered.kind).toBe('answered');
+  });
+
+  it('a forecast still goes through the reading, which refuses it', async () => {
+    const { outcome, drafted } = run('what will the amount by status be next month, likely to grow?', () => ok);
+    const refused = await outcome;
+    expect(drafted).toHaveLength(0);
+    expect(refused.kind).toBe('gap');
+  });
+
+  it('an answer to a clarification and a follow-up edit are read first', async () => {
+    const answering = run('the open ones', () => ok, { conversation: { pendingClarification: 'Which statuses count as active?' } });
+    await answering.outcome;
+    expect(answering.reads.length).toBeGreaterThan(0);
+    const prior = parseIntent(JSON.parse(reading)).intent!;
+    const edit = run('now only the open ones', () => ok, { prior });
+    await edit.outcome;
+    expect(edit.reads.length).toBeGreaterThan(0);
+  });
+
+  it('without the flag the reading comes first, as before', async () => {
+    const { outcome, reads } = run('total amount by status', () => ok, { draftFirst: false });
+    await outcome;
+    expect(reads.length).toBeGreaterThan(0);
+  });
+});

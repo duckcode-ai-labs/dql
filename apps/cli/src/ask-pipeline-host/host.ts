@@ -2581,6 +2581,10 @@ export function createAskPipelineHost(deps: AskPipelineHostDeps): AskPipelineHos
       provider: ledgered,
       describeRelations,
       explorationAuto: deps.autoExploration !== false,
+      // Nothing governed at all (a warehouse-first project with no certified
+      // block, metric or measure in scope): draft from the question itself.
+      // ZLENS_ASK_DRAFT_FIRST=0 keeps the reading step first, for comparison.
+      ...(readEnv('ZLENS_ASK_DRAFT_FIRST') !== '0' && warehouseFirstCatalog(deps.getManifest().manifest, deps.projectRoot) && !currentVocabulary().entries.some((entry) => entry.kind === 'block' || entry.kind === 'metric' || entry.kind === 'measure') ? { draftFirst: true } : {}),
       prepareDeps: { ...prepareDeps(connection ?? { driver: 'duckdb' } as ConnectionConfig, currentVocabulary, engine, request.signal), draftSql: makeDraftSql(state) },
       executeDeps: {
         maxRows: deps.maxRows ?? 500,
