@@ -771,6 +771,7 @@ describe('explainMissingSemanticRuntime (actionable config diagnosis)', () => {
     const { explainMissingSemanticRuntime } = await import('./semantic-runtime.js');
     // beforeEach points ZLENS_METRICFLOW_BIN at a missing path → mf unresolvable,
     // and no dbt Cloud is configured → the PATH-guidance branch.
+    writeFileSync(join(root, 'dbt_project.yml'), 'name: demo\n');
     const msg = await explainMissingSemanticRuntime(root);
     expect(msg).toContain('MetricFlow is not on this server’s PATH');
     expect(msg).toContain('ZLENS_METRICFLOW_BIN');
@@ -832,3 +833,115 @@ describe('looksLikeAuthFailure (expired/invalid token detection)', () => {
     ]) expect(looksLikeAuthFailure(d)).toBe(false);
   });
 })
+
+/**
+ * REPORTED (warehouse-first insurance project, no dbt): a loss ratio metric
+ * failed with "dbt semantic execution requires target/semantic_manifest.json".
+ * The project had no dbt project to parse. An `mf` on the PATH had made
+ * MetricFlow the active runtime, and the native engine did not run ratios.
+ */
+describe('warehouse-first project (no dbt project)', () => {
+  function insuranceLayer(): SemanticLayer {
+    return new SemanticLayer({
+      metrics: [
+        { name: 'incurred_losses', label: 'Incurred losses', description: '', domain: 'claims', sql: 'claim_amount', type: 'sum', table: 'claim_amount' },
+        { name: 'written_premium', label: 'Written premium', description: '', domain: 'policies', sql: 'policy_amount', type: 'sum', table: 'policy_amount' },
+        {
+          name: 'loss_ratio',
+          label: 'Loss ratio',
+          description: '',
+          domain: 'claims',
+          sql: 'loss_ratio',
+          type: 'custom',
+          table: '',
+          metricType: 'ratio',
+          // dbt's imported shape: numerator/denominator carry name + filter.
+          typeParams: { numerator: { name: 'incurred_losses', filter: null }, denominator: { name: 'written_premium', filter: null } },
+          source: { provider: 'dbt', objectType: 'metric', objectId: 'loss_ratio' },
+        },
+        {
+          name: 'premium_growth',
+          label: 'Premium growth',
+          description: '',
+          domain: 'policies',
+          sql: 'premium_growth',
+          type: 'custom',
+          table: '',
+          metricType: 'derived',
+          typeParams: { expr: 'written_premium * 2', metrics: ['written_premium'] },
+          source: { provider: 'dbt', objectType: 'metric', objectId: 'premium_growth' },
+        },
+      ],
+      dimensions: [],
+    });
+  }
+
+  function installFakeMetricFlow(): void {
+    const bin = join(root, 'mf');
+    writeFileSync(bin, [
+      '#!/bin/sh',
+      'if [ "$1" = "--version" ]; then printf "%s\\n" "mf, version 0.14.0"; exit 0; fi',
+      'printf "%s\\n" "SELECT 1 FROM metricflow_compiled"',
+    ].join('\n'));
+    chmodSync(bin, 0o755);
+    process.env.ZLENS_METRICFLOW_BIN = bin;
+  }
+
+  const warehouseFirstConfig = { semanticLayer: { provider: 'dql' } };
+
+  it('does not make MetricFlow the active runtime just because mf is installed', async () => {
+    installFakeMetricFlow();
+    writeFileSync(join(root, 'dql.config.json'), JSON.stringify(warehouseFirstConfig));
+    const status = await getSemanticRuntimeStatus(root);
+    expect(status.active).toBe('native');
+    // Main's rule (projectHasDbtSemantics): mf is detected, but not used for a
+    // semantic layer it cannot read.
+    const metricFlow = status.adapters.find((adapter) => adapter.id === 'metricflow-cli');
+    expect(metricFlow?.detail).toContain('Not used automatically');
+    expect(status.setup).toContain('no dbt project');
+    expect(status.setup).not.toContain('semantic_manifest');
+  });
+
+  it('still selects MetricFlow in a dbt project', async () => {
+    installFakeMetricFlow();
+    writeFileSync(join(root, 'dbt_project.yml'), 'name: insurance\n');
+    mkdirSync(join(root, 'target'), { recursive: true });
+    writeFileSync(join(root, 'target', 'semantic_manifest.json'), JSON.stringify({ semantic_models: [{ name: 'policies' }], metrics: [{ name: 'written_premium' }] }));
+    const status = await getSemanticRuntimeStatus(root);
+    expect(status.active).toBe('metricflow-cli');
+  });
+
+  it('runs a ratio metric on the native compiler', async () => {
+    installFakeMetricFlow();
+    writeFileSync(join(root, 'dql.config.json'), JSON.stringify(warehouseFirstConfig));
+    const result = await compileSemanticRuntimeQuery({ metrics: ['loss_ratio'], dimensions: [] }, {
+      projectRoot: root,
+      projectConfig: warehouseFirstConfig,
+      semanticLayer: insuranceLayer(),
+    });
+    expect(result?.engine).toBe('native');
+    expect(result?.sql).toContain('NULLIF(ratio_inputs.written_premium, 0) AS loss_ratio');
+  });
+
+  it('explains an explicitly selected MetricFlow without asking for dbt parse', async () => {
+    installFakeMetricFlow();
+    const { saveSemanticRuntimePreference } = await import('./semantic-runtime-settings.js');
+    saveSemanticRuntimePreference(root, 'metricflow-cli');
+    const error = await compileSemanticRuntimeQuery({ metrics: ['loss_ratio'], dimensions: [] }, {
+      projectRoot: root,
+      projectConfig: warehouseFirstConfig,
+      semanticLayer: insuranceLayer(),
+    }).then(() => undefined, (caught: unknown) => caught as Error);
+    expect(error).toBeInstanceOf(Error);
+    expect(error?.message).toContain('no dbt project');
+    expect(error?.message).not.toContain('semantic_manifest.json');
+  });
+
+  it('describes what the native engine cannot run instead of pointing at dbt', async () => {
+    const { explainMissingSemanticRuntime } = await import('./semantic-runtime.js');
+    const message = await explainMissingSemanticRuntime(root);
+    expect(message).toContain('no dbt project');
+    expect(message).toContain('ratios of two simple metrics');
+    expect(insuranceLayer().explainNativeMetricGap('premium_growth')).toContain('derived metric');
+  });
+});

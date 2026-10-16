@@ -1,4 +1,4 @@
-import { existsSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, statSync } from 'node:fs';
 import { join, resolve, dirname } from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import { readEnv } from '@zlens/core';
@@ -341,6 +341,33 @@ export function resolveDbtProjectRoot(projectRoot: string, configuredPath?: stri
   return configuredPath ? resolve(projectRoot, configuredPath) : projectRoot;
 }
 
+export interface DbtProjectLocationConfig {
+  semanticLayer?: { provider?: string; projectPath?: string };
+  dbt?: { projectDir?: string };
+}
+
+/**
+ * Whether this DQL project has a dbt project for MetricFlow to read. A
+ * warehouse-first project (semantic layer authored or imported into
+ * `semantic-layer/`, no dbt) has none, so an `mf` executable on the PATH is
+ * no reason to route its metrics to MetricFlow: every compile would fail with
+ * "requires target/semantic_manifest.json", which no step in that project can
+ * produce. Reads `dql.config.json` when the caller has no parsed config.
+ */
+export function projectHasDbtProject(projectRoot: string, config?: DbtProjectLocationConfig): boolean {
+  let resolved = config;
+  if (!resolved) {
+    try {
+      resolved = JSON.parse(readFileSync(join(projectRoot, 'dql.config.json'), 'utf-8')) as DbtProjectLocationConfig;
+    } catch {
+      resolved = {};
+    }
+  }
+  if (resolved.semanticLayer?.provider === 'dbt' || resolved.dbt?.projectDir) return true;
+  return existsSync(join(projectRoot, 'dbt_project.yml'))
+    || existsSync(join(projectRoot, 'target', 'semantic_manifest.json'));
+}
+
 export function hasDbtSemanticManifest(projectRoot: string, configuredPath?: string): boolean {
   return existsSync(join(resolveDbtProjectRoot(projectRoot, configuredPath), 'target', 'semantic_manifest.json'));
 }
@@ -395,8 +422,10 @@ function metricFlowCompileCacheKey(bin: string, manifestMtime: string, request: 
 export async function compileMetricFlowQuery(request: MetricFlowQueryRequest): Promise<MetricFlowCompileResult> {
   const dbtRoot = resolveDbtProjectRoot(request.projectRoot, request.dbtProjectPath);
   if (!existsSync(join(dbtRoot, 'target', 'semantic_manifest.json'))) {
-    throw new MetricFlowUnavailableError(
-      'dbt semantic execution requires target/semantic_manifest.json. Run `dbt parse` or `dbt build` in the dbt project, then retry.',
+    throw new MetricFlowUnavailableError(existsSync(join(dbtRoot, 'dbt_project.yml'))
+      ? 'dbt semantic execution requires target/semantic_manifest.json. Run `dbt parse` or `dbt build` in the dbt project, then retry.'
+      // No dbt project at all: "run dbt parse" is not a step this project can take.
+      : 'MetricFlow runs a dbt project, and this project has none (no dbt_project.yml). Its semantic layer runs on the DQL native engine, which runs simple and ratio metrics; set the semantic runtime to the native compiler in Settings.'
     );
   }
 

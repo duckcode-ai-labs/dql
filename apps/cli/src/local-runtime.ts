@@ -713,6 +713,7 @@ import {
   resolveSemanticManifestPath,
   hasMetricFlowCli,
   setMetricFlowChildEnvironment,
+  projectHasDbtProject,
 } from "./metricflow.js";
 import {
   ManagedMetricFlowInstaller,
@@ -39700,7 +39701,29 @@ interface ParsedSemanticBlockConfig {
   filters: Array<{ dimension: string; operator: string; values: string[] }>;
   timeDimension?: string;
   granularity?: string;
+  orderBy?: Array<{ name: string; direction: 'asc' | 'desc' }>;
   limit?: number;
+}
+
+/**
+ * A semantic block's `order_by` entries, as the canonical writer emits them
+ * (`"name desc"`), plus the MetricFlow `-name` spelling for descending.
+ */
+export function parseSemanticOrderBy(entries: string[]): Array<{ name: string; direction: 'asc' | 'desc' }> {
+  const orderBy: Array<{ name: string; direction: 'asc' | 'desc' }> = [];
+  for (const entry of entries) {
+    const trimmed = entry.trim();
+    if (!trimmed) continue;
+    const spelled = trimmed.match(/^(.+?)\s+(asc|desc)$/i);
+    if (spelled) {
+      orderBy.push({ name: spelled[1]!.trim(), direction: spelled[2]!.toLowerCase() as 'asc' | 'desc' });
+    } else if (trimmed.startsWith('-')) {
+      orderBy.push({ name: trimmed.slice(1).trim(), direction: 'desc' });
+    } else {
+      orderBy.push({ name: trimmed, direction: 'asc' });
+    }
+  }
+  return orderBy.filter((order) => order.name);
 }
 
 /**
@@ -39789,6 +39812,7 @@ function parseSemanticBlockConfig(source: string): ParsedSemanticBlockConfig {
   const filters = parseSemanticRequestedFilters(source);
   const timeDimension = parseBlockStudioStringField(source, 'time_dimension');
   const granularity = parseBlockStudioStringField(source, 'granularity');
+  const orderBy = parseSemanticOrderBy(parseBlockStudioArrayField(source, 'order_by'));
   const limitMatch = source.match(/\blimit\s*=\s*(\d+)/i);
   return {
     blockType,
@@ -39798,6 +39822,7 @@ function parseSemanticBlockConfig(source: string): ParsedSemanticBlockConfig {
     filters,
     timeDimension,
     granularity,
+    ...(orderBy.length > 0 ? { orderBy } : {}),
     limit: limitMatch ? Number.parseInt(limitMatch[1], 10) : undefined,
   };
 }
@@ -39965,15 +39990,6 @@ export function buildSemanticTableMapping(
     if (matches.size === 1) tableMapping[semTable] = [...matches.values()][0]!;
   }
   return Object.keys(tableMapping).length > 0 ? tableMapping : undefined;
-}
-
-function isDbtSemanticRuntime(
-  projectConfig: ProjectConfig,
-  detectedProvider: string | null | undefined,
-  semanticLayer?: SemanticLayer | null,
-): boolean {
-  if (projectConfig.semanticLayer?.provider === 'dbt' || projectConfig.dbt?.projectDir || detectedProvider === 'dbt') return true;
-  return Boolean(semanticLayer?.listMetrics().some((metric) => metric.source?.provider === 'dbt'));
 }
 
 /**
@@ -40208,6 +40224,7 @@ function composeSemanticBlockSql(
           timeDimension: config.timeDimension && config.granularity
             ? { name: config.timeDimension, granularity: config.granularity }
             : undefined,
+          orderBy: config.orderBy,
           limit: runtimeBindings.limit ?? config.limit,
         }, semanticLayer, {
           driver: options.driver,
@@ -40220,6 +40237,7 @@ function composeSemanticBlockSql(
           timeDimension: config.timeDimension && config.granularity
             ? { name: config.timeDimension, granularity: config.granularity }
             : undefined,
+          orderBy: config.orderBy,
           limit: runtimeBindings.limit ?? config.limit,
           driver: options?.driver,
           tableMapping: options?.tableMapping,
@@ -40233,25 +40251,36 @@ function composeSemanticBlockSql(
     return { sql: null, diagnostics, semanticRefs };
   }
   if (!composed) {
-    const provider = options?.projectConfig && isDbtSemanticRuntime(
-      options.projectConfig,
-      options.detectedProvider,
-      semanticLayer,
-    ) ? 'dbt' : (options?.detectedProvider ?? 'dql');
+    // Name the real gap. Imported dbt metrics keep `source.provider: dbt`, so
+    // "requires a dbt runtime" used to reach warehouse-first projects that have
+    // no dbt project to run MetricFlow against. Only a project that has one is
+    // pointed at a runtime; every other project is told what the native engine
+    // does and does not run.
+    const dbtProject = Boolean(options?.projectRoot && options.projectConfig
+      && projectHasDbtProject(options.projectRoot, options.projectConfig));
     const reasons = metrics.map((metricName) => {
-      if (semanticLayer.canComposeMetric(metricName)) return null;
-      const metric = semanticLayer.getMetric(metricName);
-      const kind = metric?.metricType || metric?.aggregation || metric?.type || 'metric';
-      return provider === 'dbt'
-        ? `${metricName}: ${kind} metric requires a configured dbt Cloud or local MetricFlow runtime.`
-        : `${metricName}: the metric does not have enough composable measure and relation metadata.`;
+      const gap = semanticLayer.explainNativeMetricGap(metricName);
+      if (!gap) return null;
+      return dbtProject
+        ? `${gap} Configure a dbt Cloud or local MetricFlow runtime to run it.`
+        : gap;
     }).filter((reason): reason is string => Boolean(reason));
+    // Every metric runs natively, so a selected dimension is what failed:
+    // say which, and why (a bridge reached one-to-many reads differently from
+    // a model with no join at all).
+    const dimensionGaps = reasons.length > 0 ? [] : [
+      ...config.dimensions,
+      ...(config.timeDimension ? [config.timeDimension] : []),
+    ].map((dimension) => semanticLayer.explainDimensionGap(metrics, parseSemanticDimensionSelection(dimension).reference))
+      .filter((gap): gap is string => Boolean(gap));
     diagnostics.push({
       severity: 'error',
       code: 'semantic_compose_failed',
       message: reasons.length > 0
         ? `Could not compose SQL for semantic block metrics. ${reasons.join(' ')}`
-        : `Could not compose SQL for semantic block metrics: [${metrics.join(', ')}]. Check that the selected dimensions share a governed join path.`,
+        : dimensionGaps.length > 0
+          ? `Could not compose SQL for semantic block metrics: [${metrics.join(', ')}]. ${dimensionGaps.join(' ')}`
+          : `Could not compose SQL for semantic block metrics: [${metrics.join(', ')}]. Check that the selected dimensions share a governed join path.`,
     });
     return { sql: null, diagnostics, semanticRefs };
   }
@@ -40301,6 +40330,7 @@ async function composeSemanticBlockSqlForRuntime(
       timeDimension: config.timeDimension && config.granularity
         ? { name: config.timeDimension, granularity: config.granularity }
         : undefined,
+      orderBy: config.orderBy,
       limit: runtimeBindings.limit ?? config.limit,
     }, semanticLayer, {
       projectRoot: options.projectRoot,
@@ -41087,7 +41117,7 @@ export function ownerlessReviewDqlArtifactFromAnswer(
         filter.values.length > 0
           ? filter.values.map((value) => `${filter.dimension}=${value}`)
           : [filter.dimension]),
-      orderBy: artifact.orderBy,
+      orderBy: artifact.orderBy ?? parsed.orderBy,
       limit: artifact.limit ?? parsed.limit,
       parameters: artifact.parameters?.map((parameter) => ({
         name: parameter.name,
@@ -44326,6 +44356,21 @@ function extractBlockStudioChartConfig(source: string): {
   };
 }
 
+/**
+ * The source with its leading comments removed, for "what does this file
+ * declare" checks. Every writer puts `// dql-format: 1` first (see
+ * `canonicalize`), so a `^\s*block\s+"` test on the raw text misses every
+ * saved block and falls through to the loose raw-SQL path.
+ */
+export function stripLeadingDqlComments(source: string): string {
+  return source.replace(/^(?:\s*(?:\/\/[^\n]*|\/\*[\s\S]*?\*\/))*\s*/, '');
+}
+
+/** True when the source declares a DQL `block "name"`, header comments or not. */
+export function isDqlBlockSource(source: string): boolean {
+  return /^block\s+"/i.test(stripLeadingDqlComments(source));
+}
+
 export function extractBlockStudioSql(source: string): string | null {
   // Masked lookup for the same reason the field parsers use one: a `description`
   // is free text and must never be able to present itself as the query.
@@ -44338,7 +44383,8 @@ export function extractBlockStudioSql(source: string): string | null {
   }
   const bareTripleMatch = source.match(/"""([\s\S]*?)"""/);
   if (bareTripleMatch) return bareTripleMatch[1].trim() || null;
-  if (/^\s*(dashboard|workbook)\s+"/i.test(source)) return null;
+  const declaration = stripLeadingDqlComments(source);
+  if (/^(dashboard|workbook)\s+"/i.test(declaration)) return null;
   const singleLineQuery = source.match(/\bquery\s*=\s*"((?:[^"\\]|\\.)*)"/i);
   if (singleLineQuery) return singleLineQuery[1].trim() || null;
   // A DQL BLOCK declares its SQL in `query` and nowhere else. The keyword scan
@@ -44348,8 +44394,10 @@ export function extractBlockStudioSql(source: string): string | null {
   // if it were SQL, which both skipped the semantic/MetricFlow compile (callers
   // read a non-null result as "already precompiled") and sent the fragment to
   // the warehouse — surfacing as `syntax error ... unexpected '%'`. A block with
-  // no `query` field has no inline SQL; say so.
-  if (/^\s*block\s+"/i.test(source)) return null;
+  // no `query` field has no inline SQL; say so. The canonical
+  // `// dql-format: 1` header comes first in every saved file, so the check
+  // reads past leading comments.
+  if (/^block\s+"/i.test(declaration)) return null;
   const sqlKeywordMatch = source.match(/\b(SELECT|WITH|INSERT|UPDATE|DELETE|CREATE|DROP|ALTER|SHOW|DESCRIBE|EXPLAIN)\b([\s\S]*)/i);
   if (!sqlKeywordMatch) return null;
   let raw = sqlKeywordMatch[0];
@@ -44870,7 +44918,7 @@ function normalizeBlockStudioContent(options: {
   content?: string;
 }): string {
   const content = options.content?.trim();
-  if (content && /^\s*block\s+"/i.test(content)) {
+  if (content && isDqlBlockSource(content)) {
     return `${applySavedBlockMetadata(content, options).trimEnd()}\n`;
   }
 
