@@ -345,6 +345,33 @@ describe('native semantic engine on an insurance book', () => {
     });
   });
 
+  it('blames the one-to-many step, not a one-to-one join before it', () => {
+    // Registration order puts the reverse copy of the claims ↔ claim_coverage
+    // one-to-one join first in the adjacency list, as it was on the real
+    // insurance project, where the message blamed claims → claim_coverages.
+    const manifest = {
+      semantic_models: [
+        { name: 'claim_coverages', node_relation: { alias: 'claim_coverage' }, primary_entity: 'claim_coverage',
+          entities: [{ name: 'claim', type: 'unique', expr: 'Claim_Identifier' }, { name: 'policy', type: 'foreign', expr: 'Policy_Identifier' }] },
+        { name: 'claims', node_relation: { alias: 'claim' }, entities: [{ name: 'claim', type: 'primary', expr: 'Claim_Identifier' }] },
+        { name: 'claim_amounts', node_relation: { alias: 'claim_amount' },
+          entities: [{ name: 'claim_amount', type: 'primary', expr: 'Claim_Amount_Identifier' }, { name: 'claim', type: 'foreign', expr: 'Claim_Identifier' }],
+          measures: [{ name: 'losses', agg: 'sum', expr: 'Claim_Amount' }] },
+        { name: 'policies', node_relation: { alias: 'policy' }, entities: [{ name: 'policy', type: 'primary', expr: 'Policy_Identifier' }] },
+        { name: 'party_roles', node_relation: { alias: 'agreement_party_role' }, primary_entity: 'party_role',
+          entities: [{ name: 'policy', type: 'foreign', expr: 'Agreement_Identifier' }],
+          dimensions: [{ name: 'role_code', type: 'categorical', expr: 'Party_Role_Code' }] },
+      ],
+      metrics: [{ name: 'losses', type: 'simple', type_params: { measure: 'losses' } }],
+    };
+    writeFileSync(join(root, 'target', 'semantic_manifest.json'), JSON.stringify(manifest));
+    const bridged = new DbtProvider().load({ provider: 'dbt' }, root);
+    expect(bridged.composeQuery({ metrics: ['losses'], dimensions: ['role_code'] })).toBeNull();
+    const gap = bridged.explainDimensionGap(['losses'], 'role_code');
+    expect(gap).toContain('policies → party_roles');
+    expect(gap).not.toContain('claims → claim_coverages');
+  });
+
   describe('model-level primary_entity', () => {
     it('qualifies the dimensions of a keyless bridge by its declared primary entity', () => {
       const partyRole = layer.listDimensions(undefined, { includeVariants: true }).find((dimension) => dimension.name === 'party_role');

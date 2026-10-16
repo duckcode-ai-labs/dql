@@ -1326,23 +1326,40 @@ export class SemanticLayer {
       if (!metricCube || metricCube === targetCube || this.findJoinPath(metricCube, targetCube).length > 0) continue;
       const step = this.oneToManyStep(metricCube, targetCube);
       if (step) {
-        return `${dimensionReference} lives on ${targetCube}, which ${metric.name} reaches only through ${step.from} → ${step.to}: one ${step.from} row has many ${step.to} rows, so every ${metric.name} value would repeat once per ${step.to} row. Model the rows you need as one row per ${step.from} (for example each policy's agent), keyed by the entity ${step.from} is keyed by; that model joins one-to-one.`;
+        return `${dimensionReference} lives on ${targetCube}, which ${metric.name} reaches only through ${step.from} → ${step.to}: one ${step.from} row has many ${step.to} rows, so every ${metric.name} value would repeat once per ${step.to} row. Model the rows you need as one row per ${step.from}, keyed (type: unique) by the entity ${step.from} is keyed by; that model joins one-to-one.`;
       }
       return `${dimensionReference} lives on ${targetCube}, which ${metric.name} has no declared many-to-one join to.`;
     }
     return undefined;
   }
 
-  /** The first entity join a path from `fromCube` to `toCube` must walk backwards. */
+  /**
+   * The entity join a path from `fromCube` to `toCube` must walk backwards.
+   * Everything reachable without one is explored first, so a one-to-one join
+   * (whose reverse copy is also marked reversed) is never blamed for a fan-out
+   * that happens further along.
+   */
   private oneToManyStep(fromCube: string, toCube: string): { from: string; to: string } | undefined {
     if (!fromCube || fromCube === toCube) return undefined;
-    const queue: Array<{ cube: string; step?: { from: string; to: string } }> = [{ cube: fromCube }];
-    const visited = new Set<string>([fromCube]);
+    const fansOut = (join: JoinDefinition) => Boolean(join.reversed && join.entity);
+    const reachable = new Set<string>([fromCube]);
+    const forward = [fromCube];
+    while (forward.length > 0) {
+      const cube = forward.shift()!;
+      for (const join of this.joinGraph.get(cube) ?? []) {
+        if (fansOut(join) || reachable.has(join.right)) continue;
+        reachable.add(join.right);
+        forward.push(join.right);
+      }
+    }
+    if (reachable.has(toCube)) return undefined;
+    const visited = new Set(reachable);
+    const queue: Array<{ cube: string; step?: { from: string; to: string } }> = [...reachable].map((cube) => ({ cube }));
     while (queue.length > 0) {
       const { cube, step } = queue.shift()!;
       for (const join of this.joinGraph.get(cube) ?? []) {
         if (visited.has(join.right)) continue;
-        const nextStep = step ?? (join.reversed && join.entity ? { from: join.left, to: join.right } : undefined);
+        const nextStep = step ?? { from: join.left, to: join.right };
         if (join.right === toCube) return nextStep;
         visited.add(join.right);
         queue.push({ cube: join.right, step: nextStep });
