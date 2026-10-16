@@ -1,4 +1,5 @@
 {
+  "_comment": "Baseline on main (9720e8bd) for the warehouse-only golden eval. askGolden: the Ask pipeline lane per case. 'jaffle-golden' and 'jaffle-warehouse-golden' are cassette replays, what CI runs; 'jaffle-golden:live' is one live run with the claude-code provider (Claude subscription CLI), not gated. The warehouse-only cassettes were recorded live with the same provider, so its replay is that live run, judged with golden.json's tier policy. router: zlens eval routes for the same questions (scripts/eval-golden-router-compare.mjs). CI fails only when the warehouse-only lane drops below a floor. See README.md.",
   "floor": {
     "askGolden": 32,
     "router": 22
@@ -53,7 +54,7 @@
           "route": "clarify",
           "trust": "not_applicable",
           "reasons": [
-            "no result rows: clarify/needs_clarification/needs_clarification — No revenue metric or column is exposed in this vocabulary; should revenue be read from the orders table (order total) or the order_items table (line-level product revenue)?\nN"
+            "no result rows: clarify/needs_clarification/needs_clarification \u2014 No revenue metric or column is exposed in this vocabulary; should revenue be read from the orders table (order total) or the order_items table (line-level product revenue)?\nN"
           ]
         },
         {
@@ -98,7 +99,7 @@
           "route": "clarify",
           "trust": "not_applicable",
           "reasons": [
-            "no result rows: clarify/needs_clarification/needs_clarification — The vocabulary exposes no metric, dimension or column for revenue or for a food/drink product classification; which columns on order_items (revenue amount) and products (food"
+            "no result rows: clarify/needs_clarification/needs_clarification \u2014 The vocabulary exposes no metric, dimension or column for revenue or for a food/drink product classification; which columns on order_items (revenue amount) and products (food"
           ]
         },
         {
@@ -136,7 +137,7 @@
           "route": "clarify",
           "trust": "not_applicable",
           "reasons": [
-            "no result rows: clarify/needs_clarification/needs_clarification — The project has no definition of a 'large' order — should it be measured by order total (and above what amount) or by number of items (and above what count)?\nThe project has "
+            "no result rows: clarify/needs_clarification/needs_clarification \u2014 The project has no definition of a 'large' order \u2014 should it be measured by order total (and above what amount) or by number of items (and above what count)?\nThe project has "
           ]
         },
         {
@@ -205,7 +206,7 @@
           "route": "clarify",
           "trust": "not_applicable",
           "reasons": [
-            "no result rows: clarify/needs_clarification/needs_clarification — Should revenue include tax (lifetime_spend) or be pretax (lifetime_spend_pretax)? No governed revenue metric is defined in this project.\nShould revenue include tax (lifetime_"
+            "no result rows: clarify/needs_clarification/needs_clarification \u2014 Should revenue include tax (lifetime_spend) or be pretax (lifetime_spend_pretax)? No governed revenue metric is defined in this project.\nShould revenue include tax (lifetime_"
           ]
         },
         {
@@ -250,7 +251,7 @@
           "route": "clarify",
           "trust": "not_applicable",
           "reasons": [
-            "no result rows: clarify/needs_clarification/needs_clarification — Should revenue be the pre-tax order subtotal or the order total including tax?\nShould revenue be the pre-tax order subtotal or the order total including tax?"
+            "no result rows: clarify/needs_clarification/needs_clarification \u2014 Should revenue be the pre-tax order subtotal or the order total including tax?\nShould revenue be the pre-tax order subtotal or the order total including tax?"
           ]
         },
         {
@@ -277,7 +278,7 @@
           "route": "clarify",
           "trust": "not_applicable",
           "reasons": [
-            "no result rows: clarify/needs_clarification/needs_clarification — The vocabulary exposes no metric or column for pre-tax sales (no subtotal/product revenue field is declared on dev.orders or dev.order_items); which relation and column shoul"
+            "no result rows: clarify/needs_clarification/needs_clarification \u2014 The vocabulary exposes no metric or column for pre-tax sales (no subtotal/product revenue field is declared on dev.orders or dev.order_items); which relation and column shoul"
           ]
         },
         {
@@ -287,7 +288,7 @@
           "route": "clarify",
           "trust": "not_applicable",
           "reasons": [
-            "no result rows: clarify/needs_clarification/needs_clarification — The vocabulary exposes no revenue metric or amount column; should revenue be read from order totals (dev.orders) or from order-line product revenue (dev.order_items), and whi"
+            "no result rows: clarify/needs_clarification/needs_clarification \u2014 The vocabulary exposes no revenue metric or amount column; should revenue be read from order totals (dev.orders) or from order-line product revenue (dev.order_items), and whi"
           ]
         },
         {
@@ -297,7 +298,7 @@
           "route": "clarify",
           "trust": "not_applicable",
           "reasons": [
-            "no result rows: clarify/needs_clarification/needs_clarification — The vocabulary exposes no metric or column for revenue or tax; which governed measure (e.g. an order total including tax on dev.orders, or line revenue plus tax on dev.order_"
+            "no result rows: clarify/needs_clarification/needs_clarification \u2014 The vocabulary exposes no metric or column for revenue or tax; which governed measure (e.g. an order total including tax on dev.orders, or line revenue plus tax on dev.order_"
           ]
         },
         {
@@ -307,7 +308,7 @@
           "route": "clarify",
           "trust": "not_applicable",
           "reasons": [
-            "no result rows: clarify/needs_clarification/needs_clarification — Should revenue include tax (lifetime_spend) or be pretax product revenue (lifetime_spend_pretax)?\nShould revenue include tax (lifetime_spend) or be pretax product revenue (li"
+            "no result rows: clarify/needs_clarification/needs_clarification \u2014 Should revenue include tax (lifetime_spend) or be pretax product revenue (lifetime_spend_pretax)?\nShould revenue include tax (lifetime_spend) or be pretax product revenue (li"
           ]
         },
         {
@@ -341,7 +342,7 @@
           "route": "generated_answer",
           "trust": "blocked",
           "reasons": [
-            "no result rows: generated_answer/blocked/blocked — No query was run: column:dev.order_items.product_price is not in the vocabulary; column:dev.products.product_type is not in the vocabulary.\nNo query was run: column:dev.order_items.product_"
+            "no result rows: generated_answer/blocked/blocked \u2014 No query was run: column:dev.order_items.product_price is not in the vocabulary; column:dev.products.product_type is not in the vocabulary.\nNo query was run: column:dev.order_items.product_"
           ]
         },
         {
@@ -646,6 +647,346 @@
           "pass": true,
           "route": "generated_answer",
           "trust": "blocked"
+        },
+        {
+          "lane": "questions",
+          "id": "revenue-by-shopper",
+          "pass": true,
+          "route": "generated_answer",
+          "trust": "review_required"
+        },
+        {
+          "lane": "research",
+          "id": "investigation-revenue-drop",
+          "pass": true,
+          "route": "research",
+          "trust": "review_required"
+        },
+        {
+          "lane": "conversation",
+          "id": "q1-top-beverage-customers",
+          "pass": true,
+          "route": "generated_answer",
+          "trust": "governed"
+        },
+        {
+          "lane": "conversation",
+          "id": "q2-include-customer-name",
+          "pass": true,
+          "route": "generated_answer",
+          "trust": "governed"
+        },
+        {
+          "lane": "conversation",
+          "id": "q3-beverage-correction",
+          "pass": true,
+          "route": "generated_answer",
+          "trust": "governed"
+        },
+        {
+          "lane": "conversation",
+          "id": "q4-ryan-byrd-both",
+          "pass": true,
+          "route": "semantic_answer",
+          "trust": "governed"
+        },
+        {
+          "lane": "conversation",
+          "id": "q5-ryan-byrd-both-retry",
+          "pass": true,
+          "route": "semantic_answer",
+          "trust": "governed"
+        }
+      ]
+    },
+    "jaffle-golden:live": {
+      "commit": "2217172ad2c447768e1a6e27b0217bf066cdf91f",
+      "dirty": false,
+      "provider": "live",
+      "passed": 43,
+      "total": 46,
+      "cases": [
+        {
+          "lane": "questions",
+          "id": "top-beverage-customers",
+          "pass": true,
+          "route": "generated_answer",
+          "trust": "governed"
+        },
+        {
+          "lane": "questions",
+          "id": "top-customers",
+          "pass": true,
+          "route": "generated_answer",
+          "trust": "review_required"
+        },
+        {
+          "lane": "questions",
+          "id": "top-5-customers-by-revenue",
+          "pass": true,
+          "route": "generated_answer",
+          "trust": "review_required"
+        },
+        {
+          "lane": "questions",
+          "id": "beverage-revenue-total",
+          "pass": true,
+          "route": "semantic_answer",
+          "trust": "governed"
+        },
+        {
+          "lane": "questions",
+          "id": "total-revenue",
+          "pass": true,
+          "route": "semantic_answer",
+          "trust": "governed"
+        },
+        {
+          "lane": "questions",
+          "id": "revenue-by-month",
+          "pass": true,
+          "route": "certified_answer",
+          "trust": "certified"
+        },
+        {
+          "lane": "questions",
+          "id": "orders-per-customer",
+          "pass": true,
+          "route": "generated_answer",
+          "trust": "review_required"
+        },
+        {
+          "lane": "questions",
+          "id": "revenue-by-location",
+          "pass": true,
+          "route": "generated_answer",
+          "trust": "review_required"
+        },
+        {
+          "lane": "questions",
+          "id": "top-products-by-revenue",
+          "pass": true,
+          "route": "generated_answer",
+          "trust": "review_required"
+        },
+        {
+          "lane": "questions",
+          "id": "beverage-revenue-by-product",
+          "pass": true,
+          "route": "generated_answer",
+          "trust": "governed"
+        },
+        {
+          "lane": "questions",
+          "id": "revenue-by-product-type",
+          "pass": true,
+          "route": "semantic_answer",
+          "trust": "governed"
+        },
+        {
+          "lane": "questions",
+          "id": "food-vs-drink",
+          "pass": true,
+          "route": "semantic_answer",
+          "trust": "governed"
+        },
+        {
+          "lane": "questions",
+          "id": "ryan-byrd-total-revenue",
+          "pass": true,
+          "route": "semantic_answer",
+          "trust": "governed"
+        },
+        {
+          "lane": "questions",
+          "id": "ryan-byrd-both-revenues",
+          "pass": true,
+          "route": "semantic_answer",
+          "trust": "governed"
+        },
+        {
+          "lane": "questions",
+          "id": "orders-by-customer-type",
+          "pass": true,
+          "route": "semantic_answer",
+          "trust": "governed"
+        },
+        {
+          "lane": "questions",
+          "id": "average-order-value",
+          "pass": true,
+          "route": "generated_answer",
+          "trust": "review_required"
+        },
+        {
+          "lane": "questions",
+          "id": "large-orders-count",
+          "pass": true,
+          "route": "semantic_answer",
+          "trust": "governed"
+        },
+        {
+          "lane": "questions",
+          "id": "drink-orders-by-month",
+          "pass": true,
+          "route": "semantic_answer",
+          "trust": "governed"
+        },
+        {
+          "lane": "questions",
+          "id": "customer-profile-ryan",
+          "pass": true,
+          "route": "certified_answer",
+          "trust": "certified"
+        },
+        {
+          "lane": "questions",
+          "id": "supplies-cost-by-product",
+          "pass": false,
+          "route": "clarify",
+          "trust": "not_applicable",
+          "reasons": [
+            "no result rows: clarify/needs_clarification/needs_clarification \u2014 Do you mean the unit supply cost to make each product (supplies table), or the total supply cost actually incurred across sold order items?\nDo you mean the unit supply cost t"
+          ]
+        },
+        {
+          "lane": "questions",
+          "id": "misspelt-beverage-category",
+          "pass": true,
+          "route": "generated_answer",
+          "trust": "governed"
+        },
+        {
+          "lane": "questions",
+          "id": "unmodeled-term",
+          "pass": true,
+          "route": "generated_answer",
+          "trust": "blocked"
+        },
+        {
+          "lane": "questions",
+          "id": "greeting",
+          "pass": true,
+          "route": "conversation",
+          "trust": "not_applicable"
+        },
+        {
+          "lane": "questions",
+          "id": "off-topic",
+          "pass": true,
+          "route": "generated_answer",
+          "trust": "blocked"
+        },
+        {
+          "lane": "questions",
+          "id": "customers-with-most-orders",
+          "pass": true,
+          "route": "generated_answer",
+          "trust": "review_required"
+        },
+        {
+          "lane": "questions",
+          "id": "revenue-by-customer-type",
+          "pass": true,
+          "route": "semantic_answer",
+          "trust": "governed"
+        },
+        {
+          "lane": "questions",
+          "id": "food-revenue-by-location",
+          "pass": true,
+          "route": "generated_answer",
+          "trust": "review_required"
+        },
+        {
+          "lane": "questions",
+          "id": "order-count-total",
+          "pass": true,
+          "route": "semantic_answer",
+          "trust": "governed"
+        },
+        {
+          "lane": "questions",
+          "id": "lifetime-spend-pretax-top",
+          "pass": true,
+          "route": "generated_answer",
+          "trust": "review_required"
+        },
+        {
+          "lane": "questions",
+          "id": "aov-2025",
+          "pass": true,
+          "route": "semantic_answer",
+          "trust": "governed"
+        },
+        {
+          "lane": "questions",
+          "id": "aov-cohort-explicit",
+          "pass": true,
+          "route": "generated_answer",
+          "trust": "review_required"
+        },
+        {
+          "lane": "questions",
+          "id": "revenue-by-location-including-empty",
+          "pass": true,
+          "route": "generated_answer",
+          "trust": "review_required"
+        },
+        {
+          "lane": "questions",
+          "id": "duplicate-name-spend",
+          "pass": true,
+          "route": "generated_answer",
+          "trust": "review_required"
+        },
+        {
+          "lane": "questions",
+          "id": "gross-margin-2025",
+          "pass": false,
+          "route": "generated_answer",
+          "trust": "review_required",
+          "reasons": [
+            "rows differ from reference: no row matches {\"gross_profit\":9781.32,\"gross_margin\":0.796070643769838}"
+          ]
+        },
+        {
+          "lane": "questions",
+          "id": "growth-jul-aug",
+          "pass": false,
+          "route": "generated_answer",
+          "trust": "review_required",
+          "reasons": [
+            "rows differ from reference: column revenue_july (aliases revenue_july, revenue_jul, revenue_jul_2025, july_revenue, revenue_july_2025, jul_revenue) not in result columns revenue_2025_07, revenue_2025_08, revenue_growth_pct"
+          ]
+        },
+        {
+          "lane": "questions",
+          "id": "unqualified-revenue",
+          "pass": true,
+          "route": "semantic_answer",
+          "trust": "governed"
+        },
+        {
+          "lane": "questions",
+          "id": "revenue-including-tax",
+          "pass": true,
+          "route": "semantic_answer",
+          "trust": "governed"
+        },
+        {
+          "lane": "questions",
+          "id": "new-vs-returning",
+          "pass": true,
+          "route": "semantic_answer",
+          "trust": "governed"
+        },
+        {
+          "lane": "questions",
+          "id": "region-why-invest",
+          "pass": true,
+          "route": "clarify",
+          "trust": "not_applicable"
         },
         {
           "lane": "questions",
