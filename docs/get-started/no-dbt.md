@@ -10,13 +10,12 @@ This page uses a DuckDB file as the example. The steps are the same for
 PostgreSQL, Snowflake and the [other supported databases](#which-databases-work);
 only the connection differs.
 
-<!-- TODO(jaffle-shop-warehouse): link the sample repo once duckcode-ai/jaffle-shop-warehouse is public -->
-
-!!! note "A database-only sample is on its way"
-    A ready-made sample with the Jaffle Shop data and no dbt files is being
-    published. Until then, use your own database, or the `jaffle_shop.duckdb`
-    file from the [Quickstart](index.md) sample. The examples below use that
-    file, whose tables are in the `dev` schema.
+!!! tip "Try it on a ready-made sample"
+    [jaffle-shop-warehouse](https://github.com/duckcode-ai/jaffle-shop-warehouse)
+    is the Jaffle Shop data as a plain DuckDB file, with no dbt files and a
+    ZLens database-only workspace already set up. Clone it and follow its
+    README, or use your own database. The examples below use that
+    `jaffle_shop.duckdb` file, whose tables are in the `dev` schema.
 
 You end with:
 
