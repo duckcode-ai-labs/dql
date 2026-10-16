@@ -177,6 +177,17 @@ jobs:
             --min-route-accuracy 1 \
             --min-refusal 1 \
             --min-answer-rate 1
+      # jaffle-golden's questions through the router with dbt (jaffle-golden)
+      # and without (jaffle-warehouse-golden: synced catalog, certified joins).
+      # Reports both scores in the job summary; fails only when the
+      # warehouse-only score drops below floor.router in the committed
+      # baseline. The Ask-pipeline half of this eval (rows and trust, replayed
+      # cassettes) is src/ask-golden-jaffle-warehouse.test.ts in `pnpm test`.
+      - name: jaffle-golden questions, dbt vs no dbt (router)
+        run: |
+          node --test scripts/eval-golden-router-compare.test.mjs
+          node scripts/eval-golden-router-compare.mjs \
+            --check apps/cli/test/ask-golden/jaffle-warehouse-golden/baseline.json
 
   # --- 4,000-model stress test (perf gate) ---
   # Gates: cold <30s, warm <2s. See docs/contribute/testing.md.
