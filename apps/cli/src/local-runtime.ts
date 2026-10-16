@@ -771,6 +771,7 @@ import {
 } from './warehouse-metadata.js';
 import { syncWarehouseCatalog } from './warehouse-catalog-sync.js';
 import { refreshValueProfile, valueProfileAllowed, type ValueProfileSummary } from './value-profile.js';
+import { resolveResultReviewMode } from './result-review-setting.js';
 import { TableDatasetError, applyTableDatasetChoices, draftTableDataset, listWarehouseTables } from './datasets/table-dataset.js';
 import {
   discoverWarehouseModel,
@@ -944,6 +945,15 @@ export interface ProjectConfig {
       mode?: 'off' | 'sampled';
       /** More column-name patterns (case-insensitive regular expressions) to leave out. */
       exclude?: string[];
+    };
+    /**
+     * A second look at each AI-drafted result before it is answered: one more
+     * AI call that sees the question, the SQL and the result's shape (never a
+     * value) and may ask for one revision. Off by default; read at every
+     * question. `ZLENS_ASK_RESULT_REVIEW=1|0` overrides it.
+     */
+    resultReview?: {
+      mode?: 'off' | 'on';
     };
     runtimeValueGrounding?: {
       /** Runtime value lookup is opt-in because query literals may be sensitive. */
@@ -7510,6 +7520,8 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
     // The column value profile reaches the drafter only while the project opts
     // in and never under a host, whose policies decide what each reader may see.
     valueProfileAllowed: () => valueProfileAllowed(loadProjectConfig(projectRoot), Boolean(hostHooks)),
+    // The result review is opt-in, read at every question like the value profile.
+    resultReviewConfigured: () => resolveResultReviewMode(loadProjectConfig(projectRoot)) === 'on',
     // The engine the semantic candidate will compile on, decided the same
     // way `compileSemantic` decides it, so the binder speaks its dialect.
     semanticEngine: async () => plannedAskEngine().then((planned) => planned.engine),

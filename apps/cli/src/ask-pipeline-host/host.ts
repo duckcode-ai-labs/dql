@@ -82,6 +82,7 @@ import { groupingKeyLabels, keyLabelLine, keyLabels, unnamedGroupingKeys, unname
 import { businessIdentifierLine, businessIdentifiers, modelingEntityTexts, certifiedJoinViolations, classifySqlJoins, ledgerJoins, markerTableLine, markerTables, modeledJoinPaths, modelingRelationshipEdges, sameRelation, sharedParentShortcuts, type LedgerJoin } from './join-relationships.js';
 import { readEnv } from '@zlens/core';
 import { readValueProfile, renderColumnProfile } from '../value-profile.js';
+import { resultReviewEnabled } from '../result-review-setting.js';
 
 /**
  * THE ASK PIPELINE HOST.
@@ -137,6 +138,12 @@ export interface AskPipelineHostDeps {
    * profile is opt-in because its values reach the provider with the prompt.
    */
   valueProfileAllowed?(): boolean;
+  /**
+   * Whether the project turned the result review on (`agent.resultReview`),
+   * asked at every question. Absent: off. `ZLENS_ASK_RESULT_REVIEW=1|0`
+   * overrides it either way.
+   */
+  resultReviewConfigured?(): boolean;
   /** Compile on the project's active semantic engine; throws with the engine's message. */
   compileSemantic(request: SemanticCompileRequest, connection: ConnectionConfig, context?: AskSemanticCompileContext): Promise<SemanticCompileOutput>;
   /** The engine `compileSemantic` will use, known before preparation so the binder can speak its dialect. */
@@ -2635,11 +2642,12 @@ export function createAskPipelineHost(deps: AskPipelineHostDeps): AskPipelineHos
       if (second && 'declined' in second) return { declined: `${second.declined.replace(/[.\s]+$/, '')} (searched ${relations.join(', ')})` };
       return finalize(second);
     };
-    // THE SECOND LOOK at an AI-drafted result, on every project: one small
-    // call that sees the question, the SQL and the result's SHAPE (row count,
-    // each column's distinct and NULL counts, repeated rows), never a value
-    // from it, and names one defect or none. Certified and governed answers
-    // are not reviewed: their SQL was compiled from definitions, not drafted.
+    // THE SECOND LOOK at an AI-drafted result, where the project turns it on
+    // (agent.resultReview; off by default): one small call that sees the
+    // question, the SQL and the result's SHAPE (row count, each column's
+    // distinct and NULL counts, repeated rows), never a value from it, and
+    // names one defect or none. Certified and governed answers are not
+    // reviewed: their SQL was compiled from definitions, not drafted.
     const makeResultReview = (state: AskRunState): NonNullable<AskPipelineRunInput['reviewResult']> => async ({ question, sql, result }) => {
       const messages: AgentMessage[] = [
         { role: 'system', content: RESULT_REVIEW_SYSTEM },
@@ -2681,7 +2689,7 @@ export function createAskPipelineHost(deps: AskPipelineHostDeps): AskPipelineHos
       // ZLENS_ASK_DRAFT_FIRST=0 keeps the reading step first, for comparison.
       ...(readEnv('ZLENS_ASK_DRAFT_FIRST') !== '0' && warehouseFirstCatalog(deps.getManifest().manifest, deps.projectRoot) && !currentVocabulary().entries.some((entry) => entry.kind === 'block' || entry.kind === 'metric' || entry.kind === 'measure') ? { draftFirst: true } : {}),
       prepareDeps: { ...prepareDeps(connection ?? { driver: 'duckdb' } as ConnectionConfig, currentVocabulary, engine, request.signal), draftSql: makeDraftSql(state) },
-      ...(readEnv('ZLENS_ASK_RESULT_REVIEW') !== '0' ? { reviewResult: makeResultReview(state) } : {}),
+      ...(resultReviewEnabled(deps.resultReviewConfigured?.() === true) ? { reviewResult: makeResultReview(state) } : {}),
       executeDeps: {
         maxRows: deps.maxRows ?? 500,
         ...(request.signal ? { signal: request.signal } : {}),
