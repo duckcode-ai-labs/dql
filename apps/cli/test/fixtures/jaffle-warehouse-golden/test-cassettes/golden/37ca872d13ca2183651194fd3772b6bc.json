@@ -1,9 +1,9 @@
 {
   "key": "37ca872d13ca2183651194fd3772b6bc",
   "operation": "generate",
-  "text": "{\"version\":1,\"kind\":\"analytics\",\"reading\":\"Rank customers by their pretax lifetime spend, highest first, showing the top 10.\",\"measures\":[{\"ref\":\"column:dev.customers.lifetime_spend_pretax\",\"aggregation\":\"sum\",\"alias\":\"lifetime_spend_pretax\"}],\"groupBy\":[{\"ref\":\"column:dev.customers.customer_id\",\"role\":\"key\"}],\"display\":[\"column:dev.customers.customer_name\"],\"filters\":[],\"ordering\":{\"ref\":\"column:dev.customers.lifetime_spend_pretax\",\"direction\":\"desc\"},\"limit\":10,\"expectedShape\":\"ranking\",\"unresolved\":[],\"provenance\":{\"column:dev.customers.lifetime_spend_pretax\":\"q:lifetime spend before tax\",\"column:dev.customers.customer_id\":\"q:top customers\",\"column:dev.customers.customer_name\":\"q:top customers\"}}",
+  "text": "{\"version\":1,\"kind\":\"analytics\",\"reading\":\"Rank the top 10 customers by their lifetime spend excluding tax (lifetime_spend_pretax), highest first.\",\"measures\":[{\"ref\":\"column:dev.customers.lifetime_spend_pretax\",\"aggregation\":\"sum\",\"alias\":\"lifetime_spend_pretax\"}],\"groupBy\":[{\"ref\":\"column:dev.customers.customer_id\",\"role\":\"key\"}],\"display\":[\"column:dev.customers.customer_name\"],\"filters\":[],\"ordering\":{\"ref\":\"column:dev.customers.lifetime_spend_pretax\",\"direction\":\"desc\"},\"limit\":10,\"expectedShape\":\"ranking\",\"unresolved\":[],\"provenance\":{\"column:dev.customers.lifetime_spend_pretax\":\"q:lifetime spend before tax\",\"column:dev.customers.customer_id\":\"q:customers\",\"column:dev.customers.customer_name\":\"q:customers\"}}",
   "providerName": "claude",
-  "recordedAt": "2026-10-16T02:53:43.314Z",
+  "recordedAt": "2026-10-16T13:45:49.098Z",
   "provenance": {
     "kind": "recorded_provider",
     "replayClassification": "recorded_provider",

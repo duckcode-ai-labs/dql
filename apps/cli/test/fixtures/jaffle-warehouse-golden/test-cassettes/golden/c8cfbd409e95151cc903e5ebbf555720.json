@@ -1,9 +1,9 @@
 {
   "key": "c8cfbd409e95151cc903e5ebbf555720",
   "operation": "generate",
-  "text": "{\"version\":1,\"kind\":\"analytics\",\"reading\":\"Total revenue (order subtotal, pre-tax) summed per store location, listing every location including those with zero orders.\",\"measures\":[{\"ref\":\"column:dev.orders.subtotal\",\"aggregation\":\"sum\",\"alias\":\"revenue\"}],\"groupBy\":[{\"ref\":\"column:dev.locations.location_id\",\"role\":\"key\"}],\"display\":[\"column:dev.locations.location_name\"],\"filters\":[],\"expectedShape\":\"grouped\",\"population\":\"all\",\"unresolved\":[{\"clause\":\"revenue\",\"options\":[\"column:dev.orders.subtotal\",\"column:dev.orders.order_total\"],\"material\":true,\"question\":\"Should revenue be the pre-tax order subtotal or the order total including tax?\"}],\"provenance\":{\"column:dev.orders.subtotal\":\"q:revenue\",\"column:dev.locations.location_id\":\"q:by location\",\"column:dev.locations.location_name\":\"q:by location\"}}",
+  "text": "{\"version\":1,\"kind\":\"analytics\",\"reading\":\"Total revenue (summed order amount) broken down by store location, showing every location as a row with 0 where it has no orders.\",\"measures\":[{\"ref\":\"column:dev.orders.subtotal\",\"aggregation\":\"sum\",\"alias\":\"revenue\"}],\"groupBy\":[{\"ref\":\"column:dev.locations.location_id\",\"role\":\"key\"}],\"display\":[\"column:dev.locations.location_name\"],\"filters\":[],\"expectedShape\":\"grouped\",\"population\":\"all\",\"unresolved\":[{\"clause\":\"revenue\",\"options\":[\"column:dev.orders.subtotal\",\"column:dev.orders.order_total\"],\"material\":true,\"question\":\"Should revenue be the pretax order subtotal or the order total including tax?\"}],\"provenance\":{\"column:dev.orders.subtotal\":\"q:revenue\",\"column:dev.orders.order_total\":\"q:revenue\",\"column:dev.locations.location_id\":\"q:by location\",\"column:dev.locations.location_name\":\"q:by location\"}}",
   "providerName": "claude",
-  "recordedAt": "2026-10-16T02:54:31.888Z",
+  "recordedAt": "2026-10-16T13:46:37.905Z",
   "provenance": {
     "kind": "recorded_provider",
     "replayClassification": "recorded_provider",

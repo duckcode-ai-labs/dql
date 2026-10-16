@@ -1,9 +1,9 @@
 {
   "key": "1ec373a3cb28517488f9a5445f24b78b",
   "operation": "generate",
-  "text": "{\"version\":1,\"kind\":\"analytics\",\"reading\":\"The user asks for the current weather in Chicago, which is not something the Jaffle Shop project holds.\",\"measures\":[],\"groupBy\":[],\"display\":[],\"filters\":[],\"expectedShape\":\"scalar\",\"unresolved\":[{\"clause\":\"what is the weather in Chicago\",\"options\":[],\"material\":true,\"question\":\"This project holds Jaffle Shop sales data (customers, orders, order items, products, supplies, locations) and has no weather data; did you mean something about the Chicago store location?\"}],\"provenance\":{}}",
+  "text": "{\"version\":1,\"kind\":\"analytics\",\"reading\":\"The user asks for the current weather in Chicago, which is not something the Jaffle Shop warehouse holds.\",\"measures\":[],\"groupBy\":[],\"display\":[],\"filters\":[],\"expectedShape\":\"scalar\",\"unresolved\":[{\"clause\":\"what is the weather in Chicago\",\"question\":\"This project holds Jaffle Shop sales data (customers, orders, products, locations, supplies) and has no weather data; which business question would you like answered?\",\"options\":[],\"material\":true}],\"provenance\":{}}",
   "providerName": "claude",
-  "recordedAt": "2026-10-16T02:52:34.997Z",
+  "recordedAt": "2026-10-16T13:44:28.701Z",
   "provenance": {
     "kind": "recorded_provider",
     "replayClassification": "recorded_provider",

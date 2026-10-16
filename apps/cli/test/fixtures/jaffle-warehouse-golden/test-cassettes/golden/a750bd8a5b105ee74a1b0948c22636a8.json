@@ -1,9 +1,9 @@
 {
   "key": "a750bd8a5b105ee74a1b0948c22636a8",
   "operation": "generate",
-  "text": "{\"version\":1,\"kind\":\"analytics\",\"reading\":\"Compare total revenue from food items against total revenue from drink items, as two side-by-side measures.\",\"measures\":[],\"groupBy\":[],\"display\":[],\"filters\":[],\"expectedShape\":\"comparison\",\"unresolved\":[{\"clause\":\"food and drink revenue\",\"options\":[\"relation:dev.order_items\",\"relation:dev.products\"],\"material\":true,\"question\":\"The vocabulary exposes no metric, dimension or column for revenue or for a food/drink product classification; which columns on order_items (revenue amount) and products (food vs drink type) should define these two measures?\"}],\"provenance\":{\"relation:dev.order_items\":\"q:revenue\",\"relation:dev.products\":\"q:food and drink\"}}",
+  "text": "{\"version\":1,\"kind\":\"analytics\",\"reading\":\"Compare total revenue from food products against total revenue from drink products, as two side-by-side measures.\",\"measures\":[],\"groupBy\":[],\"display\":[],\"filters\":[],\"expectedShape\":\"comparison\",\"unresolved\":[{\"clause\":\"food revenue and drink revenue\",\"options\":[],\"material\":true,\"question\":\"The vocabulary exposes no metric, dimension or column refs for revenue or for a food/drink product type (relations are listed with no columns), so neither measure can be named without inventing an identifier — which ref holds revenue and which holds the product type?\"}],\"provenance\":{\"relation:dev.order_items\":\"q:revenue\",\"relation:dev.products\":\"q:food and drink\"}}",
   "providerName": "claude",
-  "recordedAt": "2026-10-16T02:50:01.910Z",
+  "recordedAt": "2026-10-16T13:40:54.901Z",
   "provenance": {
     "kind": "recorded_provider",
     "replayClassification": "recorded_provider",

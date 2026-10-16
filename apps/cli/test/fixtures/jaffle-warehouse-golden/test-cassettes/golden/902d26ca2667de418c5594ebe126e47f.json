@@ -1,9 +1,9 @@
 {
   "key": "902d26ca2667de418c5594ebe126e47f",
   "operation": "generate",
-  "text": "{\"version\":1,\"kind\":\"analytics\",\"reading\":\"Total revenue including tax across all orders, as a single number.\",\"measures\":[],\"groupBy\":[],\"display\":[],\"filters\":[],\"expectedShape\":\"scalar\",\"unresolved\":[{\"clause\":\"revenue including tax\",\"options\":[\"relation:dev.orders\",\"relation:dev.order_items\"],\"material\":true,\"question\":\"The vocabulary exposes no metric or column for revenue or tax; which governed measure (e.g. an order total including tax on dev.orders, or line revenue plus tax on dev.order_items) should define 'revenue including tax'?\"}],\"provenance\":{\"relation:dev.orders\":\"q:revenue do we have including tax\",\"relation:dev.order_items\":\"q:revenue do we have including tax\"}}",
+  "text": "{\"version\":1,\"kind\":\"analytics\",\"reading\":\"Total revenue including tax across all orders, as a single number (tax-inclusive order total, not pretax product revenue).\",\"measures\":[],\"groupBy\":[],\"display\":[],\"filters\":[],\"expectedShape\":\"scalar\",\"unresolved\":[{\"clause\":\"revenue including tax\",\"options\":[\"relation:dev.orders\"],\"material\":true,\"question\":\"The vocabulary exposes no metric or column for a tax-inclusive total; the orders relation (one row per order) is the only place such a total would live — which column on dev.orders holds the order total including tax?\"}],\"provenance\":{\"relation:dev.orders\":\"q:revenue do we have including tax\"}}",
   "providerName": "claude",
-  "recordedAt": "2026-10-16T02:55:48.692Z",
+  "recordedAt": "2026-10-16T13:47:55.461Z",
   "provenance": {
     "kind": "recorded_provider",
     "replayClassification": "recorded_provider",

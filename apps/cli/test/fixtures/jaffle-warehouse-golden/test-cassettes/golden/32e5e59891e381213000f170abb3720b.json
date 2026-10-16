@@ -1,0 +1,23 @@
+{
+  "key": "32e5e59891e381213000f170abb3720b",
+  "operation": "generate",
+  "text": "SELECT SUM(lifetime_spend) / NULLIF(SUM(count_lifetime_orders), 0) AS average_order_value FROM jaffle_shop.dev.customers WHERE first_ordered_at >= '2024-01-01' AND first_ordered_at < '2025-01-01'",
+  "providerName": "claude",
+  "recordedAt": "2026-10-16T13:46:24.857Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 2,
+    "messageRoles": [
+      "system",
+      "user"
+    ],
+    "preCanonicalHash": "32e5e59891e381213000f170abb3720b4f521b2a70a1b4541ececdebc6d4deed",
+    "postCanonicalHash": "32e5e59891e381213000f170abb3720b4f521b2a70a1b4541ececdebc6d4deed",
+    "appliedRuleClasses": []
+  }
+}

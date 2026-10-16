@@ -1,9 +1,9 @@
 {
   "key": "8c1b23f447afae17a5374adf5787ca84",
   "operation": "generate",
-  "text": "{\"version\":1,\"kind\":\"conversation\",\"reading\":\"The user is greeting the assistant.\",\"measures\":[],\"groupBy\":[],\"display\":[],\"filters\":[],\"expectedShape\":\"scalar\",\"unresolved\":[],\"provenance\":{},\"reply\":\"Hi! I can answer analytics questions over this project's data — customers, orders, order items, products, locations and supplies. Ask me things like \\\"top 10 customers by revenue\\\" or \\\"orders by month in 2026\\\".\"}",
+  "text": "{\"version\":1,\"kind\":\"conversation\",\"reading\":\"The user is greeting the assistant.\",\"measures\":[],\"groupBy\":[],\"display\":[],\"filters\":[],\"expectedShape\":\"scalar\",\"unresolved\":[],\"provenance\":{},\"reply\":\"Hi! I can answer questions about this project's data — customers, orders, order items, products, locations and supplies. Ask me things like \\\"top 10 customers by orders\\\" or \\\"orders by month in 2025\\\".\"}",
   "providerName": "claude",
-  "recordedAt": "2026-10-16T02:52:29.861Z",
+  "recordedAt": "2026-10-16T13:44:23.229Z",
   "provenance": {
     "kind": "recorded_provider",
     "replayClassification": "recorded_provider",

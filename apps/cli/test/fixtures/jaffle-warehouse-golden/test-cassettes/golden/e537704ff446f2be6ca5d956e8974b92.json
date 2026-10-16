@@ -1,9 +1,9 @@
 {
   "key": "e537704ff446f2be6ca5d956e8974b92",
   "operation": "generate",
-  "text": "{\"version\":1,\"kind\":\"analytics\",\"reading\":\"Break down revenue by customer (shopper), one row per customer.\",\"measures\":[],\"groupBy\":[],\"display\":[],\"filters\":[],\"expectedShape\":\"grouped\",\"unresolved\":[{\"clause\":\"revenue\",\"options\":[],\"material\":true,\"question\":\"The vocabulary exposes no revenue metric and no columns on dev.orders or dev.order_items; which governed measure (or column) should 'revenue' resolve to?\"},{\"clause\":\"by shopper\",\"options\":[\"relation:dev.customers\"],\"material\":true,\"question\":\"'Shopper' is read as the customer (relation:dev.customers), but no customer key or name column/entity ref is exposed to group by and display; which key should be used?\"}],\"provenance\":{\"relation:dev.customers\":\"q:shopper\"}}",
+  "text": "{\"version\":1,\"kind\":\"analytics\",\"reading\":\"Total revenue broken down per customer (shopper), one row per customer with the customer's name as label.\",\"measures\":[],\"groupBy\":[],\"display\":[],\"filters\":[],\"expectedShape\":\"grouped\",\"unresolved\":[{\"clause\":\"revenue\",\"options\":[\"relation:dev.order_items\",\"relation:dev.orders\"],\"material\":true,\"question\":\"The vocabulary exposes no metric or column for revenue; should revenue be the sum of order-line amounts (dev.order_items) or of order totals (dev.orders)?\"},{\"clause\":\"by shopper\",\"options\":[\"relation:dev.customers\"],\"material\":true,\"question\":\"Shopper is read as the customer entity (dev.customers), but no customer key or name column is exposed in the vocabulary to group and label by; which column identifies the customer?\"}],\"provenance\":{\"relation:dev.order_items\":\"q:revenue\",\"relation:dev.orders\":\"q:revenue\",\"relation:dev.customers\":\"q:shopper\"}}",
   "providerName": "claude",
-  "recordedAt": "2026-10-16T02:56:31.889Z",
+  "recordedAt": "2026-10-16T13:48:38.806Z",
   "provenance": {
     "kind": "recorded_provider",
     "replayClassification": "recorded_provider",

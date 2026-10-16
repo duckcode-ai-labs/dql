@@ -1,0 +1,23 @@
+{
+  "key": "988270eba6e9f675447fb02b51e4b11f",
+  "operation": "generate",
+  "text": "NO_SQL: The Jaffle Shop warehouse has no weather measure or Chicago location/condition column; it only holds customers, orders, products, locations, and supplies.",
+  "providerName": "claude",
+  "recordedAt": "2026-10-16T13:44:35.886Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 2,
+    "messageRoles": [
+      "system",
+      "user"
+    ],
+    "preCanonicalHash": "988270eba6e9f675447fb02b51e4b11fa864d4c3b33460983fc66c6c6a168bac",
+    "postCanonicalHash": "988270eba6e9f675447fb02b51e4b11fa864d4c3b33460983fc66c6c6a168bac",
+    "appliedRuleClasses": []
+  }
+}

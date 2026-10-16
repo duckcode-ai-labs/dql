@@ -1,9 +1,9 @@
 {
   "key": "997647f0f0c924272b700b67caf09409",
   "operation": "generate",
-  "text": "{\"version\":1,\"kind\":\"analytics\",\"reading\":\"Total revenue (a scalar) restricted to the customer named \\\"Ryan Byrd\\\".\",\"measures\":[],\"groupBy\":[],\"display\":[],\"filters\":[],\"expectedShape\":\"scalar\",\"unresolved\":[{\"clause\":\"total revenue\",\"options\":[\"relation:dev.orders\",\"relation:dev.order_items\"],\"material\":true,\"question\":\"No revenue metric or numeric column is exposed in the vocabulary; should revenue be the order total on dev.orders or the summed line price on dev.order_items?\"},{\"clause\":\"for \\\"Ryan Byrd\\\"\",\"options\":[\"relation:dev.customers\"],\"material\":true,\"question\":\"No customer_name dimension is exposed; which column on dev.customers holds the customer's name to match \\\"Ryan Byrd\\\"?\"}],\"provenance\":{\"relation:dev.orders\":\"q:total revenue\",\"relation:dev.order_items\":\"q:total revenue\",\"relation:dev.customers\":\"q:\\\"Ryan Byrd\\\"\"}}",
+  "text": "{\"version\":1,\"kind\":\"analytics\",\"reading\":\"Total revenue (a single number) for the customer named \\\"Ryan Byrd\\\".\",\"measures\":[],\"groupBy\":[],\"display\":[],\"filters\":[],\"expectedShape\":\"scalar\",\"unresolved\":[{\"clause\":\"total revenue for \\\"Ryan Byrd\\\"\",\"options\":[],\"material\":true,\"question\":\"The vocabulary exposes the orders, order_items and customers relations but no revenue metric, no revenue/amount column and no customer_name column; which column holds revenue (e.g. on dev.orders or dev.order_items) and which holds the customer name?\"}],\"provenance\":{\"relation:dev.orders\":\"q:total revenue\",\"relation:dev.customers\":\"q:Ryan Byrd\"}}",
   "providerName": "claude",
-  "recordedAt": "2026-10-16T02:50:14.562Z",
+  "recordedAt": "2026-10-16T13:41:15.240Z",
   "provenance": {
     "kind": "recorded_provider",
     "replayClassification": "recorded_provider",

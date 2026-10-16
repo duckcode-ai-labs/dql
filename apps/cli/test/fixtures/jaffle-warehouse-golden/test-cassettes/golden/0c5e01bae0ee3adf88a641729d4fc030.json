@@ -1,9 +1,9 @@
 {
   "key": "0c5e01bae0ee3adf88a641729d4fc030",
   "operation": "generate",
-  "text": "{\"version\":1,\"kind\":\"analytics\",\"reading\":\"Rank products by total revenue (sum of order-line price) and return the top 10.\",\"measures\":[{\"ref\":\"column:dev.order_items.product_price\",\"aggregation\":\"sum\",\"alias\":\"revenue\"}],\"groupBy\":[{\"ref\":\"column:dev.products.product_id\",\"role\":\"key\"}],\"display\":[\"column:dev.products.product_name\"],\"filters\":[],\"ordering\":{\"ref\":\"revenue\",\"direction\":\"desc\"},\"limit\":10,\"expectedShape\":\"ranking\",\"population\":\"matching\",\"unresolved\":[{\"clause\":\"revenue\",\"options\":[\"column:dev.order_items.product_price\"],\"material\":false,\"question\":\"No revenue metric is defined in this project; revenue is read as the sum of the order-line price on dev.order_items.\"}],\"provenance\":{\"column:dev.order_items.product_price\":\"q:revenue\",\"column:dev.products.product_id\":\"q:products\",\"column:dev.products.product_name\":\"q:products\"}}",
+  "text": "{\"version\":1,\"kind\":\"analytics\",\"reading\":\"Rank products by their revenue, highest first, and show the top 10; no revenue metric or revenue column is declared in this vocabulary, so the measure needs resolving.\",\"measures\":[],\"groupBy\":[{\"ref\":\"column:dev.products.product_id\",\"role\":\"key\"}],\"display\":[\"column:dev.products.product_name\"],\"filters\":[],\"limit\":10,\"expectedShape\":\"ranking\",\"unresolved\":[{\"clause\":\"revenue\",\"question\":\"Which governed measure should be used as product revenue? The vocabulary declares no revenue metric and lists no numeric columns on order_items or orders.\",\"options\":[],\"material\":true}],\"provenance\":{\"column:dev.products.product_id\":\"q:products\",\"column:dev.products.product_name\":\"q:products\"}}",
   "providerName": "claude",
-  "recordedAt": "2026-10-16T02:48:46.287Z",
+  "recordedAt": "2026-10-16T13:39:59.954Z",
   "provenance": {
     "kind": "recorded_provider",
     "replayClassification": "recorded_provider",

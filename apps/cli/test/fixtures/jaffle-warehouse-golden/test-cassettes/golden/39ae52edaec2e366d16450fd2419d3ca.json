@@ -1,9 +1,9 @@
 {
   "key": "39ae52edaec2e366d16450fd2419d3ca",
   "operation": "generate",
-  "text": "{\"version\":1,\"kind\":\"analytics\",\"reading\":\"Total supply cost summed from the supplies table, broken down by product (keyed by product_id, labeled with product_name).\",\"measures\":[{\"ref\":\"column:dev.supplies.supply_cost\",\"aggregation\":\"sum\",\"alias\":\"supply_cost\"}],\"groupBy\":[{\"ref\":\"column:dev.supplies.product_id\",\"role\":\"key\"}],\"display\":[\"column:dev.products.product_name\"],\"filters\":[],\"ordering\":{\"ref\":\"column:dev.supplies.supply_cost\",\"direction\":\"desc\"},\"expectedShape\":\"grouped\",\"unresolved\":[],\"provenance\":{\"column:dev.supplies.supply_cost\":\"q:supply cost\",\"column:dev.supplies.product_id\":\"q:by product\",\"column:dev.products.product_name\":\"q:by product\"}}",
+  "text": "{\"version\":1,\"kind\":\"analytics\",\"reading\":\"Total supply cost (sum of supplies.supply_cost) broken down by product, labelled with the product name.\",\"measures\":[{\"ref\":\"column:dev.supplies.supply_cost\",\"aggregation\":\"sum\",\"alias\":\"supply_cost\"}],\"groupBy\":[{\"ref\":\"column:dev.supplies.product_id\",\"role\":\"key\"}],\"display\":[\"column:dev.products.product_name\"],\"filters\":[],\"ordering\":{\"ref\":\"supply_cost\",\"direction\":\"desc\"},\"expectedShape\":\"grouped\",\"unresolved\":[],\"provenance\":{\"column:dev.supplies.supply_cost\":\"q:supply cost\",\"column:dev.supplies.product_id\":\"q:by product\",\"column:dev.products.product_name\":\"q:by product\"}}",
   "providerName": "claude",
-  "recordedAt": "2026-10-16T02:51:50.446Z",
+  "recordedAt": "2026-10-16T13:43:40.908Z",
   "provenance": {
     "kind": "recorded_provider",
     "replayClassification": "recorded_provider",

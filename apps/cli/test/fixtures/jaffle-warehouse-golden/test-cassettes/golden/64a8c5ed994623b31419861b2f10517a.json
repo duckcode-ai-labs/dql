@@ -1,9 +1,9 @@
 {
   "key": "64a8c5ed994623b31419861b2f10517a",
   "operation": "generate",
-  "text": "{\"version\":1,\"kind\":\"analytics\",\"reading\":\"Count the total number of orders in the orders table, as a single number with no breakdown.\",\"measures\":[{\"ref\":\"column:dev.orders.order_id\",\"aggregation\":\"count_distinct\",\"alias\":\"order_count\"}],\"groupBy\":[],\"display\":[],\"filters\":[],\"expectedShape\":\"scalar\",\"unresolved\":[],\"provenance\":{\"column:dev.orders.order_id\":\"q:how many orders\"}}",
+  "text": "{\"version\":1,\"kind\":\"analytics\",\"reading\":\"Count the total number of orders in the orders table.\",\"measures\":[{\"ref\":\"column:dev.orders.order_id\",\"aggregation\":\"count_distinct\",\"alias\":\"order_count\"}],\"groupBy\":[],\"display\":[],\"filters\":[],\"expectedShape\":\"scalar\",\"unresolved\":[],\"provenance\":{\"column:dev.orders.order_id\":\"q:how many orders\"}}",
   "providerName": "claude",
-  "recordedAt": "2026-10-16T02:53:32.485Z",
+  "recordedAt": "2026-10-16T13:45:33.838Z",
   "provenance": {
     "kind": "recorded_provider",
     "replayClassification": "recorded_provider",

@@ -1,0 +1,24 @@
+{
+  "key": "940020c6f67f9a7297c7c67dbf8ec9d6",
+  "operation": "generate",
+  "text": "{\"version\":1,\"kind\":\"analytics\",\"reading\":\"For the customer named \\\"Ryan byrd\\\", report total revenue (sum of product price across all order items) and beverage revenue (the same sum restricted to drink items) side by side — a repeat of the previous analysis.\",\"measures\":[{\"ref\":\"column:dev.products.product_price\",\"aggregation\":\"sum\",\"alias\":\"total_revenue\"},{\"ref\":\"column:dev.products.product_price\",\"aggregation\":\"sum\",\"scope\":[{\"ref\":\"column:dev.products.is_drink_item\",\"op\":\"is_true\",\"values\":[true],\"source\":\"question\"}],\"alias\":\"beverage_revenue\"}],\"groupBy\":[],\"display\":[],\"filters\":[{\"ref\":\"column:dev.customers.customer_name\",\"op\":\"eq\",\"values\":[\"Ryan byrd\"],\"source\":\"question\"}],\"expectedShape\":\"comparison\",\"unresolved\":[],\"provenance\":{\"column:dev.products.product_price\":\"q:total revenue\",\"column:dev.products.is_drink_item\":\"q:beverage revenue\",\"column:dev.customers.customer_name\":\"q:\\\"Ryan byrd\\\"\"}}",
+  "providerName": "claude",
+  "recordedAt": "2026-10-16T13:50:05.755Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 3,
+    "messageRoles": [
+      "system",
+      "user",
+      "user"
+    ],
+    "preCanonicalHash": "940020c6f67f9a7297c7c67dbf8ec9d682f76f80fc3bcbbc2e3b1bfdeaea5a0e",
+    "postCanonicalHash": "940020c6f67f9a7297c7c67dbf8ec9d682f76f80fc3bcbbc2e3b1bfdeaea5a0e",
+    "appliedRuleClasses": []
+  }
+}

@@ -1,9 +1,9 @@
 {
   "key": "c8809c86ae01dcb12f8a6ffbeeb4e40c",
   "operation": "generate",
-  "text": "{\"version\":1,\"kind\":\"analytics\",\"reading\":\"Break down revenue by product type (one row per product_type), but no governed revenue metric or listed revenue column exists in this vocabulary.\",\"measures\":[],\"groupBy\":[{\"ref\":\"column:dev.products.product_type\",\"role\":\"categorical\"}],\"display\":[],\"filters\":[],\"expectedShape\":\"grouped\",\"unresolved\":[{\"clause\":\"revenue\",\"options\":[],\"material\":true,\"question\":\"No revenue metric or revenue column is listed in this project's vocabulary (only products columns are enumerated); which column on dev.order_items or dev.orders holds revenue?\"}],\"provenance\":{\"column:dev.products.product_type\":\"q:by product type\"}}",
+  "text": "{\"version\":1,\"kind\":\"analytics\",\"reading\":\"Total revenue (sum of order-line product price) broken down by product type.\",\"measures\":[{\"ref\":\"column:dev.order_items.product_price\",\"aggregation\":\"sum\",\"alias\":\"revenue\"}],\"groupBy\":[{\"ref\":\"column:dev.products.product_type\",\"role\":\"categorical\"}],\"display\":[],\"filters\":[],\"ordering\":{\"ref\":\"revenue\",\"direction\":\"desc\"},\"expectedShape\":\"grouped\",\"unresolved\":[{\"clause\":\"revenue\",\"options\":[\"column:dev.order_items.product_price\",\"column:dev.orders.order_total\"],\"material\":false,\"question\":\"No governed revenue metric exists; order-line product price (pretax) is used. Should order total including tax be used instead?\"}],\"provenance\":{\"column:dev.order_items.product_price\":\"q:revenue\",\"column:dev.products.product_type\":\"q:by product type\"}}",
   "providerName": "claude",
-  "recordedAt": "2026-10-16T02:49:21.030Z",
+  "recordedAt": "2026-10-16T13:40:40.609Z",
   "provenance": {
     "kind": "recorded_provider",
     "replayClassification": "recorded_provider",

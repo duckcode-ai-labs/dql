@@ -3,7 +3,7 @@
   "operation": "generate",
   "text": "{\"version\":1,\"kind\":\"analytics\",\"reading\":\"Count of orders broken down by the customer's type.\",\"measures\":[{\"ref\":\"column:dev.orders.order_id\",\"aggregation\":\"count_distinct\",\"alias\":\"order_count\"}],\"groupBy\":[{\"ref\":\"column:dev.customers.customer_type\",\"role\":\"categorical\"}],\"display\":[],\"filters\":[],\"ordering\":{\"ref\":\"order_count\",\"direction\":\"desc\"},\"expectedShape\":\"grouped\",\"unresolved\":[],\"provenance\":{\"column:dev.orders.order_id\":\"q:how many orders\",\"column:dev.customers.customer_type\":\"q:by customer type\"}}",
   "providerName": "claude",
-  "recordedAt": "2026-10-16T02:50:37.973Z",
+  "recordedAt": "2026-10-16T13:42:26.071Z",
   "provenance": {
     "kind": "recorded_provider",
     "replayClassification": "recorded_provider",

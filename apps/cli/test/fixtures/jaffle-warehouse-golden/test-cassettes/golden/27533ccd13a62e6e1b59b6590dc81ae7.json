@@ -1,9 +1,9 @@
 {
   "key": "27533ccd13a62e6e1b59b6590dc81ae7",
   "operation": "generate",
-  "text": "{\"version\":1,\"kind\":\"analytics\",\"reading\":\"Total revenue (customer spend) broken down by customer type.\",\"measures\":[{\"ref\":\"column:dev.customers.lifetime_spend\",\"aggregation\":\"sum\",\"alias\":\"revenue\"}],\"groupBy\":[{\"ref\":\"column:dev.customers.customer_type\",\"role\":\"categorical\"}],\"display\":[],\"filters\":[],\"ordering\":{\"ref\":\"column:dev.customers.lifetime_spend\",\"direction\":\"desc\"},\"expectedShape\":\"grouped\",\"unresolved\":[{\"clause\":\"revenue\",\"options\":[\"column:dev.customers.lifetime_spend\",\"column:dev.customers.lifetime_spend_pretax\"],\"material\":true,\"question\":\"Should revenue include tax (lifetime_spend) or be pretax (lifetime_spend_pretax)? No governed revenue metric is defined in this project.\"}],\"provenance\":{\"column:dev.customers.lifetime_spend\":\"q:revenue\",\"column:dev.customers.lifetime_spend_pretax\":\"q:revenue\",\"column:dev.customers.customer_type\":\"q:by customer type\"}}",
+  "text": "{\"version\":1,\"kind\":\"analytics\",\"reading\":\"Total revenue (customer lifetime spend) broken down by customer type.\",\"measures\":[{\"ref\":\"column:dev.customers.lifetime_spend_pretax\",\"aggregation\":\"sum\",\"alias\":\"revenue\"}],\"groupBy\":[{\"ref\":\"column:dev.customers.customer_type\",\"role\":\"categorical\"}],\"display\":[],\"filters\":[],\"ordering\":{\"ref\":\"revenue\",\"direction\":\"desc\"},\"expectedShape\":\"grouped\",\"unresolved\":[{\"clause\":\"revenue\",\"options\":[\"column:dev.customers.lifetime_spend_pretax\",\"column:dev.customers.lifetime_spend\"],\"material\":true,\"question\":\"Should revenue be pretax spend (lifetime_spend_pretax) or spend including tax (lifetime_spend)? No governed revenue metric exists in this project.\"}],\"provenance\":{\"column:dev.customers.lifetime_spend_pretax\":\"q:revenue\",\"column:dev.customers.lifetime_spend\":\"q:revenue\",\"column:dev.customers.customer_type\":\"q:by customer type\"}}",
   "providerName": "claude",
-  "recordedAt": "2026-10-16T02:53:05.213Z",
+  "recordedAt": "2026-10-16T13:45:02.175Z",
   "provenance": {
     "kind": "recorded_provider",
     "replayClassification": "recorded_provider",
