@@ -1,0 +1,23 @@
+{
+  "key": "526f6b9f60109d485b6c3f2fe5a023c3",
+  "operation": "generate",
+  "text": "New vs returning: use customer_order_number (1 = new, >1 = returning). Revenue = order_total.\n\nSELECT CASE WHEN o.customer_order_number = 1 THEN 'new' ELSE 'returning' END AS customer_segment, SUM(o.order_total) AS revenue, COUNT(DISTINCT o.order_id) AS order_count FROM jaffle_shop.dev.orders o GROUP BY CASE WHEN o.customer_order_number = 1 THEN 'new' ELSE 'returning' END ORDER BY revenue DESC",
+  "providerName": "claude",
+  "recordedAt": "2026-10-16T15:46:06.526Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 2,
+    "messageRoles": [
+      "system",
+      "user"
+    ],
+    "preCanonicalHash": "526f6b9f60109d485b6c3f2fe5a023c337ac1db8ab0663f1c33bf5b166c9e758",
+    "postCanonicalHash": "526f6b9f60109d485b6c3f2fe5a023c337ac1db8ab0663f1c33bf5b166c9e758",
+    "appliedRuleClasses": []
+  }
+}

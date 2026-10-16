@@ -1,0 +1,23 @@
+{
+  "key": "fa189f97a18822d0df66ac6479d6bded",
+  "operation": "generate",
+  "text": "SELECT\n  SUM(CASE WHEN strftime('%Y-%m', ordered_at) = '2025-07' THEN subtotal ELSE 0 END) AS july_2025_sales_pretax,\n  SUM(CASE WHEN strftime('%Y-%m', ordered_at) = '2025-08' THEN subtotal ELSE 0 END) AS august_2025_sales_pretax,\n  SUM(CASE WHEN strftime('%Y-%m', ordered_at) = '2025-08' THEN subtotal ELSE 0 END)\n    - SUM(CASE WHEN strftime('%Y-%m', ordered_at) = '2025-07' THEN subtotal ELSE 0 END) AS absolute_growth,\n  CASE\n    WHEN SUM(CASE WHEN strftime('%Y-%m', ordered_at) = '2025-07' THEN subtotal ELSE 0 END) = 0 THEN NULL\n    ELSE 100.0 * (\n      SUM(CASE WHEN strftime('%Y-%m', ordered_at) = '2025-08' THEN subtotal ELSE 0 END)\n      - SUM(CASE WHEN strftime('%Y-%m', ordered_at) = '2025-07' THEN subtotal ELSE 0 END)\n    ) / SUM(CASE WHEN strftime('%Y-%m', ordered_at) = '2025-07' THEN subtotal ELSE 0 END)\n  END AS pct_growth\nFROM jaffle_shop.dev.orders\nWHERE strftime('%Y-%m', ordered_at) IN ('2025-07', '2025-08')",
+  "providerName": "claude",
+  "recordedAt": "2026-10-16T15:45:47.863Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 2,
+    "messageRoles": [
+      "system",
+      "user"
+    ],
+    "preCanonicalHash": "fa189f97a18822d0df66ac6479d6bdedfa99ac772d1f25dff04be3d4576b826c",
+    "postCanonicalHash": "fa189f97a18822d0df66ac6479d6bdedfa99ac772d1f25dff04be3d4576b826c",
+    "appliedRuleClasses": []
+  }
+}

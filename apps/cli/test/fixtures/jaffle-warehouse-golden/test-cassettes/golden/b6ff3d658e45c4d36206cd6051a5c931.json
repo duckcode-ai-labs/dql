@@ -1,0 +1,23 @@
+{
+  "key": "b6ff3d658e45c4d36206cd6051a5c931",
+  "operation": "generate",
+  "text": "SELECT c.customer_id, c.customer_name, SUM(oi.product_price) AS beverage_revenue, COUNT(oi.order_item_id) AS beverage_items FROM jaffle_shop.dev.order_items oi JOIN jaffle_shop.dev.orders o ON oi.order_id = o.order_id JOIN jaffle_shop.dev.customers c ON o.customer_id = c.customer_id WHERE oi.is_drink_item = 1 GROUP BY c.customer_id, c.customer_name ORDER BY beverage_revenue DESC LIMIT 10",
+  "providerName": "claude",
+  "recordedAt": "2026-10-16T15:47:12.668Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 2,
+    "messageRoles": [
+      "system",
+      "user"
+    ],
+    "preCanonicalHash": "b6ff3d658e45c4d36206cd6051a5c931eb93edd57d29e0dc45d6464aed3d223c",
+    "postCanonicalHash": "b6ff3d658e45c4d36206cd6051a5c931eb93edd57d29e0dc45d6464aed3d223c",
+    "appliedRuleClasses": []
+  }
+}

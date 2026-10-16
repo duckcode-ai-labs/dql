@@ -1,0 +1,23 @@
+{
+  "key": "429a70fef5c4a70b7f677887e544a0fc",
+  "operation": "generate",
+  "text": "```sql\nWITH latest AS (\n  SELECT MAX(ordered_at) AS max_ordered_at FROM jaffle_shop.dev.orders\n),\ncustomer_region AS (\n  SELECT o.customer_id, o.location_id\n  FROM jaffle_shop.dev.orders o\n  WHERE o.customer_order_number = 1\n),\ncustomer_status AS (\n  SELECT\n    cr.customer_id,\n    cr.location_id,\n    CASE WHEN julianday(l.max_ordered_at) - julianday(c.last_ordered_at) > 90 THEN 1 ELSE 0 END AS is_churned\n  FROM customer_region cr\n  JOIN jaffle_shop.dev.customers c ON c.customer_id = cr.customer_id\n  CROSS JOIN latest l\n)\nSELECT\n  loc.location_id,\n  loc.location_name AS region,\n  COUNT(cs.customer_id) AS total_customers,\n  SUM(cs.is_churned) AS churned_customers,\n  1.0 * SUM(cs.is_churned) / COUNT(cs.customer_id) AS churn_rate\nFROM customer_status cs\nJOIN jaffle_shop.dev.locations loc ON loc.location_id = cs.location_id\nGROUP BY loc.location_id, loc.location_name\nORDER BY churn_rate DESC\nLIMIT 500\n```",
+  "providerName": "claude",
+  "recordedAt": "2026-10-16T15:44:04.813Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 2,
+    "messageRoles": [
+      "system",
+      "user"
+    ],
+    "preCanonicalHash": "429a70fef5c4a70b7f677887e544a0fcc83e7c7f0b5bfefae8dc5d51b0a531d5",
+    "postCanonicalHash": "429a70fef5c4a70b7f677887e544a0fcc83e7c7f0b5bfefae8dc5d51b0a531d5",
+    "appliedRuleClasses": []
+  }
+}

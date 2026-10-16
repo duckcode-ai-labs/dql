@@ -1,0 +1,24 @@
+{
+  "key": "c53b96dbcb363621ec847c6cc5c78eee",
+  "operation": "generate",
+  "text": "{\"version\":1,\"kind\":\"analytics\",\"reading\":\"Total revenue (sum of all order-line prices) and beverage revenue (sum of drink-item line prices) for the customer named \\\"Ryan byrd\\\", shown side by side.\",\"measures\":[{\"ref\":\"column:dev.order_items.product_price\",\"aggregation\":\"sum\",\"alias\":\"total_revenue\"},{\"ref\":\"column:dev.order_items.product_price\",\"aggregation\":\"sum\",\"scope\":[{\"ref\":\"column:dev.order_items.is_drink_item\",\"op\":\"is_true\",\"values\":[],\"source\":\"question\"}],\"alias\":\"beverage_revenue\"}],\"groupBy\":[],\"display\":[],\"filters\":[{\"ref\":\"column:dev.customers.customer_name\",\"op\":\"eq\",\"values\":[\"Ryan byrd\"],\"source\":\"question\"}],\"expectedShape\":\"comparison\",\"unresolved\":[{\"clause\":\"total revenue\",\"options\":[\"column:dev.order_items.product_price\",\"column:dev.orders.subtotal\",\"column:dev.orders.order_total\"],\"material\":false,\"question\":\"Total revenue is read as the pretax sum of order-line prices (consistent with beverage revenue); say so if you want the order total including tax instead.\"}],\"provenance\":{\"column:dev.order_items.product_price\":\"q:revenue / total revenue / beverage revenue\",\"column:dev.order_items.is_drink_item\":\"q:beverage revenue\",\"column:dev.customers.customer_name\":\"q:\\\"Ryan byrd\\\"\",\"column:dev.orders.customer_id\":\"removed:new subject is a single named customer, no customer ranking\",\"column:dev.order_items.order_item_id\":\"removed:item count not asked for in the new question\"}}",
+  "providerName": "claude",
+  "recordedAt": "2026-10-16T15:47:47.199Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 3,
+    "messageRoles": [
+      "system",
+      "user",
+      "user"
+    ],
+    "preCanonicalHash": "c53b96dbcb363621ec847c6cc5c78eeeada60595a3ab32655e4d2f0b7bd27edd",
+    "postCanonicalHash": "c53b96dbcb363621ec847c6cc5c78eeeada60595a3ab32655e4d2f0b7bd27edd",
+    "appliedRuleClasses": []
+  }
+}

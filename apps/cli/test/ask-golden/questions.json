@@ -939,18 +939,42 @@
     "gross_profit": [
      "order_gross_profit",
      "gross_profit",
-     "profit"
+     "profit",
+     "gross_profit_2025"
     ],
     "gross_margin": [
      "gross_margin",
      "gross_margin_pct",
      "margin",
      "margin_pct",
-     "gross_margin_percentage"
+     "gross_margin_percentage",
+     "gross_margin_pct_2025"
     ]
    },
    "tier": "reviewable",
-   "note": "order_gross_profit is a derived metric (revenue - order_cost) whose inputs live on two relations; the relational tier aggregates each on its own island and evaluates the formula, the margin is a disclosed ratio. On MetricFlow the same intent compiles with a metric_time window."
+   "note": "order_gross_profit is a derived metric (revenue - order_cost) whose inputs live on two relations; the relational tier aggregates each on its own island and evaluates the formula, the margin is a disclosed ratio. On MetricFlow the same intent compiles with a metric_time window.",
+   "alternatives": [
+    {
+     "sql": "SELECT gross_profit, gross_margin * 100 AS gross_margin FROM (SELECT (SELECT SUM(oi.product_price) FROM dev.order_items oi WHERE oi.ordered_at >= '2025-01-01' AND oi.ordered_at < '2026-01-01') - (SELECT SUM(o.order_cost) FROM dev.orders o WHERE o.ordered_at >= '2025-01-01' AND o.ordered_at < '2026-01-01') AS gross_profit, ((SELECT SUM(oi.product_price) FROM dev.order_items oi WHERE oi.ordered_at >= '2025-01-01' AND oi.ordered_at < '2026-01-01') - (SELECT SUM(o.order_cost) FROM dev.orders o WHERE o.ordered_at >= '2025-01-01' AND o.ordered_at < '2026-01-01')) * 1.0 / (SELECT SUM(oi.product_price) FROM dev.order_items oi WHERE oi.ordered_at >= '2025-01-01' AND oi.ordered_at < '2026-01-01') AS gross_margin)",
+     "columns": {
+      "gross_profit": [
+       "order_gross_profit",
+       "gross_profit",
+       "profit",
+       "gross_profit_2025"
+      ],
+      "gross_margin": [
+       "gross_margin",
+       "gross_margin_pct",
+       "margin",
+       "margin_pct",
+       "gross_margin_percentage",
+       "gross_margin_pct_2025"
+      ]
+     },
+     "note": "AI-written SQL may give the margin in percentage points (79.6) instead of a fraction (0.796); both are accepted, as for growth-jul-aug."
+    }
+   ]
   },
   {
    "id": "growth-jul-aug",
@@ -963,6 +987,7 @@
      "revenue_july",
      "revenue_jul",
      "revenue_jul_2025",
+     "revenue_2025_07",
      "july_revenue",
      "revenue_july_2025",
      "jul_revenue"
@@ -971,6 +996,7 @@
      "revenue_august",
      "revenue_aug",
      "revenue_aug_2025",
+     "revenue_2025_08",
      "august_revenue",
      "revenue_august_2025",
      "aug_revenue"
@@ -999,6 +1025,7 @@
        "revenue_july",
        "revenue_jul",
        "revenue_jul_2025",
+       "revenue_2025_07",
        "july_revenue",
        "revenue_july_2025",
        "jul_revenue"
@@ -1007,6 +1034,7 @@
        "revenue_august",
        "revenue_aug",
        "revenue_aug_2025",
+       "revenue_2025_08",
        "august_revenue",
        "revenue_august_2025",
        "aug_revenue"

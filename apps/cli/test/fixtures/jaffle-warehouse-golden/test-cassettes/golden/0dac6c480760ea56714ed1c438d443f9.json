@@ -1,0 +1,23 @@
+{
+  "key": "0dac6c480760ea56714ed1c438d443f9",
+  "operation": "generate",
+  "text": "SELECT AVG(order_total) AS average_order_value FROM jaffle_shop.dev.orders WHERE strftime('%Y', ordered_at) = '2025'",
+  "providerName": "claude",
+  "recordedAt": "2026-10-16T15:44:55.284Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 2,
+    "messageRoles": [
+      "system",
+      "user"
+    ],
+    "preCanonicalHash": "0dac6c480760ea56714ed1c438d443f93ad3273727cfcf1e6a67ee7fc327ed82",
+    "postCanonicalHash": "0dac6c480760ea56714ed1c438d443f93ad3273727cfcf1e6a67ee7fc327ed82",
+    "appliedRuleClasses": []
+  }
+}

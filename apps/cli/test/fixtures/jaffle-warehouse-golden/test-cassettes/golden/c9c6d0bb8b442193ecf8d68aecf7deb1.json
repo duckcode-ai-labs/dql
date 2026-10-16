@@ -1,0 +1,23 @@
+{
+  "key": "c9c6d0bb8b442193ecf8d68aecf7deb1",
+  "operation": "generate",
+  "text": "{\"version\":1,\"kind\":\"analytics\",\"reading\":\"Compare revenue (order subtotal) per store location this year versus last year and show the change, so the user can see where revenue fell; the project has no \\\"region\\\" (locations are the nearest grain) and cannot itself answer \\\"why\\\" or recommend where to invest.\",\"measures\":[{\"ref\":\"column:dev.orders.subtotal\",\"aggregation\":\"sum\",\"alias\":\"revenue_last_year\",\"scope\":[{\"ref\":\"column:dev.orders.ordered_at\",\"op\":\"eq\",\"values\":[\"last_year\"],\"source\":\"question\"}]},{\"ref\":\"column:dev.orders.subtotal\",\"aggregation\":\"sum\",\"alias\":\"revenue_this_year\",\"scope\":[{\"ref\":\"column:dev.orders.ordered_at\",\"op\":\"eq\",\"values\":[\"this_year\"],\"source\":\"question\"}]},{\"change\":{\"base\":\"revenue_last_year\",\"comparison\":\"revenue_this_year\",\"as\":\"percent\"},\"alias\":\"revenue_change_pct\"}],\"groupBy\":[{\"ref\":\"column:dev.orders.location_id\",\"role\":\"key\"}],\"display\":[\"column:dev.locations.location_name\"],\"filters\":[],\"ordering\":{\"ref\":\"revenue_change_pct\",\"direction\":\"asc\"},\"expectedShape\":\"comparison\",\"unresolved\":[{\"clause\":\"revenue\",\"options\":[\"column:dev.orders.subtotal\",\"column:dev.orders.order_total\"],\"material\":true,\"question\":\"Should revenue be the pretax order subtotal or the order total including tax?\"},{\"clause\":\"by region\",\"options\":[\"column:dev.orders.location_id\"],\"material\":false,\"question\":\"The project has no region; store location is used as the regional grain.\"},{\"clause\":\"why is revenue down / which region should we invest in\",\"options\":[],\"material\":false,\"question\":\"Causes and investment recommendations are not held in the data; the comparison shows where revenue changed, and the judgment is yours.\"}],\"provenance\":{\"column:dev.orders.subtotal\":\"q:revenue\",\"column:dev.orders.ordered_at\":\"q:down\",\"column:dev.orders.location_id\":\"q:by region\",\"column:dev.locations.location_name\":\"q:by region\"}}",
+  "providerName": "claude",
+  "recordedAt": "2026-10-16T15:46:42.410Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 2,
+    "messageRoles": [
+      "system",
+      "user"
+    ],
+    "preCanonicalHash": "c9c6d0bb8b442193ecf8d68aecf7deb1d4085cb47c5a85fd8bef823110a8c3dc",
+    "postCanonicalHash": "c9c6d0bb8b442193ecf8d68aecf7deb1d4085cb47c5a85fd8bef823110a8c3dc",
+    "appliedRuleClasses": []
+  }
+}
