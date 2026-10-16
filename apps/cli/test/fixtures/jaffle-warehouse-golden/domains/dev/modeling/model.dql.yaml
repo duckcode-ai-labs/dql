@@ -1,0 +1,72 @@
+entities:
+  - id: customer
+    relation: jaffle_shop.dev.customers
+    business_name: Customer
+    status: draft
+    grain: customer_id
+    keys:
+      - customer_id
+  - id: location
+    relation: jaffle_shop.dev.locations
+    business_name: Location
+    status: draft
+    grain: location_id
+    keys:
+      - location_id
+  - id: metricflow_time_spine
+    relation: jaffle_shop.dev.metricflow_time_spine
+    business_name: Metricflow Time Spine
+    status: draft
+  - id: order_item
+    relation: jaffle_shop.dev.order_items
+    business_name: Order Item
+    status: draft
+    grain: order_item_id
+    keys:
+      - order_item_id
+  - id: order
+    relation: jaffle_shop.dev.orders
+    business_name: Order
+    status: draft
+    grain: order_id
+    keys:
+      - order_id
+  - id: product
+    relation: jaffle_shop.dev.products
+    business_name: Product
+    status: draft
+    grain: product_id
+    keys:
+      - product_id
+  - id: supply
+    relation: jaffle_shop.dev.supplies
+    business_name: Supply
+    status: draft
+    grain: supply_uuid
+    keys:
+      - supply_uuid
+relationships:
+  - id: order_item_to_product_by_product_name
+    from: order_item
+    to: product
+    keys:
+      - from: product_name
+        to: product_name
+    cardinality: many_to_one
+    fanout: safe
+    status: draft
+    rationale: product_name is unique in products, and 2926 of 2926 order_items values are found there
+    validation:
+      status: passed
+      checked_at: '2026-10-16T02:36:26.752Z'
+      query_fingerprint: 8191f184b5e229c3980e2eebcc3ed1d34f633b9cb03243463d60b3549d26985b
+      proof_fingerprint: 9b68d2a51e103fbbc6811452423811c70e684d07b28617ccb060fe011ef1042c
+      from_rows: 2926
+      to_rows: 10
+      joined_rows: 2926
+      from_null_keys: 0
+      to_null_keys: 0
+      unmatched_from: 0
+      max_from_per_key: 537
+      max_to_per_key: 1
+      message: Warehouse evidence matches the declared cardinality and safe fanout policy.

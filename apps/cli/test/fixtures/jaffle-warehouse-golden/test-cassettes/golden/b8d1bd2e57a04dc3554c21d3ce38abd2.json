@@ -1,0 +1,23 @@
+{
+  "key": "b8d1bd2e57a04dc3554c21d3ce38abd2",
+  "operation": "generate",
+  "text": "NO_SQL: No column or metric defines customer churn (no churn/active status or churn window), so churn rate cannot be computed from the listed columns.",
+  "providerName": "claude",
+  "recordedAt": "2026-10-16T13:44:17.337Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 2,
+    "messageRoles": [
+      "system",
+      "user"
+    ],
+    "preCanonicalHash": "b8d1bd2e57a04dc3554c21d3ce38abd23fe5628a9b1d5909669fe0e5b86d30af",
+    "postCanonicalHash": "b8d1bd2e57a04dc3554c21d3ce38abd23fe5628a9b1d5909669fe0e5b86d30af",
+    "appliedRuleClasses": []
+  }
+}

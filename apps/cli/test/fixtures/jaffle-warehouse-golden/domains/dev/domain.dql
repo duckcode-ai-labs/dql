@@ -1,0 +1,8 @@
+// dql-format: 1
+
+domain "Jaffle Shop" {
+  id = "dev"
+  owner = "analytics@jaffle.shop"
+  reviewCadence = "quarterly"
+  description = "The Jaffle Shop warehouse (schema dev), drafted from the warehouse catalog; the five joins between the tables are checked on the data and certified."
+}

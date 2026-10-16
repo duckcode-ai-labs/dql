@@ -1,0 +1,23 @@
+{
+  "key": "bdea893dfe34711cac86c5a10d290ba0",
+  "operation": "generate",
+  "text": "SELECT strftime('%Y-%m', ordered_at) AS order_month, COUNT(DISTINCT order_id) AS drink_orders FROM jaffle_shop.dev.orders WHERE is_drink_order = 1 GROUP BY strftime('%Y-%m', ordered_at) ORDER BY order_month ASC LIMIT 500",
+  "providerName": "claude",
+  "recordedAt": "2026-10-16T13:43:13.731Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 2,
+    "messageRoles": [
+      "system",
+      "user"
+    ],
+    "preCanonicalHash": "bdea893dfe34711cac86c5a10d290ba0dd3b58b6cfe84d5bace4fa80033f3997",
+    "postCanonicalHash": "bdea893dfe34711cac86c5a10d290ba0dd3b58b6cfe84d5bace4fa80033f3997",
+    "appliedRuleClasses": []
+  }
+}

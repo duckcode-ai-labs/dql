@@ -1,0 +1,364 @@
+{
+  "version": 1,
+  "driver": "duckdb",
+  "connectionId": "default",
+  "scopes": [
+    {
+      "catalogOrDatabase": "jaffle_shop",
+      "schemas": [
+        "dev"
+      ]
+    }
+  ],
+  "relations": [
+    {
+      "id": "warehouse.dev.customers",
+      "database": "jaffle_shop",
+      "schema": "dev",
+      "name": "customers",
+      "relation": "jaffle_shop.dev.customers",
+      "kind": "table",
+      "columns": [
+        {
+          "name": "customer_id",
+          "type": "VARCHAR",
+          "nullable": true
+        },
+        {
+          "name": "customer_name",
+          "type": "VARCHAR",
+          "nullable": true
+        },
+        {
+          "name": "count_lifetime_orders",
+          "type": "INTEGER",
+          "nullable": true
+        },
+        {
+          "name": "first_ordered_at",
+          "type": "TIMESTAMP",
+          "nullable": true
+        },
+        {
+          "name": "last_ordered_at",
+          "type": "TIMESTAMP",
+          "nullable": true
+        },
+        {
+          "name": "lifetime_spend_pretax",
+          "type": "DOUBLE",
+          "nullable": true
+        },
+        {
+          "name": "lifetime_tax_paid",
+          "type": "DOUBLE",
+          "nullable": true
+        },
+        {
+          "name": "lifetime_spend",
+          "type": "DOUBLE",
+          "nullable": true
+        },
+        {
+          "name": "customer_type",
+          "type": "VARCHAR",
+          "nullable": true
+        }
+      ],
+      "rowCountEstimate": 14
+    },
+    {
+      "id": "warehouse.dev.locations",
+      "database": "jaffle_shop",
+      "schema": "dev",
+      "name": "locations",
+      "relation": "jaffle_shop.dev.locations",
+      "kind": "table",
+      "columns": [
+        {
+          "name": "location_id",
+          "type": "VARCHAR",
+          "nullable": true
+        },
+        {
+          "name": "location_name",
+          "type": "VARCHAR",
+          "nullable": true
+        },
+        {
+          "name": "tax_rate",
+          "type": "DOUBLE",
+          "nullable": true
+        },
+        {
+          "name": "opened_date",
+          "type": "TIMESTAMP",
+          "nullable": true
+        }
+      ],
+      "rowCountEstimate": 6
+    },
+    {
+      "id": "warehouse.dev.metricflow_time_spine",
+      "database": "jaffle_shop",
+      "schema": "dev",
+      "name": "metricflow_time_spine",
+      "relation": "jaffle_shop.dev.metricflow_time_spine",
+      "kind": "table",
+      "columns": [
+        {
+          "name": "date_day",
+          "type": "TIMESTAMP",
+          "nullable": true
+        }
+      ],
+      "rowCountEstimate": 365
+    },
+    {
+      "id": "warehouse.dev.order_items",
+      "database": "jaffle_shop",
+      "schema": "dev",
+      "name": "order_items",
+      "relation": "jaffle_shop.dev.order_items",
+      "kind": "table",
+      "columns": [
+        {
+          "name": "order_item_id",
+          "type": "VARCHAR",
+          "nullable": true
+        },
+        {
+          "name": "order_id",
+          "type": "VARCHAR",
+          "nullable": true
+        },
+        {
+          "name": "product_id",
+          "type": "VARCHAR",
+          "nullable": true
+        },
+        {
+          "name": "ordered_at",
+          "type": "TIMESTAMP",
+          "nullable": true
+        },
+        {
+          "name": "product_name",
+          "type": "VARCHAR",
+          "nullable": true
+        },
+        {
+          "name": "product_price",
+          "type": "DOUBLE",
+          "nullable": true
+        },
+        {
+          "name": "is_food_item",
+          "type": "BOOLEAN",
+          "nullable": true
+        },
+        {
+          "name": "is_drink_item",
+          "type": "BOOLEAN",
+          "nullable": true
+        },
+        {
+          "name": "supply_cost",
+          "type": "DOUBLE",
+          "nullable": true
+        }
+      ],
+      "rowCountEstimate": 2926
+    },
+    {
+      "id": "warehouse.dev.orders",
+      "database": "jaffle_shop",
+      "schema": "dev",
+      "name": "orders",
+      "relation": "jaffle_shop.dev.orders",
+      "kind": "table",
+      "columns": [
+        {
+          "name": "order_id",
+          "type": "VARCHAR",
+          "nullable": true
+        },
+        {
+          "name": "location_id",
+          "type": "VARCHAR",
+          "nullable": true
+        },
+        {
+          "name": "customer_id",
+          "type": "VARCHAR",
+          "nullable": true
+        },
+        {
+          "name": "subtotal_cents",
+          "type": "INTEGER",
+          "nullable": true
+        },
+        {
+          "name": "tax_paid_cents",
+          "type": "INTEGER",
+          "nullable": true
+        },
+        {
+          "name": "order_total_cents",
+          "type": "INTEGER",
+          "nullable": true
+        },
+        {
+          "name": "subtotal",
+          "type": "DOUBLE",
+          "nullable": true
+        },
+        {
+          "name": "tax_paid",
+          "type": "DOUBLE",
+          "nullable": true
+        },
+        {
+          "name": "order_total",
+          "type": "DOUBLE",
+          "nullable": true
+        },
+        {
+          "name": "ordered_at",
+          "type": "TIMESTAMP",
+          "nullable": true
+        },
+        {
+          "name": "order_cost",
+          "type": "DOUBLE",
+          "nullable": true
+        },
+        {
+          "name": "order_items_subtotal",
+          "type": "DOUBLE",
+          "nullable": true
+        },
+        {
+          "name": "count_food_items",
+          "type": "INTEGER",
+          "nullable": true
+        },
+        {
+          "name": "count_drink_items",
+          "type": "INTEGER",
+          "nullable": true
+        },
+        {
+          "name": "count_order_items",
+          "type": "INTEGER",
+          "nullable": true
+        },
+        {
+          "name": "is_food_order",
+          "type": "BOOLEAN",
+          "nullable": true
+        },
+        {
+          "name": "is_drink_order",
+          "type": "BOOLEAN",
+          "nullable": true
+        },
+        {
+          "name": "customer_order_number",
+          "type": "INTEGER",
+          "nullable": true
+        }
+      ],
+      "rowCountEstimate": 2088
+    },
+    {
+      "id": "warehouse.dev.products",
+      "database": "jaffle_shop",
+      "schema": "dev",
+      "name": "products",
+      "relation": "jaffle_shop.dev.products",
+      "kind": "table",
+      "columns": [
+        {
+          "name": "product_id",
+          "type": "VARCHAR",
+          "nullable": true
+        },
+        {
+          "name": "product_name",
+          "type": "VARCHAR",
+          "nullable": true
+        },
+        {
+          "name": "product_type",
+          "type": "VARCHAR",
+          "nullable": true
+        },
+        {
+          "name": "product_description",
+          "type": "VARCHAR",
+          "nullable": true
+        },
+        {
+          "name": "product_price",
+          "type": "DOUBLE",
+          "nullable": true
+        },
+        {
+          "name": "is_food_item",
+          "type": "BOOLEAN",
+          "nullable": true
+        },
+        {
+          "name": "is_drink_item",
+          "type": "BOOLEAN",
+          "nullable": true
+        }
+      ],
+      "rowCountEstimate": 10
+    },
+    {
+      "id": "warehouse.dev.supplies",
+      "database": "jaffle_shop",
+      "schema": "dev",
+      "name": "supplies",
+      "relation": "jaffle_shop.dev.supplies",
+      "kind": "table",
+      "columns": [
+        {
+          "name": "supply_uuid",
+          "type": "VARCHAR",
+          "nullable": true
+        },
+        {
+          "name": "supply_id",
+          "type": "VARCHAR",
+          "nullable": true
+        },
+        {
+          "name": "product_id",
+          "type": "VARCHAR",
+          "nullable": true
+        },
+        {
+          "name": "supply_name",
+          "type": "VARCHAR",
+          "nullable": true
+        },
+        {
+          "name": "supply_cost",
+          "type": "DOUBLE",
+          "nullable": true
+        },
+        {
+          "name": "is_perishable_supply",
+          "type": "BOOLEAN",
+          "nullable": true
+        }
+      ],
+      "rowCountEstimate": 65
+    }
+  ],
+  "capturedAt": "2026-10-16T02:36:19.807Z",
+  "fingerprint": "d6b4fbcfcf1e85256d77514347a6dc7fb25951e0fe0c4c24a96e800d303bdf23"
+}

@@ -1,0 +1,23 @@
+{
+  "key": "a2e2f3713d8e5e45b4c53866223e522d",
+  "operation": "generate",
+  "text": "{\"version\":1,\"kind\":\"analytics\",\"reading\":\"Count the number of orders that qualify as \\\"large\\\", where the project has no governed definition of a large order.\",\"measures\":[{\"ref\":\"column:dev.orders.order_id\",\"aggregation\":\"count_distinct\",\"alias\":\"order_count\"}],\"groupBy\":[],\"display\":[],\"filters\":[],\"expectedShape\":\"scalar\",\"unresolved\":[{\"clause\":\"large orders\",\"options\":[\"column:dev.orders.order_total\",\"column:dev.orders.count_order_items\"],\"material\":true,\"question\":\"No governed definition of a \\\"large\\\" order exists; should it be orders above a certain order_total (and what threshold), or orders with more than a certain number of items?\"}],\"provenance\":{\"column:dev.orders.order_id\":\"q:how many large orders\",\"column:dev.orders.order_total\":\"q:large orders\",\"column:dev.orders.count_order_items\":\"q:large orders\"}}",
+  "providerName": "claude",
+  "recordedAt": "2026-10-16T13:42:58.400Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 2,
+    "messageRoles": [
+      "system",
+      "user"
+    ],
+    "preCanonicalHash": "a2e2f3713d8e5e45b4c53866223e522df4e027b90d05c938c631c34e9996724c",
+    "postCanonicalHash": "a2e2f3713d8e5e45b4c53866223e522df4e027b90d05c938c631c34e9996724c",
+    "appliedRuleClasses": []
+  }
+}
