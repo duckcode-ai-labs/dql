@@ -1,0 +1,23 @@
+{
+  "key": "b45bae8bcf10faa4a3bbdaf3e50e07de",
+  "operation": "generate",
+  "text": "SELECT SUM(order_total) AS revenue_including_tax FROM jaffle_shop.dev.orders",
+  "providerName": "claude",
+  "recordedAt": "2026-10-16T16:43:09.956Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 2,
+    "messageRoles": [
+      "system",
+      "user"
+    ],
+    "preCanonicalHash": "b45bae8bcf10faa4a3bbdaf3e50e07de05daceea11d4f1d92e7c256aff5776bd",
+    "postCanonicalHash": "b45bae8bcf10faa4a3bbdaf3e50e07de05daceea11d4f1d92e7c256aff5776bd",
+    "appliedRuleClasses": []
+  }
+}

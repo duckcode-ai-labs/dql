@@ -3,7 +3,7 @@
   "operation": "generate",
   "text": "{\"version\":1,\"kind\":\"analytics\",\"reading\":\"Count the number of orders that qualify as \\\"large\\\", where the project has no governed definition of a large order.\",\"measures\":[{\"ref\":\"column:dev.orders.order_id\",\"aggregation\":\"count_distinct\",\"alias\":\"order_count\"}],\"groupBy\":[],\"display\":[],\"filters\":[],\"expectedShape\":\"scalar\",\"unresolved\":[{\"clause\":\"large orders\",\"options\":[\"column:dev.orders.order_total\",\"column:dev.orders.count_order_items\"],\"material\":true,\"question\":\"The project has no definition of a \\\"large\\\" order — should it be measured by order total (and above what amount) or by number of items (and above what count)?\"}],\"provenance\":{\"column:dev.orders.order_id\":\"q:how many large orders\",\"column:dev.orders.order_total\":\"q:large orders\",\"column:dev.orders.count_order_items\":\"q:large orders\"}}",
   "providerName": "claude",
-  "recordedAt": "2026-10-16T15:43:11.631Z",
+  "recordedAt": "2026-10-16T16:40:11.859Z",
   "provenance": {
     "kind": "recorded_provider",
     "replayClassification": "recorded_provider",

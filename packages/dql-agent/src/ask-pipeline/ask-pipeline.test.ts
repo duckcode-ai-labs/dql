@@ -3167,23 +3167,25 @@ describe('draft first where nothing is governed', () => {
   const run = (question: string, draft: (question: string) => { sql: string; relations: string[]; proof: string[] } | { declined: string }, extra: Partial<Parameters<typeof runAskPipeline>[0]> = {}) => {
     const reads: number[] = [];
     const drafted: string[] = [];
+    const reasons: string[] = [];
     const provider: AgentProvider = { name: 'ollama', available: async () => true, generate: async () => { reads.push(1); return reading; } };
     const outcome = runAskPipeline({
       question, vocabulary, provider, clauseCoverage: false, explorationAuto: true, draftFirst: true,
-      prepareDeps: { draftSql: async (input) => { drafted.push(input.question); return draft(input.question); } },
+      prepareDeps: { draftSql: async (input) => { drafted.push(input.question); reasons.push(input.reason ?? ''); return draft(input.question); } },
       executeDeps: { run: async () => ({ columns: ['status', 'amount'], rows: [{ status: 'open', amount: 3 }], rowCount: 1, executionTimeMs: 1 }) },
       ...extra,
     });
-    return { outcome, reads, drafted };
+    return { outcome, reads, drafted, reasons };
   };
   const ok = { sql: 'SELECT status, SUM(amount) AS amount FROM dev.orders GROUP BY status', relations: ['dev.orders'], proof: [] };
 
-  it('drafts from the question as asked, without the reading call', async () => {
-    const { outcome, reads, drafted } = run('total amount by status', () => ok);
+  it('drafts from the question as asked, without the reading call, and is told not to invent a term nothing defines', async () => {
+    const { outcome, reads, drafted, reasons } = run('total amount by status', () => ok);
     const answered = await outcome;
     expect(answered.kind).toBe('answered');
     expect(reads).toHaveLength(0);
     expect(drafted).toEqual(['total amount by status']);
+    expect(reasons[0]).toContain('do not invent a definition or substitute another field; reply NO_SQL naming it');
   });
 
   it('a question the drafter declines is read as before', async () => {

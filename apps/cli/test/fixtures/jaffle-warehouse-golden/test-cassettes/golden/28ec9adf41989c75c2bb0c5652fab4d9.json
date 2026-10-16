@@ -1,9 +1,9 @@
 {
   "key": "28ec9adf41989c75c2bb0c5652fab4d9",
   "operation": "generate",
-  "text": "{\"version\":1,\"kind\":\"conversation\",\"reading\":\"The user is greeting the system.\",\"measures\":[],\"groupBy\":[],\"display\":[],\"filters\":[],\"expectedShape\":\"scalar\",\"unresolved\":[],\"provenance\":{},\"reply\":\"Hi! I can answer questions about this project's data: orders, order items, products, customers, locations and supplies — for example revenue by month, top customers by lifetime spend, or food vs. drink order counts. What would you like to know?\"}",
+  "text": "{\"version\":1,\"kind\":\"conversation\",\"reading\":\"The user is greeting the system.\",\"measures\":[],\"groupBy\":[],\"display\":[],\"filters\":[],\"expectedShape\":\"scalar\",\"unresolved\":[],\"provenance\":{},\"reply\":\"Hi! I can answer questions about this project's data — orders, order items, customers, products, locations and supplies. Try something like \\\"top 10 customers by lifetime spend\\\", \\\"revenue by month in 2025\\\", or \\\"how many orders were placed last quarter\\\".\"}",
   "providerName": "claude",
-  "recordedAt": "2026-10-16T15:44:10.760Z",
+  "recordedAt": "2026-10-16T16:41:14.605Z",
   "provenance": {
     "kind": "recorded_provider",
     "replayClassification": "recorded_provider",

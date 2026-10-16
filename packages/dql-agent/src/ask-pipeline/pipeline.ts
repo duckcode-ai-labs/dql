@@ -998,7 +998,10 @@ export async function runAskPipeline(input: RunAskPipelineInput): Promise<Pipeli
   // a picked meaning, a forecast, a question about causes) is read first.
   if (!settled && input.draftFirst && aiSqlAvailable && !input.prior && !memberGuidance(input) && !input.selection && !input.memberSelection && !input.conversation?.pendingClarification
     && predictiveOperatorsIn(input.question).length === 0 && causalOperatorsIn(input.question).length === 0) {
-    const drafted = await schemaLane('nothing governed covers this project, so the SQL is written from the question itself', undefined, { onDecline: 'fallthrough' });
+    // No reading was made, so nothing has checked the question's terms yet: a
+    // term no listed column holds or defines is declined, not invented, and
+    // the decline goes to the reading, which asks or names the gap.
+    const drafted = await schemaLane('nothing governed covers this project, so the SQL is written from the question itself. No reading was made: when the question uses a business term or grouping that no listed column holds and nothing in CONTEXT defines (a churn rate, a region the tables do not have), do not invent a definition or substitute another field; reply NO_SQL naming it', undefined, { onDecline: 'fallthrough' });
     if (drafted) return drafted;
   }
   const resolveStarted = now();

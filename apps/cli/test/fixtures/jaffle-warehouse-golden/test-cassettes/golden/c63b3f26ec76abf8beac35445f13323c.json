@@ -1,0 +1,23 @@
+{
+  "key": "c63b3f26ec76abf8beac35445f13323c",
+  "operation": "generate",
+  "text": "\"Large orders\" is a business term with no listed column or CONTEXT definition (no threshold on order_total or count_order_items), so I shouldn't invent one.\n\nNO_SQL: \"large order\" is not defined by any listed column or CONTEXT rule (no threshold on order_total or count_order_items is given), so the restriction cannot be applied.",
+  "providerName": "claude",
+  "recordedAt": "2026-10-16T16:39:56.104Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 2,
+    "messageRoles": [
+      "system",
+      "user"
+    ],
+    "preCanonicalHash": "c63b3f26ec76abf8beac35445f13323cce348b547777d06c8030a7dc7f3900be",
+    "postCanonicalHash": "c63b3f26ec76abf8beac35445f13323cce348b547777d06c8030a7dc7f3900be",
+    "appliedRuleClasses": []
+  }
+}

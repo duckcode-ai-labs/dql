@@ -1,0 +1,23 @@
+{
+  "key": "47f2e88ac6fb0070a4a2b92b8a66cf6e",
+  "operation": "generate",
+  "text": "\"Top customers\" — by lifetime spend is the standard reading; the customers table holds it directly.\n\nSELECT customer_id, customer_name, lifetime_spend, count_lifetime_orders\nFROM jaffle_shop.dev.customers\nORDER BY lifetime_spend DESC\nLIMIT 10",
+  "providerName": "claude",
+  "recordedAt": "2026-10-16T16:37:41.285Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 2,
+    "messageRoles": [
+      "system",
+      "user"
+    ],
+    "preCanonicalHash": "47f2e88ac6fb0070a4a2b92b8a66cf6e1f90a8ce6ae5f79676f6c3ae56ba0dc8",
+    "postCanonicalHash": "47f2e88ac6fb0070a4a2b92b8a66cf6e1f90a8ce6ae5f79676f6c3ae56ba0dc8",
+    "appliedRuleClasses": []
+  }
+}

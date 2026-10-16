@@ -1,9 +1,9 @@
 {
   "key": "a878325665a6e53226ba4bcd932b1a10",
   "operation": "generate",
-  "text": "{\"version\":1,\"kind\":\"analytics\",\"reading\":\"Total revenue from drink items (sum of order-line product price restricted to drink lines), as a single number.\",\"measures\":[{\"ref\":\"column:dev.order_items.product_price\",\"aggregation\":\"sum\",\"alias\":\"beverage_revenue\",\"scope\":[{\"ref\":\"column:dev.order_items.is_drink_item\",\"op\":\"is_true\",\"values\":[true],\"source\":\"question\"}]}],\"groupBy\":[],\"display\":[],\"filters\":[],\"expectedShape\":\"scalar\",\"unresolved\":[],\"provenance\":{\"column:dev.order_items.product_price\":\"q:revenue\",\"column:dev.order_items.is_drink_item\":\"q:beverage\"}}",
+  "text": "{\"version\":1,\"kind\":\"analytics\",\"reading\":\"Total revenue from drink (beverage) order lines: the sum of order-line product price restricted to lines flagged as drink items.\",\"measures\":[{\"ref\":\"column:dev.order_items.product_price\",\"aggregation\":\"sum\",\"alias\":\"beverage_revenue\",\"scope\":[{\"ref\":\"column:dev.order_items.is_drink_item\",\"op\":\"is_true\",\"values\":[true],\"source\":\"question\"}]}],\"groupBy\":[],\"display\":[],\"filters\":[],\"expectedShape\":\"scalar\",\"unresolved\":[],\"provenance\":{\"column:dev.order_items.product_price\":\"q:revenue\",\"column:dev.order_items.is_drink_item\":\"q:beverage\"}}",
   "providerName": "claude",
-  "recordedAt": "2026-10-16T15:41:41.747Z",
+  "recordedAt": "2026-10-16T16:38:08.491Z",
   "provenance": {
     "kind": "recorded_provider",
     "replayClassification": "recorded_provider",

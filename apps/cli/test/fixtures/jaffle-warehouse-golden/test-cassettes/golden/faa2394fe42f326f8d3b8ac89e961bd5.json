@@ -1,9 +1,9 @@
 {
   "key": "faa2394fe42f326f8d3b8ac89e961bd5",
   "operation": "generate",
-  "text": "{\"version\":1,\"kind\":\"analytics\",\"reading\":\"List the products that belong to the beverage (drink) product category.\",\"measures\":[],\"groupBy\":[{\"ref\":\"column:dev.products.product_id\",\"role\":\"key\"}],\"display\":[\"column:dev.products.product_name\",\"column:dev.products.product_type\",\"column:dev.products.product_price\"],\"filters\":[{\"ref\":\"column:dev.products.product_type\",\"op\":\"eq\",\"values\":[\"beverage\"],\"source\":\"question\"}],\"expectedShape\":\"lookup\",\"population\":\"matching\",\"unresolved\":[{\"clause\":\"get the beverage category\",\"question\":\"Do you just want the list of beverage products, or a measure for them (e.g. revenue or items sold)?\",\"options\":[\"column:dev.products.product_id\",\"column:dev.order_items.product_price\",\"column:dev.order_items.order_item_id\"],\"material\":false}],\"provenance\":{\"column:dev.products.product_id\":\"q:bevereage catogery\",\"column:dev.products.product_name\":\"q:bevereage catogery\",\"column:dev.products.product_type\":\"q:catogery\",\"column:dev.products.product_price\":\"q:bevereage catogery\"}}",
+  "text": "{\"version\":1,\"kind\":\"analytics\",\"reading\":\"List the products that belong to the beverage (drink) category.\",\"measures\":[],\"groupBy\":[{\"ref\":\"column:dev.products.product_id\",\"role\":\"key\"}],\"display\":[\"column:dev.products.product_name\",\"column:dev.products.product_type\"],\"filters\":[{\"ref\":\"column:dev.products.is_drink_item\",\"op\":\"is_true\",\"values\":[true],\"source\":\"question\"}],\"expectedShape\":\"lookup\",\"unresolved\":[],\"provenance\":{\"column:dev.products.product_id\":\"q:bevereage catogery\",\"column:dev.products.product_name\":\"q:bevereage catogery\",\"column:dev.products.product_type\":\"q:catogery\",\"column:dev.products.is_drink_item\":\"q:bevereage\"}}",
   "providerName": "claude",
-  "recordedAt": "2026-10-16T15:43:43.889Z",
+  "recordedAt": "2026-10-16T16:40:37.471Z",
   "provenance": {
     "kind": "recorded_provider",
     "replayClassification": "recorded_provider",

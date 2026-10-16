@@ -1,15 +1,15 @@
 {
-  "_comment": "Baseline for the warehouse-only golden eval: main 221f4f92 (after #109) for jaffle-golden, and port PR 2/6 (#115) for jaffle-warehouse-golden, whose cassettes were re-recorded live with claude-code because a database-only project's drafter now reads the whole schema and drafts from the question (PR 1/6, #113, re-recorded them before for catalog columns: floor.askGolden 29 -> 32; PR 2/6 replays 32, floor unchanged). askGolden: the Ask pipeline lane per case. 'jaffle-golden' and 'jaffle-warehouse-golden' are cassette replays, what CI runs; 'jaffle-golden:live' is one live run with the claude-code provider (Claude subscription CLI), not gated. The warehouse-only cassettes were recorded live with the same provider, so its replay is that live run, judged with golden.json's tier policy. router: zlens eval routes for the same questions (scripts/eval-golden-router-compare.mjs). CI fails only when the warehouse-only lane drops below a floor. See README.md.",
+  "_comment": "Baseline for the warehouse-only golden eval: main 221f4f92 (after #109) for jaffle-golden, and port PR 2/6 (#115) for jaffle-warehouse-golden, whose cassettes were re-recorded live with claude-code because a database-only project's drafter now reads the whole schema and drafts from the question (PR 1/6, #113, re-recorded them before for catalog columns: floor.askGolden 29 -> 32; PR 2/6 replays 34: floor.askGolden 32 -> 34). askGolden: the Ask pipeline lane per case. 'jaffle-golden' and 'jaffle-warehouse-golden' are cassette replays, what CI runs; 'jaffle-golden:live' is one live run with the claude-code provider (Claude subscription CLI), not gated. The warehouse-only cassettes were recorded live with the same provider, so its replay is that live run, judged with golden.json's tier policy. router: zlens eval routes for the same questions (scripts/eval-golden-router-compare.mjs). CI fails only when the warehouse-only lane drops below a floor. See README.md.",
   "floor": {
-    "askGolden": 32,
+    "askGolden": 34,
     "router": 22
   },
   "askGolden": {
     "jaffle-warehouse-golden": {
-      "commit": "e63ebaec3688c196344c0855c819a71a95c725ed",
-      "dirty": false,
+      "commit": "03112c87e696e0ed0aa2e7f1443ca1f84d587725",
+      "dirty": true,
       "provider": "cassette replay",
-      "passed": 32,
+      "passed": 34,
       "total": 45,
       "cases": [
         {
@@ -57,7 +57,7 @@
           "route": "clarify",
           "trust": "not_applicable",
           "reasons": [
-            "no result rows: clarify/needs_clarification/needs_clarification — Should revenue be the pretax order subtotal or the order total including tax? (No governed revenue metric is defined in this project.)\nShould revenue be the pretax order subt"
+            "no result rows: clarify/needs_clarification/needs_clarification — No governed revenue metric exists here: should revenue be the pretax order subtotal or the order total including tax?\nNo governed revenue metric exists here: should revenue b"
           ]
         },
         {
@@ -109,8 +109,8 @@
           "lane": "questions",
           "id": "ryan-byrd-total-revenue",
           "pass": true,
-          "route": "generated_answer",
-          "trust": "review_required"
+          "route": "clarify",
+          "trust": "not_applicable"
         },
         {
           "lane": "questions",
@@ -174,18 +174,15 @@
           "route": "generated_answer",
           "trust": "review_required",
           "reasons": [
-            "rows differ from reference: column beverage_revenue (aliases beverage_revenue, drink_revenue, revenue) not in result columns product_id, product_name, product_type, product_price"
+            "rows differ from reference: column beverage_revenue (aliases beverage_revenue, drink_revenue, revenue) not in result columns product_id, product_name, product_type"
           ]
         },
         {
           "lane": "questions",
           "id": "unmodeled-term",
-          "pass": false,
+          "pass": true,
           "route": "generated_answer",
-          "trust": "review_required",
-          "reasons": [
-            "expected an honest gap, got generated_answer/completed with 1 rows"
-          ]
+          "trust": "blocked"
         },
         {
           "lane": "questions",
@@ -204,19 +201,19 @@
         {
           "lane": "questions",
           "id": "customers-with-most-orders",
-          "pass": true,
+          "pass": false,
           "route": "generated_answer",
-          "trust": "review_required"
+          "trust": "review_required",
+          "reasons": [
+            "rows differ from reference: expected 10 rows, got 14"
+          ]
         },
         {
           "lane": "questions",
           "id": "revenue-by-customer-type",
-          "pass": false,
-          "route": "clarify",
-          "trust": "not_applicable",
-          "reasons": [
-            "no result rows: clarify/needs_clarification/needs_clarification — Should revenue be the pretax order subtotal or the order total including tax? No governed revenue metric exists in this project.\nShould revenue be the pretax order subtotal o"
-          ]
+          "pass": true,
+          "route": "generated_answer",
+          "trust": "review_required"
         },
         {
           "lane": "questions",
@@ -270,12 +267,9 @@
         {
           "lane": "questions",
           "id": "gross-margin-2025",
-          "pass": false,
-          "route": "clarify",
-          "trust": "not_applicable",
-          "reasons": [
-            "no result rows: clarify/needs_clarification/needs_clarification — No governed gross profit metric exists; should gross profit be pretax order subtotal minus order_cost (orders model), or product_price minus supply_cost summed over order lin"
-          ]
+          "pass": true,
+          "route": "generated_answer",
+          "trust": "review_required"
         },
         {
           "lane": "questions",
@@ -294,7 +288,7 @@
           "route": "clarify",
           "trust": "not_applicable",
           "reasons": [
-            "no result rows: clarify/needs_clarification/needs_clarification — Should revenue be the pretax order subtotal or the order total including tax?\nShould revenue be the pretax order subtotal or the order total including tax?"
+            "no result rows: clarify/needs_clarification/needs_clarification — Should revenue be the order total including tax, or the pretax order subtotal?\nShould revenue be the order total including tax, or the pretax order subtotal?"
           ]
         },
         {
@@ -308,10 +302,10 @@
           "lane": "questions",
           "id": "new-vs-returning",
           "pass": false,
-          "route": "clarify",
-          "trust": "not_applicable",
+          "route": "generated_answer",
+          "trust": "review_required",
           "reasons": [
-            "no result rows: clarify/needs_clarification/needs_clarification — Should revenue be the pretax order subtotal or the order total including tax?\nShould revenue be the pretax order subtotal or the order total including tax?"
+            "rows differ from reference: column new_customer_revenue (aliases new_customer_revenue, new_revenue, first_order_revenue) not in result columns customer_type, revenue, customer_count, order_count"
           ]
         },
         {

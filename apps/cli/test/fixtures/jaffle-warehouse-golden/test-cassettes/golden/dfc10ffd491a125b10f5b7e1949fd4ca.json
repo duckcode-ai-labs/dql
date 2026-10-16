@@ -1,0 +1,23 @@
+{
+  "key": "dfc10ffd491a125b10f5b7e1949fd4ca",
+  "operation": "generate",
+  "text": "NO_SQL: no listed column holds a region, and no churned/active flag or defined churn window exists to compute a churn rate.",
+  "providerName": "claude",
+  "recordedAt": "2026-10-16T16:41:06.652Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 2,
+    "messageRoles": [
+      "system",
+      "user"
+    ],
+    "preCanonicalHash": "dfc10ffd491a125b10f5b7e1949fd4ca09508022d735d7fd924a1c75cec42c57",
+    "postCanonicalHash": "dfc10ffd491a125b10f5b7e1949fd4ca09508022d735d7fd924a1c75cec42c57",
+    "appliedRuleClasses": []
+  }
+}
