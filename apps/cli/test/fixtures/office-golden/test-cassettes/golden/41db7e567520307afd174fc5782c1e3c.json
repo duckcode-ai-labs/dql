@@ -1,0 +1,23 @@
+{
+  "key": "41db7e567520307afd174fc5782c1e3c",
+  "operation": "generate",
+  "text": "SELECT strftime('%Y-%m', e.CLOSE_DATE) AS close_month, COUNT(DISTINCT e.OPPORTUNITY_ID) AS lost_opportunities_count, SUM(e.AMOUNT) AS lost_amount FROM OFFICE_DW.SALES.OPPORTUNITY_ENHANCED e JOIN OFFICE_DW.SFDC.OPPORTUNITY o ON o.ID = e.OPPORTUNITY_ID WHERE e.IS_CLOSED = 1 AND e.IS_WON = 0 AND e.FISCAL_YEAR = 2026 AND LOWER(o.COMPETITOR_C) = 'splunk' GROUP BY strftime('%Y-%m', e.CLOSE_DATE) ORDER BY close_month ASC LIMIT 500",
+  "providerName": "claude",
+  "recordedAt": "2026-10-16T18:03:13.666Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 2,
+    "messageRoles": [
+      "system",
+      "user"
+    ],
+    "preCanonicalHash": "41db7e567520307afd174fc5782c1e3cb49579b0f8b30d280cdfaaff4f6918e8",
+    "postCanonicalHash": "41db7e567520307afd174fc5782c1e3cb49579b0f8b30d280cdfaaff4f6918e8",
+    "appliedRuleClasses": []
+  }
+}

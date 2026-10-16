@@ -97,6 +97,34 @@ describe('check_compatibility', () => {
     expect(verdict.explanation).toMatch(/join path|not modeled|cannot/i);
   });
 
+  it('names the one-to-many step when the only path to a dimension fans out', async () => {
+    // order_items holds the foreign `order_id` and `product` entities, so orders
+    // reach products only by walking order_items backwards: one order, many items.
+    const shop = new SemanticLayer({
+      metrics: [{ name: 'order_total', label: 'Order total', description: '', domain: 'shop', sql: 'SUM(order_total)', type: 'sum', table: 'orders', cube: 'orders' }],
+      dimensions: [],
+    });
+    const cube = (name: string, joins: Array<{ right: string; entity: string }>, dimensions: string[]) => ({
+      name, label: name, description: '', sql: name, table: name, domain: 'shop',
+      measures: [], timeDimensions: [], segments: [], preAggregations: [],
+      dimensions: dimensions.map((dimension) => ({ name: dimension, label: dimension, description: '', sql: dimension, type: 'string' as const, table: name, cube: name })),
+      joins: joins.map(({ right, entity }) => ({ name: `${name}_to_${right}`, left: name, right, type: 'left' as const, sql: `\${left}.${entity}_id = \${right}.${entity}_id`, entity })),
+    });
+    shop.addCube(cube('orders', [], ['order_status']));
+    shop.addCube(cube('order_items', [{ right: 'orders', entity: 'order' }, { right: 'products', entity: 'product' }], []));
+    shop.addCube(cube('products', [], ['product_name']));
+    const check = buildSemanticStageTools({ semanticLayer: shop, kg: undefined as never })
+      .find((entry) => entry.name === 'check_compatibility')!;
+
+    const result = await check.run({ metrics: ['order_total'], dimensions: ['product_name'] }) as {
+      requested: Array<{ dimension: string; compatible: boolean; reason?: string; explanation?: string }>;
+      compatibleDimensions: Array<{ name: string }>;
+    };
+    expect(result.requested[0]).toMatchObject({ dimension: 'product_name', compatible: false, reason: 'one_to_many_only' });
+    expect(result.requested[0].explanation).toContain('orders → order_items');
+    expect(result.compatibleDimensions.map((dimension) => dimension.name)).not.toContain('product_name');
+  });
+
   it('refuses an empty metric list with an actionable message, not a crash', async () => {
     const result = await tool().run({ metrics: [] }) as { error?: string };
     expect(result.error).toMatch(/at least one governed metric/i);

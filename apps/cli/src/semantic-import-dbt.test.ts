@@ -28,6 +28,13 @@ const SEMANTIC_MANIFEST = {
       dimensions: [{ name: 'has_loss_payment', type: 'categorical', expr: '1', description: null, is_partition: false, type_params: null, metadata: null, label: null }],
       measures: [],
     },
+    {
+      // A bridge with no key column: dbt names its entity at model level.
+      name: 'policy_party_role', description: null, node_relation: relation('agreement_party_role'), defaults: null, primary_entity: 'party_role_assignment', label: null, metadata: null, config: { meta: {} },
+      entities: [{ name: 'policy', type: 'foreign', expr: 'agreement_identifier', description: null, role: null, metadata: null, label: null }],
+      dimensions: [{ name: 'party_role', type: 'categorical', expr: 'party_role_code', description: null, is_partition: false, type_params: null, metadata: null, label: null }],
+      measures: [measure('parties_with_role', 'count_distinct', 'party_identifier')],
+    },
   ],
   metrics: [
     { name: 'total_claim_amount', type: 'simple', label: 'Total claim amount', description: '', filter: null, metadata: null, config: { meta: {} }, time_granularity: null, type_params: { measure: simpleMeasureInput('total_claim_amount'), input_measures: [simpleMeasureInput('total_claim_amount')], metrics: [], numerator: null, denominator: null, expr: null, window: null, grain_to_date: null, conversion_type_params: null, cumulative_type_params: null } },
@@ -54,9 +61,9 @@ describe('importing a dbt semantic layer into native DQL YAML', () => {
 
     const result = await performSemanticImport({ targetProjectRoot: target, provider: 'dbt', sourceConfig: { provider: 'dbt', projectPath: dbtRoot } });
     // Both declarations of `claim_amount` are kept, one file per model.
-    expect(result.counts.entity).toBe(2);
+    expect(result.counts.entity).toBe(3);
     const entityFiles = readdirSync(join(target, 'semantic-layer', 'entitys'), { recursive: true }).map(String).filter((file) => file.endsWith('.yaml'));
-    expect(entityFiles).toHaveLength(2);
+    expect(entityFiles).toHaveLength(3);
 
     const metricFile = (name: string) => {
       const dir = join(target, 'semantic-layer', 'metrics');
@@ -69,8 +76,36 @@ describe('importing a dbt semantic layer into native DQL YAML', () => {
 
     const layer = loadSemanticLayerFromDir(join(target, 'semantic-layer'));
     expect(layer.composeQuery({ metrics: ['total_claim_amount'], dimensions: [], driver: 'duckdb' })?.sql).toContain('SUM(claim_amount)');
-    // The filter lives on loss_payment, which the metric's query does not
-    // join: refusing is right; summing every claim amount would be wrong.
-    expect(layer.composeQuery({ metrics: ['loss_payment_amount'], dimensions: [], driver: 'duckdb' })).toBeNull();
+    // The filter lives on loss_payment, a subtype keyed by the same entity.
+    // It joins one-to-one, and its constant flag means "a loss_payment row
+    // exists" — never `1 = 1` over every claim amount, which would widen the
+    // metric to all amounts.
+    const paid = layer.composeQuery({ metrics: ['loss_payment_amount'], dimensions: [], driver: 'duckdb' })?.sql ?? '';
+    expect(paid).toContain('LEFT JOIN "acme"."main"."loss_payment" AS loss_payment ON claim_amount.claim_amount_identifier = loss_payment.claim_amount_identifier');
+    expect(paid).toContain('CASE WHEN loss_payment.claim_amount_identifier IS NOT NULL THEN 1 END = 1');
+  });
+
+  it('addresses dimensions by the model-level primary_entity after import', async () => {
+    const dbtRoot = mkdtempSync(join(tmpdir(), 'dql-dbt-semantic-'));
+    const target = mkdtempSync(join(tmpdir(), 'dql-native-semantic-'));
+    roots.push(dbtRoot, target);
+    writeFileSync(join(dbtRoot, 'dbt_project.yml'), 'name: acme\nversion: "1.0"\nprofile: acme\n');
+    mkdirSync(join(dbtRoot, 'target'), { recursive: true });
+    writeFileSync(join(dbtRoot, 'target', 'semantic_manifest.json'), JSON.stringify(SEMANTIC_MANIFEST));
+    writeFileSync(join(dbtRoot, 'target', 'manifest.json'), JSON.stringify({ metadata: { project_name: 'acme' }, nodes: {}, sources: {} }));
+    writeFileSync(join(target, 'dql.config.json'), JSON.stringify({ project: 'acme', semanticLayer: { provider: 'dql' } }));
+
+    await performSemanticImport({ targetProjectRoot: target, provider: 'dbt', sourceConfig: { provider: 'dbt', projectPath: dbtRoot } });
+    const cubeDir = join(target, 'semantic-layer', 'cubes');
+    const cubeFile = readdirSync(cubeDir, { recursive: true }).map(String).find((path) => path.endsWith('policy_party_role.yaml'));
+    const cube = readFileSync(join(cubeDir, cubeFile!), 'utf-8');
+    // Written as MetricFlow addresses it, not `<semantic model>__party_role`.
+    expect(cube).toContain('qualified_name: party_role_assignment__party_role');
+    expect(cube).toContain('entity_link: party_role_assignment');
+
+    // The native engine resolves that spelling without renaming the model.
+    const layer = loadSemanticLayerFromDir(join(target, 'semantic-layer'));
+    const composed = layer.composeQuery({ metrics: ['parties_with_role'], dimensions: ['party_role_assignment__party_role'], driver: 'duckdb' });
+    expect(composed?.sql).toContain('party_role_code AS party_role');
   });
 });

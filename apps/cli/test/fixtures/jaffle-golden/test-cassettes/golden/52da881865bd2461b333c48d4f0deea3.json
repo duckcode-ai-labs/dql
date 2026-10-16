@@ -1,0 +1,23 @@
+{
+  "key": "52da881865bd2461b333c48d4f0deea3",
+  "operation": "generate",
+  "text": "{\"version\":1,\"kind\":\"analytics\",\"reading\":\"Total revenue broken down by customer type (new vs returning).\",\"measures\":[{\"ref\":\"metric:order_item.revenue\"}],\"groupBy\":[{\"ref\":\"dimension:customers.customer_type\",\"role\":\"categorical\"}],\"display\":[],\"filters\":[],\"expectedShape\":\"grouped\",\"unresolved\":[{\"clause\":\"revenue\",\"options\":[\"metric:order_item.revenue\",\"metric:orders.order_total\"],\"material\":false,\"question\":\"Should revenue be pre-tax product revenue (default) or gross order total including tax?\"}],\"provenance\":{\"metric:order_item.revenue\":\"q:revenue\",\"dimension:customers.customer_type\":\"q:new versus returning customers\"}}",
+  "providerName": "claude",
+  "recordedAt": "2026-10-16T18:11:10.413Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 2,
+    "messageRoles": [
+      "system",
+      "user"
+    ],
+    "preCanonicalHash": "52da881865bd2461b333c48d4f0deea3869578180a7e2114579de5644169412b",
+    "postCanonicalHash": "52da881865bd2461b333c48d4f0deea3869578180a7e2114579de5644169412b",
+    "appliedRuleClasses": []
+  }
+}

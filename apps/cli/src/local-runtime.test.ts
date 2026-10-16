@@ -36,6 +36,8 @@ import {
   buildAppCopilotResearchAgentRequest,
   buildRowBoundedSql,
   extractBlockStudioSql,
+  isDqlBlockSource,
+  parseSemanticOrderBy,
   maskDqlStringContents,
   slimAgentRunForTransport,
   parseBlockStudioArrayField,
@@ -10613,6 +10615,35 @@ describe('validateBlockStudioSource', () => {
     expect(validation.executableSql).toContain('GROUP BY customer_type');
   });
 
+  // REPORTED: `order_by = ["total_revenue desc"]` on a semantic block was
+  // parsed by the DQL grammar but never read by the Block Studio compiler, so
+  // the output came back in warehouse order.
+  it('applies a semantic block order_by to the composed SQL', () => {
+    const source = `// dql-format: 1
+
+block "Revenue by Type" {
+  type = "semantic"
+  status = "draft"
+  metrics = ["total_revenue"]
+  dimensions = ["customer_type"]
+  order_by = ["total_revenue desc", "customer_type"]
+  limit = 5
+}`;
+
+    const validation = validateBlockStudioSource(source, semanticLayer);
+
+    expect(validation.valid).toBe(true);
+    expect(validation.executableSql).toContain('ORDER BY total_revenue DESC, customer_type ASC');
+    expect(validation.executableSql).toMatch(/LIMIT 5$/);
+  });
+
+  it('reads the MetricFlow -name spelling of a descending order', () => {
+    expect(parseSemanticOrderBy(['-total_revenue', 'customer_type asc', ' '])).toEqual([
+      { name: 'total_revenue', direction: 'desc' },
+      { name: 'customer_type', direction: 'asc' },
+    ]);
+  });
+
   it('composes executable SQL for semantic blocks with requested filters', () => {
     const source = `block "Revenue by Online Channel" {
   domain = "finance"
@@ -11993,6 +12024,20 @@ describe('extractBlockStudioSql', () => {
   it('still returns the SQL a block actually declares', () => {
     const block = `block "b" {\n  type = "custom"\n  description = "revenue with detail"\n  query = """\nSELECT 1 AS n\n"""\n}`;
     expect(extractBlockStudioSql(block)).toBe('SELECT 1 AS n');
+  });
+
+  // REPORTED: every writer puts the recommended `// dql-format: 1` header
+  // FIRST, and the "is this a block" check was anchored at the start of the
+  // file. With the header, a semantic block whose description said "with"
+  // was scanned as raw SQL and the description tail was sent to DuckDB.
+  it('recognises a block behind the dql-format header and other leading comments', () => {
+    expect(extractBlockStudioSql(`// dql-format: 1\n\n${SEMANTIC_BLOCK}`)).toBeNull();
+    expect(extractBlockStudioSql(`/* owned by claims */\n// dql-format: 1\n${SEMANTIC_BLOCK}`)).toBeNull();
+    expect(isDqlBlockSource(`// dql-format: 1\n\n${SEMANTIC_BLOCK}`)).toBe(true);
+    expect(isDqlBlockSource('-- a comment\nSELECT 1')).toBe(false);
+    expect(extractBlockStudioSql('// dql-format: 1\n\ndashboard "d" {\n  description = "with"\n}')).toBeNull();
+    const custom = `// dql-format: 1\n\nblock "b" {\n  type = "custom"\n  description = "with"\n  query = """\nSELECT 1 AS n\n"""\n}`;
+    expect(extractBlockStudioSql(custom)).toBe('SELECT 1 AS n');
   });
 
   it('still reads a loose raw-SQL source that is not a block', () => {

@@ -1,0 +1,23 @@
+{
+  "key": "97c4931776365a2ff4701351fce6121b",
+  "operation": "generate",
+  "text": "{\"version\":1,\"kind\":\"analytics\",\"reading\":\"Count of orders broken down by customer, one row per customer with the customer's name.\",\"measures\":[{\"ref\":\"metric:orders.orders\",\"alias\":\"order_count\"}],\"groupBy\":[{\"ref\":\"entity:orders.customer\",\"role\":\"key\"}],\"display\":[\"dimension:customers.customer_name\"],\"filters\":[],\"ordering\":{\"ref\":\"metric:orders.orders\",\"direction\":\"desc\"},\"expectedShape\":\"grouped\",\"unresolved\":[],\"provenance\":{\"metric:orders.orders\":\"q:how many orders\",\"entity:orders.customer\":\"q:each customer\",\"dimension:customers.customer_name\":\"q:each customer\"}}",
+  "providerName": "claude",
+  "recordedAt": "2026-10-16T18:04:17.274Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 2,
+    "messageRoles": [
+      "system",
+      "user"
+    ],
+    "preCanonicalHash": "97c4931776365a2ff4701351fce6121be945efc9798a8a3f21310f9f52161f67",
+    "postCanonicalHash": "97c4931776365a2ff4701351fce6121be945efc9798a8a3f21310f9f52161f67",
+    "appliedRuleClasses": []
+  }
+}

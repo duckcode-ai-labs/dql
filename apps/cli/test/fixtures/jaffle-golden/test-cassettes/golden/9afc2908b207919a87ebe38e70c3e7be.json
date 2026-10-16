@@ -1,0 +1,23 @@
+{
+  "key": "9afc2908b207919a87ebe38e70c3e7be",
+  "operation": "generate",
+  "text": "{\"version\":1,\"kind\":\"analytics\",\"reading\":\"Rank customers by beverage (drink) product revenue, showing the top 10 customers with their beverage revenue and number of beverage orders.\",\"measures\":[{\"ref\":\"metric:order_item.drink_revenue\",\"alias\":\"beverage_revenue\"},{\"ref\":\"column:dev.order_items.order_id\",\"aggregation\":\"count_distinct\",\"alias\":\"beverage_orders\",\"scope\":[{\"ref\":\"dimension:products.is_drink_item\",\"op\":\"is_true\",\"values\":[true],\"source\":\"question\"}]}],\"groupBy\":[{\"ref\":\"entity:customers.customer\",\"role\":\"key\"}],\"display\":[\"dimension:customers.customer_name\"],\"filters\":[],\"ordering\":{\"ref\":\"metric:order_item.drink_revenue\",\"direction\":\"desc\"},\"limit\":10,\"expectedShape\":\"ranking\",\"unresolved\":[],\"provenance\":{\"metric:order_item.drink_revenue\":\"q:beverage product category\",\"column:dev.order_items.order_id\":\"q:top customers for beverage\",\"dimension:products.is_drink_item\":\"q:beverage product category\",\"entity:customers.customer\":\"q:customers\",\"dimension:customers.customer_name\":\"q:who are the top customers\"}}",
+  "providerName": "claude",
+  "recordedAt": "2026-10-16T18:03:07.587Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 2,
+    "messageRoles": [
+      "system",
+      "user"
+    ],
+    "preCanonicalHash": "9afc2908b207919a87ebe38e70c3e7be45a7fe923b8dd2f3147335e0c81b709b",
+    "postCanonicalHash": "9afc2908b207919a87ebe38e70c3e7be45a7fe923b8dd2f3147335e0c81b709b",
+    "appliedRuleClasses": []
+  }
+}

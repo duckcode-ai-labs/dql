@@ -1,0 +1,25 @@
+{
+  "key": "751bf7066e98a773cec62484065065c1",
+  "operation": "generate",
+  "text": "{\"version\":1,\"kind\":\"analytics\",\"reading\":\"Compare gross order revenue (order total) per location this year versus last year with the absolute change and order counts, so the locations where revenue is down are visible; causal drivers and an investment recommendation are not held by the project.\",\"measures\":[{\"ref\":\"metric:orders.order_total\",\"alias\":\"revenue_last_year\",\"scope\":[{\"ref\":\"dimension:orders.ordered_at\",\"op\":\"eq\",\"values\":[\"last_year\"],\"source\":\"question\"}]},{\"ref\":\"metric:orders.order_total\",\"alias\":\"revenue_this_year\",\"scope\":[{\"ref\":\"dimension:orders.ordered_at\",\"op\":\"eq\",\"values\":[\"this_year\"],\"source\":\"question\"}]},{\"change\":{\"base\":\"revenue_last_year\",\"comparison\":\"revenue_this_year\",\"as\":\"absolute\"},\"alias\":\"revenue_change\"},{\"ref\":\"metric:orders.orders\",\"alias\":\"orders_last_year\",\"scope\":[{\"ref\":\"dimension:orders.ordered_at\",\"op\":\"eq\",\"values\":[\"last_year\"],\"source\":\"question\"}]},{\"ref\":\"metric:orders.orders\",\"alias\":\"orders_this_year\",\"scope\":[{\"ref\":\"dimension:orders.ordered_at\",\"op\":\"eq\",\"values\":[\"this_year\"],\"source\":\"question\"}]}],\"groupBy\":[{\"ref\":\"entity:orders.location\",\"role\":\"key\"}],\"display\":[\"dimension:locations.location_name\"],\"filters\":[],\"ordering\":{\"ref\":\"revenue_change\",\"direction\":\"asc\"},\"expectedShape\":\"comparison\",\"unresolved\":[{\"clause\":\"why is our revenue down\",\"options\":[],\"material\":true,\"question\":\"The project holds revenue and order counts by location and period but no causal drivers; the comparison shown is this year versus last year per location.\"},{\"clause\":\"which region should we invest in\",\"options\":[],\"material\":true,\"question\":\"An investment recommendation is not a governed measure; the per-location revenue change is provided for you to judge.\"}],\"provenance\":{\"metric:orders.order_total\":\"q:revenue\",\"metric:orders.orders\":\"q:revenue down\",\"entity:orders.location\":\"q:by region\",\"dimension:locations.location_name\":\"q:by region\",\"dimension:orders.ordered_at\":\"q:revenue down\"}}",
+  "providerName": "claude",
+  "recordedAt": "2026-10-16T18:11:44.961Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 4,
+    "messageRoles": [
+      "system",
+      "user",
+      "assistant",
+      "user"
+    ],
+    "preCanonicalHash": "751bf7066e98a773cec62484065065c156f28a63d7879504b0569f2a3c91b18c",
+    "postCanonicalHash": "751bf7066e98a773cec62484065065c156f28a63d7879504b0569f2a3c91b18c",
+    "appliedRuleClasses": []
+  }
+}

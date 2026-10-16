@@ -89,11 +89,13 @@ describe('dashboard business story', () => {
     // valid whole-scope distinct count or ratio-of-sums for this grouped tile.
     expect(result.facts.map((fact) => fact.value)).not.toContain(62_500);
     expect(result.facts.map((fact) => fact.value)).not.toContain(1.6166667);
+    // The largest observations are narrated; February and March tie, and the
+    // earlier month comes first.
     expect(result.facts).toEqual(expect.arrayContaining([
-      expect.objectContaining({ label: expect.stringContaining('2026-01-01'), value: 12_500 }),
-      expect.objectContaining({ label: expect.stringContaining('2026-01-01'), value: 0.4166667, unit: 'percent:1' }),
+      expect.objectContaining({ label: expect.stringContaining('2026-02-01'), value: 25_000 }),
+      expect.objectContaining({ label: expect.stringContaining('2026-02-01'), value: 0.6, unit: 'percent:1' }),
     ]));
-    expect(result.story.paragraphs.join(' ')).toContain('41.7%');
+    expect(result.story.paragraphs.join(' ')).toContain('60.0%');
     expect(validateDashboardStoryBrief(result.story, result.facts)).toEqual({ ok: true, errors: [] });
   });
 
@@ -133,7 +135,7 @@ describe('dashboard business story', () => {
     const narratedFactIds = new Set(result.story.claims.flatMap((claim) => claim.factIds));
     expect(result.facts).toEqual(expect.arrayContaining([
       expect.objectContaining({ tileId: 'monthly-revenue', value: 60, filters: {} }),
-      expect.objectContaining({ tileId: 'monthly-revenue', value: 30, filters: {} }),
+      expect.objectContaining({ tileId: 'monthly-revenue', value: 40, filters: {} }),
     ]));
     expect([...narratedFactIds].every((factId) => scopedFactIds.has(factId))).toBe(true);
     expect(result.story.paragraphs.join(' ')).not.toContain('Monthly Revenue');
@@ -372,5 +374,126 @@ LIMIT \${top_n}`;
       });
       expect(result.facts.map((fact) => fact.id)).toEqual(['sample:rank:1']);
     });
+  });
+  describe('clearest signals do not depend on result row order', () => {
+    // The commerce-pilot `details` page: one certified Dataset tile grouped
+    // by order line with no ORDER BY, so each run returned the same nine rows
+    // in a different order and the story named different signals each time.
+    const orderLines = [
+      { order_line_id: 'OL-001', revenue: 40 },
+      { order_line_id: 'OL-002', revenue: 20 },
+      { order_line_id: 'OL-003', revenue: null },
+      { order_line_id: 'OL-004', revenue: 30 },
+      { order_line_id: 'OL-005', revenue: 0 },
+      { order_line_id: 'OL-006', revenue: 5 },
+      { order_line_id: 'OL-007', revenue: 25 },
+      { order_line_id: 'OL-008', revenue: 10 },
+      { order_line_id: 'OL-009', revenue: 15 },
+    ];
+    const pick = (...ids: string[]) => ids.map((id) => orderLines.find((row) => row.order_line_id === id)!);
+    const storyFor = (rows: Array<Record<string, unknown>>, extra: { columns?: string[]; limited?: boolean } = {}) => buildDeterministicDashboardStory({
+      goal: 'Order line revenue',
+      filters: {},
+      tiles: [{
+        tileId: 'component-2', title: 'revenue by order_line_id', status: 'ok', trustState: 'certified',
+        datasetScope: {
+          kind: 'grouped_observations', dimensions: ['order_line_id'], outputDimensionAliases: ['order_line_id'], limited: extra.limited ?? false,
+        },
+        result: {
+          columns: extra.columns ?? ['order_line_id', 'revenue'],
+          columnsMeta: [{ name: 'revenue', kind: 'currency', unit: 'USD' }],
+          rows,
+        },
+        citation: { kind: 'dataset', name: 'order_lines' },
+      }],
+    });
+
+    it('tells the same story for the same rows in two different orders', () => {
+      // Both orders were observed on consecutive runs of the same page.
+      const first = storyFor(pick('OL-009', 'OL-003', 'OL-008', 'OL-004', 'OL-006', 'OL-001', 'OL-007', 'OL-002', 'OL-005'));
+      const second = storyFor(pick('OL-001', 'OL-002', 'OL-003', 'OL-005', 'OL-004', 'OL-007', 'OL-006', 'OL-009', 'OL-008'));
+
+      expect(second.story).toEqual(first.story);
+      expect(second.facts).toEqual(first.facts);
+      expect(first.story.paragraphs[0]).toBe(
+        'For the current scope, the clearest signals are revenue by order_line_id — revenue for OL-001 is **$40.00** and revenue by order_line_id — revenue for OL-004 is **$30.00**. '
+        + 'These figures come from tiles with this exact filter scope, so the summary and visible results stay aligned when filters change.',
+      );
+      expect(validateDashboardStoryBrief(first.story, first.facts)).toEqual({ ok: true, errors: [] });
+    });
+
+    it('never counts a missing value as a signal, and settles an equal value by the group', () => {
+      // OL-010 ties OL-004 for second place; the group, not row position, decides.
+      const tied = [...orderLines, { order_line_id: 'OL-010', revenue: 30 }];
+      const orders = [tied, [...tied].reverse(), [...tied.slice(4), ...tied.slice(0, 4)]];
+      const stories = orders.map((rows) => storyFor(rows));
+      for (const result of stories) expect(result.story).toEqual(stories[0]!.story);
+      const text = stories[0]!.story.paragraphs.join(' ');
+      expect(text).toContain('OL-001 is **$40.00**');
+      expect(text).toContain('OL-004 is **$30.00**');
+      expect(text).not.toContain('OL-010');
+
+      // With the only other rows missing a value, one signal is all there is.
+      const sparse = storyFor(pick('OL-003', 'OL-009'));
+      expect(sparse.facts.map((fact) => fact.label)).toEqual(['revenue by order_line_id — revenue for OL-009']);
+      expect(sparse.story.paragraphs.join(' ')).not.toMatch(/OL-003|not available/);
+    });
+
+    it('ranks by magnitude, so a large loss is a clearer signal than a small gain', () => {
+      const result = storyFor([
+        { order_line_id: 'OL-001', revenue: 12 },
+        { order_line_id: 'OL-002', revenue: -45 },
+        { order_line_id: 'OL-003', revenue: 30 },
+      ]);
+      expect(result.facts.map((fact) => fact.value)).toEqual([-45, 30]);
+    });
+
+    it('does not narrate a pivot total row as a group', () => {
+      const withTotals = [
+        ...orderLines.map((row) => ({ ...row, __total_order_line_id: 0 })),
+        { order_line_id: null, revenue: 145, __total_order_line_id: 1 },
+      ];
+      const result = storyFor([...withTotals].reverse(), { columns: ['order_line_id', 'revenue', '__total_order_line_id'] });
+      expect(result.facts.map((fact) => fact.value)).toEqual([40, 30]);
+      expect(result.story.paragraphs.join(' ')).not.toMatch(/145|total order line id/);
+    });
+  });
+
+  it('names the highest value as a tile leader, whatever the row order', () => {
+    const leaderFor = (rows: Array<Record<string, unknown>>) => buildDeterministicDashboardStory({
+      goal: 'Customer revenue', filters: {},
+      tiles: [{
+        tileId: 'customers', title: 'Customers', status: 'ok', trustState: 'certified',
+        result: { columns: ['customer', 'revenue'], rows },
+      }],
+    }).facts.find((fact) => fact.kind === 'rank')?.value;
+    const rows = [{ customer: 'Cy', revenue: null }, { customer: 'Bob', revenue: 80 }, { customer: 'Alice', revenue: 120 }];
+    expect(leaderFor(rows)).toBe('Alice: 120');
+    expect(leaderFor([...rows].reverse())).toBe('Alice: 120');
+  });
+
+  it('settles a tied leader by its label, whatever the row order (port 7 regression)', () => {
+    const leaderFor = (rows: Array<Record<string, unknown>>) => buildDeterministicDashboardStory({
+      goal: 'Customer revenue', filters: {},
+      tiles: [{ tileId: 'customers', title: 'Customers', status: 'ok', trustState: 'certified', result: { columns: ['customer', 'revenue'], rows } }],
+    }).facts.find((fact) => fact.kind === 'rank')?.value;
+    const rows = [{ customer: 'Bob', revenue: 120 }, { customer: 'Cy', revenue: 40 }, { customer: 'Alice', revenue: 120 }];
+    expect(leaderFor(rows)).toBe('Alice: 120');
+    expect(leaderFor([...rows].reverse())).toBe('Alice: 120');
+  });
+
+  it('reads a grouped tile its SQL orders and limits in that order, not by magnitude (port 7 regression)', () => {
+    // A bottom-3 Dataset tile: ORDER BY revenue ASC LIMIT 3. Its story is the
+    // smallest values, as the tile shows them, not the largest of the three.
+    const result = buildDeterministicDashboardStory({
+      goal: 'Weakest order lines', filters: {},
+      tiles: [{
+        tileId: 'bottom', title: 'Bottom order lines', status: 'ok', trustState: 'certified',
+        source: { sql: 'SELECT order_line_id, SUM(revenue) AS revenue FROM order_lines GROUP BY 1 ORDER BY revenue ASC LIMIT 3' },
+        datasetScope: { kind: 'grouped_observations', dimensions: ['order_line_id'], outputDimensionAliases: ['order_line_id'], limited: true },
+        result: { columns: ['order_line_id', 'revenue'], rows: [{ order_line_id: 'OL-005', revenue: 0 }, { order_line_id: 'OL-006', revenue: 5 }, { order_line_id: 'OL-008', revenue: 10 }] },
+      }],
+    });
+    expect(result.facts.map((fact) => fact.value)).toEqual([0, 5]);
   });
 });

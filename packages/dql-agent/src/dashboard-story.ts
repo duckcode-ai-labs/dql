@@ -6,7 +6,7 @@ import type {
   ResultOrdering,
   ResultSourceHint,
 } from '@zlens/core';
-import { columnNameTokens, resultLeaderRow, selectResultMeasures } from '@zlens/core';
+import { columnNameTokens, rankResultRows, resultLeaderRow, selectResultMeasures } from '@zlens/core';
 import { computeResultStats } from './synthesize.js';
 
 export interface DashboardStoryTileResult {
@@ -86,8 +86,15 @@ export function buildDeterministicDashboardStory(input: DashboardStoryBuildInput
   const rankPhrases = new Map<string, string>();
   for (const tile of input.tiles) {
     if (!eligible.has(tile.tileId) || tile.status !== 'ok' || !tile.result) continue;
-    const columns = (tile.result.columns ?? []).map((column) => typeof column === 'string' ? column : String((column as { name?: unknown })?.name ?? column));
-    const rows = (tile.result.rows ?? []).filter((row): row is Record<string, unknown> => Boolean(row) && typeof row === 'object' && !Array.isArray(row));
+    // A pivot's total rows are totals, not members, and its flag columns are
+    // not figures. Ranked by value, a total row would always read as the
+    // clearest signal.
+    const columns = (tile.result.columns ?? [])
+      .map((column) => typeof column === 'string' ? column : String((column as { name?: unknown })?.name ?? column))
+      .filter((column) => !column.startsWith('__total_'));
+    const rows = (tile.result.rows ?? [])
+      .filter((row): row is Record<string, unknown> => Boolean(row) && typeof row === 'object' && !Array.isArray(row))
+      .filter((row) => !Object.entries(row).some(([column, value]) => column.startsWith('__total_') && Number(value) === 1));
     if (columns.length === 0 || rows.length === 0) continue;
     const stats = computeResultStats(columns, rows);
     const trustState = tile.trustState ?? 'review_required';
@@ -106,7 +113,9 @@ export function buildDeterministicDashboardStory(input: DashboardStoryBuildInput
       ...(tile.ordering ? { ordering: tile.ordering } : {}),
     });
     const measureColumns = new Set(selection.measures);
-    const labelColumn = selection.labelColumn ?? columns.find((column) => typeof first[column] === 'string');
+    // A grouped query without ORDER BY returns its rows in a different order
+    // on each run, so nothing below may read meaning into row position.
+    const labelColumn = selection.labelColumn ?? columns.find((column) => rows.some((row) => typeof row[column] === 'string'));
     const numericStats = stats
       .filter((stat) => stat.kind === 'numeric' && measureColumns.has(stat.column))
       // The summary measure leads, then the others in result order.
@@ -119,22 +128,30 @@ export function buildDeterministicDashboardStory(input: DashboardStoryBuildInput
       // A Dataset row at a declared dimension is evidence *at that dimension*.
       // Never turn rows such as monthly COUNT DISTINCT or ratio-of-sums into a
       // dashboard-wide total by summing display results. Keep the small set of
-      // observations visibly group-qualified instead.
-      const observationRows = rows.slice(0, 2);
+      // observations visibly group-qualified instead: the two largest values
+      // of each measure, ties settled by group, and never a missing value.
       const declaredGroupColumn = resolveDeclaredGroupColumn(
         columns,
         tile.datasetScope?.outputDimensionAliases ?? tile.datasetScope?.dimensions ?? [],
       );
+      const groupColumn = declaredGroupColumn ?? labelColumn;
+      // A result its source orders (a rank column, ORDER BY … LIMIT, a top_n
+      // parameter) is read in that order; any other is ranked by value.
+      const sourceOrdered = Boolean(selection.rankColumn)
+        || (selection.ordering?.kind === 'top_n' && ['rank_column', 'order_limit', 'top_n_parameter'].includes(selection.ordering.reason));
       for (const stat of numericStats.slice(0, 2)) {
         const unit = storyFormatUnit(columnMeta.get(stat.column));
-        for (let index = 0; index < observationRows.length; index += 1) {
-          const row = observationRows[index]!;
-          const value = numericValue(row[stat.column]);
-          if (value === undefined) continue;
-          const groupColumn = declaredGroupColumn ?? labelColumn;
+        const observations = (sourceOrdered
+          ? rows.map((row) => ({ row, value: numericValue(row[stat.column]) ?? null }))
+          : rankResultRows(rows, {
+            measure: (row) => numericValue(row[stat.column]),
+            member: (row) => (groupColumn ? row[groupColumn] : undefined),
+          })).filter((entry): entry is { row: Record<string, unknown>; value: number } => entry.value !== null).slice(0, 2);
+        for (let index = 0; index < observations.length; index += 1) {
+          const { row, value } = observations[index]!;
           const group = groupColumn && row[groupColumn] !== undefined
             ? formatGroupValue(row[groupColumn])
-            : `returned group ${index + 1}`;
+            : `ranked group ${index + 1}`;
           facts.push({
             id: `${tile.tileId}:observation:${stat.column}:${index + 1}`,
             tileId: tile.tileId,

@@ -1,0 +1,23 @@
+{
+  "key": "4face7d076581702cf8e40958d3d31d9",
+  "operation": "generate",
+  "text": "SELECT player_id, player_name, SUM(pts) * 1.0 / COUNT(DISTINCT game_id) AS points_per_game, SUM(reb) * 1.0 / COUNT(DISTINCT game_id) AS rebounds_per_game, SUM(ast) * 1.0 / COUNT(DISTINCT game_id) AS assists_per_game FROM \"nba_golden\".\"dev\".\"player_game_stats\" WHERE LOWER(player_name) IN ('lebron james', 'stephen curry') AND played = 1 AND game_date >= '2017-01-01' AND game_date < '2018-01-01' GROUP BY player_id, player_name ORDER BY player_name ASC",
+  "providerName": "claude",
+  "recordedAt": "2026-10-16T18:06:06.589Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 2,
+    "messageRoles": [
+      "system",
+      "user"
+    ],
+    "preCanonicalHash": "4face7d076581702cf8e40958d3d31d956bd3badbff60cdd7766ca32b561d4f1",
+    "postCanonicalHash": "4face7d076581702cf8e40958d3d31d956bd3badbff60cdd7766ca32b561d4f1",
+    "appliedRuleClasses": []
+  }
+}

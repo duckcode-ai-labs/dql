@@ -1,0 +1,23 @@
+{
+  "key": "9091a6f1c23c5734ba5508390c3eb82a",
+  "operation": "generate",
+  "text": "{\"version\":1,\"kind\":\"analytics\",\"reading\":\"Return the lifetime customer profile (orders, spend, type, first/last order dates) for the customer named Ryan Byrd.\",\"measures\":[{\"ref\":\"block:commerce.customer_profile\"}],\"groupBy\":[],\"display\":[],\"filters\":[{\"ref\":\"dimension:customers.customer_name\",\"op\":\"eq\",\"values\":[\"Ryan Byrd\"],\"source\":\"question\"}],\"expectedShape\":\"lookup\",\"unresolved\":[],\"provenance\":{\"block:commerce.customer_profile\":\"q:customer profile\",\"dimension:customers.customer_name\":\"q:Ryan Byrd\"}}",
+  "providerName": "claude",
+  "recordedAt": "2026-10-16T18:20:18.015Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 2,
+    "messageRoles": [
+      "system",
+      "user"
+    ],
+    "preCanonicalHash": "9091a6f1c23c5734ba5508390c3eb82a0b8c5c0f700da4902a4f2b5934379128",
+    "postCanonicalHash": "9091a6f1c23c5734ba5508390c3eb82a0b8c5c0f700da4902a4f2b5934379128",
+    "appliedRuleClasses": []
+  }
+}

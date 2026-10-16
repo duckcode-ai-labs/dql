@@ -11,6 +11,7 @@ import type {
   ManifestModelLifecycle,
   ManifestRelationshipCardinality,
   ManifestRelationshipValidationEvidence,
+  ManifestRelationshipValidationScope,
 } from './types.js';
 
 type UnknownRecord = Record<string, unknown>;
@@ -93,6 +94,10 @@ export interface RelationshipAuthoringInput {
   attributionBlock?: string;
   importRefs?: string[];
   evidenceExpiresAt?: string;
+  /** Share (0–1) of keyed "from" rows allowed to find no "to" row; omitted, the validator's default. */
+  maxUnmatchedShare?: number;
+  /** `referenced_keys`: judge uniqueness only over the keys the join reaches. */
+  validationScope?: ManifestRelationshipValidationScope;
 }
 
 /** A business concept as authored: bindings describe where it lives; equivalences are typed mappings for a later, separately gated release. */
@@ -175,7 +180,24 @@ export type ModelingAuthoringChange =
   | { operation: 'remove_contract'; value: ModelingObjectRef }
   | { operation: 'remove_export'; value: ModelingObjectRef }
   | { operation: 'remove_import'; value: ModelingObjectRef }
-  | { operation: 'remove_concept'; value: ModelingObjectRef };
+  | { operation: 'remove_concept'; value: ModelingObjectRef }
+  // Warehouse evidence for a relationship as authored (`zlens model
+  // validate-relationship`): only the evidence, and on an explicit certify the
+  // status and the grains certified against, change; every other authored
+  // field stays exactly as written.
+  | { operation: 'record_relationship_validation'; value: RelationshipValidationRecordInput };
+
+/** The evidence one warehouse check wrote for an existing relationship. */
+export interface RelationshipValidationRecordInput extends ModelingObjectRef {
+  /** The authored file, as the manifest reports it (`sourcePath`); found by id within the domain when omitted. */
+  sourcePath?: string;
+  validation: ManifestRelationshipValidationEvidence;
+  /** Set only when a person certifies with the check: the status becomes certified against these grains. */
+  certifiedAgainst?: {
+    from: { grain: string; keys: string[] };
+    to: { grain: string; keys: string[] };
+  };
+}
 
 /** Identifies an authored modeling object for removal. */
 export interface ModelingObjectRef {
@@ -331,6 +353,7 @@ export function previewModelingChange(projectRoot: string, change: ModelingAutho
       case 'remove_import': return [previewRemoveListEntry(root, change.value, 'interfaces.dql.yaml', 'imports')];
       case 'upsert_concept': return [previewConcept(root, change.value)];
       case 'remove_concept': return [previewRemoveListEntry(root, change.value, 'concepts.dql.yaml', 'concepts')];
+      case 'record_relationship_validation': return [previewRelationshipValidationRecord(root, change.value)];
       default: {
         const unsupported: never = change;
         throw new Error(`Unsupported modeling operation: ${(unsupported as { operation?: string }).operation ?? 'unknown'}`);
@@ -638,10 +661,33 @@ function previewRelationship(projectRoot: string, value: RelationshipAuthoringIn
     ...(value.attributionBlock ? { attribution_block: value.attributionBlock } : {}),
     ...(value.importRefs?.length ? { imports: cleanStrings(value.importRefs) } : {}),
     ...(value.evidenceExpiresAt ? { evidence_expires_at: value.evidenceExpiresAt } : {}),
+    ...(value.maxUnmatchedShare !== undefined ? { max_unmatched_share: value.maxUnmatchedShare } : {}),
+    ...(value.validationScope ? { validation_scope: value.validationScope } : {}),
     ...(value.certifiedAgainst ? { certifiedAgainst: value.certifiedAgainst } : {}),
     ...(value.validation ? { validation: validationSource(value.validation) } : {}),
   };
   return upsertMovingListPatches(projectRoot, domain, modelingSourceFile(projectRoot, domain, 'relationships.dql.yaml', 'relationships', 'id', id, value.areaId), 'relationships', relationship);
+}
+
+function previewRelationshipValidationRecord(projectRoot: string, value: RelationshipValidationRecordInput): ModelingSourcePatch {
+  const id = requiredId(value.id, 'relationship');
+  const domain = requiredId(value.domain, 'domain');
+  const areaId = value.areaId?.includes('::') ? value.areaId.split('::').pop() : value.areaId;
+  const path = value.sourcePath?.trim()
+    ? value.sourcePath.trim().replace(/\\/g, '/')
+    : modelingSourceFile(projectRoot, domain, 'relationships.dql.yaml', 'relationships', 'id', id, areaId?.trim() || undefined);
+  if (!/\.dql\.ya?ml$/.test(path)) throw new Error(`Relationship evidence is written only to a modeling YAML file, not ${path}.`);
+  const absolute = safeProjectPath(projectRoot, path);
+  const before = existsSync(absolute) ? readFileSync(absolute, 'utf8') : '';
+  const list = before.trim() ? asRecord(yaml.load(before)).relationships : undefined;
+  if (!Array.isArray(list) || !list.some((entry) => asRecord(entry).id === id)) {
+    throw new Error(`Relationship "${id}" is not authored in domain "${domain}"; evidence is recorded only for an existing relationship.`);
+  }
+  return upsertListPatch(projectRoot, path, 'relationships', 'id', {
+    id,
+    validation: validationSource(value.validation),
+    ...(value.certifiedAgainst ? { status: 'certified', certifiedAgainst: value.certifiedAgainst } : {}),
+  });
 }
 
 function previewConcept(projectRoot: string, value: ConceptAuthoringInput): ModelingSourcePatch {
@@ -748,6 +794,13 @@ function validationSource(value: ManifestRelationshipValidationEvidence): Unknow
     unmatched_from: value.unmatchedFrom,
     max_from_per_key: value.maxFromPerKey,
     max_to_per_key: value.maxToPerKey,
+    ...(value.unmatchedKeyedFrom !== undefined ? { unmatched_keyed_from: value.unmatchedKeyedFrom } : {}),
+    ...(value.unmatchedKeyValues !== undefined ? { unmatched_key_values: value.unmatchedKeyValues } : {}),
+    ...(value.unmatchedShare !== undefined ? { unmatched_share: value.unmatchedShare } : {}),
+    ...(value.maxUnmatchedShare !== undefined ? { max_unmatched_share: value.maxUnmatchedShare } : {}),
+    ...(value.maxToPerReferencedKey !== undefined ? { max_to_per_referenced_key: value.maxToPerReferencedKey } : {}),
+    ...(value.maxFromPerReferencedKey !== undefined ? { max_from_per_referenced_key: value.maxFromPerReferencedKey } : {}),
+    ...(value.scope ? { scope: value.scope } : {}),
     ...(value.message ? { message: value.message } : {}),
   };
 }

@@ -13,7 +13,7 @@ import {
   type DomainProposal,
 } from '@zlens/core';
 import type { CLIFlags } from '../args.js';
-import { startLocalServer } from '../local-runtime.js';
+import { rejectDiscoveredRelationship, startLocalServer, validateProjectRelationships } from '../local-runtime.js';
 
 /** `zlens model` — inspect/validate v3 and preview evidence-bounded discovery (AGT-002/API-001). */
 export async function runModel(file: string | null, rest: string[], flags: CLIFlags): Promise<void> {
@@ -28,6 +28,14 @@ export async function runModel(file: string | null, rest: string[], flags: CLIFl
   }
   if (subcommand === 'import') {
     await runModelImport(rest, flags);
+    return;
+  }
+  if (subcommand === 'validate-relationship') {
+    await runValidateRelationship(rest, flags);
+    return;
+  }
+  if (subcommand === 'reject-discovery') {
+    runRejectDiscovery(rest, flags);
     return;
   }
   const args = rest.filter((value) => !value.startsWith('-'));
@@ -95,7 +103,7 @@ export async function runModel(file: string | null, rest: string[], flags: CLIFl
   }
 
   if (subcommand !== 'list') {
-    console.error('Usage: zlens model list|validate|discover [path] | zlens model explain <relationship-id> [path] | zlens model apply-discovery [path] --domain <id> --apply | zlens model import <file-or-directory> --domain <id> --area <id> --dry-run|--apply');
+    console.error('Usage: zlens model list|validate|discover [path] | zlens model explain <relationship-id> [path] | zlens model validate-relationship <relationship-id>|--all [path] [--certify] [--dry-run] | zlens model reject-discovery <relationship-id> [path] [--reason <text>] | zlens model apply-discovery [path] --domain <id> --apply | zlens model import <file-or-directory> --domain <id> --area <id> --dry-run|--apply');
     process.exitCode = 1;
     return;
   }
@@ -107,9 +115,97 @@ export async function runModel(file: string | null, rest: string[], flags: CLIFl
   if (flags.format === 'json') console.log(JSON.stringify(output, null, 2));
   else {
     console.log('Entities');
-    for (const entity of output.entities) console.log(`  ${entity.id} → ${entity.dbtUniqueId} (${entity.domain})`);
+    for (const entity of output.entities) console.log(`  ${entity.id} → ${entity.dbtUniqueId} (${entity.domain}) · ${entity.status ?? 'draft'}`);
     console.log('Relationships');
-    for (const relationship of output.relationships) console.log(`  ${relationship.id}: ${relationship.from} → ${relationship.to} [${relationship.automaticJoinAllowed ? 'safe' : relationship.fanout}]`);
+    for (const relationship of output.relationships) console.log(`  ${relationship.id}: ${relationship.from} → ${relationship.to} [${relationship.automaticJoinAllowed ? 'safe' : relationship.fanout}] · ${relationship.status}${relationship.validation ? ` · warehouse ${relationship.validation.status}` : ''}`);
+  }
+}
+
+/** Positional arguments, skipping the value after a flag that takes one. */
+function positionalArgs(rest: string[], valued: string[] = ['--reason', '--source', '--dbt-manifest']): string[] {
+  return rest.filter((value, index) => !value.startsWith('-') && !valued.includes(rest[index - 1] ?? ''));
+}
+
+/**
+ * `zlens model validate-relationship <id> [path]` (or `--all`): the check the
+ * Modeling page's Validate action runs, for relationships written by hand —
+ * any keys, composite or role joins — with the evidence recorded in their
+ * YAML. `--certify` certifies each one whose check passed; `--dry-run` only
+ * reports.
+ */
+async function runValidateRelationship(rest: string[], flags: CLIFlags): Promise<void> {
+  const all = rest.includes('--all');
+  const args = positionalArgs(rest);
+  const id = all ? undefined : args[0];
+  const projectRoot = resolve((all ? args[0] : args[1]) ?? '.');
+  if (!all && !id) {
+    modelImportError(flags, 'INVALID_REQUEST', 'Usage: zlens model validate-relationship <relationship-id> [path] | --all [path] [--certify] [--dry-run] [--connection <name>]');
+    return;
+  }
+  if (!existsSync(resolve(projectRoot, 'dql.config.json'))) {
+    modelImportError(flags, 'PROJECT_NOT_FOUND', `No ZLens project found at ${projectRoot} (missing dql.config.json).`);
+    return;
+  }
+  const { QueryExecutor } = await import('@zlens/connectors');
+  const executor = new QueryExecutor();
+  try {
+    const outcome = await validateProjectRelationships(projectRoot, {
+      ...(all ? { all: true } : { ids: [id!] }),
+      write: flags.dryRun !== true,
+      certify: rest.includes('--certify'),
+      ...(flags.connection ? { connection: flags.connection } : {}),
+      executor,
+    });
+    if (flags.format === 'json') console.log(JSON.stringify(outcome, null, 2));
+    else {
+      console.log(`ZLens relationship validation (connection ${outcome.connectionId}${flags.dryRun ? ', dry run: nothing written' : ''})`);
+      for (const result of outcome.results) {
+        if (result.error) {
+          console.log(`  ✗ ${result.id}: not checked: ${result.error}`);
+          continue;
+        }
+        const evidence = result.evidence!;
+        const mark = evidence.status === 'passed' ? '✓' : '✗';
+        const counts = `${evidence.joinedRows.toLocaleString('en-US')} joined of ${evidence.fromRows.toLocaleString('en-US')} from rows · max ${evidence.maxToPerKey} to rows per key`;
+        console.log(`  ${mark} ${result.id}: ${evidence.status} · ${counts}${result.certified ? ' · certified' : ''}`);
+        console.log(`      ${evidence.message ?? ''}`);
+      }
+      if (outcome.paths.length) console.log(`  evidence written to ${outcome.paths.join(', ')}`);
+    }
+    if (outcome.results.some((result) => result.error || result.evidence?.status !== 'passed')) process.exitCode = 1;
+  } catch (error) {
+    const code = typeof error === 'object' && error && 'code' in error ? String((error as { code?: unknown }).code) : 'RELATIONSHIP_VALIDATION_FAILED';
+    modelImportError(flags, code, error instanceof Error ? error.message : String(error));
+  } finally {
+    await executor.disconnect().catch(() => undefined);
+  }
+}
+
+/** `zlens model reject-discovery <id> [path] [--reason <text>]`: discovery stops proposing a join. */
+function runRejectDiscovery(rest: string[], flags: CLIFlags): void {
+  const args = positionalArgs(rest);
+  const id = args[0];
+  const projectRoot = resolve(args[1] ?? '.');
+  const reasonIndex = rest.indexOf('--reason');
+  const reason = reasonIndex >= 0 ? rest[reasonIndex + 1] : undefined;
+  if (!id) {
+    modelImportError(flags, 'INVALID_REQUEST', 'Usage: zlens model reject-discovery <relationship-id> [path] [--reason <text>]');
+    return;
+  }
+  if (!existsSync(resolve(projectRoot, 'dql.config.json'))) {
+    modelImportError(flags, 'PROJECT_NOT_FOUND', `No ZLens project found at ${projectRoot} (missing dql.config.json).`);
+    return;
+  }
+  try {
+    const decision = rejectDiscoveredRelationship(projectRoot, id, reason ? { reason } : {});
+    if (flags.format === 'json') console.log(JSON.stringify(decision, null, 2));
+    else {
+      console.log(`Discovery will not propose ${decision.from} → ${decision.to} on ${decision.keys.map((pair) => `${pair.from} = ${pair.to}`).join(', ')} again.`);
+      console.log('  Recorded in .dql/modeling-discovery.json (commit it so teammates share the decision). The model itself is unchanged.');
+    }
+  } catch (error) {
+    const code = typeof error === 'object' && error && 'code' in error ? String((error as { code?: unknown }).code) : 'REJECT_FAILED';
+    modelImportError(flags, code, error instanceof Error ? error.message : String(error));
   }
 }
 
@@ -268,8 +364,24 @@ function printWarehouseDiscovery(report: import('../warehouse-model-discovery.js
     const check = relationship.validation
       ? ` · warehouse: ${relationship.validation.status}${relationship.validation.status === 'passed' ? '' : ` (${relationship.validation.message})`}`
       : relationship.validationError ? ` · not checked: ${relationship.validationError}` : '';
-    console.log(`  ${relationship.from} → ${relationship.to} on ${keys} · ${relationship.cardinality}${check}`);
+    const nameOnly = !relationship.validation && !relationship.validationError && relationship.evidence.every((item) => item.source === 'same_name' || item.source === 'named_for_table' || item.source === 'shared_key')
+      ? ' · a name match only: --validate checks the values'
+      : '';
+    console.log(`  ${relationship.from} → ${relationship.to} on ${keys} · ${relationship.cardinality}${check}${nameOnly}`);
     for (const item of relationship.evidence) console.log(`      because ${item.reason}`);
+  }
+  if (report.withheld?.length) {
+    console.log('Not proposed: a name suggested these joins, the warehouse did not back them');
+    for (const relationship of report.withheld) {
+      console.log(`  ${relationship.from} → ${relationship.to} on ${relationship.keys.map((pair) => `${pair.from} = ${pair.to}`).join(', ')}`);
+      console.log(`      ${relationship.reason}`);
+    }
+  }
+  if (report.dismissed?.length) {
+    console.log('Not proposed again: removed or rejected by a reviewer');
+    for (const relationship of report.dismissed) {
+      console.log(`  ${relationship.from} → ${relationship.to} on ${relationship.keys.map((pair) => `${pair.from} = ${pair.to}`).join(', ')} · ${relationship.reason}`);
+    }
   }
 }
 

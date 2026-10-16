@@ -1,0 +1,23 @@
+{
+  "key": "cd34d2a3d8a4abcb1e5f3881ffda669a",
+  "operation": "generate",
+  "text": "{\"version\":1,\"kind\":\"analytics\",\"reading\":\"Rank players by total three-pointers made in games dated in calendar 2017, showing three-point attempts and three-point percentage (made / attempted) alongside.\",\"measures\":[{\"ref\":\"dimension:player_game_stats.fg3m\",\"aggregation\":\"sum\",\"alias\":\"three_pointers_made\"},{\"ref\":\"dimension:player_game_stats.fg3a\",\"aggregation\":\"sum\",\"alias\":\"three_pointers_attempted\"},{\"derived\":{\"kind\":\"ratio\",\"numerator\":\"dimension:player_game_stats.fg3m\",\"numeratorAggregation\":\"sum\",\"denominator\":\"dimension:player_game_stats.fg3a\",\"denominatorAggregation\":\"sum\"},\"alias\":\"three_point_pct\"}],\"groupBy\":[{\"ref\":\"dimension:player_game_stats.player_id\",\"role\":\"key\"}],\"display\":[\"dimension:player_game_stats.player_name\"],\"filters\":[],\"ordering\":{\"ref\":\"three_pointers_made\",\"direction\":\"desc\"},\"limit\":10,\"time\":{\"ref\":\"dimension:player_game_stats.game_date\",\"window\":{\"start\":\"2017-01-01\",\"end\":\"2018-01-01\",\"expression\":\"in 2017\"}},\"expectedShape\":\"ranking\",\"unresolved\":[],\"provenance\":{\"dimension:player_game_stats.fg3m\":\"q:made the most three-pointers\",\"dimension:player_game_stats.fg3a\":\"q:attempts\",\"dimension:player_game_stats.player_id\":\"q:Who\",\"dimension:player_game_stats.player_name\":\"q:Who\",\"dimension:player_game_stats.game_date\":\"q:in 2017\"}}",
+  "providerName": "claude",
+  "recordedAt": "2026-10-16T18:06:34.126Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 2,
+    "messageRoles": [
+      "system",
+      "user"
+    ],
+    "preCanonicalHash": "cd34d2a3d8a4abcb1e5f3881ffda669a4b5840605f7f036c31231879662d36c3",
+    "postCanonicalHash": "cd34d2a3d8a4abcb1e5f3881ffda669a4b5840605f7f036c31231879662d36c3",
+    "appliedRuleClasses": []
+  }
+}

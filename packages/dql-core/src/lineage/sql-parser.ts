@@ -146,6 +146,15 @@ const DIALECT_MAP: Record<string, string> = {
 };
 
 /**
+ * One part of a relation name: double-quoted (ANSI, `""` escapes a quote),
+ * backtick-quoted (MySQL, BigQuery, Databricks), bracketed (SQL Server), or bare.
+ */
+const SQL_IDENTIFIER_PART = '(?:"(?:[^"]|"")+"|`(?:[^`]|``)+`|\\[(?:[^\\]]|\\]\\])+\\]|[a-zA-Z_][a-zA-Z0-9_]*)';
+
+/** A dotted relation name whose parts may each be quoted: `orders`, `"main"."order_lines"`, `db.schema."Orders"`. */
+const SQL_RELATION_NAME = `${SQL_IDENTIFIER_PART}(?:\\.${SQL_IDENTIFIER_PART})*`;
+
+/**
  * Extract table references from a SQL string.
  *
  * Identifies tables in FROM and JOIN clauses, filters out CTE definitions,
@@ -174,20 +183,20 @@ export function extractTablesFromSql(sql: string): SqlParseResult {
 
   const rawTables = new Set<string>();
 
-  // FROM <table> — handles FROM table, FROM schema.table, FROM "table"
-  const fromPattern = /\bFROM\s+(?:LATERAL\s+)?([a-zA-Z_][a-zA-Z0-9_.]*|"[^"]+")/gi;
+  // FROM <table> — handles FROM table, FROM schema.table, FROM "schema"."table"
+  const fromPattern = new RegExp(`\\bFROM\\s+(?:LATERAL\\s+)?(${SQL_RELATION_NAME})`, 'gi');
   for (const match of cleaned.matchAll(fromPattern)) {
     addTableRef(rawTables, match[1]);
   }
 
   // JOIN <table> — all join types
-  const joinPattern = /\bJOIN\s+(?:LATERAL\s+)?([a-zA-Z_][a-zA-Z0-9_.]*|"[^"]+")/gi;
+  const joinPattern = new RegExp(`\\bJOIN\\s+(?:LATERAL\\s+)?(${SQL_RELATION_NAME})`, 'gi');
   for (const match of cleaned.matchAll(joinPattern)) {
     addTableRef(rawTables, match[1]);
   }
 
   // INTO <table> (INSERT INTO, MERGE INTO)
-  const intoPattern = /\bINTO\s+([a-zA-Z_][a-zA-Z0-9_.]*|"[^"]+")/gi;
+  const intoPattern = new RegExp(`\\bINTO\\s+(${SQL_RELATION_NAME})`, 'gi');
   for (const match of cleaned.matchAll(intoPattern)) {
     addTableRef(rawTables, match[1]);
   }
@@ -1242,11 +1251,31 @@ function extractSemanticRefs(sql: string, type: 'metric' | 'dim'): string[] {
   return [...new Set(refs)];
 }
 
-/** Normalize and add a table reference */
+/**
+ * Add a table reference as its unquoted, dot-joined name — the same shape
+ * `analyzeSqlReferences` reports (`"main"."order_lines"` → `main.order_lines`,
+ * `main."Order Lines"` → `main.Order Lines`). Case is kept as written.
+ */
 function addTableRef(tables: Set<string>, ref: string): void {
-  // Remove surrounding quotes
-  const cleaned = ref.replace(/^"|"$/g, '');
-  if (cleaned.length > 0) {
-    tables.add(cleaned);
+  const parts = Array.from(ref.matchAll(new RegExp(SQL_IDENTIFIER_PART, 'g')), (match) =>
+    unquoteIdentifierPart(match[0]),
+  );
+  const name = parts.join('.');
+  if (name.length > 0) {
+    tables.add(name);
+  }
+}
+
+/** Strip one identifier part's quotes and undo its doubled-quote escapes. */
+function unquoteIdentifierPart(part: string): string {
+  switch (part[0]) {
+    case '"':
+      return part.slice(1, -1).replace(/""/g, '"');
+    case '`':
+      return part.slice(1, -1).replace(/``/g, '`');
+    case '[':
+      return part.slice(1, -1).replace(/\]\]/g, ']');
+    default:
+      return part;
   }
 }
