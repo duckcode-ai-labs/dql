@@ -18,7 +18,7 @@ export interface RunAiCall {
   ms?: number;
   promptChars?: number;
   reply?: string;
-  outcome?: 'sql' | 'declined' | 'rejected' | 'error';
+  outcome?: 'sql' | 'declined' | 'rejected' | 'error' | 'accepted' | 'revise';
   at?: number;
 }
 
@@ -203,6 +203,8 @@ const CALL_LABELS: Record<string, string> = {
   fix: 'Fixed a failed check',
   retry_empty: 'Redrafted after an empty result',
   widen: 'Looked again with more tables',
+  review: 'Checked the result against the question',
+  revise: 'Revised the SQL after the result check',
 };
 
 function aiCallOf(value: unknown): RunAiCall | undefined {
@@ -210,7 +212,7 @@ function aiCallOf(value: unknown): RunAiCall | undefined {
   const purpose = str(call?.purpose);
   if (!call || !purpose) return undefined;
   const label = str(call.label) ?? (purpose === 'intent:resolve' ? 'read' : purpose === 'intent:correct' ? 'correct' : purpose === 'intent:repair' ? 'reread' : purpose === 'intent:draft' ? 'draft' : purpose);
-  const outcome = call.outcome === 'sql' || call.outcome === 'declined' || call.outcome === 'rejected' || call.outcome === 'error' ? call.outcome : undefined;
+  const outcome = call.outcome === 'sql' || call.outcome === 'declined' || call.outcome === 'rejected' || call.outcome === 'error' || call.outcome === 'accepted' || call.outcome === 'revise' ? call.outcome : undefined;
   return {
     label: CALL_LABELS[label] ?? label.replace(/^intent:/, '').replace(/_/g, ' '),
     ...(num(call.ms) !== undefined ? { ms: num(call.ms) } : {}),
@@ -265,6 +267,8 @@ export function explainAskRun(input: ExplainAskRunInput): RunExplanation | undef
   const calls = arr(receipt.dispatches).map((value) => ({ raw: rec(value), call: aiCallOf(value) })).filter((item): item is { raw: Rec; call: RunAiCall } => Boolean(item.raw && item.call));
   const readCalls = calls.filter(({ raw }) => /^intent:(resolve|correct|repair)$/.test(String(raw.purpose))).map(({ call }) => call);
   const draftCalls = calls.filter(({ raw }) => raw.purpose === 'intent:draft').map(({ call }) => call);
+  // The drafting calls with the result check between them, in the order they ran.
+  const sqlCalls = calls.filter(({ raw }) => raw.purpose === 'intent:draft' || raw.purpose === 'intent:review').map(({ call }) => call);
   const executedTier = str(executed?.tier);
   const gap = rec(payload.gap);
 
@@ -349,7 +353,7 @@ export function explainAskRun(input: ExplainAskRunInput): RunExplanation | undef
         reason: outcome === 'done'
           ? `Wrote one read-only statement${tables.length ? ` over ${tables.join(', ')}` : ''}${redrafts > 0 ? `, redrafted ${redrafts === 1 ? 'once' : `${redrafts} times`}` : ''}.`
           : plainReason(code, str(aiRefusal?.message)),
-        aiCalls: draftCalls,
+        aiCalls: sqlCalls,
         story: story.filter((entry) => entry.phase === 'schema'),
         ...(executedTier === 'exploratory' && str(payload.sql) ? { sql: str(payload.sql) } : {}),
       });

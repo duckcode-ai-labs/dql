@@ -772,6 +772,8 @@ import {
   type ConnectionMetadataScopeV1,
 } from './warehouse-metadata.js';
 import { syncWarehouseCatalog } from './warehouse-catalog-sync.js';
+import { refreshValueProfile, valueProfileAllowed, type ValueProfileSummary } from './value-profile.js';
+import { resolveResultReviewMode } from './result-review-setting.js';
 import { TableDatasetError, applyTableDatasetChoices, draftTableDataset, listWarehouseTables } from './datasets/table-dataset.js';
 import {
   discoverWarehouseModel,
@@ -937,6 +939,27 @@ export interface ProjectConfig {
     };
   };
   agent?: {
+    /**
+     * Example values and ranges of the warehouse's columns, read at each schema
+     * sync and shown to the SQL drafter on warehouse-first projects. Off by
+     * default: the values reach the AI provider with the drafting prompt.
+     * Sensitive column names and values are never read; a host (RFC 0010)
+     * turns it off. See `value-profile.ts`.
+     */
+    valueProfile?: {
+      mode?: 'off' | 'sampled';
+      /** More column-name patterns (case-insensitive regular expressions) to leave out. */
+      exclude?: string[];
+    };
+    /**
+     * A second look at each AI-drafted result before it is answered: one more
+     * AI call that sees the question, the SQL and the result's shape (never a
+     * value) and may ask for one revision. Off by default; read at every
+     * question. `ZLENS_ASK_RESULT_REVIEW=1|0` overrides it.
+     */
+    resultReview?: {
+      mode?: 'off' | 'on';
+    };
     runtimeValueGrounding?: {
       /** Runtime value lookup is opt-in because query literals may be sensitive. */
       mode?: 'disabled' | 'safe_automatic';
@@ -7510,6 +7533,11 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
       hosted: Boolean(hostHooks),
       withoutHost: 'chosen-model',
     }),
+    // The column value profile reaches the drafter only while the project opts
+    // in and never under a host, whose policies decide what each reader may see.
+    valueProfileAllowed: () => valueProfileAllowed(loadProjectConfig(projectRoot), Boolean(hostHooks)),
+    // The result review is opt-in, read at every question like the value profile.
+    resultReviewConfigured: () => resolveResultReviewMode(loadProjectConfig(projectRoot)) === 'on',
     // The engine the semantic candidate will compile on, decided the same
     // way `compileSemantic` decides it, so the binder speaks its dialect.
     semanticEngine: async () => plannedAskEngine().then((planned) => planned.engine),
@@ -26833,7 +26861,7 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
         });
         persistConnectionMetadataScope(projectRoot, connectionId, scope);
         projectConfig = loadProjectConfig(projectRoot);
-        const warehouseCatalog = await refreshWarehouseCatalogAfterSync(projectRoot, projectConfig, executor, selectedConnection, connectionId, synced.scope, modelBeforeSync);
+        const warehouseCatalog = await refreshWarehouseCatalogAfterSync(projectRoot, projectConfig, executor, selectedConnection, connectionId, synced.scope, modelBeforeSync, Boolean(hostHooks));
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(serializeJSON({
           scope: synced.scope,
@@ -26869,7 +26897,7 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
           connection: selectedConnection,
           scope,
         });
-        const warehouseCatalog = await refreshWarehouseCatalogAfterSync(projectRoot, cfg, executor, selectedConnection, connectionId, synced.scope, modelBeforeSync);
+        const warehouseCatalog = await refreshWarehouseCatalogAfterSync(projectRoot, cfg, executor, selectedConnection, connectionId, synced.scope, modelBeforeSync, Boolean(hostHooks));
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(serializeJSON({
           scope: synced.scope,
@@ -35923,6 +35951,8 @@ export interface WarehouseCatalogSummary {
   error?: string;
   /** What changed since the previous sync, and the modeled objects it touches. Absent when nothing changed. */
   drift?: WarehouseCatalogDrift & { affected: string[] };
+  /** The column value profile read with this sync (`agent.valueProfile` opted in). */
+  valueProfile?: ValueProfileSummary;
 }
 
 /** The entities and relationships bound to relations that changed. */
@@ -35959,6 +35989,8 @@ async function refreshWarehouseCatalogAfterSync(
   scope: ConnectionMetadataScopeV1,
   /** The model before this sync, to name what drift touches. */
   manifest?: DQLManifest,
+  /** An RFC 0010 host serves this runtime: column values are never profiled. */
+  hosted = false,
 ): Promise<WarehouseCatalogSummary | undefined> {
   if (!warehouseCatalogModeling(config)) return undefined;
   const path = readWarehouseCatalog(projectRoot).path;
@@ -35969,6 +36001,8 @@ async function refreshWarehouseCatalogAfterSync(
   try {
     const previous = readWarehouseCatalog(projectRoot).snapshot;
     const { snapshot, warnings } = await syncWarehouseCatalog({ projectRoot, executor, connection, scope });
+    // What the columns hold, read only when the project opted in.
+    const valueProfile = await refreshValueProfile({ projectRoot, config, executor, connection, snapshot, hosted });
     const drift = previous && previous.fingerprint !== snapshot.fingerprint ? diffWarehouseCatalogs(previous, snapshot) : undefined;
     const changed = drift && (drift.addedRelations.length || drift.removedRelations.length || drift.addedColumns.length || drift.removedColumns.length || drift.changedColumnTypes.length);
     return {
@@ -35979,6 +36013,7 @@ async function refreshWarehouseCatalogAfterSync(
       connectionId,
       warnings,
       ...(drift && changed ? { drift: { ...drift, affected: driftAffected(manifest, drift) } } : {}),
+      ...(valueProfile ? { valueProfile } : {}),
     };
   } catch (error) {
     return { path, error: error instanceof Error ? error.message : String(error) };
