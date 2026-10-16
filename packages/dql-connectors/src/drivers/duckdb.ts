@@ -35,6 +35,7 @@ export class DuckDBConnector implements DatabaseConnector {
     const duckdb = resolveDuckDBModule(duckdbModule);
 
     const dbPath = config.filepath ?? ':memory:';
+    const downloadsOff = duckDBAutoinstallOff();
     const { db, release } = await acquireDuckDBDatabase(duckDBDatabaseKey(dbPath), async () => {
       const database = await new Promise<any>((resolve, reject) => {
         const opened = new duckdb.Database(dbPath, (err: Error | null) => {
@@ -50,7 +51,7 @@ export class DuckDBConnector implements DatabaseConnector {
         await executeDuckDBConnection(setup, database, 'PRAGMA disable_checkpoint_on_shutdown');
         // A host that must not download code at run time (ZLENS_DUCKDB_AUTOINSTALL=off): DuckDB uses only the
         // extensions already installed, and a statement that needs another one fails instead of fetching it.
-        if (duckDBAutoinstallOff()) await executeDuckDBConnection(setup, database, 'SET autoinstall_known_extensions = false');
+        if (downloadsOff) await turnOffDuckDBExtensionDownloads(setup, database);
       } catch (error) {
         await closeDuckDBConnection(setup);
         await closeDuckDBDatabase(database, false);
@@ -59,16 +60,15 @@ export class DuckDBConnector implements DatabaseConnector {
       await closeDuckDBConnection(setup);
       return database;
     });
-    if (config.restrictExternalAccess) {
-      try {
-        await restrictDuckDBDatabase(db, config.allowedDirectories ?? []);
-      } catch (error) {
-        await release();
-        throw error;
-      }
+    if (downloadsOff) extensionDownloadsOffDuckDBDatabases.add(db);
+    try {
+      if (config.restrictExternalAccess) await restrictDuckDBDatabase(db, config.allowedDirectories ?? []);
+      this.connection = await openDuckDBConnection(db);
+    } catch (error) {
+      await release();
+      throw error;
     }
     this.db = db;
-    this.connection = db.connect();
     this.releaseDatabase = release;
   }
 
@@ -91,7 +91,7 @@ export class DuckDBConnector implements DatabaseConnector {
     }
     const db = this.db;
     const context = await readDuckDBSessionContext(this.connection, db);
-    const connection = db.connect();
+    const connection = await openDuckDBConnection(db);
     let closed = false;
     let pending = Promise.resolve();
     const enqueue = <T>(work: () => Promise<T>): Promise<T> => {
@@ -235,6 +235,11 @@ function executeDuckDBConnection(
   if (!connection) return Promise.reject(new Error('DuckDB connector not connected. Call connect() first.'));
   if (options.signal?.aborted) return Promise.reject(duckDbCancellationError(options.signal.reason));
   if (options.deadlineMs !== undefined && options.deadlineMs <= 0) return Promise.reject(duckDbDeadlineError(options.deadlineMs));
+  const downloadsOff = extensionDownloadsOffDuckDBDatabases.has(database);
+  if (downloadsOff) {
+    const refusal = extensionDownloadRefusal(sql);
+    if (refusal) return Promise.reject(new Error(refusal));
+  }
 
   const startTime = performance.now();
   return new Promise((resolve, reject) => {
@@ -278,6 +283,14 @@ function executeDuckDBConnection(
       }
       const executionTimeMs = performance.now() - startTime;
       if (err) {
+        const missing = downloadsOff ? missingDuckDBExtensionName(err.message) : undefined;
+        if (missing) {
+          // The engine's text offers INSTALL and the auto-install settings, neither of which this install allows.
+          duckDBExtensionInstalled(connection, missing).then((installed) => {
+            settle(() => reject(new Error(`DuckDB query failed: ${extensionDownloadsOffMessage(missing, installed)}`)));
+          });
+          return;
+        }
         settle(() => reject(new Error(`DuckDB query failed: ${withMissingTableHint(err.message)}`)));
         return;
       }
@@ -404,12 +417,117 @@ const sharedDuckDBDatabases = new Map<string, SharedDuckDBDatabase>();
 const closingDuckDBDatabases = new Map<string, Promise<void>>();
 
 /**
- * ZLENS_DUCKDB_AUTOINSTALL=off (or false, 0): DuckDB never downloads an
- * extension on first use (by default it fetches a known extension, such as
- * httpfs for a URL, from its extension repository). Unset: DuckDB's default.
+ * ZLENS_DUCKDB_AUTOINSTALL=off (or false, 0, no; `DQL_DUCKDB_AUTOINSTALL` is
+ * the old name): DuckDB never downloads an extension. By default it fetches a
+ * known extension, such as httpfs for a URL, from extensions.duckdb.org the
+ * first time a statement needs it, and `INSTALL` fetches one on request.
+ * Off, every connection of the database starts with auto-install and auto-load
+ * off, an `INSTALL` that would download (anything but a local file path) is
+ * refused before it reaches the engine, and a statement that needs an
+ * extension the install does not have fails with one plain sentence. An
+ * extension already in `extension_directory` still loads (`LOAD httpfs`).
+ * Unset or `on`: DuckDB's default.
  */
 export function duckDBAutoinstallOff(env: NodeJS.ProcessEnv = process.env): boolean {
   return /^(off|false|0|no)$/i.test(readEnv('ZLENS_DUCKDB_AUTOINSTALL', env)?.trim() ?? '');
+}
+
+/** The settings every connection of a database with downloads off starts with (both are global in DuckDB). */
+export const DUCKDB_EXTENSION_DOWNLOADS_OFF = ['SET autoinstall_known_extensions = false', 'SET autoload_known_extensions = false'] as const;
+
+/** Databases opened while ZLENS_DUCKDB_AUTOINSTALL=off: their statements are checked and their errors reworded. */
+const extensionDownloadsOffDuckDBDatabases = new WeakSet<object>();
+
+async function turnOffDuckDBExtensionDownloads(connection: any, database: any): Promise<void> {
+  for (const sql of DUCKDB_EXTENSION_DOWNLOADS_OFF) await executeDuckDBConnection(connection, database, sql);
+}
+
+/**
+ * A new connection on an open database. With downloads off the two settings are
+ * (re)issued before anything else runs on it; a restricted database (RFC 0010)
+ * already has both off and its settings locked, so nothing is issued there.
+ */
+async function openDuckDBConnection(database: any): Promise<any> {
+  const connection = database.connect();
+  if (extensionDownloadsOffDuckDBDatabases.has(database) && !restrictedDuckDBDatabases.has(database)) {
+    try {
+      await turnOffDuckDBExtensionDownloads(connection, database);
+    } catch (error) {
+      await closeDuckDBConnection(connection);
+      throw error;
+    }
+  }
+  return connection;
+}
+
+export function extensionDownloadsOffMessage(extension: string, installed = false): string {
+  return installed
+    ? `the ${extension} extension is installed but not loaded, and extension downloads are off on this install (ZLENS_DUCKDB_AUTOINSTALL=off); run LOAD ${extension} first (nothing is fetched)`
+    : `the ${extension} extension is not installed and extension downloads are off on this install (ZLENS_DUCKDB_AUTOINSTALL=off); ask an administrator to bundle it`;
+}
+
+/**
+ * With downloads off, a statement that would fetch an extension or turn
+ * fetching back on is refused before the engine sees it: `INSTALL <name>`
+ * (from DuckDB's repository, a named one or a URL), and `SET`/`RESET`/`PRAGMA`
+ * of the two auto settings. `INSTALL ... FROM '<local path>'` stays: an
+ * administrator bundling an extension from disk downloads nothing.
+ */
+export function extensionDownloadRefusal(sql: string): string | null {
+  const bare = sql.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/--[^\n]*/g, ' ');
+  for (const statement of bare.split(';')) {
+    const text = statement.trim();
+    const install = /^(?:FORCE\s+)?INSTALL\s+(?:"([^"]+)"|'([^']+)'|([^\s'"(]+))(?:\s+FROM\s+(?:'([^']*)'|"([^"]*)"|([^\s;]+)))?/i.exec(text);
+    if (install) {
+      const isUrl = (value: string) => /^[a-z][a-z0-9+.-]*:\/\//i.test(value);
+      const quotedName = install[1] ?? install[2];
+      const name = (quotedName ?? install[3] ?? '').replace(/^.*[\\/]/, '').replace(/\.duckdb_extension(?:\.gz)?$/i, '');
+      const quotedSource = install[4] ?? install[5];
+      // A file on disk: `INSTALL '/path/httpfs.duckdb_extension'` or `INSTALL httpfs FROM '/mirror'`.
+      const localFile = quotedName !== undefined && /[\\/]/.test(quotedName) && !isUrl(quotedName) && quotedSource === undefined && install[6] === undefined;
+      const localSource = quotedSource !== undefined && !isUrl(quotedSource);
+      if (localFile || localSource) continue;
+      return `extension downloads are off on this install (ZLENS_DUCKDB_AUTOINSTALL=off): INSTALL ${name || 'extension'} would download it; ask an administrator to bundle it`;
+    }
+    const setting = /^(?:SET|RESET|PRAGMA)\s+(?:GLOBAL\s+|SESSION\s+|LOCAL\s+)?(autoinstall_known_extensions|autoload_known_extensions)\b/i.exec(text);
+    // Turning either setting off again is what this connector itself does on every new connection.
+    if (setting && !/^(?:SET|PRAGMA)\b[^=]*(?:=|\bTO\b)\s*'?(?:false|0|off|no)'?\s*$/i.test(text)) {
+      return `extension downloads are off on this install (ZLENS_DUCKDB_AUTOINSTALL=off); ${setting[1].toLowerCase()} cannot be changed by a statement`;
+    }
+  }
+  return null;
+}
+
+/** The extension a DuckDB error says is missing, if that is what it says (DuckDB 1.1 to 1.5 wordings). */
+export function missingDuckDBExtensionName(message: string): string | undefined {
+  const patterns = [
+    /requires the extension (\w+) to be loaded/i,
+    /exists in the (\w+) extension/i,
+    /required extension '(\w+)'/i,
+    /Extension "(\w+)" is an existing extension/i,
+    /Extension "(\w+)" (?:is not installed|not found|could not be loaded)/i,
+    /Missing Extension Error:[^\n]*?\b(?:extension|Extension)\s+"?(\w+)"?/,
+  ];
+  for (const pattern of patterns) {
+    const match = pattern.exec(message);
+    if (match) return match[1];
+  }
+  return undefined;
+}
+
+/** Whether `extension` is installed in this database's extension directory (so only a LOAD is missing). */
+function duckDBExtensionInstalled(connection: any, extension: string): Promise<boolean> {
+  return new Promise<boolean>((resolve) => {
+    try {
+      connection.all(
+        'SELECT installed FROM duckdb_extensions() WHERE extension_name = ?',
+        extension,
+        (error: Error | null, rows: Array<{ installed?: unknown }> | undefined) => resolve(!error && rows?.[0]?.installed === true),
+      );
+    } catch {
+      resolve(false);
+    }
+  });
 }
 
 async function acquireDuckDBDatabase(
