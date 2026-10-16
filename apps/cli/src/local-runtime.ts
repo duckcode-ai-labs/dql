@@ -785,6 +785,7 @@ import {
 } from "./notebook-datasets.js";
 import { prepareBlockInvocation } from './block-invocation.js';
 import { readPrivateConnections, redactConnections, resolveSecretReferences, storeConnectionSecrets } from './connection-secrets.js';
+import { connectionEnvironmentReferences } from './connection-env.js';
 import { authorizeHostRequest, currentHostGitHooks, currentHostHooks, currentPrincipal, currentRequestContext, destinationForRequest, hostActor, hostAllowedSources, hostFiguresDependOnReader, hostGitAuthor, anyHostedServer, hostModelProvider, HOST_IDENTITY_UNAVAILABLE, installHostPersonaSlots, processHostHooks, registerServerHooks, resolveHostPrincipal, resolveHostPrincipalOutcome, resultValuesMayReachModel, safeAppNotFound, safeHomeCards, safeHostBanner, safeNextLink, scopedHostHooks, setHostGitHooks, setHostModelHooks, setProcessToolHooks, currentToolHooks, unregisterServerHooks, withRequestContext, withServerScope, type DqlServerScope, type DqlFollow, type DqlHostHooks, type DqlRunStoreLike } from './host/request-context.js';
 import { isRunPass, issueRunPass, redeemRunPass, revokeRunPass } from './host/schedule-runs.js';
 import { setDeliverySink } from './schedule/notifiers/index.js';
@@ -26904,6 +26905,8 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
         metadataStatus: metadataScope
           ? warehouseMetadataStatus(projectRoot, metadataScope.scopeFingerprint, defaultKey)
           : warehouseMetadataStatus(projectRoot),
+        // The environment variables the default connection reads, by name, and whether each is set.
+        environmentReferences: manages ? connectionEnvironmentReferences(connections[defaultKey]) : [],
         // Present only in warehouse-first and hybrid modeling (RFC 0007).
         ...(() => {
           const warehouseCatalog = warehouseCatalogStatus(projectRoot, cfg, defaultKey);

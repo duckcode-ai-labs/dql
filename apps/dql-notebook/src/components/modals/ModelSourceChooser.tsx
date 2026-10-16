@@ -70,11 +70,12 @@ export function ModelSourceChooser({
           checked={selected}
           disabled={disabled}
           onChange={() => onChange(id)}
+          aria-labelledby={`${inputId}-title`}
           aria-describedby={`${inputId}-body`}
           style={{ marginTop: 3, accentColor: t.accent, flexShrink: 0 }}
         />
         <span style={{ display: 'flex', flexDirection: 'column', gap: 5, minWidth: 0 }}>
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 13.5, fontWeight: 750, color: t.textPrimary }}>
+          <span id={`${inputId}-title`} style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 13.5, fontWeight: 750, color: t.textPrimary }}>
             <span style={{ color: selected ? t.accent : t.textSecondary, display: 'inline-flex' }}>{ICONS[id]}</span>
             {title}
           </span>
@@ -154,12 +155,15 @@ export function ExistingProjectSyncCard({
   project,
   busy,
   steps,
+  environment = [],
   onSync,
   t,
 }: {
   project: ExistingProject;
   busy: boolean;
   steps: ProjectSyncStep[] | null;
+  /** `${NAME}` values the connection reads, and whether each is set for this server. */
+  environment?: Array<{ name: string; set: boolean }>;
   onSync: () => void;
   t: Theme;
 }) {
@@ -183,6 +187,23 @@ export function ExistingProjectSyncCard({
           {busy ? 'Synchronizing…' : 'Synchronize'}
         </button>
       </div>
+      {environment.length ? (
+        <div style={{ fontSize: 11.5, lineHeight: 1.55, color: t.textSecondary }}>
+          <div style={{ fontWeight: 650, color: t.textPrimary }}>Environment variables this connection reads</div>
+          <ul aria-label="Environment variables" style={{ margin: '4px 0 0', paddingLeft: 18 }}>
+            {environment.map((reference) => (
+              <li key={reference.name}>
+                <code style={{ fontFamily: t.fontMono }}>{reference.name}</code>
+                {' · '}
+                <span style={{ color: reference.set ? 'var(--status-success)' : 'var(--status-warning)' }}>{reference.set ? 'set' : 'not set'}</span>
+              </li>
+            ))}
+          </ul>
+          {environment.some((reference) => !reference.set)
+            ? <div style={{ marginTop: 4 }}>Export the missing ones in the shell that starts <code style={{ fontFamily: t.fontMono }}>zlens notebook</code>, restart it, then test and synchronize. Passwords can also be entered above; they stay in the private secrets file.</div>
+            : null}
+        </div>
+      ) : null}
       {steps?.map((step) => (
         <div key={step.kind} role={step.ok ? 'status' : 'alert'} style={{ fontSize: 11.5, lineHeight: 1.5, color: step.ok ? 'var(--status-success)' : 'var(--status-error)' }}>
           {step.message}

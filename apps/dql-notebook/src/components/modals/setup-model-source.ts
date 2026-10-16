@@ -97,7 +97,7 @@ export function existingProjectFromStatus(
   const parts: string[] = [];
   if (mode !== 'warehouse-first') {
     const dbtSource = status?.dbt?.repoUrl || status?.dbt?.projectDir;
-    parts.push(dbtSource ? `dbt project at ${dbtSource}` : 'dbt project');
+    parts.push(!dbtSource ? 'dbt project' : dbtSource === '.' || dbtSource === './' ? 'dbt project in this folder' : `dbt project at ${dbtSource}`);
   }
   if (warehouseModeling) parts.push('warehouse tables');
   const driver = connectionDriver(connections);
@@ -232,6 +232,11 @@ export function rememberProposalForModeling(proposalId: string, storage: Pick<St
 
 // ── Open an existing project: synchronize ──────────────────────────────────
 
+/** Environment variables the connection reads that are not set for this server. */
+export function missingEnvironment(environment: Array<{ name: string; set: boolean }> | undefined): string[] {
+  return (environment ?? []).filter((reference) => !reference.set).map((reference) => reference.name);
+}
+
 export interface ProjectSyncApi {
   previewDbtOnboarding: (payload: Record<string, never>) => Promise<{ fingerprint: string; counts?: Record<string, number> }>;
   refreshDbtOnboarding: (payload: { expectedFingerprint: string }) => Promise<unknown>;
@@ -255,7 +260,12 @@ export async function synchronizeExistingProject(
   project: ExistingProject,
   connectionId: string | null | undefined,
   syncApi: ProjectSyncApi,
+  environment: Array<{ name: string; set: boolean }> = [],
 ): Promise<ProjectSyncStep[]> {
+  const unset = missingEnvironment(environment);
+  if (unset.length) {
+    return [{ kind: project.warehouseModeling ? 'warehouse' : 'dbt', ok: false, message: `Set ${unset.join(', ')} in the shell that starts zlens notebook, restart it, then synchronize.` }];
+  }
   const steps: ProjectSyncStep[] = [];
   if (project.dbtConfigured && project.mode !== 'warehouse-first') {
     try {

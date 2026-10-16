@@ -6,6 +6,7 @@ import {
   draftsFromWarehouse,
   existingProjectFromStatus,
   initialModelSource,
+  missingEnvironment,
   modelingModeForSource,
   PROPOSAL_HANDOFF_KEY,
   rememberProposalForModeling,
@@ -165,6 +166,18 @@ describe('synchronize an existing project', () => {
     expect(steps[0]).toMatchObject({ kind: 'warehouse', ok: false });
     expect(steps[0]!.message).toContain('Apply and synchronize');
     expect(syncApi.refreshConnectionMetadata).not.toHaveBeenCalled();
+  });
+
+  it('asks for unset environment variables before reading anything', async () => {
+    const syncApi = fakeApi();
+    const steps = await synchronizeExistingProject(existingProjectFromStatus(warehouseProject)!, 'warehouse', syncApi, [
+      { name: 'PGHOST', set: true },
+      { name: 'PGPASSWORD', set: false },
+    ]);
+    expect(steps).toEqual([{ kind: 'warehouse', ok: false, message: 'Set PGPASSWORD in the shell that starts zlens notebook, restart it, then synchronize.' }]);
+    expect(syncApi.getConnectionMetadataScope).not.toHaveBeenCalled();
+    expect(missingEnvironment([{ name: 'A', set: true }, { name: 'B', set: false }])).toEqual(['B']);
+    expect(missingEnvironment(undefined)).toEqual([]);
   });
 
   it('needs a connection for the warehouse part', async () => {

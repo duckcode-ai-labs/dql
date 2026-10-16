@@ -34,6 +34,8 @@ describe('Where does your data model live?', () => {
     // Every radio is labelled by its card and described by its body text.
     for (const id of ['dbt', 'warehouse', 'both', 'existing']) {
       expect(html).toContain(`for="zlens-model-source-${id}"`);
+      expect(html).toContain(`aria-labelledby="zlens-model-source-${id}-title"`);
+      expect(html).toContain(`id="zlens-model-source-${id}-title"`);
       expect(html).toContain(`aria-describedby="zlens-model-source-${id}-body"`);
     }
   });
@@ -112,5 +114,22 @@ describe('Synchronize card (existing project)', () => {
     expect(html).toContain('Reads the saved warehouse schemas again');
     expect(html).toContain('Warehouse synchronized · 6 tables and views.');
     expect(html).toMatch(/<button[^>]*>Synchronize<\/button>/);
+  });
+
+  it('names the environment variables the connection reads and which are missing', () => {
+    const html = renderToStaticMarkup(
+      <ExistingProjectSyncCard
+        project={warehouseProject!}
+        busy={false}
+        steps={null}
+        environment={[{ name: 'PGHOST', set: true }, { name: 'PGPASSWORD', set: false }]}
+        onSync={noop}
+        t={t}
+      />,
+    );
+    expect(html).toContain('aria-label="Environment variables"');
+    expect(html).toMatch(/PGHOST<\/code> · <span[^>]*>set<\/span>/);
+    expect(html).toMatch(/PGPASSWORD<\/code> · <span[^>]*>not set<\/span>/);
+    expect(html).toContain('Export the missing ones');
   });
 });

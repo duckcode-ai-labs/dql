@@ -78,6 +78,7 @@ export function SetupOnboarding({
   const [draft, setDraft] = useState<DraftOutcome | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [syncSteps, setSyncSteps] = useState<ProjectSyncStep[] | null>(null);
+  const [environment, setEnvironment] = useState<Array<{ name: string; set: boolean }>>([]);
   const requestedSource = state.setupModelSource;
 
   const requiresUpgradeReapply = Boolean(
@@ -118,6 +119,7 @@ export function SetupOnboarding({
         setDatabaseDetail(`${driver} configured — test to verify reachability.`);
         setConnectionId(connectionInfo.default);
       }
+      setEnvironment(connectionInfo?.environmentReferences ?? []);
       const catalog = (connectionInfo as { warehouseCatalog?: WarehouseCatalogSummary } | null)?.warehouseCatalog;
       if (catalog?.relations && !catalog.error) setCatalogReady(true);
       const project = existingProjectFromStatus(onboarding, realConnection ? connectionInfo : null);
@@ -230,7 +232,9 @@ export function SetupOnboarding({
     setSyncSteps(null);
     try {
       const latest = await api.getConnections().catch(() => null);
-      setSyncSteps(await synchronizeExistingProject(existing, latest?.default ?? connectionId, api));
+      const references = latest?.environmentReferences ?? environment;
+      setEnvironment(references);
+      setSyncSteps(await synchronizeExistingProject(existing, latest?.default ?? connectionId, api, references));
     } finally {
       setSyncing(false);
     }
@@ -352,7 +356,7 @@ export function SetupOnboarding({
                 <DraftModelsCard busy={drafting} canDraft={catalogReady} outcome={draft} onDraft={() => void draftModels()} t={t} />
               ) : null}
               {source === 'existing' && existing ? (
-                <ExistingProjectSyncCard project={existing} busy={syncing} steps={syncSteps} onSync={() => void synchronize()} t={t} />
+                <ExistingProjectSyncCard project={existing} busy={syncing} steps={syncSteps} environment={environment} onSync={() => void synchronize()} t={t} />
               ) : null}
             </SetupSection>
           ) : null}

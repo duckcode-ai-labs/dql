@@ -4701,6 +4701,8 @@ export interface ConnectionsResponse {
   dbtProfiles?: DbtProfileConnectionCandidate[];
   metadataScope?: ConnectionMetadataScopeV1 | null;
   metadataStatus?: WarehouseMetadataStatus;
+  /** The environment variables the default connection reads (`${NAME}`), by name, and whether each is set. */
+  environmentReferences?: Array<{ name: string; set: boolean }>;
 }
 
 export interface ConnectionMetadataScopeV1 {
