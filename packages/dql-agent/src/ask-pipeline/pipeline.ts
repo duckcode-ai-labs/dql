@@ -796,7 +796,7 @@ export async function runAskPipeline(input: RunAskPipelineInput): Promise<Pipeli
       // What the drafting host could not fix and the reader must know (a
       // grouping by keys whose names it could not join) is said in the answer.
       const drafted = candidate.proof.filter((line) => line.startsWith('caveat: ')).map((line) => line.slice('caveat: '.length));
-      return { kind: 'answered', intent: reading, candidate, result, text: composeAnsweredText(reading, result, input.vocabulary, candidate.trust, { caveats: [...(options.caveats ?? []), caveat, ...drafted] }), receipt };
+      return { kind: 'answered', intent: reading, candidate, result, text: composeAnsweredText(reading, result, input.vocabulary, candidate.trust, { caveats: [...(options.caveats ?? []), caveat, ...drafted], tier: candidate.tier }), receipt };
     };
     // The first statement ran and returned nothing: kept, so a redraft that
     // fails or declines still ends in the honest empty answer.
@@ -1734,5 +1734,5 @@ export async function runAskPipeline(input: RunAskPipelineInput): Promise<Pipeli
     ? { source: step.authority.source, ...(step.authority.relationshipId ? { relationshipId: step.authority.relationshipId } : {}), authority: step.authority.authority, scope: step.authority.scope }
     : { source: 'declared', authority: 'unknown' });
   receipt.context = { ...receipt.context!, used: { joins: usedJoins, relations: [...new Set([...(candidate.relations ?? []), ...(candidate.joins ?? []).map((step) => step.relation)])], tier: candidate.tier, ...(candidate.engine ? { engine: candidate.engine } : {}) } };
-  return { kind: 'answered', intent, candidate, result, text: composeAnsweredText(intent, result, input.vocabulary, candidate.trust, { notes: [...(receipt.grounding ?? []), ...textMatches], caveats }), receipt };
+  return { kind: 'answered', intent, candidate, result, text: composeAnsweredText(intent, result, input.vocabulary, candidate.trust, { notes: [...(receipt.grounding ?? []), ...textMatches], caveats, tier: candidate.tier }), receipt };
 }

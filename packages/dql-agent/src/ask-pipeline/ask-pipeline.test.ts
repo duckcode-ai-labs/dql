@@ -1402,6 +1402,9 @@ describe('a label-only certified block is the answer of last resort, after the r
     expect(outcome.candidate.trust).toBe('governed');
     expect(outcome.candidate.proof.join(' ')).toMatch(/served as published because no keyed governed answer could be composed/);
     expect(outcome.text).toMatch(/recertify it with the entity key/);
+    // The answer names the block it came from, never "the semantic layer" (launch blocker: App Ask labels).
+    expect(outcome.text).toMatch(/Source: a certified block, served as published \(not certified for this exact question\)\./);
+    expect(outcome.text).not.toMatch(/semantic layer/);
     expect(outcome.receipt.refusals.some((refusal) => refusal.tier === 'certified' && /no identity key/.test(refusal.message))).toBe(false);
   });
 });

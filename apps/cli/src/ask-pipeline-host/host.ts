@@ -1145,6 +1145,22 @@ export function effectiveAnsweredTrust(input: {
   return { trustState: 'governed', certification: 'governed', reviewStatus: 'governed', stopReason: 'governed_semantic_answer' };
 }
 
+/**
+ * The answer card's title, from the ONE trust decision and the source of the
+ * figures. A certified block served as evidence is never headed "certified"
+ * unless the run is, and nothing but SQL the AI wrote is headed AI-drafted:
+ * the heading, the card, the run and the badge must say the same thing.
+ */
+export function answeredArtifactTitle(
+  trustState: 'certified' | 'governed' | 'review_required',
+  source: 'certified_block' | 'block_as_evidence' | 'governed_definitions' | 'ai_sql',
+): string {
+  if (trustState === 'certified') return 'Certified answer';
+  if (source === 'ai_sql') return 'AI-drafted answer';
+  if (source === 'block_as_evidence') return trustState === 'governed' ? 'Governed answer from a certified block' : 'Answer to review, from a certified block';
+  return trustState === 'governed' ? 'Semantic answer' : 'Answer to review, from governed definitions';
+}
+
 export function coverageEvaluations(receipt: Pick<PipelineReceipt, 'uncovered' | 'coverage'>): Array<{ id: string; label: string; passed: boolean; severity: 'warning' | 'info'; message: string }> {
   if (!receipt.uncovered?.length) return [];
   const states = new Map((receipt.coverage ?? []).map((item) => [item.word, item.state]));
@@ -3378,7 +3394,9 @@ export function toExecutorResult(runId: string, outcome: PipelineOutcome, starte
   const undeclaredJoin = (receipt.context?.used?.joins ?? []).find((join) => join.authority === 'none' && join.relations?.length === 2 && (join.keys?.length ?? 0) > 0);
   const tableName = (relation: string) => relation.replace(/"/g, '').split('.').pop() ?? relation;
   // An answer whose SQL the AI wrote from the schema is never headed as governed.
-  const artifact: AgentRunArtifact ={ id: `${runId}:answer`, kind: 'answer', title: certified ? 'Certified answer' : reviewRequired ? 'AI-drafted answer' : blockAsEvidence ? 'Certified block answer' : 'Semantic answer', trustState, payload };
+  // The card's title comes from the same trust decision as the run, the badge
+  // and the payload, and names the source the figures came from.
+  const artifact: AgentRunArtifact ={ id: `${runId}:answer`, kind: 'answer', title: answeredArtifactTitle(trustState, certified ? 'certified_block' : reviewRequired ? 'ai_sql' : blockAsEvidence ? 'block_as_evidence' : 'governed_definitions'), trustState, payload };
   return withReceipt({
     summary: outcome.text, answer: outcome.text, status: 'completed', trustState,
     stopReason: effectiveTrust.stopReason,
