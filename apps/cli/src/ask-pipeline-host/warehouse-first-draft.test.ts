@@ -4,13 +4,14 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { AgentMessage, AgentProvider, AgentRunRequest } from '@zlens/agent';
 import type { ConnectionConfig, QueryExecutor } from '@zlens/connectors';
-import { createAskPipelineRouteExecutor } from './host.js';
+import { certifiedBlocksForDraft, createAskPipelineRouteExecutor } from './host.js';
 
 /**
  * A warehouse-first project (no dbt): the synced catalog is the whole account
  * of the data. The drafter reads every table of it when it fits, with the keys
  * the warehouse declares, and where nothing is governed it drafts from the
- * question itself.
+ * question itself. On any project the drafter reads the certified blocks
+ * nearest the question.
  */
 type Table = { columns: string[]; primaryKey?: string[]; foreignKeys?: Array<{ columns: string[]; references: { relation: string; columns: string[] } }> };
 
@@ -170,5 +171,34 @@ describe('where nothing is governed, the SQL is drafted from the question itself
   it('a project with a certified block is read first', async () => {
     const { readings } = await ask({ blocks: [{ name: 'invoice_totals', description: 'Invoice totals by country.', sql: 'SELECT c.country, SUM(i.total) AS total FROM main.invoices i JOIN main.customers c ON c.customer_id = i.customer_id GROUP BY 1', certified: true }] }, 'Total invoice amount for each customer country', () => sql, rows);
     expect(readings).toBeGreaterThan(0);
+  });
+});
+
+describe('the certified blocks an AI-written statement reads', () => {
+  const block = (name: string, description: string, sql: string, certified = true) => ({ kind: 'block', ref: `block:${name}`, name, aliases: [], roles: [], description, sql, certified, contract: { outputs: [], measures: [], staticScope: [], acceptedFilters: [] } }) as unknown as Parameters<typeof certifiedBlocksForDraft>[0][number];
+  const entries = [
+    block('loss_ratio_by_policy', 'Loss ratio per policy: losses paid over written premium.', 'SELECT p.policy_number, SUM(lp.amount) / SUM(pa.amount) FROM main.policy p JOIN main.policy_amount pa ON pa.policy_id = p.policy_id JOIN main.loss_payment lp ON lp.policy_id = p.policy_id GROUP BY 1'),
+    block('claims_register', 'Every claim with its open and close dates.', 'SELECT * FROM main.claim'),
+    block('draft_premium', 'Premium by agent.', 'SELECT 1 FROM main.policy_amount', false),
+  ];
+
+  it('keeps certified blocks that share words with the question and read a chosen table, best first; a draft block is never shown', () => {
+    expect(certifiedBlocksForDraft(entries, 'loss ratio for each policy holder', ['"acme"."main"."policy"']).map((entry) => entry.name)).toEqual(['loss_ratio_by_policy']);
+    // The draft "premium by agent" block is not shown; the certified block that computes premium is.
+    expect(certifiedBlocksForDraft(entries, 'premium by agent', ['main.policy_amount']).map((entry) => entry.name)).toEqual(['loss_ratio_by_policy']);
+    expect(certifiedBlocksForDraft(entries, 'how many orders', ['main.orders'])).toEqual([]);
+  });
+
+  it('the drafter reads the certified block near the question, and the run receipt names it', async () => {
+    const blocks = [
+      { name: 'invoice_totals', description: 'Invoice totals by customer country.', sql: 'SELECT c.country, SUM(i.total) AS total FROM main.invoices i JOIN main.customers c ON c.customer_id = i.customer_id GROUP BY 1', certified: true },
+      { name: 'invoice_drafts', description: 'Invoice totals by customer country, a draft.', sql: 'SELECT 1 FROM main.invoices', certified: false },
+    ];
+    const { prompts, result } = await ask({ blocks }, 'Total invoice amount for each customer city', declined);
+    expect(prompts[0]).toContain('- certified block invoice_totals (how the team joins these tables');
+    expect(prompts[0]).toContain('Its certified SQL: SELECT c.country, SUM(i.total)');
+    expect(prompts[0]).not.toContain('invoice_drafts');
+    const receipt = (result as { askPipelineReceipt?: { dispatches: Array<{ label?: string; blocks?: string[] }> } }).askPipelineReceipt;
+    expect(receipt?.dispatches.find((dispatch) => dispatch.blocks)?.blocks).toEqual(['block:shop.invoice_totals']);
   });
 });

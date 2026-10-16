@@ -709,6 +709,36 @@ export function skillsForDraft(entries: VocabularyEntry[], text: string, max = 2
     .map((item) => item.entry);
 }
 
+/**
+ * THE CERTIFIED BLOCKS AN AI-WRITTEN STATEMENT READS. A certified block that
+ * does not answer the question exactly is still how the team computes a
+ * report near it: its joins, filters and definitions were approved. At most
+ * two, ranked by the words they share with the question and its reading, and
+ * by the chosen tables their SQL reads; a block that shares no word is not
+ * shown, and a draft block never is.
+ */
+export function certifiedBlocksForDraft(entries: VocabularyEntry[], text: string, relations: string[], max = 2): VocabularyEntry[] {
+  const words = (value: string) => new Set((value.toLowerCase().replace(/[_."]/g, ' ').match(SKILL_WORD) ?? []).filter((word) => !SKILL_STOPWORDS.has(word)));
+  const tail = (relation: string) => relation.replace(/["`\[\]]/g, '').split('.').pop()!.toLowerCase();
+  const wanted = words(text);
+  const chosen = new Set(relations.map(tail));
+  return entries
+    .filter((entry) => entry.kind === 'block' && entry.certified === true && Boolean(entry.sql))
+    .map((entry, index) => {
+      const own = words(`${entry.name} ${entry.label ?? ''} ${entry.description ?? ''} ${(entry.contract?.outputs ?? []).join(' ')}`);
+      let shared = 0;
+      for (const word of wanted) if (own.has(word)) shared += 1;
+      const reads = new Set([...entry.sql!.matchAll(/\b(?:from|join)\s+((?:"[^"]+"|`[^`]+`|[A-Za-z_][\w$]*)(?:\.(?:"[^"]+"|`[^`]+`|[A-Za-z_][\w$]*)){0,2})/gi)].map((match) => tail(match[1]!)));
+      let tables = 0;
+      for (const name of reads) if (chosen.has(name)) tables += 1;
+      return { entry, shared, tables, index };
+    })
+    .filter((item) => item.shared > 0 && (item.tables > 0 || item.shared >= 2))
+    .sort((a, b) => (b.shared + b.tables) - (a.shared + a.tables) || a.index - b.index)
+    .slice(0, max)
+    .map((item) => item.entry);
+}
+
 /** A declared relationship two tables of an AI-written statement both carry the keys of. */
 export type PreferredJoin = { name: string; certified: boolean; from: string; to: string; keys: Array<{ from: string; to: string }>; cardinality?: string };
 
@@ -1248,7 +1278,7 @@ type AskPipelineRunInput = Parameters<typeof runAskPipeline>[0];
 
 /** What one pipeline run keeps for its own receipt: drafting calls, checks and host steps. */
 interface AskRunState {
-  draftDispatches: Array<{ purpose: string; ms: number; reply?: string; promptChars?: number; at?: number; attempt?: number; label?: 'draft' | 'redraft' | 'fix' | 'retry_empty' | 'widen'; outcome?: 'sql' | 'declined' | 'rejected' | 'error' }>;
+  draftDispatches: Array<{ purpose: string; ms: number; reply?: string; promptChars?: number; at?: number; attempt?: number; /** Certified blocks the drafter was given as the team's approved computations. */ blocks?: string[]; label?: 'draft' | 'redraft' | 'fix' | 'retry_empty' | 'widen'; outcome?: 'sql' | 'declined' | 'rejected' | 'error' }>;
   // The checks drafted SQL was held to, recorded for the run views (the
   // notes sent back to the model are built separately and never from these).
   hostChecks: Array<{ id: 'stated_values' | 'required_filters' | 'join_fanout' | 'certified_joins' | 'catalog_columns' | 'read_only' | 'key_labels'; label: string; passed: boolean; message: string; attempt: number }>;
@@ -2172,6 +2202,12 @@ export function createAskPipelineHost(deps: AskPipelineHostDeps): AskPipelineHos
       // THE PROJECT'S WRITTEN RULES: the skills selected for this request whose
       // text shares the most words with the question and the chosen tables,
       // long enough to carry a definition (the reading step sees a short card).
+      // THE TEAM'S CERTIFIED REPORTS NEAR THE QUESTION: their SQL is how the
+      // team joins and defines these tables, reused where the question
+      // overlaps. Draft blocks are never shown; the answer stays review-required.
+      const draftBlocks = certifiedBlocksForDraft(current.entries, `${question} ${intent?.reading ?? ''}`, relations);
+      const blockLines = draftBlocks
+        .map((entry) => `- certified block ${entry.label ?? entry.name} (how the team joins these tables and defines its measures, for a report near this question: reuse its joins and definitions where the question overlaps it; which rows to keep, the grouping and the output come from the question, not the block; write the SQL for ${connection?.driver ?? 'duckdb'} even where the block's syntax differs)${entry.description ? `: ${entry.description.replace(/\s+/g, ' ').slice(0, 300)}` : ''}. Its certified SQL: ${entry.sql!.replace(/\s+/g, ' ').slice(0, 1500)}`);
       const skillLines = skillsForDraft(current.entries, `${question} ${intent?.reading ?? ''} ${relations.join(' ')}`)
         .map((entry) => `- project skill ${entry.label ?? entry.name}: ${(entry.skill?.guidance ?? entry.description ?? '').replace(/\s+/g, ' ').slice(0, 1500)}`);
       const contextLines = [
@@ -2183,6 +2219,7 @@ export function createAskPipelineHost(deps: AskPipelineHostDeps): AskPipelineHos
         ...metricLines,
         ...joinLines,
         ...keyLines,
+        ...blockLines,
         ...markerLines,
         ...identifierLines,
         ...skillLines,
@@ -2230,6 +2267,7 @@ export function createAskPipelineHost(deps: AskPipelineHostDeps): AskPipelineHos
         // What this call was for and what it returned, kept for the run views.
         const dispatch: AskRunState['draftDispatches'][number] = {
           purpose: 'intent:draft', ms: 0, attempt: state.draftDispatches.length + 1,
+          ...(draftBlocks.length ? { blocks: draftBlocks.map((entry) => entry.ref) } : {}),
           label: label ?? (note ? 'fix' : undefined) ?? (previous ?(/^the statement ran and returned no rows/.test(previous.error) ? 'retry_empty' : 'redraft') : 'draft'),
         };
         let raw: string;
