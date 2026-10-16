@@ -171,6 +171,83 @@ export function joinKeyPairs(sql: string): JoinKeyPair[] {
   return pairs;
 }
 
+export interface GroupedColumn {
+  column: string;
+  /** The relation the column is read from, as the statement names it; absent for a bare column of a statement that reads several relations. */
+  relation?: string;
+  qualifier?: string;
+}
+
+/** Split a clause on its top-level commas (a comma inside a call is not a separator). */
+function topLevelItems(text: string): string[] {
+  const items: string[] = [];
+  let depth = 0;
+  let start = 0;
+  let quoted: string | undefined;
+  for (let index = 0; index < text.length; index += 1) {
+    const char = text[index]!;
+    if (quoted) { if (char === quoted) quoted = undefined; continue; }
+    if (char === '\'' || char === '"') quoted = char;
+    else if (char === '(') depth += 1;
+    else if (char === ')') depth -= 1;
+    else if (char === ',' && depth === 0) { items.push(text.slice(start, index)); start = index + 1; }
+  }
+  items.push(text.slice(start));
+  return items.map((item) => item.trim()).filter(Boolean);
+}
+
+const SIMPLE_COLUMN = /^(?:("?[\w$]+"?)\.)?("?[\w$]+"?)$/;
+/** A select item without its output name (`o.location_id AS store` -> `o.location_id`). */
+const withoutAlias = (item: string) => item.trim().replace(/\s+(?:as\s+)?"?[\w$]+"?$/i, '').trim();
+
+/**
+ * WHAT A STATEMENT GROUPS BY. Each plain column of every GROUP BY, with the
+ * relation it is read from (aliases resolved, CTEs left out). A position
+ * (`GROUP BY 1`) is read from the select list before it; an expression is
+ * not a column and is skipped. Best effort by design: what this cannot read
+ * is not reported, so a check built on it never fails a statement it misread.
+ */
+export function groupedColumns(sql: string): GroupedColumn[] {
+  const text = sql.replace(/--[^\n]*/g, ' ').replace(/\/\*[\s\S]*?\*\//g, ' ');
+  const ctes = new Set([...text.matchAll(/(?:\bwith\b|,)\s*([A-Za-z_][\w$]*)\s+as\s*\(/gi)].map((match) => match[1]!.toLowerCase()));
+  const aliases = new Map<string, string>();
+  const relations: string[] = [];
+  for (const match of text.matchAll(new RegExp(String.raw`\b(?:from|join)\s+${RELATION_TOKEN}(?:\s+(?:as\s+)?([A-Za-z_][\w$]*))?`, 'gi'))) {
+    const relation = match[1]!;
+    if (ctes.has(relation.replace(/"/g, '').toLowerCase())) continue;
+    const alias = match[2] && !NOT_ALIAS.has(match[2].toLowerCase()) ? match[2] : undefined;
+    aliases.set(relation.split('.').pop()!.replace(/"/g, '').toLowerCase(), relation);
+    if (alias) aliases.set(alias.toLowerCase(), relation);
+    if (!relations.includes(relation)) relations.push(relation);
+  }
+  const out: GroupedColumn[] = [];
+  for (const match of text.matchAll(/\bgroup\s+by\b([\s\S]*?)(?=\bhaving\b|\border\s+by\b|\blimit\b|\bqualify\b|\bwindow\b|\bunion\b|\)|;|$)/gi)) {
+    // The select list of the query this GROUP BY closes: the last SELECT before it.
+    const before = text.slice(0, match.index);
+    const select = [...before.matchAll(/\bselect\b([\s\S]*?)\bfrom\b/gi)].pop()?.[1];
+    const selected = select ? topLevelItems(select.replace(/^\s*distinct\b/i, '')) : [];
+    for (const written of topLevelItems(match[1]!)) {
+      const item = /^\d+$/.test(written) ? withoutAlias(selected[Number(written) - 1] ?? '') : written;
+      const column = SIMPLE_COLUMN.exec(withoutAlias(item));
+      if (!column) continue;
+      const qualifier = column[1]?.replace(/"/g, '');
+      const name = column[2]!.replace(/"/g, '');
+      const relation = qualifier ? aliases.get(qualifier.toLowerCase()) : relations.length === 1 ? relations[0] : undefined;
+      if (qualifier && !relation) continue;
+      if (!out.some((existing) => existing.column.toLowerCase() === name.toLowerCase() && existing.relation === relation)) {
+        out.push({ column: name, ...(relation ? { relation } : {}), ...(qualifier ? { qualifier } : {}) });
+      }
+    }
+  }
+  return out;
+}
+
+/** Whether a statement reads a column anywhere (bare or qualified, quoted or not). */
+export function mentionsColumn(sql: string, column: string): boolean {
+  const escaped = column.replace(/"/g, '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`(?<![\\w$])"?${escaped}"?(?![\\w$])`, 'i').test(sql.replace(/--[^\n]*/g, ' '));
+}
+
 /**
  * LEFT JOINS THAT DO NOTHING. A LEFT JOIN keeps every row of the tables before
  * it, so a table joined that way and never used again (no column selected,

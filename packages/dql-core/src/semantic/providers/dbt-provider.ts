@@ -351,7 +351,7 @@ function loadFromManifestJson(manifestPath: string, artifactKind: 'manifest' | '
   }
 
   const layer = new SemanticLayer();
-  if (overlay) applyYamlOverlay(layer, overlay, models, dbtMetrics, statSync(manifestPath).mtimeMs);
+  if (overlay) applyYamlOverlay(layer, overlay, models, dbtMetrics, statSync(manifestPath).mtimeMs, nodeRelationsByModel(nodesSource));
 
   // Build measure lookup first (identical logic to the YAML path).
   const measureLookup: DbtMeasureLookup = new Map();
@@ -445,7 +445,22 @@ function applyYamlOverlay(
   models: DbtSemanticModel[],
   metrics: DbtMetric[],
   manifestMtimeMs: number,
+  nodeRelations: Map<string, NonNullable<DbtSemanticModel['node_relation']>> = new Map(),
 ): void {
+  // A semantic model in YAML says `model: ref('locations')`; dbt resolved that
+  // ref to the warehouse table ("jaffle_shop"."dev"."locations") in the
+  // artifact. Editing the YAML (or copying the project, which only refreshes
+  // file times) does not move the table, so the YAML model keeps the relation
+  // dbt resolved. Without it the model's table is the bare name `locations`,
+  // which the warehouse does not have, and everything built on the model
+  // (its dimensions, its entities, the tables an AI drafts SQL over) is cut off
+  // from the table that holds its columns.
+  const withRelation = (item: DbtSemanticModel, base?: DbtSemanticModel): DbtSemanticModel => {
+    if (item.node_relation) return item;
+    const ref = dbtRefName(item.model);
+    const relation = (base?.node_relation && dbtRefName(base.model) === ref ? base.node_relation : undefined) ?? (ref ? nodeRelations.get(ref) : undefined);
+    return relation ? { ...item, node_relation: relation } : item;
+  };
   // A file older than the manifest was already seen by dbt: what the manifest lacks from it was left out on purpose
   // (disabled, another package), so only files edited after the manifest was written are read.
   // Measures that metrics written by Add metric need, for files older than the manifest (see readYamlOverlay).
@@ -461,15 +476,15 @@ function applyYamlOverlay(
       const index = models.findIndex((model) => model.name === item.name);
       const needed = (item.measures ?? []).filter((measure) => authoredMeasures.has(measure.name));
       if (needed.length === 0) continue;
-      if (index < 0) { models.push(item); continue; }
+      if (index < 0) { models.push(withRelation(item)); continue; }
       const have = models[index]!.measures ?? [];
       const extra = needed.filter((measure) => !have.some((existing) => existing.name === measure.name));
       if (extra.length > 0) models[index] = { ...models[index]!, measures: [...have, ...extra] };
       continue;
     }
     const index = models.findIndex((model) => model.name === item.name);
-    if (index < 0) models.push(item);
-    else models[index] = { ...item, ...(models[index]!.columnDescriptions ? { columnDescriptions: models[index]!.columnDescriptions } : {}) };
+    if (index < 0) models.push(withRelation(item));
+    else models[index] = { ...withRelation(item, models[index]), ...(models[index]!.columnDescriptions ? { columnDescriptions: models[index]!.columnDescriptions } : {}) };
   }
   const measures = new Set(models.flatMap((model) => (model.measures ?? []).map((measure) => measure.name)));
   const metricNames = new Set(metrics.map((metric) => metric.name));
@@ -545,6 +560,37 @@ function dbtNodeColumnDescriptions(manifest: Record<string, unknown> | undefined
     }
     if (Object.keys(descriptions).length > 0) out.set(raw.name, descriptions);
   }
+  return out;
+}
+
+/** The model a `ref('name')` names. */
+function dbtRefName(model: string | undefined): string | undefined {
+  return model?.match(/ref\(\s*['"]([^'"]+)['"]/)?.[1];
+}
+
+/**
+ * The warehouse relation dbt built for each model, seed and snapshot, by name:
+ * what `ref('locations')` resolves to. A name two packages share is ambiguous
+ * and resolves to nothing.
+ */
+function nodeRelationsByModel(manifest: Record<string, unknown> | undefined): Map<string, NonNullable<DbtSemanticModel['node_relation']>> {
+  const out = new Map<string, NonNullable<DbtSemanticModel['node_relation']>>();
+  const ambiguous = new Set<string>();
+  if (!manifest) return out;
+  for (const node of artifactCollection(manifest.nodes)) {
+    const raw = asRecord(node);
+    if (!['model', 'seed', 'snapshot'].includes(String(raw.resource_type)) || typeof raw.name !== 'string') continue;
+    const relationName = firstString(raw.relation_name);
+    if (!relationName) continue;
+    if (out.has(raw.name)) { ambiguous.add(raw.name); continue; }
+    out.set(raw.name, {
+      alias: firstString(raw.alias) ?? raw.name,
+      ...(firstString(raw.schema) ? { schema_name: firstString(raw.schema) } : {}),
+      ...(firstString(raw.database) ? { database: firstString(raw.database) } : {}),
+      relation_name: relationName,
+    });
+  }
+  for (const name of ambiguous) out.delete(name);
   return out;
 }
 
