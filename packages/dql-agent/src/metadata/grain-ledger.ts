@@ -224,7 +224,10 @@ export function aggregationIntegrityIssuesForSql(
           `aggregate at the proven native grain, then apply ROUND only to the outer final result (for example ROUND(COALESCE(SUM(amount), 0), 2)).`,
       });
     }
-    if (hasLossyNumericCast(call.body)) {
+    // SQLite stores no DECIMAL: a NUMERIC-declared column already holds an
+    // INTEGER or a REAL, so casting to REAL loses nothing, and it is the
+    // standard guard against SQLite's integer division.
+    if (dialect.trim().toLowerCase() !== 'sqlite' && hasLossyNumericCast(call.body)) {
       issues.push({
         kind: 'lossy_numeric_cast',
         message:

@@ -1,0 +1,23 @@
+{
+  "key": "15cfe929523e1a28fab3f19f7c42de8f",
+  "operation": "generate",
+  "text": "{\"version\":1,\"kind\":\"analytics\",\"reading\":\"Rank customers by their lifetime spend (order total including tax) and return the top 10 with their names.\",\"measures\":[{\"ref\":\"column:dev.customers.lifetime_spend\",\"aggregation\":\"sum\",\"alias\":\"lifetime_spend\"}],\"groupBy\":[{\"ref\":\"column:dev.customers.customer_id\",\"role\":\"key\"}],\"display\":[\"column:dev.customers.customer_name\"],\"filters\":[],\"ordering\":{\"ref\":\"lifetime_spend\",\"direction\":\"desc\"},\"limit\":10,\"expectedShape\":\"ranking\",\"unresolved\":[{\"clause\":\"top customers\",\"options\":[\"column:dev.customers.lifetime_spend\",\"column:dev.customers.lifetime_spend_pretax\",\"column:dev.customers.count_lifetime_orders\"],\"material\":false,\"question\":\"Should 'top' be measured by lifetime spend (default), pretax spend, or number of lifetime orders?\"}],\"provenance\":{\"column:dev.customers.lifetime_spend\":\"q:top customers\",\"column:dev.customers.customer_id\":\"q:customers\",\"column:dev.customers.customer_name\":\"q:who are\"}}",
+  "providerName": "claude",
+  "recordedAt": "2026-10-16T14:00:34.364Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 2,
+    "messageRoles": [
+      "system",
+      "user"
+    ],
+    "preCanonicalHash": "15cfe929523e1a28fab3f19f7c42de8fab73a1fdb4e1987b3dd5711bd27f6104",
+    "postCanonicalHash": "15cfe929523e1a28fab3f19f7c42de8fab73a1fdb4e1987b3dd5711bd27f6104",
+    "appliedRuleClasses": []
+  }
+}

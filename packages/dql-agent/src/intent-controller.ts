@@ -244,7 +244,7 @@ const STRONG_MATCH = 0.5;
 
 /** Build-an-app phrasing: an explicit verb on a dashboard/app noun. */
 const COMPOSE_APP_RE =
-  /\b(build|create|make|set ?up|put ?together|assemble|design|generate|spin ?up|give me)\b[^.?!]*\b(dashboard|dashboards|app|apps|cockpit|scorecard|overview|workspace|monitor|report)\b/i;
+  /\b(build|create|make|set ?up|put ?together|assemble|design|spin ?up|give me)\b[^.?!]*\b(dashboard|dashboards|app|apps|cockpit|scorecard|overview|workspace)\b/i;
 /** "Monitor / keep an eye on X over time" also implies a standing surface. */
 const MONITOR_RE = /\b(monitor|keep an eye on|track .* over time|standing (view|report)|watch over time)\b/i;
 /**

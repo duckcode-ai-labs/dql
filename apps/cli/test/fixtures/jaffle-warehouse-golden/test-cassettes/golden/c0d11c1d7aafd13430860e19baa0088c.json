@@ -1,0 +1,23 @@
+{
+  "key": "c0d11c1d7aafd13430860e19baa0088c",
+  "operation": "generate",
+  "text": "{\"version\":1,\"kind\":\"analytics\",\"reading\":\"Rank products by total revenue (sum of order-line product price) and return the top 10.\",\"measures\":[{\"ref\":\"column:dev.order_items.product_price\",\"aggregation\":\"sum\",\"alias\":\"revenue\"}],\"groupBy\":[{\"ref\":\"column:dev.products.product_id\",\"role\":\"key\"}],\"display\":[\"column:dev.products.product_name\"],\"filters\":[],\"ordering\":{\"ref\":\"revenue\",\"direction\":\"desc\"},\"limit\":10,\"expectedShape\":\"ranking\",\"unresolved\":[],\"provenance\":{\"column:dev.order_items.product_price\":\"q:revenue\",\"column:dev.products.product_id\":\"q:products\",\"column:dev.products.product_name\":\"q:products\"}}",
+  "providerName": "claude",
+  "recordedAt": "2026-10-16T14:02:11.121Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 2,
+    "messageRoles": [
+      "system",
+      "user"
+    ],
+    "preCanonicalHash": "c0d11c1d7aafd13430860e19baa0088c39d32773d540d8560c913885ba82fd38",
+    "postCanonicalHash": "c0d11c1d7aafd13430860e19baa0088c39d32773d540d8560c913885ba82fd38",
+    "appliedRuleClasses": []
+  }
+}

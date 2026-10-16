@@ -1,9 +1,9 @@
 {
   "key": "3bc3c4a90b9606619a00bcc7926ee967",
   "operation": "generate",
-  "text": "SELECT c.customer_type, COUNT(DISTINCT o.order_id) AS order_count\nFROM jaffle_shop.dev.orders o\nJOIN jaffle_shop.dev.customers c ON o.customer_id = c.customer_id\nGROUP BY c.customer_type\nORDER BY order_count DESC\nLIMIT 500",
+  "text": "SELECT c.customer_type, COUNT(DISTINCT o.order_id) AS order_count\nFROM jaffle_shop.dev.orders AS o\nJOIN jaffle_shop.dev.customers AS c ON o.customer_id = c.customer_id\nGROUP BY c.customer_type\nORDER BY order_count DESC\nLIMIT 500",
   "providerName": "claude",
-  "recordedAt": "2026-10-16T13:42:33.961Z",
+  "recordedAt": "2026-10-16T14:03:52.339Z",
   "provenance": {
     "kind": "recorded_provider",
     "replayClassification": "recorded_provider",

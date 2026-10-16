@@ -1,0 +1,23 @@
+{
+  "key": "b9fb1b7c30935e315fc48a263c3fe6a0",
+  "operation": "generate",
+  "text": "{\"version\":1,\"kind\":\"analytics\",\"reading\":\"Compare total food revenue against total drink revenue, where revenue is the sum of order-line product prices, scoped by the line's food/drink flag.\",\"measures\":[{\"ref\":\"column:dev.order_items.product_price\",\"aggregation\":\"sum\",\"alias\":\"food_revenue\",\"scope\":[{\"ref\":\"column:dev.order_items.is_food_item\",\"op\":\"is_true\",\"values\":[true],\"source\":\"question\"}]},{\"ref\":\"column:dev.order_items.product_price\",\"aggregation\":\"sum\",\"alias\":\"drink_revenue\",\"scope\":[{\"ref\":\"column:dev.order_items.is_drink_item\",\"op\":\"is_true\",\"values\":[true],\"source\":\"question\"}]}],\"groupBy\":[],\"display\":[],\"filters\":[],\"expectedShape\":\"comparison\",\"unresolved\":[],\"provenance\":{\"column:dev.order_items.product_price\":\"q:revenue\",\"column:dev.order_items.is_food_item\":\"q:food\",\"column:dev.order_items.is_drink_item\":\"q:drink\"}}",
+  "providerName": "claude",
+  "recordedAt": "2026-10-16T14:03:04.180Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 2,
+    "messageRoles": [
+      "system",
+      "user"
+    ],
+    "preCanonicalHash": "b9fb1b7c30935e315fc48a263c3fe6a0af9997be6beff53866d9256320074f46",
+    "postCanonicalHash": "b9fb1b7c30935e315fc48a263c3fe6a0af9997be6beff53866d9256320074f46",
+    "appliedRuleClasses": []
+  }
+}

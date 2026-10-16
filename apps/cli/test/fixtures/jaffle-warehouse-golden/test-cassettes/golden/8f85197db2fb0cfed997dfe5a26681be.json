@@ -1,0 +1,23 @@
+{
+  "key": "8f85197db2fb0cfed997dfe5a26681be",
+  "operation": "generate",
+  "text": "{\"version\":1,\"kind\":\"analytics\",\"reading\":\"Compare total pretax sales (order subtotal) for July 2025 and August 2025, and show the percentage growth from July to August.\",\"measures\":[{\"ref\":\"column:dev.orders.subtotal\",\"aggregation\":\"sum\",\"alias\":\"sales_pretax_2025_07\",\"scope\":[{\"ref\":\"column:dev.orders.ordered_at\",\"op\":\"eq\",\"values\":[\"2025-07\"],\"source\":\"question\"}]},{\"ref\":\"column:dev.orders.subtotal\",\"aggregation\":\"sum\",\"alias\":\"sales_pretax_2025_08\",\"scope\":[{\"ref\":\"column:dev.orders.ordered_at\",\"op\":\"eq\",\"values\":[\"2025-08\"],\"source\":\"question\"}]},{\"change\":{\"base\":\"sales_pretax_2025_07\",\"comparison\":\"sales_pretax_2025_08\",\"as\":\"percent\"},\"alias\":\"sales_pretax_growth_pct\"}],\"groupBy\":[],\"display\":[],\"filters\":[],\"expectedShape\":\"comparison\",\"unresolved\":[],\"provenance\":{\"column:dev.orders.subtotal\":\"q:sales before tax\",\"column:dev.orders.ordered_at\":\"q:August with July 2025\"}}",
+  "providerName": "claude",
+  "recordedAt": "2026-10-16T14:09:18.352Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 2,
+    "messageRoles": [
+      "system",
+      "user"
+    ],
+    "preCanonicalHash": "8f85197db2fb0cfed997dfe5a26681befaa3094defa86db89adc0d218f42cb50",
+    "postCanonicalHash": "8f85197db2fb0cfed997dfe5a26681befaa3094defa86db89adc0d218f42cb50",
+    "appliedRuleClasses": []
+  }
+}

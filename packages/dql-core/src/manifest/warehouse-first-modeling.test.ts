@@ -119,6 +119,39 @@ describe('warehouse-first modeling (RFC 0007)', () => {
     expect(graph).toContain('warehouse::warehouse.acme.sales.orders');
   });
 
+  it('models a thing called `constructor`, or any other JavaScript built-in name', () => {
+    // Formula 1 has a constructors table. A plain lookup handed back
+    // JavaScript's own `Object.constructor` instead of undefined, so the
+    // relationship passed the "unknown entity" guard and then failed to
+    // compile: every question about that project was answered "blocked".
+    writeWarehouseCatalog(projectRoot, {
+      ...CATALOG,
+      relations: [...CATALOG.relations, relation('SALES', 'CONSTRUCTORS', ['CONSTRUCTOR_ID', 'NAME'], { primaryKey: ['CONSTRUCTOR_ID'] }), relation('SALES', 'RESULTS', ['RESULT_ID', 'CONSTRUCTOR_ID'], { primaryKey: ['RESULT_ID'] })],
+    });
+    writeYaml(projectRoot, 'domains/sales/modeling/f1.dql.yaml', `entities:
+  - id: constructor
+    relation: SALES.CONSTRUCTORS
+  - id: toString
+    relation: SALES.RESULTS
+relationships:
+  - id: result_to_constructor
+    from: toString
+    to: constructor
+    keys: [{ from: CONSTRUCTOR_ID, to: CONSTRUCTOR_ID }]
+    cardinality: many_to_one
+    fanout: safe
+    status: draft
+`);
+    const manifest = buildManifest({ projectRoot });
+    expect(manifest.diagnostics?.filter((item) => item.severity === 'error')).toEqual([]);
+    expect(manifest.modeling?.entities['sales::entity::constructor']).toMatchObject({ dbtUniqueId: 'warehouse.acme.sales.constructors', keys: ['CONSTRUCTOR_ID'] });
+    expect(manifest.modeling?.relationships['sales::relationship::result_to_constructor']).toMatchObject({
+      from: 'sales::entity::toString',
+      to: 'sales::entity::constructor',
+      cardinality: 'many_to_one',
+    });
+  });
+
   it('names an unknown or ambiguous relation, and a missing snapshot, in plain words', () => {
     writeYaml(projectRoot, 'domains/sales/modeling/more.dql.yaml', `entities:
   - id: archived_customer

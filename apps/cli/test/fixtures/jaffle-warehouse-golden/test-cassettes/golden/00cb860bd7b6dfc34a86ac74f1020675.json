@@ -1,0 +1,23 @@
+{
+  "key": "00cb860bd7b6dfc34a86ac74f1020675",
+  "operation": "generate",
+  "text": "SELECT SUM(CASE WHEN is_food_item THEN product_price ELSE 0 END) AS food_revenue, SUM(CASE WHEN is_drink_item THEN product_price ELSE 0 END) AS drink_revenue FROM jaffle_shop.dev.order_items",
+  "providerName": "claude",
+  "recordedAt": "2026-10-16T14:03:08.999Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 2,
+    "messageRoles": [
+      "system",
+      "user"
+    ],
+    "preCanonicalHash": "00cb860bd7b6dfc34a86ac74f10206753b69fa59f4ca16f3085621a7548bcc90",
+    "postCanonicalHash": "00cb860bd7b6dfc34a86ac74f10206753b69fa59f4ca16f3085621a7548bcc90",
+    "appliedRuleClasses": []
+  }
+}

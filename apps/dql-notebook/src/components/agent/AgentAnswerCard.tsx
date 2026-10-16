@@ -125,6 +125,8 @@ export interface AgentDqlArtifactMeta {
 
 export interface AgentAnswerEnvelope {
   kind: 'certified' | 'uncertified' | 'no_answer';
+  /** Effective host-issued result trust. Takes precedence over legacy display fields. */
+  trustState?: string;
   sourceTier?: string;
   certification?: string;
   reviewStatus?: string;
@@ -1998,8 +2000,15 @@ function formatBusinessTier(value: string): string {
 }
 
 export function resolveAnswerTrustState(answer: AgentAnswerEnvelope): TrustState {
-  // Prefer the canonical trust stamp from the answer loop (single source of
-  // truth). Fall back to the legacy fields for older payloads.
+  // The host's effective decision takes precedence over display-era fields.
+  // A coverage downgrade must never render as governed because a stale
+  // certification or reviewStatus still says otherwise.
+  const effectiveTrust = answer.result?.trustState ?? answer.trustState;
+  if (effectiveTrust === 'certified') return 'certified';
+  if (effectiveTrust === 'governed') return 'reviewed';
+  if (effectiveTrust === 'review_required') return 'review';
+  if (effectiveTrust === 'blocked') return 'no_answer';
+  // Prefer the canonical trust stamp from the answer loop for older payloads.
   switch (answer.trustLabelInfo?.id) {
     case 'certified': return 'certified';
     case 'reviewed': return 'review';

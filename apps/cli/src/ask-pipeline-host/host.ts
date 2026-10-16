@@ -57,6 +57,8 @@ import {
   aggregatesRows,
   appliedConditions,
   joinKeyPairs,
+  joinKeyGroups,
+  type JoinKeyGroup,
   unusedJoins,
   aggregatesColumnOf,
   missingRequiredFilters,
@@ -69,6 +71,7 @@ import {
   type PhysicalIdentifierPartV1,
   renderCard,
   validateSqlAgainstLocalContext,
+  executionRelationIdentity,
   type AgentMessage,
   type RuntimeSchemaTable,
   priorWithoutValues,
@@ -1089,6 +1092,27 @@ export function governedCoverageDoubt(receipt: Pick<PipelineReceipt, 'coverage' 
   const words = (receipt.coverage ?? []).filter((item) => item.state === 'unsatisfied' || (item.names ?? []).some((kind) => !measureKinds.has(kind))).map((item) => `"${item.word}"`);
   const labels = (receipt.unmet ?? []).filter((unmet) => unmet.obligation === 'display_label').map((unmet) => unmet.message);
   return { reasons: [...words, ...labels] };
+}
+
+/**
+ * The answer payload, the durable run and the UI badge carry ONE effective
+ * trust decision. Route provenance (route, sourceTier, resolvedRoute) still
+ * says where the answer came from when coverage downgrades a semantic
+ * result, but no trust field may go on calling that result governed.
+ */
+export function effectiveAnsweredTrust(input: {
+  certified: boolean;
+  reviewRequired: boolean;
+  coverageDoubt: boolean;
+}): {
+  trustState: 'certified' | 'governed' | 'review_required';
+  certification: 'certified' | 'governed' | 'review_required';
+  reviewStatus: 'certified' | 'governed' | 'review_required';
+  stopReason: 'certified_answer_found' | 'governed_semantic_answer' | 'generated_review_required';
+} {
+  if (input.certified) return { trustState: 'certified', certification: 'certified', reviewStatus: 'certified', stopReason: 'certified_answer_found' };
+  if (input.reviewRequired || input.coverageDoubt) return { trustState: 'review_required', certification: 'review_required', reviewStatus: 'review_required', stopReason: 'generated_review_required' };
+  return { trustState: 'governed', certification: 'governed', reviewStatus: 'governed', stopReason: 'governed_semantic_answer' };
 }
 
 export function coverageEvaluations(receipt: Pick<PipelineReceipt, 'uncovered' | 'coverage'>): Array<{ id: string; label: string; passed: boolean; severity: 'warning' | 'info'; message: string }> {
@@ -2250,6 +2274,14 @@ export function createAskPipelineHost(deps: AskPipelineHostDeps): AskPipelineHos
       // The relationships on the Modeling map, as edges between the warehouse
       // relations a statement names.
       const relationshipEdges = modelingRelationshipEdges(deps.getManifest().manifest);
+      // Key columns in a probe are quoted the warehouse's way: a double-quoted
+      // name is a string literal on MySQL, where GROUP BY "id" groups every
+      // row into one and reports a repeating key that is not there.
+      const keyDialect = connection ? getDialect(connection.driver) : undefined;
+      const quoteKey = (column: string) => {
+        const bare = column.replace(/^["`\[]|["`\]]$/g, '');
+        return keyDialect ? keyDialect.quoteIdentifier(bare) : `"${bare.replace(/"/g, '')}"`;
+      };
       const probeOne = async (sql: string): Promise<boolean> => {
         if (!connection) return false;
         const options = { maxRows: 1, ...(request.signal ? { signal: request.signal } : {}), ...(request.runBudget ? { deadlineMs: Math.min(8_000, request.runBudget.remainingMs()) } : {}) };
@@ -2296,7 +2328,7 @@ export function createAskPipelineHost(deps: AskPipelineHostDeps): AskPipelineHos
             continue;
           }
           if (!totals || join.keys.length === 0) continue;
-          const key = join.keys.map((column) => `"${column.replace(/"/g, '')}"`).join(', ');
+          const key = join.keys.map(quoteKey).join(', ');
           let repeats = false;
           try { repeats = await probeOne(`SELECT ${key} FROM ${join.relation} GROUP BY ${key} HAVING COUNT(*) > 1`); } catch { repeats = false; }
           if (repeats) failures.push(`it joins ${name} but uses none of its columns, and ${name} has several rows per ${join.keys.join(', ')}, so every total is counted once per matching ${name} row; leave the join out, or aggregate ${name} at its own grain first if it restricts which rows count`);
@@ -2304,21 +2336,28 @@ export function createAskPipelineHost(deps: AskPipelineHostDeps): AskPipelineHos
         state.hostJoins = ledgerJoins(joinUses);
         const certifiedUses = joinUses.filter((use) => use.relationship?.level === 'certified');
         if (aggregatesRows(sql)) {
-          for (const pair of joinKeyPairs(sql).slice(0, 3)) {
-            const repeats = async (side: { relation: string; column: string }) => {
-              try { return await probeOne(`SELECT ${side.column} FROM ${side.relation} GROUP BY ${side.column} HAVING COUNT(*) > 1`); } catch { return false; }
+          // A join repeats rows when its WHOLE key repeats: the tuple of
+          // columns it matches on together, probed as one GROUP BY. A column
+          // of a composite key repeats on its own by design (a ball number
+          // recurs in every over), so probing it alone condemned correct
+          // joins on the full key.
+          for (const group of joinKeyGroups(sql).slice(0, 3)) {
+            const repeats = async (side: JoinKeyGroup['left']) => {
+              const key = side.columns.map(quoteKey).join(', ');
+              try { return await probeOne(`SELECT ${key} FROM ${side.relation} GROUP BY ${key} HAVING COUNT(*) > 1`); } catch { return false; }
             };
-            const leftRepeats = await repeats(pair.left);
-            const rightRepeats = await repeats(pair.right);
-            if (leftRepeats && rightRepeats) failures.push(`its join of ${pair.left.relation} and ${pair.right.relation} on ${pair.left.column} = ${pair.right.column} repeats the key on both sides, so totals would count rows more than once`);
+            const leftRepeats = await repeats(group.left);
+            const rightRepeats = await repeats(group.right);
+            const on = group.left.columns.map((column, index) => `${column} = ${group.right.columns[index]}`).join(' and ');
+            if (leftRepeats && rightRepeats) failures.push(`its join of ${group.left.relation} and ${group.right.relation} on ${on} repeats the key on both sides, so totals would count rows more than once`);
             else if (leftRepeats !== rightRepeats) {
               // ONE ROW PER KEY ON ONE SIDE, SEVERAL ON THE OTHER: a total of the
               // one side's columns (an order's cost) is counted once per matching
               // row of the other (each order item). It is aggregated at its own
               // grain before the join, or the number is wrong.
-              const one = leftRepeats ? pair.right : pair.left;
-              const many = leftRepeats ? pair.left : pair.right;
-              if (one.qualifier && aggregatesColumnOf(sql, one.qualifier)) failures.push(`it aggregates columns of ${one.relation} (one row per ${one.column}) across its join to ${many.relation}, which has several rows per ${many.column}, so those totals count each ${one.relation} row once per ${many.relation} row; aggregate ${one.relation} at its own grain (a subquery or CTE) before joining`);
+              const one = leftRepeats ? group.right : group.left;
+              const many = leftRepeats ? group.left : group.right;
+              if (one.qualifier && aggregatesColumnOf(sql, one.qualifier)) failures.push(`it aggregates columns of ${one.relation} (one row per ${one.columns.join(', ')}) across its join to ${many.relation}, which has several rows per ${many.columns.join(', ')}, so those totals count each ${one.relation} row once per ${many.relation} row; aggregate ${one.relation} at its own grain (a subquery or CTE) before joining`);
             }
           }
         }
@@ -3078,15 +3117,13 @@ function relationsInSql(sql: string): string[] {
 }
 
 /**
- * The identity a warehouse gives a relation written in SQL. Snowflake keeps
- * quote state; DuckDB and SQLite compare quoted and unquoted names alike and
- * case-insensitively (their compilers quote every component), so only the
- * component count and the folded spelling count there.
+ * The identity a warehouse gives a relation written in SQL: one rule with the
+ * validator (`executionRelationIdentity`). Snowflake keeps quote state;
+ * DuckDB, SQLite and the other engines whose table names ignore quoting and
+ * case compare quoted and unquoted names alike, case-insensitively.
  */
 function executionRelationIdentityFor(relation: string, driver: string | undefined): string {
-  const lower = driver?.trim().toLowerCase();
-  if (lower !== 'duckdb' && lower !== 'sqlite') return physicalRelationIdentity(relation);
-  return parsePhysicalIdentifier(relation).map((part) => `d:${part.value.toLocaleLowerCase('en-US')}`).join('.');
+  return executionRelationIdentity(relation, driver);
 }
 
 /** Exact Snowflake-aware identity for a relation already written in SQL. */
@@ -3228,13 +3265,15 @@ export function toExecutorResult(runId: string, outcome: PipelineOutcome, starte
   // are shown, labelled for review, with the reason.
   const doubt = governedCoverageDoubt(receipt);
   const coverageDoubt = !certified && !reviewRequired && doubt.reasons.length > 0;
-  const trustState = certified ? 'certified' : reviewRequired || coverageDoubt ? 'review_required' : 'governed';
+  const effectiveTrust = effectiveAnsweredTrust({ certified, reviewRequired, coverageDoubt });
+  const trustState = effectiveTrust.trustState;
   const payload = {
     kind: certified ? 'certified' : 'uncertified',
     route,
     sourceTier: certified || blockAsEvidence ? 'certified_artifact' : candidate.tier === 'semantic' ? 'semantic_layer' : 'dbt_manifest',
-    certification: certified ? 'certified' : reviewRequired ? 'review_required' : 'governed',
-    reviewStatus: certified ? 'certified' : reviewRequired ? 'review_required' : 'governed',
+    trustState,
+    certification: effectiveTrust.certification,
+    reviewStatus: effectiveTrust.reviewStatus,
     text: outcome.text,
     answer: outcome.text,
     sql: candidate.sql,
@@ -3260,7 +3299,7 @@ export function toExecutorResult(runId: string, outcome: PipelineOutcome, starte
   const artifact: AgentRunArtifact ={ id: `${runId}:answer`, kind: 'answer', title: certified ? 'Certified answer' : reviewRequired ? 'AI-drafted answer' : blockAsEvidence ? 'Certified block answer' : 'Semantic answer', trustState, payload };
   return withReceipt({
     summary: outcome.text, answer: outcome.text, status: 'completed', trustState,
-    stopReason: certified ? 'certified_answer_found' : reviewRequired ? 'generated_review_required' : 'governed_semantic_answer',
+    stopReason: effectiveTrust.stopReason,
     resolvedRoute: certified ? 'certified_answer' : candidate.tier === 'semantic' ? 'semantic_answer' : 'generated_answer',
     answerTier: route.tier, result: payload.result, artifacts: [artifact],
     evaluations: [

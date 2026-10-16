@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import type { SemanticLayer } from '@zlens/core';
 import type { DQLManifest } from '@zlens/core';
 import { renderPhysicalIdentifier, buildVocabularyIndex, renderCard } from '@zlens/agent';
 import { relationshipValidationProofFingerprint } from '@zlens/core';
 import { modelingJoinGraph, modelingJoinPaths } from './host.js';
-import { leafName, nativeAggregateBinding, nativeFormulaBinding, normalizeRelationName, parseMetricFilter, qualifyExpression, buildVocabularySource, columnLineageFromSql  } from './vocabulary-source.js';
+import { embeddedManifestRelations, leafName, nativeAggregateBinding, nativeFormulaBinding, normalizeRelationName, parseMetricFilter, qualifyExpression, buildVocabularySource, columnLineageFromSql  } from './vocabulary-source.js';
 
 describe('vocabulary source helpers', () => {
   it('reads a numeric measure expression (dbt `expr: 1`) instead of throwing', () => {
@@ -622,5 +625,37 @@ describe('a warehouse observation merges into the relation dbt spelled with quot
     const vocabulary = buildVocabularyIndex(source);
     expect(vocabulary.get('column:dev.player_game_stats.turnover')).toBeDefined();
     expect(vocabulary.get('relation:dev.player_game_stats')).toBeDefined();
+  });
+});
+
+describe('a warehouse-first project shows Ask its columns, not a list of table names', () => {
+  it('puts the synced catalog columns on the relation, complete, and caps a pathological table', () => {
+    const projectRoot = mkdtempSync(join(tmpdir(), 'zlens-vocab-warehouse-'));
+    try {
+      mkdirSync(join(projectRoot, '.dql'), { recursive: true });
+      const wide = Array.from({ length: 450 }, (_, index) => ({ name: `c${index}`, type: 'INTEGER' }));
+      writeFileSync(join(projectRoot, '.dql', 'warehouse-catalog.json'), JSON.stringify({
+        version: 1, driver: 'duckdb', connectionId: 'default', scopes: [], capturedAt: '2026-10-16T00:00:00.000Z',
+        relations: [
+          { id: 'warehouse.jaffle.dev.races', database: 'jaffle', schema: 'dev', name: 'races', relation: 'jaffle.dev.races', kind: 'table', comment: 'One row per race.',
+            columns: [{ name: 'race_id', type: 'INTEGER' }, { name: 'year', type: 'INTEGER', comment: 'Season year.' }] },
+          { id: 'warehouse.jaffle.dev.wide', database: 'jaffle', schema: 'dev', name: 'wide', relation: 'jaffle.dev.wide', kind: 'table', columns: wide },
+        ],
+      }));
+      const manifest = { dbtProvenance: { warehouseCatalogPath: '.dql/warehouse-catalog.json', nodes: {
+        'warehouse.jaffle.dev.races': { uniqueId: 'warehouse.jaffle.dev.races', resourceType: 'warehouse' },
+        'warehouse.jaffle.dev.wide': { uniqueId: 'warehouse.jaffle.dev.wide', resourceType: 'warehouse' },
+      } } } as unknown as DQLManifest;
+      const [races, wideRelation] = embeddedManifestRelations(manifest, projectRoot);
+      // A bare table name told Ask nothing: it reported `year` missing while the catalog held it.
+      expect(races).toMatchObject({ name: 'races', columnCompleteness: 'complete', columns: [{ name: 'race_id', dataType: 'INTEGER' }, { name: 'year', dataType: 'INTEGER', description: 'Season year.' }] });
+      expect(wideRelation!.columns).toHaveLength(400);
+      expect(wideRelation!.columnCompleteness).toBe('partial');
+      const source = buildVocabularySource({ driver: 'duckdb', snapshotId: 'snapshot:warehouse', relations: [races!] });
+      const vocabulary = buildVocabularyIndex(source);
+      expect(vocabulary.entries.some((entry) => entry.kind === 'column' && entry.name.endsWith('year'))).toBe(true);
+    } finally {
+      rmSync(projectRoot, { recursive: true, force: true });
+    }
   });
 });

@@ -1,0 +1,23 @@
+{
+  "key": "faa2394fe42f326f8d3b8ac89e961bd5",
+  "operation": "generate",
+  "text": "{\"version\":1,\"kind\":\"analytics\",\"reading\":\"List the products that belong to the beverage (drink) category, i.e. products flagged as drink items.\",\"measures\":[],\"groupBy\":[{\"ref\":\"column:dev.products.product_id\",\"role\":\"key\"}],\"display\":[\"column:dev.products.product_name\",\"column:dev.products.product_type\"],\"filters\":[{\"ref\":\"column:dev.products.is_drink_item\",\"op\":\"is_true\",\"values\":[true],\"source\":\"question\"}],\"expectedShape\":\"lookup\",\"unresolved\":[{\"clause\":\"bevereage catogery\",\"question\":\"Do you want the list of beverage products, or a measure (e.g. revenue or item count) for the beverage category?\",\"options\":[\"column:dev.products.is_drink_item\",\"column:dev.order_items.is_drink_item\"],\"material\":false}],\"provenance\":{\"column:dev.products.product_id\":\"q:bevereage catogery\",\"column:dev.products.product_name\":\"q:bevereage catogery\",\"column:dev.products.product_type\":\"q:catogery\",\"column:dev.products.is_drink_item\":\"q:bevereage\"}}",
+  "providerName": "claude",
+  "recordedAt": "2026-10-16T14:05:20.047Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 2,
+    "messageRoles": [
+      "system",
+      "user"
+    ],
+    "preCanonicalHash": "faa2394fe42f326f8d3b8ac89e961bd5a83bb1272af94c6ecd2d04ab23a4d4de",
+    "postCanonicalHash": "faa2394fe42f326f8d3b8ac89e961bd5a83bb1272af94c6ecd2d04ab23a4d4de",
+    "appliedRuleClasses": []
+  }
+}

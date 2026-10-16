@@ -1,0 +1,23 @@
+{
+  "key": "ac4b164bca97f33b5ac413955d59ca74",
+  "operation": "generate",
+  "text": "{\"version\":1,\"kind\":\"analytics\",\"reading\":\"Total supply cost for each product, grouped by product key with the product name as label.\",\"measures\":[{\"ref\":\"column:dev.supplies.supply_cost\",\"aggregation\":\"sum\",\"alias\":\"supply_cost\"}],\"groupBy\":[{\"ref\":\"column:dev.products.product_id\",\"role\":\"key\"}],\"display\":[\"column:dev.products.product_name\"],\"filters\":[],\"ordering\":{\"ref\":\"column:dev.supplies.supply_cost\",\"direction\":\"desc\"},\"expectedShape\":\"grouped\",\"unresolved\":[{\"clause\":\"supply cost\",\"options\":[\"column:dev.supplies.supply_cost\",\"column:dev.order_items.supply_cost\"],\"material\":true,\"question\":\"Do you mean the catalog supply cost per product (from the supplies table) or the supply cost actually incurred on sold order lines (from order_items)?\"}],\"provenance\":{\"column:dev.supplies.supply_cost\":\"q:supply cost\",\"column:dev.products.product_id\":\"q:by product\",\"column:dev.products.product_name\":\"q:by product\"}}",
+  "providerName": "claude",
+  "recordedAt": "2026-10-16T14:05:06.253Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 2,
+    "messageRoles": [
+      "system",
+      "user"
+    ],
+    "preCanonicalHash": "ac4b164bca97f33b5ac413955d59ca74bdf36b183c3ecfa6db5be2de793cd327",
+    "postCanonicalHash": "ac4b164bca97f33b5ac413955d59ca74bdf36b183c3ecfa6db5be2de793cd327",
+    "appliedRuleClasses": []
+  }
+}
