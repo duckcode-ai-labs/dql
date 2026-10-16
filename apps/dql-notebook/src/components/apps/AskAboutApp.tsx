@@ -72,7 +72,7 @@ export function AskAboutApp({ scope, onAsk }: { scope: AskAboutAppScope; onAsk: 
           <span key={chip} style={{ padding: '1px 7px', borderRadius: 999, border: '1px solid var(--border-subtle)', background: 'var(--bg-1)' }}>{chip}</span>
         ))}
       </div>
-      <div className="dql-app-ask-capability" style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>{askAboutAppCapability(scope)}</div>
+      <div className="dql-app-ask-capability" style={{ fontSize: 11.5, color: 'var(--text-tertiary)' }}>{askAboutAppCapability(scope)}</div>
     </form>
   );
 }

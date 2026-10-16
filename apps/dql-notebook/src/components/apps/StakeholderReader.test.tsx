@@ -33,6 +33,8 @@ describe('the App reader for stakeholders (HH-16)', () => {
       />,
     );
     expect(html).toContain('Answers read this page’s current results, each tile’s source and trust label, and the filters on screen.');
+    // Body text, so a text token that meets 4.5:1 on the panel in every theme; --text-muted is for icons and dividers (2.1:1).
+    expect(html).toMatch(/class="dql-app-ask-capability"[^>]*color:var\(--text-tertiary\)/);
   });
 
   it('shows no Follow button until the server says whether this person follows the page', () => {
