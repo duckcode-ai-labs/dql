@@ -17,6 +17,36 @@ const tiles = [
 ];
 
 describe('story bindings (RFC 0008 step 8)', () => {
+  it('binds the same members, values and leader whatever order the rows came back in', () => {
+    // A grouped tile without ORDER BY returns rows in a different order on
+    // each run; digests, monitors and story editions read these bindings.
+    const rows = Array.from({ length: 25 }, (_, index) => ({
+      sku: `SKU-${String(index + 1).padStart(2, '0')}`,
+      revenue: index === 3 ? null : (index % 5) * 10 + index,
+    }));
+    // SKU-25 has the highest value (64); SKU-00 ties it for the lead.
+    rows.push({ sku: 'SKU-00', revenue: 64 });
+    const catalogFor = (ordered: typeof rows) => buildStoryBindingCatalog([{ tileId: 'skus', status: 'ok', result: { columns: ['sku', 'revenue'], rows: ordered } }]);
+    const forward = catalogFor(rows);
+    const reversed = catalogFor([...rows].reverse());
+    const rotated = catalogFor([...rows.slice(11), ...rows.slice(0, 11)]);
+    expect(reversed).toEqual(forward);
+    expect(rotated).toEqual(forward);
+    // The member cap keeps the twenty largest values, not the first twenty rows.
+    const members = Object.keys(forward).filter((key) => key.startsWith('skus.revenue['));
+    expect(members).toHaveLength(20);
+    expect(members).not.toContain('skus.revenue[SKU-04]');
+    // Two members share the highest value; the member decides, not row position.
+    expect(forward['skus.leader']).toMatchObject({ value: 'SKU-00' });
+    expect(forward['skus.leader_value']).toMatchObject({ value: 64 });
+  });
+
+  it('resolves a repeated member to the same row in any order', () => {
+    const rows = [{ region: 'US', revenue: 10 }, { region: 'US', revenue: 50 }, { region: 'CA', revenue: 20 }];
+    const catalogFor = (ordered: typeof rows) => buildStoryBindingCatalog([{ tileId: 'r', status: 'ok', result: { columns: ['region', 'revenue'], rows: ordered } }]);
+    expect(catalogFor([...rows].reverse())).toEqual(catalogFor(rows));
+  });
+
   it('offers single values, members, leaders and driver results as bindings', () => {
     const catalog = buildStoryBindingCatalog(tiles, { revenue: 'Revenue' });
     expect(catalog['revenue.revenue']).toMatchObject({ value: 130, display: '$130', label: 'Revenue — revenue' });

@@ -7,6 +7,7 @@
  * run's results, and a number with no binding is refused when the page is
  * saved. Browser-safe: no Node imports.
  */
+import { rankResultRows } from './result-ranking.js';
 
 export interface StoryBinding {
   key: string;
@@ -97,21 +98,32 @@ export function buildStoryBindingCatalog(tiles: StoryBindingTileInput[], titles:
       continue;
     }
     if (!labelColumn) continue;
+    const first = numeric[0];
+    // Which members get bindings, and which row a repeated member resolves
+    // to, must not depend on the order the warehouse returned the rows in:
+    // rank by the first measure's magnitude, then by member. Bindings keep
+    // the result's own order.
+    const boundRows = new Set<Record<string, unknown>>();
+    const boundMembers = new Set<string>();
+    for (const { row } of rankResultRows(rows, { measure: (row) => (first ? toNumber(row[first]) : null), member: (row) => row[labelColumn] })) {
+      if (boundMembers.size >= MAX_STORY_MEMBERS) break;
+      const member = memberText(row[labelColumn]);
+      if (!member || boundMembers.has(member)) continue;
+      boundMembers.add(member);
+      boundRows.add(row);
+    }
     for (const column of numeric) {
       const unit = unitFor(column);
-      for (const row of rows.slice(0, MAX_STORY_MEMBERS)) {
+      for (const row of rows) {
+        if (!boundRows.has(row)) continue;
         const member = memberText(row[labelColumn]);
-        if (!member) continue;
         add({ key: `${tile.tileId}.${column}[${member}]`, tileId: tile.tileId, label: `${title} — ${humanize(column)} for ${member}`, kind: 'number', value: toNumber(row[column]), unit });
       }
     }
-    const first = numeric[0];
     if (first) {
-      let best: Record<string, unknown> | undefined;
-      for (const row of rows) {
-        const value = toNumber(row[first]);
-        if (value !== null && (!best || value > (toNumber(best[first]) ?? -Infinity))) best = row;
-      }
+      // The highest value leads; an equal value is settled by member.
+      const best = rankResultRows(rows, { measure: (row) => toNumber(row[first]), member: (row) => row[labelColumn], by: 'value' })
+        .find((entry) => entry.value !== null)?.row;
       if (best) {
         const member = memberText(best[labelColumn]);
         add({ key: `${tile.tileId}.leader`, tileId: tile.tileId, label: `${title} — highest ${humanize(labelColumn)} by ${humanize(first)}`, kind: 'text', value: member, display: readableMember(member) });

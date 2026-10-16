@@ -123,10 +123,12 @@ const EXPECTED_TEST_FILES = 189;
 // 2521 with relationship verdicts that count the keyed rows a join loses and judge cardinality over the keys
 // a join reaches (relationship-validation.test.ts, +6) (port of 71d5c333) and check_compatibility naming the
 // one-to-many step (agentic/toolset.test.ts, +1) (port of 2bd5ecdf).
-const EXPECTED_TESTS = 2521;
+// 2528 with page stories whose clearest signals do not depend on row order (dashboard-story.test.ts, +7)
+// (port of c0e24814).
+const EXPECTED_TESTS = 2528;
 // The heavy lane's share of EXPECTED_TESTS (catalog.test.ts 72 + project-state.test.ts 4), pinned so
 // a lane run on its own (CI runs the two lanes as separate steps) is audited as exactly as both together.
-// The ordinary lane's share is the difference: 2445.
+// The ordinary lane's share is the difference: 2452.
 const EXPECTED_HEAVY_TESTS = 76;
 
 const LANES = ['all', 'ordinary', 'heavy'];
