@@ -81,3 +81,9 @@ condition = "AND"
 regexTarget = "match"
 paths = ['''apps/cli/src/providers/oauth/claude-oauth\.ts''']
 regexes = ['''interleaved-thinking-\d{4}-\d{2}-\d{2}''']
+
+[[allowlists]]
+description = "Synthetic credential shapes in the value-profile test (commit 70ee9eb9 spelled them literally)"
+condition = "AND"
+paths = ['''apps/cli/src/value-profile\.test\.ts''']
+regexes = ['''^sk_live_abcdef123456$''', '''^AKIAABCDEFGHIJKLMNOP$''']

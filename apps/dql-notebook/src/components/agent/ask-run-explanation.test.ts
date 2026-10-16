@@ -92,6 +92,21 @@ describe('how an Ask run was answered, as steps in plain words', () => {
     expect(explanation.headline).toBe('Answered from SQL written by AI from the tables (review before relying on it).');
   });
 
+  it('the result check sits among the drafting calls and is not counted as a redraft', () => {
+    const reviewed = base({
+      ...aiAnswer,
+      dispatches: [
+        { purpose: 'intent:resolve', ms: 14_000, reply: '{}', label: 'read', attempt: 1, at: 1 },
+        { purpose: 'intent:draft', ms: 5_000, reply: 'SELECT COUNT(*) FROM sales.opportunities', label: 'draft', attempt: 1, outcome: 'sql', at: 2 },
+        { purpose: 'intent:review', ms: 2_000, reply: '{"answers": false, "problem": "it does not keep Splunk"}', label: 'review', attempt: 2, outcome: 'revise', at: 3 },
+        { purpose: 'intent:draft', ms: 4_000, reply: "SELECT COUNT(*) FROM sales.opportunities WHERE competitor = 'Splunk'", label: 'revise', attempt: 3, outcome: 'sql', at: 4 },
+      ],
+    });
+    const ai = explainAskRun({ receipt: reviewed, payload: { kind: 'uncertified', sql: "SELECT COUNT(*) FROM sales.opportunities WHERE competitor = 'Splunk'", proof: [] }, status: 'completed' })!.steps.find((step) => step.kind === 'ai_sql')!;
+    expect(ai.aiCalls.map((call) => [call.label, call.outcome])).toEqual([['Drafted SQL', 'sql'], ['Checked the result against the question', 'revise'], ['Revised the SQL after the result check', 'sql']]);
+    expect(ai.reason).toBe('Wrote one read-only statement over sales.opportunities, redrafted once.');
+  });
+
   it('a declined gap says the AI looked and found nothing, and that nothing ran', () => {
     const explanation = explainAskRun({ receipt: declinedGap, payload: { kind: 'no_answer', gap: { kind: 'not_modeled', message: 'these tables hold orders only; nothing records churn or region' } }, status: 'blocked' })!;
     expect(explanation.ending).toBe('gap');
