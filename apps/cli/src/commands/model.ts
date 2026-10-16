@@ -207,8 +207,9 @@ async function runWarehouseDiscovery(subcommand: 'discover' | 'apply-discovery',
   // Opt-in: read recent query text in memory and keep only which columns were joined.
   const queryHistory = rest.includes('--query-history');
   const { discoverProjectWarehouseModel, applyProjectWarehouseDiscovery } = await import('../local-runtime.js');
-  const { QueryExecutor } = await import('@zlens/connectors');
-  const executor = validate || queryHistory ? new QueryExecutor() : undefined;
+  // A running workbench holds a DuckDB file open; the checks then run through it.
+  const { WorkbenchRoutedQueryExecutor } = await import('../workbench-query-route.js');
+  const executor = validate || queryHistory ? new WorkbenchRoutedQueryExecutor(projectRoot, { onRoute: (via) => { if (flags.format !== 'json') console.error(`  Running the warehouse checks through ${via}, which has the DuckDB file open.`); } }) : undefined;
   try {
     const report = await discoverProjectWarehouseModel(projectRoot, {
       ...(flags.domain ? { domain: flags.domain } : {}),
