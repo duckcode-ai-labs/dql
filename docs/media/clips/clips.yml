@@ -39,7 +39,7 @@ ask-review:
   steps:
     - Open Ask from the left rail.
     - Ask "What is the average order value at each store?".
-    - The answer is labelled AI-generated answer and shows the two stores with their average order value.
+    - The answer is labelled AI-generated answer and shows the two stores by name, Philadelphia and Brooklyn, with their average order value.
     - Below the result, Ask notes it saved the query for review as a draft block, not certified.
     - Open draft to review opens the draft block in Block Studio, where it can be reviewed and certified.
 
