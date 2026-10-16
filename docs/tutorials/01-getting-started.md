@@ -34,8 +34,11 @@ dbt parse         # or dbt build — either writes target/manifest.json
 
 > **Need a ready repo?** Use the separate
 > [jaffle-shop-duckdb](https://github.com/duckcode-ai/jaffle-shop-duckdb)
-> example and follow its
-> [Jaffle Shop tutorial](https://github.com/duckcode-ai/jaffle-shop-duckdb/blob/main/docs/tutorials/jaffle/README.md).
+> sample and follow its
+> [README](https://github.com/duckcode-ai/jaffle-shop-duckdb#readme) (or the
+> [Quickstart](../get-started/index.md)) instead of this tutorial. The sample
+> is already a ZLens workspace, so skip Step 2 there: do not run
+> `create-zlens-app` inside it.
 
 ---
 

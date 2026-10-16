@@ -16,7 +16,7 @@ import { cliEntry, installDuckdbConnector, run } from '../../support/server';
  */
 
 export const SAMPLE_REPO = 'https://github.com/duckcode-ai/jaffle-shop-duckdb.git';
-export const SAMPLE_COMMIT = '736e16e05d9e19d3fc846b8a73a30b5e9fdd9b9c';
+export const SAMPLE_COMMIT = 'a9ec27779995708d961a6cfcad9ee5c049573e6e';
 
 const COPY_EXCLUDES = new Set(['.git', '.venv', 'dbt_packages', 'logs', 'node_modules', '.dql', 'dql-manifest.json']);
 
@@ -64,7 +64,7 @@ function ensureSampleBuilt(cacheDir: string): string {
   return cloneDir;
 }
 
-/** The DuckDB driver range the sample's own setup.sh installs. */
+/** The DuckDB driver range for the template (the sample's setup.sh installs the latest `duckdb`, which this range includes). */
 export const SAMPLE_DUCKDB_RANGE = '^1.1.0';
 
 /** The DuckDB connector, installed once and copied into each project. */
@@ -84,22 +84,17 @@ function ensureConnectors(cacheDir: string): string {
 export interface PreparedSample {
   /** The dbt-built clone of the sample (read-only; copy before use). */
   cloneDir: string;
-  /** A ready-to-serve copy: connector installed, connection made portable, manifest compiled. */
+  /** A ready-to-serve copy: connector installed, manifest compiled. */
   templateDir: string;
   /** The DuckDB connector directory to copy into other projects. */
   connectorsDir: string;
 }
 
 /**
- * Build the template project the clips copy from. Two edits to the sample,
- * both fixes for bugs in the sample itself (to be fixed upstream):
- *  - its `jaffle_shop_dev` connection points at an absolute path on the sample
- *    author's machine; it is pointed at the sample's own jaffle_shop.duckdb
- *    (the file its `default` connection uses);
- *  - the certified beverage_revenue_by_product block orders by a bare
- *    `product_name`, which both joined tables have; DuckDB up to 1.4 (the
- *    driver the sample's setup.sh installs) rejects it as ambiguous, so the
- *    App's tile is blocked. The ORDER BY is qualified as the SELECT already is.
+ * Build the template project the clips copy from: a copy of the dbt-built
+ * sample with the DuckDB connector installed and the ZLens manifest compiled.
+ * The sample is used as it is: its `jaffle_shop_dev` connection already points
+ * at its own jaffle_shop.duckdb and its certified blocks run on DuckDB.
  */
 export function prepareSample(cacheDir: string): PreparedSample {
   const cloneDir = ensureSampleBuilt(cacheDir);
@@ -112,19 +107,6 @@ export function prepareSample(cacheDir: string): PreparedSample {
   });
   rmSync(join(templateDir, '.zlens-clips-built'), { force: true });
   cpSync(connectorsDir, join(templateDir, '.dql', 'connectors'), { recursive: true });
-
-  const configPath = join(templateDir, 'dql.config.json');
-  const config = JSON.parse(readFileSync(configPath, 'utf8')) as { connections?: Record<string, { driver?: string; filepath?: string }> };
-  for (const connection of Object.values(config.connections ?? {})) {
-    if (connection.driver === 'duckdb' && connection.filepath?.startsWith('/')) connection.filepath = 'jaffle_shop.duckdb';
-  }
-  writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`);
-
-  const beverageBlock = join(templateDir, 'domains', 'commerce', 'blocks', 'beverage_revenue_by_product.dql');
-  if (existsSync(beverageBlock)) {
-    const source = readFileSync(beverageBlock, 'utf8');
-    writeFileSync(beverageBlock, source.replace('ORDER BY beverage_revenue DESC, product_name', 'ORDER BY beverage_revenue DESC, products.product_name'));
-  }
 
   run('node', [cliEntry, 'compile', '.'], { cwd: templateDir });
   return { cloneDir, templateDir, connectorsDir };

@@ -40,15 +40,13 @@ ImageMagick) and `oxipng` are on `PATH`, the files are optimised in place.
 
 ## What the script does to the sample
 
-- Points the sample's `jaffle_shop_dev` connection (an absolute path on its
-  author's machine) at the sample's own `jaffle_shop.duckdb`.
 - Installs the DuckDB driver into `.dql/connectors`, as the Connections page
   does.
 - Writes the AI provider to `.dql/provider-settings.json`, as
   **Settings → AI provider** does.
 - Runs everything as the sample's analyst (`analytics@jaffle.shop`), so no
   personal git identity reaches a screenshot.
-- At the pinned commit, the sample's certified `beverage_revenue_by_product`
-  block orders by an ambiguous `product_name` and fails on DuckDB. The script
-  fixes that one column reference in a draft and certifies it with
-  `zlens certify --from-draft`, the documented CLI path, so the App's tile runs.
+
+The sample at the pinned commit needs no other changes: its `jaffle_shop_dev`
+connection already points at its own `jaffle_shop.duckdb`, and its certified
+blocks all run on DuckDB.

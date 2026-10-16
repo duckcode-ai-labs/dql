@@ -39,26 +39,28 @@ python3 -m venv .venv
 You now have `jaffle_shop.duckdb` and `target/manifest.json` in the folder.
 
 !!! note
-    The sample repository also has a `setup.sh` script. It installs an old
-    pre-ZLens CLI, so use the commands above instead.
+    The sample also has `./setup.sh`, which runs steps 1 to 3 in one go once
+    you have cloned it. Then continue at [step 4](#4-open-the-workbench).
 
 ## 2. Add ZLens
 
-From the `jaffle-shop-duckdb` folder:
+The sample is already a ZLens workspace: its `dql.config.json` is in the
+`jaffle-shop-duckdb` folder, next to `dbt_project.yml`. From that folder:
 
 ```bash
-npx create-zlens-app@latest dql
-cd dql
 npm install
 npm install --prefix .dql/connectors duckdb
 ```
 
-- `create-zlens-app` makes a `dql/` folder for ZLens and finds the dbt project
-  in the folder above. It prints `detected sibling dbt project`.
-- `npm install` installs the ZLens CLI into this folder. No global install is
-  needed.
-- The last command installs the DuckDB driver. Other databases need their own
-  driver; see [Connect a database](connect-database.md).
+- `npm install` installs the ZLens CLI (`@zlens/cli`) into this folder. No
+  global install is needed.
+- The second command installs the DuckDB driver. Other databases need their
+  own driver; see [Connect a database](connect-database.md).
+
+!!! warning "Do not run `create-zlens-app` in the sample"
+    `npx create-zlens-app` inside the sample creates a second, empty workspace
+    in `dql/`, without the sample's domain, blocks, App and notebook. If you
+    already have a `dql/` folder from an older quickstart, delete it.
 
 ## 3. Import the dbt project
 
@@ -86,12 +88,12 @@ opens it. Leave the terminal running.
 The first time, ZLens opens **Guided Setup** in four steps.
 
 1. **Connect your dbt project.** You see **dbt project ready**, and the path
-   field shows `..`. Click **Preview**. ZLens shows the models, sources and
+   field shows `.` (this folder). Click **Preview**. ZLens shows the models, sources and
    metrics it found and says **Nothing has changed yet**. Click
    **Apply project**, then **Continue to database**.
-2. **Connect your database.** Under **dbt profiles**, the `jaffle_shop` profile
-   is listed. Click **Import & test**. The status changes to
-   **DuckDB · configured** and **Test passed**. Click **Continue to optional AI**.
+2. **Connect your database.** The sample's DuckDB connection is already set
+   up: you see **DuckDB · configured** and **Test passed**. Click
+   **Continue to optional AI**.
 3. **Set up an AI provider.** This step is optional. Ask needs a model, but
    notebooks, blocks, Apps and lineage do not. Set one up now
    ([how](ai-provider.md)) or click **Continue to finish**.
@@ -118,6 +120,12 @@ You can run the setup again later from **Settings → Overview → Guided Setup*
 
 The cell shows **Success** and a table of ten customers. The notebook saves
 itself as `notebooks/customer_orders.dqlnb`.
+
+## Your own dbt project
+
+The sample ships with its ZLens workspace. For your own dbt project, create
+one with `npx create-zlens-app@latest dql` from the dbt repo; see
+[Add ZLens to your dbt project](your-dbt-project.md).
 
 ## Next
 

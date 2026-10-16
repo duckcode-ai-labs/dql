@@ -27,7 +27,8 @@ clip('app-ask', async ({ page, sample, director }) => {
   const ask = page.getByPlaceholder(/Ask about Jaffle Growth Review/);
   await director.type(ask, 'How has revenue changed by month?');
   await director.click(page.getByRole('button', { name: 'Ask', exact: true }).last(), { after: 300 });
-  const label = page.getByText(/^(Certified|Governed|AI-generated) answer$/).first();
+  // The caption promises a certified answer; a replay miss or refusal must fail the clip, not be recorded.
+  const label = page.getByText('Certified answer', { exact: true }).first();
   await director.fastForward(() => expect(label).toBeVisible({ timeout: 240_000 }));
   await expect(page.getByText(/Scoped to Jaffle Growth Review/).last()).toBeVisible();
   await director.beat(900);

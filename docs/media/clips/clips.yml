@@ -115,16 +115,19 @@ overview:
 quickstart:
   title: Get started with the Jaffle Shop sample
   caption: >-
-    Inside the Jaffle Shop sample, create-zlens-app scaffolds a ZLens workspace,
-    npm installs it and npm run notebook starts the workbench. Guided Setup
-    finds the dbt project, connects the sample's DuckDB file, skips the
-    optional AI step, and a first query runs in the starter notebook.
+    The Jaffle Shop sample is already a ZLens workspace: in its folder, npm
+    install adds ZLens and the DuckDB driver, npm run sync imports the dbt
+    project and npm run notebook starts the workbench. Guided Setup finds the
+    dbt project, shows the sample's DuckDB connection already configured and
+    tested, skips the optional AI step, and a first query runs in the starter
+    notebook.
   steps:
-    - In the jaffle-shop-duckdb folder, run npx create-zlens-app@latest dql; it detects the sibling dbt project and scaffolds the workspace.
-    - Run cd dql && npm install.
-    - Run npm run notebook; ZLens installs the DuckDB driver and prints the local URL.
+    - In the jaffle-shop-duckdb folder, run npm install; it installs the ZLens CLI into the folder.
+    - Run npm install --prefix .dql/connectors duckdb to install the DuckDB driver.
+    - Run npm run sync; it imports the dbt project and ends with dbt sync complete.
+    - Run npm run notebook; it prints the local URL.
     - In the browser, Guided Setup shows the dbt project is ready.
-    - Enter ../jaffle_shop.duckdb as the DuckDB file path and save the connection; the test passes.
+    - On the database step, the sample's DuckDB connection is already configured and the test has passed.
     - Skip the optional AI step and finish setup.
     - Open the welcome notebook, query dev.customers for the top five customers by lifetime spend, and run the cell; the result shows as a bar chart.
 

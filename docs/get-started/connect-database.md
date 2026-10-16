@@ -58,11 +58,12 @@ connection.
 
 ## Where the connection is stored
 
-The connection goes into `dql.config.json` under `connections`, for example:
+The connection goes into `dql.config.json` under `connections`. The Jaffle
+Shop sample's, for example, points at the DuckDB file in the same folder:
 
 ```json
 "connections": {
-  "jaffle_shop_dev": { "driver": "duckdb", "filepath": "../jaffle_shop.duckdb" }
+  "jaffle_shop_dev": { "driver": "duckdb", "filepath": "jaffle_shop.duckdb" }
 }
 ```
 

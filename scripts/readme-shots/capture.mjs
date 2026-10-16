@@ -20,7 +20,7 @@ const repoRoot = resolve(here, '../..');
 const cliEntry = join(repoRoot, 'apps/cli/dist/index.js');
 
 const SAMPLE_REPO = 'https://github.com/duckcode-ai/jaffle-shop-duckdb.git';
-const SAMPLE_COMMIT = '736e16e05d9e19d3fc846b8a73a30b5e9fdd9b9c';
+const SAMPLE_COMMIT = 'a9ec27779995708d961a6cfcad9ee5c049573e6e';
 const DUCKDB_VERSION = '1.1.3';
 const SAMPLE_OWNER = 'analytics@jaffle.shop';
 
@@ -76,7 +76,10 @@ function buildSample() {
   if (existsSync(stamp) && readFileSync(stamp, 'utf8').trim() === SAMPLE_COMMIT) return cloneDir;
   mkdirSync(workDir, { recursive: true });
   if (!existsSync(join(cloneDir, '.git'))) run('git', ['clone', '--quiet', SAMPLE_REPO, cloneDir]);
-  run('git', ['checkout', '--quiet', '--force', SAMPLE_COMMIT], { cwd: cloneDir });
+  if (capture('git', ['rev-parse', 'HEAD'], { cwd: cloneDir }) !== SAMPLE_COMMIT) {
+    run('git', ['fetch', '--quiet', 'origin'], { cwd: cloneDir });
+    run('git', ['checkout', '--quiet', '--force', SAMPLE_COMMIT], { cwd: cloneDir });
+  }
   const venvPython = join(cloneDir, '.venv/bin/python');
   if (!existsSync(venvPython)) run(findPython(), ['-m', 'venv', '.venv'], { cwd: cloneDir });
   run(venvPython, ['-m', 'pip', 'install', '--quiet', '-r', 'requirements.txt'], { cwd: cloneDir });
@@ -102,15 +105,6 @@ function prepareProject(sampleDir) {
     filter: (source) => !COPY_EXCLUDES.has(relative(sampleDir, source).split('/')[0] ?? ''),
   });
 
-  // The sample's jaffle_shop_dev connection points at its author's machine;
-  // point it at the sample's own database file (as its `default` connection does).
-  const configPath = join(projectDir, 'dql.config.json');
-  const config = JSON.parse(readFileSync(configPath, 'utf8'));
-  for (const connection of Object.values(config.connections ?? {})) {
-    if (connection.driver === 'duckdb' && connection.filepath?.startsWith('/')) connection.filepath = 'jaffle_shop.duckdb';
-  }
-  writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`);
-
   // The DuckDB driver, installed once and copied in (as the Connections page installs it).
   const connectorCache = join(workDir, 'connectors');
   if (!existsSync(join(connectorCache, 'node_modules/duckdb'))) {
@@ -134,21 +128,6 @@ function prepareProject(sampleDir) {
   const gitConfig = join(workDir, 'gitconfig');
   writeFileSync(gitConfig, `[user]\n\tname = Jaffle Analyst\n\temail = ${SAMPLE_OWNER}\n[init]\n\tdefaultBranch = main\n`);
   const env = { ...process.env, GIT_CONFIG_GLOBAL: gitConfig, GIT_CONFIG_NOSYSTEM: '1' };
-
-  // At 736e16e the sample's certified `beverage_revenue_by_product` block
-  // orders by an ambiguous `product_name` and fails on DuckDB, so its App tile
-  // shows Blocked. Fix it the way a user would: a reviewed draft, certified
-  // with `zlens certify --from-draft` (which writes the certification receipt).
-  const blockPath = join(projectDir, 'domains/commerce/blocks/beverage_revenue_by_product.dql');
-  const block = existsSync(blockPath) ? readFileSync(blockPath, 'utf8') : '';
-  if (block.includes('ORDER BY beverage_revenue DESC, product_name')) {
-    const draft = join(projectDir, 'blocks/_drafts/beverage_revenue_by_product.dql');
-    mkdirSync(dirname(draft), { recursive: true });
-    writeFileSync(draft, block
-      .replace('status = "certified"', 'status = "draft"')
-      .replace('ORDER BY beverage_revenue DESC, product_name', 'ORDER BY beverage_revenue DESC, products.product_name'));
-    run('node', [cliEntry, 'certify', '--from-draft', relative(projectDir, draft), '--owner', SAMPLE_OWNER, '--force'], { cwd: projectDir, env });
-  }
 
   run('node', [cliEntry, 'compile', '.'], { cwd: projectDir, env, stdio: 'ignore' });
   run('node', [cliEntry, 'sync', 'dbt'], { cwd: projectDir, env });
