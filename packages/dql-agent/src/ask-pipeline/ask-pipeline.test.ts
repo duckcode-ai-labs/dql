@@ -3219,3 +3219,86 @@ describe('draft first where nothing is governed', () => {
     expect(reads.length).toBeGreaterThan(0);
   });
 });
+
+describe('the second look at an AI-drafted result', () => {
+  const vocabulary = buildVocabularyIndex({
+    relations: [{ schema: 'dev', name: 'orders', columnCompleteness: 'complete', columns: [{ name: 'amount', dataType: 'NUMBER' }, { name: 'status', dataType: 'VARCHAR' }] }],
+  });
+  const reading = JSON.stringify({ version: 1, kind: 'analytics', reading: 'Median of the per-status totals.', measures: [{ ref: 'column:dev.orders.amount', aggregation: 'sum' }], groupBy: [], display: [], filters: [], unresolved: [], provenance: {}, expectedShape: 'scalar' });
+  const provider: AgentProvider = { name: 'ollama', available: async () => true, generate: async () => reading };
+  const perStatus = { columns: ['status', 'amount'], rows: [{ status: 'open', amount: 3 }, { status: 'closed', amount: 9 }], rowCount: 2, executionTimeMs: 1 };
+  const oneNumber = { columns: ['median_amount'], rows: [{ median_amount: 6 }], rowCount: 1, executionTimeMs: 1 };
+  const run = (options: { verdict?: string; second: 'ok' | 'error' | 'empty' | 'declined'; draftFirst?: boolean; review?: boolean }) => {
+    const previous: Array<string | undefined> = [];
+    const reviewed: Array<{ question: string; sql: string; rowCount: number }> = [];
+    const outcome = runAskPipeline({
+      question: 'the median of the total amount per status', vocabulary, provider, clauseCoverage: false, explorationAuto: true,
+      ...(options.draftFirst ? { draftFirst: true } : {}),
+      ...(options.review === false ? {} : { reviewResult: async ({ question, sql, result }) => { reviewed.push({ question, sql, rowCount: result.rowCount }); return options.verdict ? { revise: options.verdict } : undefined; } }),
+      prepareDeps: { draftSql: async (draft) => {
+        previous.push(draft.previous?.error);
+        if (!draft.previous) return { sql: 'SELECT status, SUM(amount) AS amount FROM dev.orders GROUP BY status', relations: ['dev.orders'], proof: [] };
+        if (options.second === 'declined') return { declined: 'no column holds it' };
+        return { sql: options.second === 'error' ? 'SELECT broken' : options.second === 'empty' ? 'SELECT NULL AS median_amount FROM dev.orders WHERE 1 = 0' : 'WITH t AS (SELECT status, SUM(amount) AS amount FROM dev.orders GROUP BY status) SELECT AVG(amount) AS median_amount FROM t', relations: ['dev.orders'], proof: [] };
+      } },
+      executeDeps: { run: async (sql) => {
+        if (sql.startsWith('SELECT broken')) throw new Error('syntax error near broken');
+        if (sql.includes('1 = 0')) return { columns: ['median_amount'], rows: [], rowCount: 0, executionTimeMs: 1 };
+        return sql.startsWith('WITH') ? oneNumber : perStatus;
+      } },
+    });
+    return { outcome, previous, reviewed };
+  };
+
+  it('a result the review accepts is answered after one draft', async () => {
+    const { outcome, previous, reviewed } = run({ second: 'ok' });
+    const answered = await outcome;
+    expect(reviewed).toHaveLength(1);
+    expect(previous).toEqual([undefined]);
+    expect(answered.kind).toBe('answered');
+    if (answered.kind === 'answered') {
+      expect(answered.result.rows).toEqual(perStatus.rows);
+      expect(JSON.stringify(answered.receipt.story)).toContain('Checked the result against the question');
+    }
+  });
+
+  it('a defect the review names is revised once, with the reason, and the revision that runs is the answer', async () => {
+    const { outcome, previous, reviewed } = run({ verdict: 'it returns one row per status; the question asks for one number, the median of those totals', second: 'ok' });
+    const answered = await outcome;
+    expect(reviewed).toHaveLength(1);
+    expect(previous[1]).toMatch(/^the statement ran and returned 2 rows, but the result does not answer the question as asked: it returns one row per status/);
+    expect(answered.kind).toBe('answered');
+    if (answered.kind === 'answered') expect(answered.result.rows).toEqual(oneNumber.rows);
+    expect(JSON.stringify(answered.receipt.story)).toContain('Checked the result against the question: revising the SQL once');
+  });
+
+  it('a revision that fails, finds nothing or is declined never costs the first answer', async () => {
+    for (const second of ['error', 'empty', 'declined'] as const) {
+      const answered = await run({ verdict: 'the question asks for one number', second }).outcome;
+      expect(answered.kind, second).toBe('answered');
+      if (answered.kind === 'answered') expect(answered.result.rows, second).toEqual(perStatus.rows);
+    }
+  });
+
+  it('an answer drafted straight from the question gets the same review, and a declined revision keeps it', async () => {
+    const accepted = run({ second: 'ok', draftFirst: true });
+    const first = await accepted.outcome;
+    expect(accepted.reviewed).toEqual([{ question: 'the median of the total amount per status', sql: 'SELECT status, SUM(amount) AS amount FROM dev.orders GROUP BY status', rowCount: 2 }]);
+    expect(first.kind).toBe('answered');
+    // Draft-first falls through to the reading on a decline; a declined REVISION keeps the first result instead.
+    const declined = run({ verdict: 'the question asks for one number', second: 'declined', draftFirst: true });
+    const kept = await declined.outcome;
+    expect(declined.reviewed).toHaveLength(1);
+    expect(kept.kind).toBe('answered');
+    if (kept.kind === 'answered') expect(kept.result.rows).toEqual(perStatus.rows);
+  });
+
+  it('without a review hook nothing changes', async () => {
+    const { outcome, previous, reviewed } = run({ second: 'ok', review: false });
+    const answered = await outcome;
+    expect(reviewed).toHaveLength(0);
+    expect(previous).toEqual([undefined]);
+    expect(answered.kind).toBe('answered');
+    if (answered.kind === 'answered') expect(JSON.stringify(answered.receipt.story)).not.toContain('Checked the result');
+  });
+});

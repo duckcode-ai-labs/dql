@@ -2,7 +2,8 @@
 
 ZLens does not need dbt. Point it at your database and choose the schemas to
 model. ZLens reads their tables, columns, comments, declared keys and view
-SQL. It reads metadata only, never rows. From that it drafts entities and
+SQL. It reads metadata only, never rows (unless you turn on a
+[value profile](#optional-show-the-drafter-what-the-columns-hold)). From that it drafts entities and
 joins and checks them on the data. You then certify the ones Ask may rely on.
 Answers carry the same trust labels as in a dbt project.
 
@@ -178,6 +179,45 @@ In a warehouse-first project it says **Choose the schemas to model**. Click
 (`DATABASE: SCHEMA, SCHEMA`) and click **Apply and synchronize**. The status
 line then reads **Modeling catalog · 13 tables and views with their keys and
 comments**.
+
+### Optional: show the drafter what the columns hold
+
+A column list says `ordered_at TEXT`; it does not say the text reads
+`12/31/2021 11:45 PM`, or that a status is spelled `delivered`. With a value
+profile, each sync also reads the three most frequent values of every text
+column and the smallest and largest value of every number column (over at
+most 50,000 rows per table, within two minutes), and Ask's SQL drafter sees
+them beside each column.
+
+It is **off by default**, because those values are sent to your AI provider
+with the drafting prompt. Turn it on in `dql.config.json`, then sync again:
+
+```json
+{
+  "agent": {
+    "valueProfile": { "mode": "sampled", "exclude": ["^internal_", "notes$"] }
+  }
+}
+```
+
+- Columns whose names mark contact details, credentials, identity documents,
+  accounts, personal names or pay (`email`, `phone`, `ssn`, `password`,
+  `api_key`, `address`, `birth`, `first_name`, `salary`, …), and name
+  columns of tables of people (`customers.name`, `users.display_name`), are
+  never read. `exclude` adds your own name patterns (case-insensitive
+  regular expressions).
+- A sampled value that looks like an email address, a phone or social
+  security number, a URL or a credential is dropped, whatever its column is
+  called.
+- The profile is kept in `.dql/cache/value-profile.json` (never committed),
+  rebuilt at each sync, and ignored when it describes another catalog.
+- Under a hosted server (RFC 0010 host hooks), where row and column policies
+  decide what each reader may see, no value is read or shown.
+- Set `"mode": "off"` (or remove the block) to turn it off: Ask stops using
+  it at once, and the next sync deletes the file.
+
+Ask answers never send result rows to the provider; the value profile is how
+stored values reach it, and only when you turn it on.
 
 ## 5. Draft your models
 
