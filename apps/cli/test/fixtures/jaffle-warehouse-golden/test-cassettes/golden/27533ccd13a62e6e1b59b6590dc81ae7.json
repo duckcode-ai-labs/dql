@@ -1,0 +1,23 @@
+{
+  "key": "27533ccd13a62e6e1b59b6590dc81ae7",
+  "operation": "generate",
+  "text": "{\"version\":1,\"kind\":\"analytics\",\"reading\":\"Total revenue (customer spend) broken down by customer type.\",\"measures\":[{\"ref\":\"column:dev.customers.lifetime_spend\",\"aggregation\":\"sum\",\"alias\":\"revenue\"}],\"groupBy\":[{\"ref\":\"column:dev.customers.customer_type\",\"role\":\"categorical\"}],\"display\":[],\"filters\":[],\"ordering\":{\"ref\":\"column:dev.customers.lifetime_spend\",\"direction\":\"desc\"},\"expectedShape\":\"grouped\",\"unresolved\":[{\"clause\":\"revenue\",\"options\":[\"column:dev.customers.lifetime_spend\",\"column:dev.customers.lifetime_spend_pretax\"],\"material\":true,\"question\":\"Should revenue include tax (lifetime_spend) or be pretax (lifetime_spend_pretax)? No governed revenue metric is defined in this project.\"}],\"provenance\":{\"column:dev.customers.lifetime_spend\":\"q:revenue\",\"column:dev.customers.lifetime_spend_pretax\":\"q:revenue\",\"column:dev.customers.customer_type\":\"q:by customer type\"}}",
+  "providerName": "claude",
+  "recordedAt": "2026-10-16T02:53:05.213Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 2,
+    "messageRoles": [
+      "system",
+      "user"
+    ],
+    "preCanonicalHash": "27533ccd13a62e6e1b59b6590dc81ae76e7ed3ec7ab06a31c1c74e38dd4bc3fb",
+    "postCanonicalHash": "27533ccd13a62e6e1b59b6590dc81ae76e7ed3ec7ab06a31c1c74e38dd4bc3fb",
+    "appliedRuleClasses": []
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "key": "da2c3a087a27a298e58a139a0a7ec536",
+  "operation": "generate",
+  "text": "{\"version\":1,\"kind\":\"analytics\",\"reading\":\"Explain the decline in revenue broken down by region and recommend a region for investment.\",\"measures\":[],\"groupBy\":[],\"display\":[],\"filters\":[],\"expectedShape\":\"grouped\",\"unresolved\":[{\"clause\":\"revenue by region\",\"options\":[],\"material\":true,\"question\":\"This project exposes no revenue metric or column and no region dimension (only a locations relation with no governed columns); which measure should stand for revenue and should store location stand in for region?\"},{\"clause\":\"why is revenue down / which region should we invest in\",\"options\":[],\"material\":true,\"question\":\"Causal explanation and investment recommendations are not held in the data; should this be read as revenue by location for the current period versus the prior period?\"}],\"provenance\":{}}",
+  "providerName": "claude",
+  "recordedAt": "2026-10-16T02:56:17.585Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 2,
+    "messageRoles": [
+      "system",
+      "user"
+    ],
+    "preCanonicalHash": "da2c3a087a27a298e58a139a0a7ec536cd4080bf1c18b3435529598fe719a494",
+    "postCanonicalHash": "da2c3a087a27a298e58a139a0a7ec536cd4080bf1c18b3435529598fe719a494",
+    "appliedRuleClasses": []
+  }
+}

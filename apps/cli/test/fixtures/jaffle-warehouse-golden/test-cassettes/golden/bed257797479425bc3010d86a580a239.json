@@ -1,0 +1,23 @@
+{
+  "key": "bed257797479425bc3010d86a580a239",
+  "operation": "generate",
+  "text": "{\"version\":1,\"kind\":\"analytics\",\"reading\":\"The average value of an order (total order amount divided by the number of distinct orders) for orders placed in calendar year 2025.\",\"measures\":[{\"derived\":{\"kind\":\"ratio\",\"numerator\":\"column:dev.orders.order_total\",\"numeratorAggregation\":\"sum\",\"denominator\":\"column:dev.orders.order_id\",\"denominatorAggregation\":\"count_distinct\"},\"alias\":\"average_order_value\"}],\"groupBy\":[],\"display\":[],\"filters\":[],\"time\":{\"ref\":\"column:dev.orders.ordered_at\",\"window\":{\"start\":\"2025-01-01\",\"end\":\"2026-01-01\",\"expression\":\"in 2025\"}},\"expectedShape\":\"scalar\",\"unresolved\":[],\"provenance\":{\"column:dev.orders.order_total\":\"q:average order value\",\"column:dev.orders.order_id\":\"q:average order value\",\"column:dev.orders.ordered_at\":\"q:in 2025\"}}",
+  "providerName": "claude",
+  "recordedAt": "2026-10-16T02:53:59.902Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 2,
+    "messageRoles": [
+      "system",
+      "user"
+    ],
+    "preCanonicalHash": "bed257797479425bc3010d86a580a2390d48fcdb54bfae515e26da45c0ea7f3c",
+    "postCanonicalHash": "bed257797479425bc3010d86a580a2390d48fcdb54bfae515e26da45c0ea7f3c",
+    "appliedRuleClasses": []
+  }
+}

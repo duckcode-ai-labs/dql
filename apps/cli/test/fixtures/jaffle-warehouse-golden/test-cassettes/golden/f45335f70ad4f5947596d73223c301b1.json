@@ -1,0 +1,23 @@
+{
+  "key": "f45335f70ad4f5947596d73223c301b1",
+  "operation": "generate",
+  "text": "SELECT SUM(order_total) / COUNT(DISTINCT order_id) AS average_order_value FROM jaffle_shop.dev.orders",
+  "providerName": "claude",
+  "recordedAt": "2026-10-16T02:50:54.241Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 2,
+    "messageRoles": [
+      "system",
+      "user"
+    ],
+    "preCanonicalHash": "f45335f70ad4f5947596d73223c301b11aeb1ed55cca48f77c9f3241ca1cf344",
+    "postCanonicalHash": "f45335f70ad4f5947596d73223c301b11aeb1ed55cca48f77c9f3241ca1cf344",
+    "appliedRuleClasses": []
+  }
+}

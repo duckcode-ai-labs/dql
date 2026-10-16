@@ -1,0 +1,23 @@
+{
+  "key": "89597dd50720ee6e88d8e7056b1761b7",
+  "operation": "generate",
+  "text": "{\"version\":1,\"kind\":\"analytics\",\"reading\":\"Rank customers by the number of distinct orders they placed, highest first, showing the top 10.\",\"measures\":[{\"ref\":\"column:dev.orders.order_id\",\"aggregation\":\"count_distinct\",\"alias\":\"order_count\"}],\"groupBy\":[{\"ref\":\"column:dev.orders.customer_id\",\"role\":\"key\"}],\"display\":[\"column:dev.customers.customer_name\"],\"filters\":[],\"ordering\":{\"ref\":\"order_count\",\"direction\":\"desc\"},\"limit\":10,\"expectedShape\":\"ranking\",\"unresolved\":[],\"provenance\":{\"column:dev.orders.order_id\":\"q:placed the most orders\",\"column:dev.orders.customer_id\":\"q:which customers\",\"column:dev.customers.customer_name\":\"q:which customers\"}}",
+  "providerName": "claude",
+  "recordedAt": "2026-10-16T02:52:50.260Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 2,
+    "messageRoles": [
+      "system",
+      "user"
+    ],
+    "preCanonicalHash": "89597dd50720ee6e88d8e7056b1761b7a83ab3f23d3e44d4facd53f8b3ba9628",
+    "postCanonicalHash": "89597dd50720ee6e88d8e7056b1761b7a83ab3f23d3e44d4facd53f8b3ba9628",
+    "appliedRuleClasses": []
+  }
+}

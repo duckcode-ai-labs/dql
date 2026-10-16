@@ -1,0 +1,23 @@
+{
+  "key": "42e61b2433dc7b76eed94c5b57ddfbe5",
+  "operation": "generate",
+  "text": "{\"version\":1,\"kind\":\"analytics\",\"reading\":\"The average value of an order across all orders: total order value divided by the number of distinct orders.\",\"measures\":[{\"derived\":{\"kind\":\"ratio\",\"numerator\":\"column:dev.orders.order_total\",\"numeratorAggregation\":\"sum\",\"denominator\":\"column:dev.orders.order_id\",\"denominatorAggregation\":\"count_distinct\"},\"alias\":\"average_order_value\"}],\"groupBy\":[],\"display\":[],\"filters\":[],\"expectedShape\":\"scalar\",\"unresolved\":[],\"provenance\":{\"column:dev.orders.order_total\":\"q:average order value\",\"column:dev.orders.order_id\":\"q:average order value\"}}",
+  "providerName": "claude",
+  "recordedAt": "2026-10-16T02:50:50.191Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 2,
+    "messageRoles": [
+      "system",
+      "user"
+    ],
+    "preCanonicalHash": "42e61b2433dc7b76eed94c5b57ddfbe5d33125aa6259f5275ff184e038e31e46",
+    "postCanonicalHash": "42e61b2433dc7b76eed94c5b57ddfbe5d33125aa6259f5275ff184e038e31e46",
+    "appliedRuleClasses": []
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "key": "1a2044573290d3f78475391b84a113f2",
+  "operation": "generate",
+  "text": "{\"version\":1,\"kind\":\"analytics\",\"reading\":\"The total revenue across the whole Jaffle Shop dataset as a single number, with no breakdown or time window.\",\"measures\":[],\"groupBy\":[],\"display\":[],\"filters\":[],\"expectedShape\":\"scalar\",\"unresolved\":[{\"clause\":\"total revenue\",\"options\":[\"relation:dev.order_items\",\"relation:dev.orders\"],\"material\":true,\"question\":\"This project exposes no revenue metric or revenue column in its vocabulary; should revenue be read from order-line product revenue (dev.order_items) or from the order total (dev.orders)?\"}],\"provenance\":{\"relation:dev.order_items\":\"q:total revenue\",\"relation:dev.orders\":\"q:total revenue\"}}",
+  "providerName": "claude",
+  "recordedAt": "2026-10-16T02:47:41.486Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 2,
+    "messageRoles": [
+      "system",
+      "user"
+    ],
+    "preCanonicalHash": "1a2044573290d3f78475391b84a113f264ea3aedd8c93cf4af564501a724cf40",
+    "postCanonicalHash": "1a2044573290d3f78475391b84a113f264ea3aedd8c93cf4af564501a724cf40",
+    "appliedRuleClasses": []
+  }
+}

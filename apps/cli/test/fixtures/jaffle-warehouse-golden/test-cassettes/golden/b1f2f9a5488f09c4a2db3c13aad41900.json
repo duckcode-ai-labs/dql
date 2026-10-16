@@ -1,0 +1,23 @@
+{
+  "key": "b1f2f9a5488f09c4a2db3c13aad41900",
+  "operation": "generate",
+  "text": "{\"version\":1,\"kind\":\"analytics\",\"reading\":\"List the products (or figures) that fall in the beverage category.\",\"measures\":[],\"groupBy\":[],\"display\":[],\"filters\":[],\"expectedShape\":\"lookup\",\"unresolved\":[{\"clause\":\"beverage category\",\"options\":[\"relation:dev.products\"],\"material\":true,\"question\":\"The vocabulary exposes no product category/type column or beverage-scoped metric; the products relation is the only candidate. Should this list products whose type is beverage, or a measure (e.g. revenue, quantity) restricted to beverages?\"}],\"provenance\":{\"relation:dev.products\":\"q:bevereage catogery\"}}",
+  "providerName": "claude",
+  "recordedAt": "2026-10-16T02:52:10.376Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 2,
+    "messageRoles": [
+      "system",
+      "user"
+    ],
+    "preCanonicalHash": "b1f2f9a5488f09c4a2db3c13aad41900a4f23dd6d30adf6b00e468a19bc69c37",
+    "postCanonicalHash": "b1f2f9a5488f09c4a2db3c13aad41900a4f23dd6d30adf6b00e468a19bc69c37",
+    "appliedRuleClasses": []
+  }
+}

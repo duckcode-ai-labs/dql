@@ -1,0 +1,23 @@
+{
+  "key": "40d489affc587e66df8bda52204d9313",
+  "operation": "generate",
+  "text": "{\"version\":1,\"kind\":\"analytics\",\"reading\":\"For the customer named \\\"Ryan byrd\\\", show two measures side by side: total revenue and beverage (drink-only) revenue.\",\"measures\":[],\"groupBy\":[],\"display\":[],\"filters\":[],\"expectedShape\":\"comparison\",\"unresolved\":[{\"clause\":\"revenue (total revenue and beverage revenue)\",\"options\":[\"relation:dev.order_items\",\"relation:dev.orders\"],\"material\":true,\"question\":\"The vocabulary exposes no revenue metric and no columns on dev.order_items or dev.orders; which relation and amount column defines revenue (pretax line revenue on order_items vs order total on orders)?\"},{\"clause\":\"beverage revenue\",\"options\":[\"relation:dev.products\"],\"material\":true,\"question\":\"No product type/category dimension is exposed; which column on dev.products marks a product as a beverage/drink?\"},{\"clause\":\"\\\"Ryan byrd\\\"\",\"options\":[\"relation:dev.customers\"],\"material\":true,\"question\":\"No customer_name dimension is exposed; which column on dev.customers holds the customer name to match \\\"Ryan byrd\\\"?\"}],\"provenance\":{\"relation:dev.order_items\":\"q:revenue\",\"relation:dev.orders\":\"q:total revenue\",\"relation:dev.products\":\"q:beverage revenue\",\"relation:dev.customers\":\"q:\\\"Ryan byrd\\\"\"}}",
+  "providerName": "claude",
+  "recordedAt": "2026-10-16T02:50:31.829Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 2,
+    "messageRoles": [
+      "system",
+      "user"
+    ],
+    "preCanonicalHash": "40d489affc587e66df8bda52204d93136121e650e740f2ae40db4e3642c7e186",
+    "postCanonicalHash": "40d489affc587e66df8bda52204d93136121e650e740f2ae40db4e3642c7e186",
+    "appliedRuleClasses": []
+  }
+}

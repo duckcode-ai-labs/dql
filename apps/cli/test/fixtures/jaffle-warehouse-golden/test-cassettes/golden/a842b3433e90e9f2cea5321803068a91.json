@@ -1,0 +1,23 @@
+{
+  "key": "a842b3433e90e9f2cea5321803068a91",
+  "operation": "generate",
+  "text": "{\"version\":1,\"kind\":\"analytics\",\"reading\":\"Total revenue across the whole business, as a single number with no breakdown or time window.\",\"measures\":[],\"groupBy\":[],\"display\":[],\"filters\":[],\"expectedShape\":\"scalar\",\"unresolved\":[{\"clause\":\"revenue\",\"options\":[\"relation:dev.orders\",\"relation:dev.order_items\"],\"material\":true,\"question\":\"The vocabulary exposes no revenue metric or amount column; should revenue be read from order totals (dev.orders) or from order-line product revenue (dev.order_items), and which column holds it?\"}],\"provenance\":{\"relation:dev.orders\":\"q:revenue\",\"relation:dev.order_items\":\"q:revenue\"}}",
+  "providerName": "claude",
+  "recordedAt": "2026-10-16T02:55:34.690Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 2,
+    "messageRoles": [
+      "system",
+      "user"
+    ],
+    "preCanonicalHash": "a842b3433e90e9f2cea5321803068a91b308de56641dcad7708422a28de5779e",
+    "postCanonicalHash": "a842b3433e90e9f2cea5321803068a91b308de56641dcad7708422a28de5779e",
+    "appliedRuleClasses": []
+  }
+}

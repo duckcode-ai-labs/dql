@@ -1,0 +1,23 @@
+{
+  "key": "91258376be50990cf70e6f1d2e90351a",
+  "operation": "generate",
+  "text": "{\"version\":1,\"kind\":\"analytics\",\"reading\":\"Revenue from drink items (order lines whose product is a drink), broken down by product.\",\"measures\":[{\"ref\":\"column:dev.order_items.product_price\",\"aggregation\":\"sum\",\"alias\":\"beverage_revenue\",\"scope\":[{\"ref\":\"column:dev.products.is_drink_item\",\"op\":\"is_true\",\"values\":[true],\"source\":\"question\"}]}],\"groupBy\":[{\"ref\":\"column:dev.products.product_id\",\"role\":\"key\"}],\"display\":[\"column:dev.products.product_name\"],\"filters\":[],\"ordering\":{\"ref\":\"beverage_revenue\",\"direction\":\"desc\"},\"expectedShape\":\"grouped\",\"unresolved\":[{\"clause\":\"revenue\",\"options\":[\"column:dev.order_items.product_price\",\"column:dev.products.product_price\"],\"material\":false,\"question\":\"No revenue metric is defined; using the sum of the order line price (order_items.product_price) as revenue.\"}],\"provenance\":{\"column:dev.order_items.product_price\":\"q:revenue\",\"column:dev.products.is_drink_item\":\"q:beverage\",\"column:dev.products.product_id\":\"q:by product\",\"column:dev.products.product_name\":\"q:by product\"}}",
+  "providerName": "claude",
+  "recordedAt": "2026-10-16T02:49:05.183Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 2,
+    "messageRoles": [
+      "system",
+      "user"
+    ],
+    "preCanonicalHash": "91258376be50990cf70e6f1d2e90351aee6fc598623ecbb30386dccf7e073788",
+    "postCanonicalHash": "91258376be50990cf70e6f1d2e90351aee6fc598623ecbb30386dccf7e073788",
+    "appliedRuleClasses": []
+  }
+}

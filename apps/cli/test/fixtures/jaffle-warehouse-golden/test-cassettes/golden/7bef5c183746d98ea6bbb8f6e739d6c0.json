@@ -1,0 +1,23 @@
+{
+  "key": "7bef5c183746d98ea6bbb8f6e739d6c0",
+  "operation": "generate",
+  "text": "{\"version\":1,\"kind\":\"analytics\",\"reading\":\"Total revenue broken down by calendar month (a monthly trend).\",\"measures\":[],\"groupBy\":[],\"display\":[],\"filters\":[],\"expectedShape\":\"trend\",\"unresolved\":[{\"clause\":\"revenue\",\"options\":[\"relation:dev.orders\",\"relation:dev.order_items\"],\"material\":true,\"question\":\"No revenue metric or column is exposed in this vocabulary; should revenue be read from the orders table (order total) or the order_items table (line-level product revenue)?\"},{\"clause\":\"by month\",\"options\":[],\"material\":true,\"question\":\"No date/time dimension is exposed in this vocabulary to bucket by month; which order date field should define the month?\"}],\"provenance\":{\"relation:dev.orders\":\"q:revenue\",\"relation:dev.order_items\":\"q:revenue\"}}",
+  "providerName": "claude",
+  "recordedAt": "2026-10-16T02:47:51.384Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 2,
+    "messageRoles": [
+      "system",
+      "user"
+    ],
+    "preCanonicalHash": "7bef5c183746d98ea6bbb8f6e739d6c0afe408f3ac5965c2224b15de98d406bd",
+    "postCanonicalHash": "7bef5c183746d98ea6bbb8f6e739d6c0afe408f3ac5965c2224b15de98d406bd",
+    "appliedRuleClasses": []
+  }
+}

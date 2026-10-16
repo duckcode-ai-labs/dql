@@ -1,0 +1,23 @@
+{
+  "key": "c8809c86ae01dcb12f8a6ffbeeb4e40c",
+  "operation": "generate",
+  "text": "{\"version\":1,\"kind\":\"analytics\",\"reading\":\"Break down revenue by product type (one row per product_type), but no governed revenue metric or listed revenue column exists in this vocabulary.\",\"measures\":[],\"groupBy\":[{\"ref\":\"column:dev.products.product_type\",\"role\":\"categorical\"}],\"display\":[],\"filters\":[],\"expectedShape\":\"grouped\",\"unresolved\":[{\"clause\":\"revenue\",\"options\":[],\"material\":true,\"question\":\"No revenue metric or revenue column is listed in this project's vocabulary (only products columns are enumerated); which column on dev.order_items or dev.orders holds revenue?\"}],\"provenance\":{\"column:dev.products.product_type\":\"q:by product type\"}}",
+  "providerName": "claude",
+  "recordedAt": "2026-10-16T02:49:21.030Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 2,
+    "messageRoles": [
+      "system",
+      "user"
+    ],
+    "preCanonicalHash": "c8809c86ae01dcb12f8a6ffbeeb4e40cd084a6d54bfe5489c53991f7f86b4cec",
+    "postCanonicalHash": "c8809c86ae01dcb12f8a6ffbeeb4e40cd084a6d54bfe5489c53991f7f86b4cec",
+    "appliedRuleClasses": []
+  }
+}

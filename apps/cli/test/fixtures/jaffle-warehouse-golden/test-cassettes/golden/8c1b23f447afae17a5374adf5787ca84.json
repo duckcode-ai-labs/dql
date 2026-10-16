@@ -1,0 +1,23 @@
+{
+  "key": "8c1b23f447afae17a5374adf5787ca84",
+  "operation": "generate",
+  "text": "{\"version\":1,\"kind\":\"conversation\",\"reading\":\"The user is greeting the assistant.\",\"measures\":[],\"groupBy\":[],\"display\":[],\"filters\":[],\"expectedShape\":\"scalar\",\"unresolved\":[],\"provenance\":{},\"reply\":\"Hi! I can answer analytics questions over this project's data — customers, orders, order items, products, locations and supplies. Ask me things like \\\"top 10 customers by revenue\\\" or \\\"orders by month in 2026\\\".\"}",
+  "providerName": "claude",
+  "recordedAt": "2026-10-16T02:52:29.861Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 2,
+    "messageRoles": [
+      "system",
+      "user"
+    ],
+    "preCanonicalHash": "8c1b23f447afae17a5374adf5787ca84f64434145a48bd5e202f5391fa6fbcd3",
+    "postCanonicalHash": "8c1b23f447afae17a5374adf5787ca84f64434145a48bd5e202f5391fa6fbcd3",
+    "appliedRuleClasses": []
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "key": "a1514d36ba07213819e620e613bb7e97",
+  "operation": "generate",
+  "text": "NO_SQL: No column or defined metric marks customers as churned (no status/churn flag or defined inactivity window), and no region attribute exists beyond store location.",
+  "providerName": "claude",
+  "recordedAt": "2026-10-16T02:52:24.407Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 2,
+    "messageRoles": [
+      "system",
+      "user"
+    ],
+    "preCanonicalHash": "a1514d36ba07213819e620e613bb7e974e8e7126ad476824163406968165cf3a",
+    "postCanonicalHash": "a1514d36ba07213819e620e613bb7e974e8e7126ad476824163406968165cf3a",
+    "appliedRuleClasses": []
+  }
+}

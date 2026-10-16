@@ -1,3 +1,5 @@
+// dql-format: 1
+
 domain "Jaffle Shop" {
   id = "dev"
   owner = "analytics@jaffle.shop"

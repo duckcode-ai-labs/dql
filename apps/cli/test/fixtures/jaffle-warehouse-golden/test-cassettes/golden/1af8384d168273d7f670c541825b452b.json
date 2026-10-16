@@ -1,0 +1,24 @@
+{
+  "key": "1af8384d168273d7f670c541825b452b",
+  "operation": "generate",
+  "text": "{\"version\":1,\"kind\":\"analytics\",\"reading\":\"Top 10 customers by beverage revenue (order-line product price summed over lines whose product type is beverage), showing each customer's name beside the customer key.\",\"measures\":[{\"ref\":\"column:dev.order_items.product_price\",\"aggregation\":\"sum\",\"scope\":[{\"ref\":\"column:dev.products.product_type\",\"op\":\"eq\",\"values\":[\"beverage\"],\"source\":\"question\"}],\"alias\":\"beverage_revenue\"}],\"groupBy\":[{\"ref\":\"column:dev.customers.customer_id\",\"role\":\"key\"}],\"display\":[\"column:dev.customers.customer_name\"],\"filters\":[],\"ordering\":{\"ref\":\"measure:0\",\"direction\":\"desc\"},\"limit\":10,\"expectedShape\":\"ranking\",\"unresolved\":[],\"provenance\":{\"column:dev.order_items.product_price\":\"inherited\",\"column:dev.products.product_type\":\"q:bevereage catogery\",\"column:dev.customers.customer_id\":\"inherited\",\"column:dev.customers.customer_name\":\"inherited\"}}",
+  "providerName": "claude",
+  "recordedAt": "2026-10-16T02:57:02.037Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 3,
+    "messageRoles": [
+      "system",
+      "user",
+      "user"
+    ],
+    "preCanonicalHash": "1af8384d168273d7f670c541825b452b3bf9710a32f958abd3245d827ae142fe",
+    "postCanonicalHash": "1af8384d168273d7f670c541825b452b3bf9710a32f958abd3245d827ae142fe",
+    "appliedRuleClasses": []
+  }
+}

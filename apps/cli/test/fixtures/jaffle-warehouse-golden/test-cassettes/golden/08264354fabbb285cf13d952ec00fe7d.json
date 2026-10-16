@@ -1,0 +1,23 @@
+{
+  "key": "08264354fabbb285cf13d952ec00fe7d",
+  "operation": "generate",
+  "text": "{\"version\":1,\"kind\":\"analytics\",\"reading\":\"Total revenue from beverage (drink) products, as a single scalar.\",\"measures\":[],\"groupBy\":[],\"display\":[],\"filters\":[],\"expectedShape\":\"scalar\",\"unresolved\":[{\"clause\":\"beverage revenue\",\"options\":[],\"material\":true,\"question\":\"The vocabulary exposes no revenue metric, product-type dimension or numeric column for this project; which governed measure and product-type attribute should define beverage revenue?\"}],\"provenance\":{}}",
+  "providerName": "claude",
+  "recordedAt": "2026-10-16T02:47:28.329Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 2,
+    "messageRoles": [
+      "system",
+      "user"
+    ],
+    "preCanonicalHash": "08264354fabbb285cf13d952ec00fe7d0c57698dcdaea2cab161bd35f26f8724",
+    "postCanonicalHash": "08264354fabbb285cf13d952ec00fe7d0c57698dcdaea2cab161bd35f26f8724",
+    "appliedRuleClasses": []
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "key": "7a616ea5cf9f1bfcd01cfa9a95d1bb21",
+  "operation": "generate",
+  "text": "{\"version\":1,\"kind\":\"analytics\",\"reading\":\"The lifetime spend (total amount ever spent) of the single customer named Jordan Lee, as one scalar value.\",\"measures\":[],\"groupBy\":[],\"display\":[],\"filters\":[],\"expectedShape\":\"scalar\",\"unresolved\":[{\"clause\":\"lifetime spend\",\"options\":[],\"material\":true,\"question\":\"The vocabulary exposes no metric or column for a customer's lifetime spend (relation:dev.customers lists no columns and no metrics are declared); which governed measure should represent lifetime spend?\"},{\"clause\":\"Jordan Lee\",\"options\":[],\"material\":true,\"question\":\"No customer name dimension or column is exposed in the vocabulary to match the literal 'Jordan Lee'; which field holds customer names?\"}],\"provenance\":{\"relation:dev.customers\":\"q:Jordan Lee\"}}",
+  "providerName": "claude",
+  "recordedAt": "2026-10-16T02:54:42.783Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 2,
+    "messageRoles": [
+      "system",
+      "user"
+    ],
+    "preCanonicalHash": "7a616ea5cf9f1bfcd01cfa9a95d1bb21ef7d57e83378a48179e6372749e8f8b3",
+    "postCanonicalHash": "7a616ea5cf9f1bfcd01cfa9a95d1bb21ef7d57e83378a48179e6372749e8f8b3",
+    "appliedRuleClasses": []
+  }
+}

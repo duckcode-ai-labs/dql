@@ -1,8 +1,12 @@
 {
-  "_comment": "The warehouse-only lane: jaffle-golden's questions and conversation over jaffle-golden's seed, on a database-only workspace (fixtures/jaffle-warehouse-golden: synced catalog, drafted and certified joins, no dbt manifest, no blocks, no metrics). A database-only project has no dbt metrics, so a case that must be governed in jaffle-golden must here return the right rows with any honest label (certified, governed or review required). The lane is floor-gated: it fails only when fewer cases pass than baseline.json's floor.askGolden.",
+  "_comment": "The warehouse-only lane: jaffle-golden's questions and conversation over jaffle-golden's seed, on a database-only workspace (fixtures/jaffle-warehouse-golden: synced catalog, drafted and certified joins, no dbt manifest, no blocks, no metrics). A database-only project has no dbt metrics, nor certified blocks, so a case that must be certified or governed (tier certified, governed or any) in jaffle-golden must here return the right rows with any honest label (certified, governed or review required). The lane is floor-gated: it fails only when fewer cases pass than baseline.json's floor.askGolden.",
   "questionsFrom": "jaffle-golden",
   "seedFrom": "jaffle-golden",
-  "tierPolicy": { "certified": "reviewable", "governed": "reviewable" },
+  "tierPolicy": {
+    "certified": "reviewable",
+    "governed": "reviewable",
+    "any": "reviewable"
+  },
   "gate": "floor",
   "baseline": "baseline.json"
 }

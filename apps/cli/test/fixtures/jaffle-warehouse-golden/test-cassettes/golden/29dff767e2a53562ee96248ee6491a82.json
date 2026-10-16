@@ -1,0 +1,23 @@
+{
+  "key": "29dff767e2a53562ee96248ee6491a82",
+  "operation": "generate",
+  "text": "{\"version\":1,\"kind\":\"analytics\",\"reading\":\"The customer churn rate broken down by geographic region.\",\"measures\":[],\"groupBy\":[],\"display\":[],\"filters\":[],\"expectedShape\":\"grouped\",\"unresolved\":[{\"clause\":\"churn rate\",\"options\":[],\"material\":true,\"question\":\"This project defines no churn metric and no column or term for churned/lost customers; how should churn be measured?\"},{\"clause\":\"by region\",\"options\":[\"relation:dev.locations\"],\"material\":true,\"question\":\"No region attribute is modeled; the only geographic entity is the store location (dev.locations). Should the breakdown be by store location?\"}],\"provenance\":{\"relation:dev.locations\":\"q:by region\"}}",
+  "providerName": "claude",
+  "recordedAt": "2026-10-16T02:52:18.122Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 2,
+    "messageRoles": [
+      "system",
+      "user"
+    ],
+    "preCanonicalHash": "29dff767e2a53562ee96248ee6491a82f0830f6360ed0783760117dd28466f61",
+    "postCanonicalHash": "29dff767e2a53562ee96248ee6491a82f0830f6360ed0783760117dd28466f61",
+    "appliedRuleClasses": []
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "key": "78ba098d0bb9bd8ab55879dc056b96d0",
+  "operation": "generate",
+  "text": "{\"version\":1,\"kind\":\"analytics\",\"reading\":\"Total gross profit for calendar year 2025 and gross margin percentage (gross profit divided by revenue) for the same period, as two scalar measures.\",\"measures\":[],\"groupBy\":[],\"display\":[],\"filters\":[],\"expectedShape\":\"comparison\",\"time\":{\"window\":{\"start\":\"2025-01-01\",\"end\":\"2026-01-01\",\"expression\":\"in 2025\"}},\"unresolved\":[{\"clause\":\"gross profit in 2025\",\"options\":[],\"material\":true,\"question\":\"The vocabulary exposes no metric, dimension or column for revenue, cost of goods or gross profit; which governed refs should define gross profit?\"},{\"clause\":\"gross margin percentage\",\"options\":[],\"material\":true,\"question\":\"No governed refs exist for the parts of a gross margin ratio (gross profit and revenue); which refs should be used as numerator and denominator?\"}],\"provenance\":{}}",
+  "providerName": "claude",
+  "recordedAt": "2026-10-16T02:55:03.127Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 2,
+    "messageRoles": [
+      "system",
+      "user"
+    ],
+    "preCanonicalHash": "78ba098d0bb9bd8ab55879dc056b96d074f9dec5b72247b71df3154818d6f43f",
+    "postCanonicalHash": "78ba098d0bb9bd8ab55879dc056b96d074f9dec5b72247b71df3154818d6f43f",
+    "appliedRuleClasses": []
+  }
+}
