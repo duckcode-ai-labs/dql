@@ -1,7 +1,7 @@
 # Release process
 
 ZLens uses one version across its publishable packages. The current version is
-`0.2.0` (see `apps/cli/package.json`). `0.1.0` was the first release under the
+`0.2.1` (see `apps/cli/package.json`). `0.1.0` was the first release under the
 ZLens package names. The packages it replaces (`@duckcodeailabs/*`,
 `create-dql-app`) ended at `1.17.2`; their last git tag is `v1.14.3-rc.1`,
 because `1.13.5` to `1.17.2` were published by hand. The repository is

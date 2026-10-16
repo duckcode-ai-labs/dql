@@ -8,6 +8,63 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+## v0.2.1 - 2026-10-16
+
+ZLens on npm 12. npm 12 (the current `latest`) runs a dependency's install
+script only when `package.json` lists the package in `allowScripts`.
+`better-sqlite3`, which holds ZLens's local index, and the `duckdb` driver
+download their native binary in that script, so on npm 12 the JavaScript
+installed without the binary: `npm run sync` failed with "Failed to compile
+project: Could not locate the bindings file", `npm run notebook` with
+"Error: Could not locate the bindings file", and the DuckDB driver reported
+itself missing although it was installed.
+
+To upgrade, run `npm i -D @zlens/cli@^0.2.1` in each project. On npm 12, also
+add `"allowScripts": { "better-sqlite3": true }` to the project's
+`package.json` (the two samples already have it), or, in a folder that is
+already installed, run `npm install-scripts approve better-sqlite3` and then
+`npm rebuild better-sqlite3`. For a global install, run
+`npm i -g @zlens/cli --allow-scripts=better-sqlite3`.
+
+### Fixed
+
+- **A clear message instead of "Could not locate the bindings file".** When
+  better-sqlite3 cannot load its native binary, every command that opens
+  ZLens's index stops before it starts, says what happened (npm 12 blocked
+  the install script), prints the commands that fix it for this kind of
+  install (project, global or npx; pnpm 10 gets `pnpm approve-builds`), and
+  exits 1. A binary built for another Node version gets `npm rebuild`.
+- **`zlens doctor` checks the native modules.** A new **SQLite native
+  module** check, and the **DuckDB connector package** check now fails, with
+  the repair commands, when the driver is installed but its binary is
+  missing.
+- **The DuckDB driver repairs itself.** When ZLens installs a driver into
+  `.dql/connectors` (the Connections page, a saved connection, or workbench
+  startup), it writes `"allowScripts": { "duckdb": true }` into
+  `.dql/connectors/package.json` first. A duckdb installed by hand without
+  its binary is rebuilt when the workbench starts or `zlens sync warehouse`
+  runs, and loading one that still cannot load names the two commands
+  instead of asking you to install it again.
+- **`create-zlens-app` projects work on npm 12.** Every project it writes
+  (dbt and `--warehouse` modes) allows better-sqlite3's install script in
+  `package.json` (and in `pnpm.onlyBuiltDependencies` for pnpm 10), and gets
+  a `.dql/connectors/package.json` that allows duckdb's, so the driver step
+  it prints works as written. New projects ask for `@zlens/cli` `^0.2.1`.
+
+### Docs
+
+- The Quickstart, Install (a new **npm 12 and install scripts** section),
+  Troubleshooting, Connectors and the README have the `allowScripts` entry,
+  the two commands for an existing folder, and the `--allow-scripts` flag for
+  a global install.
+
+### Release checks
+
+- The launch gate runs every sample and `create-zlens-app` under npm 12 as
+  well as the system npm (`--npm system,12`, with `--node` for a Node that
+  npm 12 supports). It fails when `npm install` blocks an install script,
+  and checks that better-sqlite3 and the DuckDB driver load.
+
 ## v0.2.0 - 2026-10-16
 
 Certified answers on your warehouse. This release adds a database-only path,
