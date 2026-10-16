@@ -15,5 +15,13 @@
   },
   "engines": {
     "node": ">=20"
+  },
+  "allowScripts": {
+    "better-sqlite3": true
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "better-sqlite3"
+    ]
   }
 }

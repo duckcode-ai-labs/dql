@@ -57,6 +57,12 @@ function assertGeneratedPackage(target) {
     `package.json uses @zlens/cli ${EXPECTED_CLI_RANGE}`,
   );
   assert(!Object.values(pkg.scripts ?? {}).includes('zlens test'), 'package.json does not use deprecated zlens test');
+  // npm 12 blocks dependency install scripts unless allowScripts lists them;
+  // better-sqlite3 downloads its native binary in its script.
+  assert(pkg.allowScripts?.['better-sqlite3'] === true, 'package.json allows better-sqlite3\'s install script (npm 12)');
+  assert(pkg.pnpm?.onlyBuiltDependencies?.includes('better-sqlite3'), 'package.json lets pnpm 10 build better-sqlite3');
+  const connectors = JSON.parse(readFileSync(join(target, '.dql', 'connectors', 'package.json'), 'utf-8'));
+  assert(connectors.allowScripts?.duckdb === true, '.dql/connectors/package.json allows duckdb\'s install script (npm 12)');
 }
 
 function assertTemplateDqlSyntax(target) {
@@ -165,6 +171,7 @@ function assertDbtWorkspace(target, projectDir) {
   const pkg = readJson(join(target, 'package.json'));
   assert(pkg.scripts.sync === 'zlens sync dbt', 'sync script runs zlens sync dbt');
   assert(readFileSync(join(target, 'README.md'), 'utf-8').includes('## Have a dbt project?'), 'README keeps the dbt section');
+  assertGeneratedPackage(target);
 }
 
 function assertWarehouseWorkspace(target, driver, expectedConnection) {
