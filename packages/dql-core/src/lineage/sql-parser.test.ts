@@ -383,6 +383,84 @@ describe('extractTablesFromSql', () => {
       expect(result.ctes).toEqual(['recent']);
     });
   });
+
+  describe('quoted, schema-qualified names', () => {
+    it('reads a fully quoted schema.table as the table, not the schema', () => {
+      // The shape "Start from a table" Datasets generate.
+      const result = extractTablesFromSql('SELECT "order_line_id" FROM "main"."order_lines"');
+      expect(result.tables).toEqual(['main.order_lines']);
+    });
+
+    it('keeps the case of quoted parts and reads unquoted three-part names beside them', () => {
+      const result = extractTablesFromSql(
+        'SELECT * FROM warehouse.sales.orders o JOIN "Sales"."Customers" c ON o.cid = c.id',
+      );
+      expect(result.tables).toEqual(['warehouse.sales.orders', 'Sales.Customers']);
+    });
+
+    it.each([
+      ['"main".order_lines', 'main.order_lines'],
+      ['main."Order Lines"', 'main.Order Lines'],
+      ['warehouse."Sales".orders', 'warehouse.Sales.orders'],
+      ['"warehouse"."sales"."orders"', 'warehouse.sales.orders'],
+      ['"weird""name"', 'weird"name'],
+    ])('reads mixed quoting %s as %s', (relation, expected) => {
+      expect(extractTablesFromSql(`SELECT * FROM ${relation} AS t`).tables).toEqual([expected]);
+    });
+
+    it('reads backtick and bracket quoting', () => {
+      expect(extractTablesFromSql('SELECT * FROM `proj`.`sales`.`Orders`').tables).toEqual(['proj.sales.Orders']);
+      expect(extractTablesFromSql('SELECT * FROM `proj.sales.Orders`').tables).toEqual(['proj.sales.Orders']);
+      expect(extractTablesFromSql('SELECT * FROM [dbo].[Order Lines]').tables).toEqual(['dbo.Order Lines']);
+      expect(extractTablesFromSql('SELECT * FROM [odd]]name]').tables).toEqual(['odd]name']);
+    });
+
+    it('reads quoted names in INSERT INTO', () => {
+      const result = extractTablesFromSql('INSERT INTO "main"."target" SELECT * FROM "main"."source"');
+      expect(result.tables).toEqual(['main.source', 'main.target']);
+    });
+
+    it('treats quoted and unquoted spellings of one relation as one table', () => {
+      const result = extractTablesFromSql('SELECT * FROM "main"."orders" a JOIN main.orders b ON a.id = b.id');
+      expect(result.tables).toEqual(['main.orders']);
+    });
+
+    it('still excludes CTEs and keeps ref(), @metric and reader functions beside quoted tables', () => {
+      const result = extractTablesFromSql(`
+        WITH "recent" AS (
+          SELECT * FROM "main"."orders" WHERE placed_at > '2024-01-01'
+        )
+        SELECT r.*, @metric(revenue)
+        FROM "recent" r
+        JOIN ref("customer_segments") s ON r.customer_id = s.customer_id
+        JOIN read_parquet('s3://lake/returns/*.parquet', hive_partitioning = true) x ON x.order_id = r.order_id
+      `);
+      expect(result.ctes).toEqual(['recent']);
+      expect(result.tables).toEqual(['main.orders', "read_parquet('s3://lake/returns/*.parquet')"]);
+      expect(result.refs).toEqual(['customer_segments']);
+      expect(result.metricRefs).toEqual(['revenue']);
+    });
+
+    it('ignores quoted names inside comments and string literals', () => {
+      const result = extractTablesFromSql(`
+        -- FROM "main"."ghost_comment"
+        /* JOIN "main"."ghost_block" */
+        SELECT 'FROM "main"."ghost_string"' AS label FROM "main"."real"
+      `);
+      expect(result.tables).toEqual(['main.real']);
+    });
+
+    it('matches the parser-based analysis for every quoting it can parse', () => {
+      for (const sql of [
+        'SELECT "order_line_id" FROM "main"."order_lines"',
+        'SELECT * FROM warehouse.sales.orders o JOIN "Sales"."Customers" c ON o.cid = c.id',
+        'SELECT * FROM "main".order_lines',
+        'SELECT * FROM main."Order Lines"',
+      ]) {
+        expect(extractTablesFromSql(sql).tables).toEqual(analyzeSqlReferences(sql, 'duckdb').tables);
+      }
+    });
+  });
 });
 
 describe('analyzeSqlReferences', () => {

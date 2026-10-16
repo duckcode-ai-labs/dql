@@ -17,7 +17,7 @@ export { MissingConnectorDependencyError } from './optional-dependency.js';
 export type { SQLParamSpec } from './sql-params.js';
 export { buildParamValues, expandArrayParameters, normalizeSQLPlaceholders } from './sql-params.js';
 export { SnowflakeConnector } from './drivers/snowflake.js';
-export { DuckDBConnector, type DuckDBConsistentReadScope } from './drivers/duckdb.js';
+export { DuckDBConnector, duckDBOpenFailureMessage, type DuckDBConsistentReadScope } from './drivers/duckdb.js';
 export { FileConnector } from './drivers/file.js';
 export { DatabricksConnector } from './drivers/databricks.js';
 export { SQLiteConnector } from './drivers/sqlite.js';

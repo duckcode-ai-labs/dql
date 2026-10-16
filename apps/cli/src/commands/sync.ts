@@ -205,8 +205,9 @@ async function runSyncWarehouse(rest: string[], flags: CLIFlags): Promise<void> 
   const schemas = (valueOf('--schemas') ?? '').split(',').map((schema) => schema.trim()).filter(Boolean);
   const connectionId = valueOf('--connection') ?? (flags.connection || undefined);
   const { syncProjectWarehouse } = await import('../local-runtime.js');
-  const { QueryExecutor } = await import('@zlens/connectors');
-  const executor = new QueryExecutor();
+  // A running workbench holds a DuckDB file open; the schema is then read through it.
+  const { WorkbenchRoutedQueryExecutor } = await import('../workbench-query-route.js');
+  const executor = new WorkbenchRoutedQueryExecutor(projectRoot, { onRoute: (via) => { if (flags.format !== 'json') console.error(`  Reading the schema through ${via}, which has the DuckDB file open.`); } });
   try {
     const result = await syncProjectWarehouse(projectRoot, {
       ...(connectionId ? { connectionId } : {}),
@@ -234,6 +235,10 @@ async function runSyncWarehouse(rest: string[], flags: CLIFlags): Promise<void> 
       } else {
         console.log(`  ✓ Warehouse catalog: ${catalog.relations} relation(s) → ${relative(projectRoot, catalog.path)}`);
         for (const warning of catalog.warnings ?? []) console.log(`    ! ${warning}`);
+        const profile = catalog.valueProfile;
+        if (profile && 'error' in profile) console.log(`    ! Value profile not read: ${profile.error}`);
+        else if (profile && 'skipped' in profile) console.log(`    Value profile not read: ${profile.skipped}.`);
+        else if (profile) console.log(`  ✓ Value profile (agent.valueProfile): example values of ${profile.columns} column(s) in ${profile.relations} relation(s), ${profile.skippedSensitive} sensitive column(s) left out → .dql/cache/value-profile.json. These values reach your AI provider with drafting prompts.`);
         if (catalog.drift) {
           const drift = catalog.drift;
           console.log('  Changed since the last sync:');

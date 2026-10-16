@@ -11,6 +11,7 @@ import type {
   ManifestModelLifecycle,
   ManifestRelationshipCardinality,
   ManifestRelationshipValidationEvidence,
+  ManifestRelationshipValidationScope,
 } from './types.js';
 
 type UnknownRecord = Record<string, unknown>;
@@ -93,6 +94,10 @@ export interface RelationshipAuthoringInput {
   attributionBlock?: string;
   importRefs?: string[];
   evidenceExpiresAt?: string;
+  /** Share (0–1) of keyed "from" rows allowed to find no "to" row; omitted, the validator's default. */
+  maxUnmatchedShare?: number;
+  /** `referenced_keys`: judge uniqueness only over the keys the join reaches. */
+  validationScope?: ManifestRelationshipValidationScope;
 }
 
 /** A business concept as authored: bindings describe where it lives; equivalences are typed mappings for a later, separately gated release. */
@@ -175,7 +180,24 @@ export type ModelingAuthoringChange =
   | { operation: 'remove_contract'; value: ModelingObjectRef }
   | { operation: 'remove_export'; value: ModelingObjectRef }
   | { operation: 'remove_import'; value: ModelingObjectRef }
-  | { operation: 'remove_concept'; value: ModelingObjectRef };
+  | { operation: 'remove_concept'; value: ModelingObjectRef }
+  // Warehouse evidence for a relationship as authored (`zlens model
+  // validate-relationship`): only the evidence, and on an explicit certify the
+  // status and the grains certified against, change; every other authored
+  // field stays exactly as written.
+  | { operation: 'record_relationship_validation'; value: RelationshipValidationRecordInput };
+
+/** The evidence one warehouse check wrote for an existing relationship. */
+export interface RelationshipValidationRecordInput extends ModelingObjectRef {
+  /** The authored file, as the manifest reports it (`sourcePath`); found by id within the domain when omitted. */
+  sourcePath?: string;
+  validation: ManifestRelationshipValidationEvidence;
+  /** Set only when a person certifies with the check: the status becomes certified against these grains. */
+  certifiedAgainst?: {
+    from: { grain: string; keys: string[] };
+    to: { grain: string; keys: string[] };
+  };
+}
 
 /** Identifies an authored modeling object for removal. */
 export interface ModelingObjectRef {
@@ -318,8 +340,8 @@ export function previewModelingChange(projectRoot: string, change: ModelingAutho
     switch (change.operation) {
       case 'upsert_domain': return previewDomain(root, change.value);
       case 'upsert_area': return [previewArea(root, change.value)];
-      case 'upsert_entity': return [previewEntity(root, change.value)];
-      case 'upsert_relationship': return [previewRelationship(root, change.value)];
+      case 'upsert_entity': return previewEntity(root, change.value);
+      case 'upsert_relationship': return previewRelationship(root, change.value);
       case 'upsert_contract': return [previewContract(root, change.value)];
       case 'upsert_export': return [previewExport(root, change.value)];
       case 'upsert_import': return [previewImport(root, change.value)];
@@ -331,6 +353,7 @@ export function previewModelingChange(projectRoot: string, change: ModelingAutho
       case 'remove_import': return [previewRemoveListEntry(root, change.value, 'interfaces.dql.yaml', 'imports')];
       case 'upsert_concept': return [previewConcept(root, change.value)];
       case 'remove_concept': return [previewRemoveListEntry(root, change.value, 'concepts.dql.yaml', 'concepts')];
+      case 'record_relationship_validation': return [previewRelationshipValidationRecord(root, change.value)];
       default: {
         const unsupported: never = change;
         throw new Error(`Unsupported modeling operation: ${(unsupported as { operation?: string }).operation ?? 'unknown'}`);
@@ -576,7 +599,7 @@ function previewArea(projectRoot: string, value: ModelAreaAuthoringInput): Model
   return { path, before, after, changed: before !== after };
 }
 
-function previewEntity(projectRoot: string, value: EntityBindingAuthoringInput): ModelingSourcePatch {
+function previewEntity(projectRoot: string, value: EntityBindingAuthoringInput): ModelingSourcePatch[] {
   const id = requiredId(value.id, 'entity');
   const domain = requiredId(value.domain, 'domain');
   const dbtModel = requiredId(value.dbtModel, 'dbt model');
@@ -598,10 +621,10 @@ function previewEntity(projectRoot: string, value: EntityBindingAuthoringInput):
     ...(value.grain ? { grain: value.grain } : {}),
     ...(cleanStrings(value.keys).length > 0 ? { keys: cleanStrings(value.keys) } : {}),
   };
-  return upsertListPatch(projectRoot, path, 'entities', 'id', entity);
+  return upsertMovingListPatches(projectRoot, domain, path, 'entities', entity);
 }
 
-function previewRelationship(projectRoot: string, value: RelationshipAuthoringInput): ModelingSourcePatch {
+function previewRelationship(projectRoot: string, value: RelationshipAuthoringInput): ModelingSourcePatch[] {
   const id = requiredId(value.id, 'relationship');
   const domain = requiredId(value.domain, 'domain');
   if (!value.from || !value.to || !Array.isArray(value.keys) || value.keys.length === 0) {
@@ -638,10 +661,33 @@ function previewRelationship(projectRoot: string, value: RelationshipAuthoringIn
     ...(value.attributionBlock ? { attribution_block: value.attributionBlock } : {}),
     ...(value.importRefs?.length ? { imports: cleanStrings(value.importRefs) } : {}),
     ...(value.evidenceExpiresAt ? { evidence_expires_at: value.evidenceExpiresAt } : {}),
+    ...(value.maxUnmatchedShare !== undefined ? { max_unmatched_share: value.maxUnmatchedShare } : {}),
+    ...(value.validationScope ? { validation_scope: value.validationScope } : {}),
     ...(value.certifiedAgainst ? { certifiedAgainst: value.certifiedAgainst } : {}),
     ...(value.validation ? { validation: validationSource(value.validation) } : {}),
   };
-  return upsertListPatch(projectRoot, modelingSourceFile(projectRoot, domain, 'relationships.dql.yaml', 'relationships', 'id', id, value.areaId), 'relationships', 'id', relationship);
+  return upsertMovingListPatches(projectRoot, domain, modelingSourceFile(projectRoot, domain, 'relationships.dql.yaml', 'relationships', 'id', id, value.areaId), 'relationships', relationship);
+}
+
+function previewRelationshipValidationRecord(projectRoot: string, value: RelationshipValidationRecordInput): ModelingSourcePatch {
+  const id = requiredId(value.id, 'relationship');
+  const domain = requiredId(value.domain, 'domain');
+  const areaId = value.areaId?.includes('::') ? value.areaId.split('::').pop() : value.areaId;
+  const path = value.sourcePath?.trim()
+    ? value.sourcePath.trim().replace(/\\/g, '/')
+    : modelingSourceFile(projectRoot, domain, 'relationships.dql.yaml', 'relationships', 'id', id, areaId?.trim() || undefined);
+  if (!/\.dql\.ya?ml$/.test(path)) throw new Error(`Relationship evidence is written only to a modeling YAML file, not ${path}.`);
+  const absolute = safeProjectPath(projectRoot, path);
+  const before = existsSync(absolute) ? readFileSync(absolute, 'utf8') : '';
+  const list = before.trim() ? asRecord(yaml.load(before)).relationships : undefined;
+  if (!Array.isArray(list) || !list.some((entry) => asRecord(entry).id === id)) {
+    throw new Error(`Relationship "${id}" is not authored in domain "${domain}"; evidence is recorded only for an existing relationship.`);
+  }
+  return upsertListPatch(projectRoot, path, 'relationships', 'id', {
+    id,
+    validation: validationSource(value.validation),
+    ...(value.certifiedAgainst ? { status: 'certified', certifiedAgainst: value.certifiedAgainst } : {}),
+  });
 }
 
 function previewConcept(projectRoot: string, value: ConceptAuthoringInput): ModelingSourcePatch {
@@ -748,8 +794,55 @@ function validationSource(value: ManifestRelationshipValidationEvidence): Unknow
     unmatched_from: value.unmatchedFrom,
     max_from_per_key: value.maxFromPerKey,
     max_to_per_key: value.maxToPerKey,
+    ...(value.unmatchedKeyedFrom !== undefined ? { unmatched_keyed_from: value.unmatchedKeyedFrom } : {}),
+    ...(value.unmatchedKeyValues !== undefined ? { unmatched_key_values: value.unmatchedKeyValues } : {}),
+    ...(value.unmatchedShare !== undefined ? { unmatched_share: value.unmatchedShare } : {}),
+    ...(value.maxUnmatchedShare !== undefined ? { max_unmatched_share: value.maxUnmatchedShare } : {}),
+    ...(value.maxToPerReferencedKey !== undefined ? { max_to_per_referenced_key: value.maxToPerReferencedKey } : {}),
+    ...(value.maxFromPerReferencedKey !== undefined ? { max_from_per_referenced_key: value.maxFromPerReferencedKey } : {}),
+    ...(value.scope ? { scope: value.scope } : {}),
     ...(value.message ? { message: value.message } : {}),
   };
+}
+
+/**
+ * Upsert an entity or relationship into `path`, MOVING it there when another
+ * modeling file of the same domain already declares the same id.
+ *
+ * An id is unique within a Domain Package. Certifying a join that discovery
+ * drafted into `modeling/model.dql.yaml` writes it to the subject area the
+ * editor names (`modeling/areas/core.dql.yaml`); upserting there alone left the
+ * draft behind, and `zlens model validate` then failed with a duplicate
+ * relationship. The other declaration is removed in the same change, and its
+ * fields the editor does not set are carried over, as an in-place edit keeps
+ * them.
+ */
+function upsertMovingListPatches(
+  projectRoot: string,
+  domain: string,
+  path: string,
+  listKey: 'entities' | 'relationships',
+  value: UnknownRecord,
+): ModelingSourcePatch[] {
+  const id = value.id;
+  const root = findPackageRoot(projectRoot, domain);
+  const target = path.replace(/\\/g, '/');
+  const removals: ModelingSourcePatch[] = [];
+  let carried: UnknownRecord | undefined;
+  for (const candidate of root ? modelingYamlFiles(join(root, 'modeling')) : []) {
+    const relativePath = relative(projectRoot, candidate).replace(/\\/g, '/');
+    if (relativePath === target) continue;
+    const before = readFileSync(candidate, 'utf8');
+    const document = asRecord(yaml.load(before));
+    const list = Array.isArray(document[listKey]) ? document[listKey] as unknown[] : [];
+    const kept = list.filter((entry) => asRecord(entry).id !== id);
+    if (kept.length === list.length) continue;
+    carried ??= asRecord(list.find((entry) => asRecord(entry).id === id));
+    document[listKey] = kept;
+    const after = dumpYaml(document);
+    removals.push({ path: relativePath, before, after, changed: before !== after });
+  }
+  return [...removals, upsertListPatch(projectRoot, path, listKey, 'id', value, carried)];
 }
 
 function upsertListPatch(
@@ -758,6 +851,8 @@ function upsertListPatch(
   listKey: string,
   identityKey: string,
   value: UnknownRecord,
+  /** The same object as declared in another file it is moving from: its fields the value does not set are kept. */
+  carried?: UnknownRecord,
 ): ModelingSourcePatch {
   const absolute = safeProjectPath(projectRoot, path);
   const before = existsSync(absolute) ? readFileSync(absolute, 'utf8') : '';
@@ -768,6 +863,7 @@ function upsertListPatch(
   // entity or relationship authored in a small Model Area from losing its
   // advanced DQL policy when a user updates its business context or keys.
   if (index >= 0) list[index] = { ...asRecord(list[index]), ...value };
+  else if (carried) list.push({ ...carried, ...value });
   // Append rather than re-sorting the whole list. Sorting by id on every upsert
   // turned a one-field edit into a whole-file diff and discarded the grouping
   // the author chose, which matters for a Git-backed file people hand-edit.

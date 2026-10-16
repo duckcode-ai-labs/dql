@@ -81,6 +81,8 @@ import { buildProjectVocabulary, buildVocabularySource, embeddedManifestRelation
 import { groupingKeyLabels, keyLabelLine, keyLabels, unnamedGroupingKeys, unnamedKeyFailure, type EntityKey, type KeyLabel, type KeyReference } from './key-labels.js';
 import { businessIdentifierLine, businessIdentifiers, modelingEntityTexts, certifiedJoinViolations, classifySqlJoins, ledgerJoins, markerTableLine, markerTables, modeledJoinPaths, modelingRelationshipEdges, sameRelation, sharedParentShortcuts, type LedgerJoin } from './join-relationships.js';
 import { readEnv } from '@zlens/core';
+import { readValueProfile, renderColumnProfile } from '../value-profile.js';
+import { resultReviewEnabled } from '../result-review-setting.js';
 
 /**
  * THE ASK PIPELINE HOST.
@@ -130,6 +132,18 @@ export interface AskPipelineHostDeps {
    * Without it, they may (single-user, the person's chosen model).
    */
   valuesMayReachModel?(request: AgentRunRequest, provider: AgentProvider): boolean | Promise<boolean>;
+  /**
+   * Whether the project's column value profile (`agent.valueProfile`, example
+   * values and ranges) may reach the SQL drafter. Absent: it may not; the
+   * profile is opt-in because its values reach the provider with the prompt.
+   */
+  valueProfileAllowed?(): boolean;
+  /**
+   * Whether the project turned the result review on (`agent.resultReview`),
+   * asked at every question. Absent: off. `ZLENS_ASK_RESULT_REVIEW=1|0`
+   * overrides it either way.
+   */
+  resultReviewConfigured?(): boolean;
   /** Compile on the project's active semantic engine; throws with the engine's message. */
   compileSemantic(request: SemanticCompileRequest, connection: ConnectionConfig, context?: AskSemanticCompileContext): Promise<SemanticCompileOutput>;
   /** The engine `compileSemantic` will use, known before preparation so the binder can speak its dialect. */
@@ -249,7 +263,11 @@ export function relationColumnsProbeSql(relations: string[], maxRelations = 8, o
     // schema directly; prefixing it with the dbt catalog produces a relation
     // that does not exist. Keep exact database identity for Snowflake while
     // retaining a valid local-MetricFlow discovery path.
-    const source = driver.toLowerCase() === 'bigquery'
+    // SQLite has no information_schema: the same rows come from its catalog
+    // pragmas (every attached schema), as the warehouse catalog sync reads them.
+    const source = driver.toLowerCase() === 'sqlite'
+      ? "(SELECT t.schema AS table_schema, t.name AS table_name, p.name AS column_name, p.type AS data_type, p.cid + 1 AS ordinal_position FROM pragma_table_list t JOIN pragma_table_info(t.name, t.schema) p WHERE t.type IN ('table', 'view') AND t.schema NOT IN ('temp', 'information_schema') AND t.name NOT LIKE 'sqlite_%') sqlite_columns"
+      : driver.toLowerCase() === 'bigquery'
       // BigQuery has no session information_schema: read the project's
       // columns in the connection's location.
       ? `${database ? `\`${database.value.replace(/`/g, '')}\`.` : ''}\`region-${(location ?? 'US').toLowerCase()}\`.INFORMATION_SCHEMA.COLUMNS`
@@ -287,6 +305,9 @@ function currentCatalogExpression(driver: string): string {
     case 'mysql':
     case 'clickhouse':
     case 'athena':
+      return 'NULL';
+    case 'sqlite':
+      // SQLite has no CURRENT_DATABASE() and no catalog above the `main` schema.
       return 'NULL';
     default:
       return 'CURRENT_DATABASE()';
@@ -1145,6 +1166,22 @@ export function effectiveAnsweredTrust(input: {
   return { trustState: 'governed', certification: 'governed', reviewStatus: 'governed', stopReason: 'governed_semantic_answer' };
 }
 
+/**
+ * The answer card's title, from the ONE trust decision and the source of the
+ * figures. A certified block served as evidence is never headed "certified"
+ * unless the run is, and nothing but SQL the AI wrote is headed AI-drafted:
+ * the heading, the card, the run and the badge must say the same thing.
+ */
+export function answeredArtifactTitle(
+  trustState: 'certified' | 'governed' | 'review_required',
+  source: 'certified_block' | 'block_as_evidence' | 'governed_definitions' | 'ai_sql',
+): string {
+  if (trustState === 'certified') return 'Certified answer';
+  if (source === 'ai_sql') return 'AI-drafted answer';
+  if (source === 'block_as_evidence') return trustState === 'governed' ? 'Governed answer from a certified block' : 'Answer to review, from a certified block';
+  return trustState === 'governed' ? 'Semantic answer' : 'Answer to review, from governed definitions';
+}
+
 export function coverageEvaluations(receipt: Pick<PipelineReceipt, 'uncovered' | 'coverage'>): Array<{ id: string; label: string; passed: boolean; severity: 'warning' | 'info'; message: string }> {
   if (!receipt.uncovered?.length) return [];
   const states = new Map((receipt.coverage ?? []).map((item) => [item.word, item.state]));
@@ -1278,7 +1315,7 @@ type AskPipelineRunInput = Parameters<typeof runAskPipeline>[0];
 
 /** What one pipeline run keeps for its own receipt: drafting calls, checks and host steps. */
 interface AskRunState {
-  draftDispatches: Array<{ purpose: string; ms: number; reply?: string; promptChars?: number; at?: number; attempt?: number; /** Certified blocks the drafter was given as the team's approved computations. */ blocks?: string[]; label?: 'draft' | 'redraft' | 'fix' | 'retry_empty' | 'widen'; outcome?: 'sql' | 'declined' | 'rejected' | 'error' }>;
+  draftDispatches: Array<{ purpose: string; ms: number; reply?: string; promptChars?: number; at?: number; attempt?: number; /** Certified blocks the drafter was given as the team's approved computations. */ blocks?: string[]; label?: 'draft' | 'redraft' | 'fix' | 'retry_empty' | 'widen' | 'review' | 'revise'; outcome?: 'sql' | 'declined' | 'rejected' | 'error' | 'accepted' | 'revise' }>;
   // The checks drafted SQL was held to, recorded for the run views (the
   // notes sent back to the model are built separately and never from these).
   hostChecks: Array<{ id: 'stated_values' | 'required_filters' | 'join_fanout' | 'certified_joins' | 'catalog_columns' | 'read_only' | 'key_labels'; label: string; passed: boolean; message: string; attempt: number }>;
@@ -2115,14 +2152,31 @@ export function createAskPipelineHost(deps: AskPipelineHostDeps): AskPipelineHos
       // the tables that name a grouped key, added above, among them), with the
       // keys the warehouse declares. Above the budget it chooses as before.
       const warehouseKeys = warehouseFirstCatalog(deps.getManifest().manifest, deps.projectRoot);
+      // WHAT THE COLUMNS HOLD, when the project opted in (agent.valueProfile)
+      // and the profile describes this catalog: a few stored values or the
+      // range beside each column. The values reach the provider with this
+      // prompt, which is why it is opt-in and never under a host.
+      const valueProfile = warehouseKeys && deps.valueProfileAllowed?.() === true
+        ? readValueProfile(deps.projectRoot, deps.getManifest().manifest?.dbtProvenance?.warehouseCatalogFingerprint)
+        : undefined;
+      const profiled = new Map(Object.entries(valueProfile?.relations ?? {}).map(([relation, columns]) => [physicalRelationIdentity(relation), new Map(Object.entries(columns).map(([column, profile]) => [column.toLowerCase(), profile]))]));
+      const columnCard = (item: VocabularyEntry): string => {
+        const card = renderCard(item);
+        const relation = entryPhysicalRelation(item);
+        if (!profiled.size || !relation) return card;
+        const column = (item.physical?.column ?? item.name.split('.').pop() ?? '').toLowerCase();
+        return `${card}${renderColumnProfile(profiled.get(physicalRelationIdentity(relation))?.get(column))}`;
+      };
+      // The values take room: the whole schema may be larger when they are shown.
+      const wholeSchemaChars = profiled.size ? WHOLE_SCHEMA_WITH_VALUES_CHARS : WHOLE_SCHEMA_CHARS;
       let wholeSchema = false;
       if (warehouseKeys) {
         const described = current.entries
           .filter((item) => item.kind === 'relation' && entryPhysicalRelation(item) !== undefined && current.entries.some((column) => column.kind === 'column' && samePhysicalEntry(column, item)))
           .map((item) => entryPhysicalRelation(item)!);
-        const size = current.entries.filter((item) => item.kind === 'column').reduce((total, item) => total + renderCard(item).length + 1, 0) + described.length * 160;
+        const size = current.entries.filter((item) => item.kind === 'column').reduce((total, item) => total + columnCard(item).length + 1, 0) + described.length * 160;
         const unseen = described.filter((relation) => !relations.some((known) => physicalRelationIdentity(known) === physicalRelationIdentity(relation)));
-        if (unseen.length > 0 && size <= WHOLE_SCHEMA_CHARS) {
+        if (unseen.length > 0 && size <= wholeSchemaChars) {
           relations.push(...unseen);
           wholeSchema = true;
         }
@@ -2248,19 +2302,19 @@ export function createAskPipelineHost(deps: AskPipelineHostDeps): AskPipelineHos
           const shownAs = (target: string) => { const table = warehouseKeys?.keysOf(target); return (table && relations.find((known) => warehouseKeys?.keysOf(known) === table)) ?? target; };
           const lines = [
             entry ? `- executable relation:${relation} [${entry.physical?.binding?.columnCompleteness ?? 'partial'} columns; logical ${entry.physical?.binding?.logicalRelation ?? entry.model ?? relation}]` : `- executable relation:${relation}`,
-            ...current.entries.filter((item) => item.kind === 'column' && samePhysicalEntry(item, entry)).map((item) => renderCard(item)),
+            ...current.entries.filter((item) => item.kind === 'column' && samePhysicalEntry(item, entry)).map((item) => columnCard(item)),
             // What one row is, and how this table points at others, as the
             // warehouse declares them (warehouse-first projects only).
             ...(declared?.primaryKey ? [`  primary key (${declared.primaryKey.join(', ')}): one row per ${declared.primaryKey.join(', ')}`] : []),
             ...(declared?.foreignKeys ?? []).map((key) => `  foreign key (${key.columns.join(', ')}) references ${shownAs(key.references.relation)} (${key.references.columns.join(', ')})`),
           ];
-          const cap = wholeSchema ? WHOLE_SCHEMA_CHARS : 18_000;
+          const cap = wholeSchema ? wholeSchemaChars : 18_000;
           for (const line of lines) { if (chars + line.length > cap) break; cards.push(line); chars += line.length + 1; }
         }
         const dialect = connection?.driver ?? 'duckdb';
         const messages: AgentMessage[] = [
           { role: 'system', content: `You write exactly ONE read-only SQL statement for ${dialect} that answers the question from the tables below. No certified block or semantic metric answers it, so you choose the tables, columns, joins and filters. Use ONLY the executable physical relations and columns listed below, spelled exactly as listed (including database and quoting where shown). Join two relations only on columns that exist in both. Apply every restriction the question states; when unsure how a text value is stored, match it case-insensitively; aggregate at the grain the question asks for; when the answer lists people or things, select and group by their id column beside the name (two can share a name); a term with a standard definition (a double-double, a win rate, a repeat customer) is computed from the listed columns that define it, and the definition is not a missing field; order and limit as it asks; never return more than 500 rows. No DDL or DML, no comments, no explanation. The CONTEXT lines are what the user and the project have said about this data (definitions, rules, where values are kept): follow them, and use a table or field the user names as named. A semantic metric listed in CONTEXT is computed exactly as it is defined there. A preferred join listed in CONTEXT is how those tables join unless the question needs another. When no column is dedicated to a restriction the question states, apply it to the text, tag, category or custom field that most plausibly holds that value, matched case-insensitively (a partial match is allowed). Reply exactly NO_SQL: followed by one sentence naming what is missing only when no listed column could hold a measure or a restriction the question asks for, and never substitute a different measure for the one asked. Otherwise return the SQL only.` },
-          { role: 'user', content: `QUESTION: ${question}\n${reason ? `WHY NO GOVERNED ANSWER: ${reason.slice(0, 600)}\n` : ''}${intent && !(warehouseKeys && readEnv('ZLENS_ASK_DRAFT_WITHOUT_READING') === '1') ? `READING: ${shownToModel(intent.reading)}\nINTENT: ${shownToModel(JSON.stringify({ measures: intent.measures, groupBy: intent.groupBy, display: intent.display, filters: intent.filters, time: intent.time ?? null, ordering: intent.ordering ?? null, limit: intent.limit ?? null }))}\n` : ''}${contextLines.length ? `CONTEXT:\n${contextLines.join('\n')}\n` : ''}${warehouseKeys && DIALECT_NOTES[dialect.toLowerCase()] ? `DIALECT NOTES (${dialect}): ${DIALECT_NOTES[dialect.toLowerCase()]}\n` : ''}${note ? `NOTE: ${note}\n` : ''}${previous ? `PREVIOUS SQL (the warehouse rejected it; fix it):\n${shownToModel(previous.sql)}\nWAREHOUSE ERROR: ${shownToModel(previous.error.slice(0, 600))}\n` : ''}RELATIONS AND COLUMNS:\n${cards.join('\n')}` },
+          { role: 'user', content: `QUESTION: ${question}\n${reason ? `WHY NO GOVERNED ANSWER: ${reason.slice(0, 600)}\n` : ''}${intent && !(warehouseKeys && readEnv('ZLENS_ASK_DRAFT_WITHOUT_READING') === '1') ? `READING: ${shownToModel(intent.reading)}\nINTENT: ${shownToModel(JSON.stringify({ measures: intent.measures, groupBy: intent.groupBy, display: intent.display, filters: intent.filters, time: intent.time ?? null, ordering: intent.ordering ?? null, limit: intent.limit ?? null }))}\n` : ''}${contextLines.length ? `CONTEXT:\n${contextLines.join('\n')}\n` : ''}${warehouseKeys && DIALECT_NOTES[dialect.toLowerCase()] ? `DIALECT NOTES (${dialect}): ${DIALECT_NOTES[dialect.toLowerCase()]}\n` : ''}${note ? `NOTE: ${note}\n` : ''}${previous ? (ranWithoutError(previous.error, Boolean(warehouseKeys)) ? `PREVIOUS SQL (it ran; this is why it needs another look):\n${shownToModel(previous.sql)}\nWHAT TO CHANGE: ${shownToModel(previous.error.slice(0, 800))}\n` : `PREVIOUS SQL (the warehouse rejected it; fix it):\n${shownToModel(previous.sql)}\nWAREHOUSE ERROR: ${shownToModel(previous.error.slice(0, 600))}\n`) : ''}RELATIONS AND COLUMNS:\n${cards.join('\n')}` },
         ];
         const draftStarted = Date.now();
         const trace = deps.dispatchOptions?.('draft', request);
@@ -2268,7 +2322,7 @@ export function createAskPipelineHost(deps: AskPipelineHostDeps): AskPipelineHos
         const dispatch: AskRunState['draftDispatches'][number] = {
           purpose: 'intent:draft', ms: 0, attempt: state.draftDispatches.length + 1,
           ...(draftBlocks.length ? { blocks: draftBlocks.map((entry) => entry.ref) } : {}),
-          label: label ?? (note ? 'fix' : undefined) ?? (previous ?(/^the statement ran and returned no rows/.test(previous.error) ? 'retry_empty' : 'redraft') : 'draft'),
+          label: label ?? (note ? 'fix' : undefined) ?? (previous ? (/^the statement ran and returned no rows/.test(previous.error) ? 'retry_empty' : REVIEW_REVISION.test(previous.error) ? 'revise' : 'redraft') : 'draft'),
         };
         let raw: string;
         let replied: string | undefined;
@@ -2611,6 +2665,40 @@ export function createAskPipelineHost(deps: AskPipelineHostDeps): AskPipelineHos
       if (second && 'declined' in second) return { declined: `${second.declined.replace(/[.\s]+$/, '')} (searched ${relations.join(', ')})` };
       return finalize(second);
     };
+    // THE SECOND LOOK at an AI-drafted result, where the project turns it on
+    // (agent.resultReview; off by default): one small call that sees the
+    // question, the SQL and the result's SHAPE (row count, each column's
+    // distinct and NULL counts, repeated rows), never a value from it, and
+    // names one defect or none. Certified and governed answers are not
+    // reviewed: their SQL was compiled from definitions, not drafted.
+    const makeResultReview = (state: AskRunState): NonNullable<AskPipelineRunInput['reviewResult']> => async ({ question, sql, result }) => {
+      const messages: AgentMessage[] = [
+        { role: 'system', content: RESULT_REVIEW_SYSTEM },
+        { role: 'user', content: `QUESTION: ${question}\nSQL:\n${shownToModel(sql)}\nRESULT:\n${resultShapeForReview(result)}` },
+      ];
+      const started = Date.now();
+      const trace = deps.dispatchOptions?.('draft', request);
+      const dispatch: AskRunState['draftDispatches'][number] = { purpose: 'intent:review', ms: 0, attempt: state.draftDispatches.length + 1, label: 'review' };
+      try {
+        if (request.signal?.aborted) return undefined;
+        const raw = await provider.generate(messages, { temperature: 0, ...(trace?.options ?? {}), ...(request.signal ? { signal: request.signal } : {}) });
+        trace?.settle('ok');
+        dispatch.reply = raw.slice(0, 600);
+        const json = /\{[\s\S]*\}/.exec(raw);
+        const verdict = json ? JSON.parse(json[0]) as { answers?: boolean; problem?: string } : undefined;
+        const problem = verdict?.answers === false && typeof verdict.problem === 'string' && verdict.problem.trim() ? verdict.problem.trim().slice(0, 400) : undefined;
+        dispatch.outcome = problem ? 'revise' : 'accepted';
+        return problem ? { revise: problem } : undefined;
+      } catch (error) {
+        // A review that fails or cannot be read leaves the answer as it is.
+        trace?.settle(request.signal?.aborted ? 'cancelled' : 'error', error);
+        dispatch.outcome = 'error';
+        return undefined;
+      } finally {
+        Object.assign(dispatch, { ms: Date.now() - started, at: Date.now(), promptChars: messages.reduce((sum, message) => sum + message.content.length, 0) });
+        state.draftDispatches.push(dispatch);
+      }
+    };
     // THE PIPELINE AS ASK RUNS IT. A caller running a settled reading (Research)
     // overrides only what differs: the reading, the lane and where steps go.
     const runPipeline = (state: AskRunState, overrides: Partial<AskPipelineRunInput> = {}) => runAskPipeline({
@@ -2624,6 +2712,7 @@ export function createAskPipelineHost(deps: AskPipelineHostDeps): AskPipelineHos
       // ZLENS_ASK_DRAFT_FIRST=0 keeps the reading step first, for comparison.
       ...(readEnv('ZLENS_ASK_DRAFT_FIRST') !== '0' && warehouseFirstCatalog(deps.getManifest().manifest, deps.projectRoot) && !currentVocabulary().entries.some((entry) => entry.kind === 'block' || entry.kind === 'metric' || entry.kind === 'measure') ? { draftFirst: true } : {}),
       prepareDeps: { ...prepareDeps(connection ?? { driver: 'duckdb' } as ConnectionConfig, currentVocabulary, engine, request.signal), draftSql: makeDraftSql(state) },
+      ...(resultReviewEnabled(deps.resultReviewConfigured?.() === true) ? { reviewResult: makeResultReview(state) } : {}),
       executeDeps: {
         maxRows: deps.maxRows ?? 500,
         ...(request.signal ? { signal: request.signal } : {}),
@@ -3180,6 +3269,52 @@ export function connectionKey(connection: ConnectionConfig): string {
 
 /** The schema a warehouse-first draft may read whole: about ten thousand tokens. */
 const WHOLE_SCHEMA_CHARS = 40_000;
+/** The same with the column value profile beside each column: about fifteen thousand tokens. */
+const WHOLE_SCHEMA_WITH_VALUES_CHARS = 60_000;
+
+/** The reason the result review sent a statement back (pipeline.ts words it). */
+const REVIEW_REVISION = /^the statement ran and returned \d+ rows?, but the result does not answer the question as asked/;
+
+/**
+ * Whether the previous statement RAN and comes back for another look (the
+ * result review's revision on every project; an empty result too on a
+ * warehouse-first project) rather than being rejected by the warehouse. A dbt
+ * project's empty-result redraft keeps its recorded wording.
+ */
+function ranWithoutError(error: string, warehouseFirst: boolean): boolean {
+  return REVIEW_REVISION.test(error) || (warehouseFirst && /^the statement ran\b/.test(error));
+}
+
+/**
+ * WHAT A RESULT LOOKS LIKE, without what it says. Row count, each column's
+ * distinct and NULL counts, repeated rows: enough to see a date that did not
+ * parse (a column entirely NULL), four rows where one number was asked, or a
+ * name the question asked for and the result lacks. No value from the result
+ * is included: an ordinary Ask run releases no result rows to the provider
+ * (provider-egress.ts), whatever the project configures.
+ */
+export function resultShapeForReview(result: { columns?: Array<string | { name: string }>; rows: Array<Record<string, unknown>>; rowCount: number }): string {
+  const rows = result.rows.slice(0, 500);
+  const names = (result.columns ?? []).map((column) => typeof column === 'string' ? column : column.name);
+  const columns = names.length ? names : Object.keys(rows[0] ?? {});
+  const lines = [`rows: ${result.rowCount}${result.rowCount > rows.length ? ` (shape read from the first ${rows.length})` : ''}`];
+  for (const column of columns) {
+    const values = rows.map((row) => row[column]);
+    const nulls = values.filter((value) => value === null || value === undefined).length;
+    const distinct = new Set(values.filter((value) => value !== null && value !== undefined).map((value) => typeof value === 'bigint' ? value.toString() : JSON.stringify(value) ?? String(value))).size;
+    lines.push(`- ${column}: ${nulls === values.length && values.length > 0 ? 'every value NULL' : `${distinct} distinct${nulls ? `, ${nulls} NULL` : ''}`}`);
+  }
+  const seen = new Set<string>();
+  let repeated = 0;
+  for (const row of rows) {
+    const key = columns.map((column) => { const value = row[column]; return typeof value === 'bigint' ? value.toString() : JSON.stringify(value ?? null); }).join('\u0001');
+    if (seen.has(key)) repeated += 1; else seen.add(key);
+  }
+  if (repeated) lines.push(`repeated rows: ${repeated}`);
+  return lines.join('\n');
+}
+
+const RESULT_REVIEW_SYSTEM = 'You check one query result against the question it should answer. You see the question, the SQL and the shape of what it returned. Reply with JSON only: {"answers": true} when the result can answer the question as asked, or {"answers": false, "problem": "<one sentence: the concrete defect and what to change>"}. Report a defect only when the shape shows it: a column that is entirely NULL (a date that did not parse, a join that matched nothing), a row count that contradicts a number the question itself states (it asks for one number, a top 5 or the single best, and the result has another count), a column the question asks for that is missing (a name, a count), repeated rows, or a total at another level than asked (per invoice where the question asks per country). You cannot see the data, so never assume how many rows it holds: a breakdown "by X" lists the X that have data, and fewer rows than you would expect is not a defect. Never question a definition, filter or formula the question leaves open; when in doubt, it answers.';
 
 /**
  * What a draft for an engine must know that the model gets wrong by default.
@@ -3378,7 +3513,9 @@ export function toExecutorResult(runId: string, outcome: PipelineOutcome, starte
   const undeclaredJoin = (receipt.context?.used?.joins ?? []).find((join) => join.authority === 'none' && join.relations?.length === 2 && (join.keys?.length ?? 0) > 0);
   const tableName = (relation: string) => relation.replace(/"/g, '').split('.').pop() ?? relation;
   // An answer whose SQL the AI wrote from the schema is never headed as governed.
-  const artifact: AgentRunArtifact ={ id: `${runId}:answer`, kind: 'answer', title: certified ? 'Certified answer' : reviewRequired ? 'AI-drafted answer' : blockAsEvidence ? 'Certified block answer' : 'Semantic answer', trustState, payload };
+  // The card's title comes from the same trust decision as the run, the badge
+  // and the payload, and names the source the figures came from.
+  const artifact: AgentRunArtifact ={ id: `${runId}:answer`, kind: 'answer', title: answeredArtifactTitle(trustState, certified ? 'certified_block' : reviewRequired ? 'ai_sql' : blockAsEvidence ? 'block_as_evidence' : 'governed_definitions'), trustState, payload };
   return withReceipt({
     summary: outcome.text, answer: outcome.text, status: 'completed', trustState,
     stopReason: effectiveTrust.stopReason,

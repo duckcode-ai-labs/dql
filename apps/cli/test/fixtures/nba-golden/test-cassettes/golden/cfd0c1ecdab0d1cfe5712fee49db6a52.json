@@ -1,0 +1,23 @@
+{
+  "key": "cfd0c1ecdab0d1cfe5712fee49db6a52",
+  "operation": "generate",
+  "text": "{\"version\":1,\"kind\":\"analytics\",\"reading\":\"Rank players by their summed points across games dated in calendar year 2017 and return the top scorer.\",\"measures\":[{\"ref\":\"dimension:player_game_stats.pts\",\"aggregation\":\"sum\",\"alias\":\"total_points\"}],\"groupBy\":[{\"ref\":\"dimension:player_game_stats.player_id\",\"role\":\"key\"}],\"display\":[\"dimension:player_game_stats.player_name\"],\"filters\":[],\"ordering\":{\"ref\":\"total_points\",\"direction\":\"desc\"},\"limit\":1,\"time\":{\"ref\":\"dimension:player_game_stats.game_date\",\"window\":{\"start\":\"2017-01-01\",\"end\":\"2018-01-01\",\"expression\":\"in calendar year 2017\"}},\"expectedShape\":\"ranking\",\"unresolved\":[],\"provenance\":{\"dimension:player_game_stats.pts\":\"q:scored the most points\",\"dimension:player_game_stats.player_id\":\"q:Who\",\"dimension:player_game_stats.player_name\":\"q:Who\",\"dimension:player_game_stats.game_date\":\"q:calendar year 2017\"}}",
+  "providerName": "claude",
+  "recordedAt": "2026-10-16T18:03:02.593Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 2,
+    "messageRoles": [
+      "system",
+      "user"
+    ],
+    "preCanonicalHash": "cfd0c1ecdab0d1cfe5712fee49db6a52cd04bd94ce5ca55647d70d2bbc859d78",
+    "postCanonicalHash": "cfd0c1ecdab0d1cfe5712fee49db6a52cd04bd94ce5ca55647d70d2bbc859d78",
+    "appliedRuleClasses": []
+  }
+}

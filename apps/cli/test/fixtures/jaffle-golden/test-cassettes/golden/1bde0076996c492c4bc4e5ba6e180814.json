@@ -1,0 +1,23 @@
+{
+  "key": "1bde0076996c492c4bc4e5ba6e180814",
+  "operation": "generate",
+  "text": "NO_SQL: No listed column or metric defines customer churn (no churn status, churn date, or governed churn definition exists; only customer_type new/returning and first/last order timestamps), and there is no region column (only Jaffle Shop location_name).",
+  "providerName": "claude",
+  "recordedAt": "2026-10-16T18:07:35.200Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 2,
+    "messageRoles": [
+      "system",
+      "user"
+    ],
+    "preCanonicalHash": "1bde0076996c492c4bc4e5ba6e1808143c8d7f225a03d2d99be4d812f1209586",
+    "postCanonicalHash": "1bde0076996c492c4bc4e5ba6e1808143c8d7f225a03d2d99be4d812f1209586",
+    "appliedRuleClasses": []
+  }
+}

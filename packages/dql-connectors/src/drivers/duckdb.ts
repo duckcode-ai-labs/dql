@@ -22,6 +22,23 @@ export interface DuckDBConsistentReadScope {
   close(): Promise<void>;
 }
 
+/**
+ * The message for a DuckDB file that could not be opened. DuckDB lets one
+ * process at a time open a database file for writing, and its own message
+ * ("Could not set lock on file … Conflicting lock is held in … (PID n)")
+ * does not say what to do. A locked file says which process holds it and how
+ * to free it; any other failure keeps DuckDB's words.
+ */
+export function duckDBOpenFailureMessage(dbPath: string, duckdbMessage: string): string {
+  if (!/could not set lock on file/i.test(duckdbMessage)) return `DuckDB connection failed: ${duckdbMessage}`;
+  const pid = /\(PID (\d+)\)/i.exec(duckdbMessage)?.[1];
+  return [
+    `DuckDB file ${dbPath} is in use by another process${pid ? ` (PID ${pid})` : ''}: DuckDB lets only one process open a database file at a time.`,
+    'Stop that process, then run this again: for a `zlens notebook` (the workbench), press Ctrl+C in its terminal; for anything else (dbt, a SQL client), close it.',
+    `(DuckDB: ${duckdbMessage})`,
+  ].join(' ');
+}
+
 export class DuckDBConnector implements DatabaseConnector {
   readonly driverName = 'duckdb';
   private db: any = null;
@@ -40,7 +57,7 @@ export class DuckDBConnector implements DatabaseConnector {
       const database = await new Promise<any>((resolve, reject) => {
         const opened = new duckdb.Database(dbPath, (err: Error | null) => {
           if (err) {
-            reject(new Error(`DuckDB connection failed: ${err.message}`));
+            reject(new Error(duckDBOpenFailureMessage(dbPath, err.message)));
             return;
           }
           resolve(opened);

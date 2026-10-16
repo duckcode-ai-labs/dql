@@ -1,0 +1,23 @@
+{
+  "key": "32d359a3d07ea11c81e2978c379bcd91",
+  "operation": "generate",
+  "text": "{\"version\":1,\"kind\":\"analytics\",\"reading\":\"Total product revenue (excluding tax) broken down by customer type (new vs returning).\",\"measures\":[{\"ref\":\"metric:order_item.revenue\"}],\"groupBy\":[{\"ref\":\"dimension:customers.customer_type\",\"role\":\"categorical\"}],\"display\":[],\"filters\":[],\"ordering\":{\"ref\":\"metric:order_item.revenue\",\"direction\":\"desc\"},\"expectedShape\":\"grouped\",\"unresolved\":[],\"provenance\":{\"metric:order_item.revenue\":\"q:revenue\",\"dimension:customers.customer_type\":\"q:by customer type\"}}",
+  "providerName": "claude",
+  "recordedAt": "2026-10-16T18:08:30.287Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 2,
+    "messageRoles": [
+      "system",
+      "user"
+    ],
+    "preCanonicalHash": "32d359a3d07ea11c81e2978c379bcd91048b56b28f7e2cea0f8bcba5e9823da7",
+    "postCanonicalHash": "32d359a3d07ea11c81e2978c379bcd91048b56b28f7e2cea0f8bcba5e9823da7",
+    "appliedRuleClasses": []
+  }
+}

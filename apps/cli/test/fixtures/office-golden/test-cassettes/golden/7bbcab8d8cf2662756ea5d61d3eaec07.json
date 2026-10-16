@@ -1,0 +1,23 @@
+{
+  "key": "7bbcab8d8cf2662756ea5d61d3eaec07",
+  "operation": "generate",
+  "text": "{\"version\":1,\"kind\":\"analytics\",\"reading\":\"Count of opportunities that were lost (closed and not won) with a close date in fiscal year FY26 (Feb 2025 through Jan 2026).\",\"measures\":[{\"ref\":\"dimension:opportunity_enhanced.OPPORTUNITY_ID\",\"aggregation\":\"count_distinct\",\"alias\":\"lost_opportunities\",\"scope\":[{\"ref\":\"dimension:opportunity_enhanced.IS_CLOSED\",\"op\":\"is_true\",\"values\":[true],\"source\":\"question\"},{\"ref\":\"dimension:opportunity_enhanced.IS_WON\",\"op\":\"is_false\",\"values\":[false],\"source\":\"question\"}]}],\"groupBy\":[],\"display\":[],\"filters\":[{\"ref\":\"dimension:opportunity_enhanced.FISCAL_YEAR\",\"op\":\"in\",\"values\":[2026,26],\"source\":\"question\"}],\"expectedShape\":\"scalar\",\"unresolved\":[],\"provenance\":{\"dimension:opportunity_enhanced.OPPORTUNITY_ID\":\"q:how many opportunities\",\"dimension:opportunity_enhanced.IS_CLOSED\":\"q:lose\",\"dimension:opportunity_enhanced.IS_WON\":\"q:lose\",\"dimension:opportunity_enhanced.FISCAL_YEAR\":\"q:fiscal year FY26\"}}",
+  "providerName": "claude",
+  "recordedAt": "2026-10-16T18:03:28.717Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 2,
+    "messageRoles": [
+      "system",
+      "user"
+    ],
+    "preCanonicalHash": "7bbcab8d8cf2662756ea5d61d3eaec0738e6ab027019d59882578820de804c54",
+    "postCanonicalHash": "7bbcab8d8cf2662756ea5d61d3eaec0738e6ab027019d59882578820de804c54",
+    "appliedRuleClasses": []
+  }
+}

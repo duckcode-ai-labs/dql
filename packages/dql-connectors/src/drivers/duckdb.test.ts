@@ -578,3 +578,16 @@ describe('a restricted DuckDB engine (RFC 0010, with a host)', () => {
     }
   });
 });
+
+// Launch blocker: DuckDB's own lock message did not say what to do.
+describe('a DuckDB file another process holds', () => {
+  it('names the holder and how to free the file, and keeps DuckDB\'s words', async () => {
+    const { duckDBOpenFailureMessage } = await import('./duckdb.js');
+    const duckdb = 'IO Error: Could not set lock on file "/p/jaffle_shop.duckdb": Conflicting lock is held in /usr/bin/node (PID 20683) by user me. See also https://duckdb.org/docs/stable/connect/concurrency';
+    const message = duckDBOpenFailureMessage('/p/jaffle_shop.duckdb', duckdb);
+    expect(message).toMatch(/^DuckDB file \/p\/jaffle_shop\.duckdb is in use by another process \(PID 20683\)/);
+    expect(message).toContain('for a `zlens notebook` (the workbench), press Ctrl+C in its terminal');
+    expect(message).toContain(duckdb);
+    expect(duckDBOpenFailureMessage('/p/x.duckdb', 'IO Error: No such file')).toBe('DuckDB connection failed: IO Error: No such file');
+  });
+});

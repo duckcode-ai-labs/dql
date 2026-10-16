@@ -1000,6 +1000,18 @@ function buildSemanticFilePath(
 }
 
 /** A top-level `key: value` for a nested value, serialized rather than stringified. */
+/**
+ * The entity-qualified name a dbt dimension is addressed by
+ * (`<primary_entity>__<name>`) and the entity it hangs off. The semantic model
+ * name is not that entity when the model declares `primary_entity:` or names
+ * its key differently, so dropping these left `<semantic_model>__<name>` as the
+ * only spelling the native engine resolved.
+ */
+function pushEntityQualification(lines: string[], dimension: DimensionDefinition, indent: string): void {
+  if (dimension.qualifiedName) lines.push(`${indent}qualified_name: ${yamlScalar(dimension.qualifiedName)}`);
+  if (dimension.entityLink) lines.push(`${indent}entity_link: ${yamlScalar(dimension.entityLink)}`);
+}
+
 function yamlField(key: string, value: unknown): string {
   return dumpYaml({ [key]: value }, { lineWidth: -1 }).trimEnd();
 }
@@ -1034,6 +1046,7 @@ function serializeSemanticObject(
   if ('expr' in object && object.expr) lines.push(`expr: ${yamlScalar(object.expr)}`);
   if ('metricType' in object && object.metricType) lines.push(`metricType: ${yamlScalar(object.metricType)}`);
   if ('aggTimeDimension' in object && object.aggTimeDimension) lines.push(`aggTimeDimension: ${yamlScalar(object.aggTimeDimension)}`);
+  if (object.kind === 'dimension' || object.kind === 'time_dimension') pushEntityQualification(lines, object, '');
   // What scopes a metric, and what a derived metric is built from. Leaving
   // these out made a filtered metric (loss payments only) sum every row, and
   // left a derived metric with nothing to compose; the native engine applies a
@@ -1092,6 +1105,7 @@ function serializeSemanticObject(
       lines.push(`    description: ${yamlScalar(dimension.description)}`);
       lines.push(`    sql: ${yamlBlockScalar(dimension.sql, 4)}`);
       lines.push(`    type: ${yamlScalar(dimension.type)}`);
+      pushEntityQualification(lines, dimension, '    ');
     }
     if (object.timeDimensions.length > 0) {
       lines.push('time_dimensions:');
@@ -1100,6 +1114,7 @@ function serializeSemanticObject(
         lines.push(`    label: ${yamlScalar(dimension.label)}`);
         lines.push(`    description: ${yamlScalar(dimension.description)}`);
         lines.push(`    sql: ${yamlBlockScalar(dimension.sql, 4)}`);
+        pushEntityQualification(lines, dimension, '    ');
         lines.push('    granularities:');
         for (const granularity of dimension.granularities) {
           lines.push(`      - ${yamlScalar(granularity)}`);

@@ -101,6 +101,20 @@ zlens preview blocks/revenue_by_month.dql --no-open
 
 It still serves on localhost; the URL is printed in the console output.
 
+### "DuckDB file … is in use by another process"
+
+DuckDB lets only one process open a database file at a time. While
+`zlens notebook` is running on the project, `zlens certify`,
+`zlens model discover --validate`, `zlens model validate-relationship`,
+`zlens sync warehouse` and `zlens doctor` send their
+read-only queries to it instead of opening the file again, and print
+`Running … through zlens notebook (pid …)`. You see this error when the file
+is held by something else: a workbench from an older ZLens, a workbench on a
+different folder that points at the same file, `dbt build`, or a SQL client.
+Stop that process (Ctrl+C in the workbench's terminal) and run the command
+again. The workbench shows the same message when another program holds the
+file.
+
 ---
 
 ## Authoring blocks

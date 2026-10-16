@@ -17,7 +17,7 @@ import {
   testDbtCloudSemanticConnection,
   type DbtCloudSemanticTestResult,
 } from './dbt-cloud-semantic.js';
-import { compileMetricFlowQuery, hasDbtSemanticManifest, hasMetricFlowCli, listMetricFlowDimensions, managedMetricFlowBin, MetricFlowUnavailableError, resolveMetricFlowCli, resolveSemanticManifestPath } from './metricflow.js';
+import { compileMetricFlowQuery, hasDbtSemanticManifest, hasMetricFlowCli, listMetricFlowDimensions, managedMetricFlowBin, MetricFlowUnavailableError, projectHasDbtProject, resolveMetricFlowCli, resolveSemanticManifestPath } from './metricflow.js';
 import { readFileSync, statSync } from 'node:fs';
 import {
   getEffectiveDbtCloudSemanticSettings,
@@ -735,6 +735,9 @@ export async function getSemanticRuntimeStatus(
   const cloud = getEffectiveDbtCloudSemanticSettings(projectRoot);
   const metricFlowCli = resolveMetricFlowCli(projectRoot);
   const cliReady = Boolean(metricFlowCli);
+  // MetricFlow compiles a dbt project; a warehouse-first project (no dbt) has
+  // none, so its setup advice names what the native compiler runs instead.
+  const dbtProject = projectHasDbtProject(projectRoot);
   let cloudTest: DbtCloudSemanticTestResult | undefined;
   if (cloud.configured && cloud.testState === 'passed') {
     cloudTest = {
@@ -769,7 +772,7 @@ export async function getSemanticRuntimeStatus(
       tested: true,
       ready: true,
       source: 'bundled',
-      detail: 'Bundled with ZLens. Executes safe simple/additive metrics without an external runtime.',
+      detail: 'Bundled with ZLens. Executes simple metrics and ratios of simple metrics without an external runtime.',
       capabilities: { having: true },
     },
     {
@@ -805,11 +808,13 @@ export async function getSemanticRuntimeStatus(
   ];
   const setup = active !== 'native'
     ? null
-    : cloud.configured && !cloudReady
+    : !dbtProject && !cloud.configured
+      ? 'This project has no dbt project. The DQL native compiler runs its simple and ratio metrics; derived, cumulative, and conversion metrics need a dbt project with MetricFlow or dbt Cloud.'
+      : cloud.configured && !cloudReady
       ? cloudTest?.ok && !cloud.executionTargetFingerprint
         ? 'Reapply dbt Cloud Semantic Layer settings with the intended warehouse connection active to bind compilation and execution targets.'
         : 'Test the configured dbt Cloud Semantic Layer connection, or install a compatible local MetricFlow runtime.'
-      : 'Configure dbt Cloud Semantic Layer, or install a compatible local MetricFlow runtime for derived, ratio, cumulative, and conversion metrics.';
+      : 'Configure dbt Cloud Semantic Layer, or install a compatible local MetricFlow runtime for derived, cumulative, and conversion metrics.';
   return { preference, active, adapters, setup };
 }
 
@@ -854,6 +859,11 @@ export function looksLikeAuthFailure(detail: string): boolean {
 }
 
 export async function explainMissingSemanticRuntime(projectRoot: string, dbtProjectPath?: string): Promise<string> {
+  // dbt Cloud compiles remotely and needs no local dbt project; otherwise a
+  // project without one has no runtime to set up, only metrics to reshape.
+  if (!dbtProjectPath && !projectHasDbtProject(projectRoot) && !getEffectiveDbtCloudSemanticSettings(projectRoot).configured) {
+    return 'This metric is not one the DQL native engine runs, and this project has no dbt project for MetricFlow or dbt Cloud to run it. The native engine runs simple metrics and ratios of two simple metrics; define the metric as one of those.';
+  }
   const status = await getSemanticRuntimeStatus(projectRoot, { probeConfiguredCloud: true });
   const cloud = status.adapters.find((adapter) => adapter.id === 'dbt-cloud');
   const cli = resolveMetricFlowCli(projectRoot);
@@ -1392,6 +1402,14 @@ export async function compileSemanticRuntimeQuery(
     }
     if (adapter === 'metricflow-cli') {
       if (!hasMetricFlowCli(context.projectRoot)) continue;
+      if (!projectHasDbtProject(context.projectRoot, context.projectConfig)) {
+        // Reached only when MetricFlow was chosen explicitly: say why it cannot
+        // run instead of asking for a dbt artifact this project cannot make.
+        lastRuntimeError = new SemanticRuntimeRequiredError(
+          'MetricFlow is the selected semantic runtime, but this project has no dbt project for it to compile. Set the semantic runtime to the DQL native compiler, which runs simple and ratio metrics.',
+        );
+        continue;
+      }
       try {
         // `mf query` has no target flag. Do not let the CLI read an unrelated
         // profiles.yml default merely because native compilation received the

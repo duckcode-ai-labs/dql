@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { dirname, join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { buildManifest, collectInputFiles, modelingModeOf } from './builder.js';
-import { isWarehouseNodeId, loadWarehouseNodeAuthoringDetail, previewModelingChange } from './dbt-first-authoring.js';
+import { applyModelingChanges, isWarehouseNodeId, loadWarehouseNodeAuthoringDetail, previewModelingChange, previewModelingChanges, type ModelingAuthoringChange } from './dbt-first-authoring.js';
 import {
   WAREHOUSE_CATALOG_PATH,
   diffWarehouseCatalogs,
@@ -152,6 +152,78 @@ relationships:
     });
   });
 
+  it('keeps a reviewed status, and names a status it does not know instead of reading it as draft', () => {
+    writeYaml(projectRoot, 'domains/sales/modeling/entities.dql.yaml', `entities:
+  - id: order
+    relation: SALES.ORDERS
+    status: reviewed
+  - id: customer
+    relation: sales.customers
+    status: approved
+`);
+    const manifest = buildManifest({ projectRoot });
+    expect(manifest.modeling?.entities['sales::entity::order']?.status).toBe('reviewed');
+    const errors = (manifest.diagnostics ?? []).filter((item) => item.severity === 'error').map((item) => item.message);
+    expect(errors).toEqual(['entity "customer" has status "approved", which ZLens does not recognise (it would be read as draft); use one of draft, evaluated, reviewed, certified, deprecated']);
+  });
+
+  it('warns when passed evidence shows the join loses more rows than allowed, and keeps the declared threshold and scope in the proof', () => {
+    const evidence = `    validation:
+      status: passed
+      checked_at: '2026-09-01T00:00:00.000Z'
+      query_fingerprint: legacy
+      from_rows: 100
+      to_rows: 10
+      joined_rows: 70
+      from_null_keys: 0
+      to_null_keys: 0
+      unmatched_from: 30
+      max_from_per_key: 10
+      max_to_per_key: 1
+`;
+    const relationship = (extra: string) => `relationships:
+  - id: order_to_customer
+    from: order
+    to: customer
+    keys: [{ from: CUSTOMER_ID, to: CUSTOMER_ID }]
+    cardinality: many_to_one
+    fanout: safe
+    status: draft
+${extra}${evidence}`;
+    writeYaml(projectRoot, 'domains/sales/modeling/relationships.dql.yaml', relationship(''));
+    const legacy = buildManifest({ projectRoot });
+    const warning = (legacy.diagnostics ?? []).find((item) => /loses|find no "to" row/.test(item.message));
+    expect(warning).toMatchObject({ severity: 'warning' });
+    expect(warning?.message).toMatch(/30 of 100 "from" rows with a key \(30%\) find no "to" row, more than the 5% allowed/);
+
+    // A person who expects the gap declares it; the warning goes and the proof changes.
+    writeYaml(projectRoot, 'domains/sales/modeling/relationships.dql.yaml', relationship('    max_unmatched_share: 0.4\n    validation_scope: referenced_keys\n'));
+    const declared = buildManifest({ projectRoot });
+    expect((declared.diagnostics ?? []).some((item) => /find no "to" row/.test(item.message))).toBe(false);
+    const declaredRelationship = declared.modeling?.relationships['sales::relationship::order_to_customer'];
+    expect(declaredRelationship).toMatchObject({ maxUnmatchedShare: 0.4, validationScope: 'referenced_keys' });
+
+    writeYaml(projectRoot, 'domains/sales/modeling/relationships.dql.yaml', relationship('    max_unmatched_share: 40%\n    validation_scope: some_rows\n'));
+    const invalid = (buildManifest({ projectRoot }).diagnostics ?? []).filter((item) => item.severity === 'error').map((item) => item.message);
+    expect(invalid).toEqual(expect.arrayContaining([
+      expect.stringMatching(/max_unmatched_share must be a number from 0 to 1/),
+      expect.stringMatching(/validation_scope must be "referenced_keys"/),
+    ]));
+  });
+
+  it('writes the threshold, the scope and the new evidence counts back as authored', () => {
+    const patch = previewModelingChange(projectRoot, {
+      operation: 'upsert_relationship',
+      value: {
+        id: 'order_to_customer', domain: 'sales', from: 'order', to: 'customer', keys: [{ from: 'CUSTOMER_ID', to: 'CUSTOMER_ID' }],
+        cardinality: 'many_to_one', fanout: 'safe', status: 'draft', maxUnmatchedShare: 0.1, validationScope: 'referenced_keys',
+        validation: { status: 'passed', checkedAt: '2026-09-23T00:00:00.000Z', queryFingerprint: 'q', fromRows: 10, toRows: 5, joinedRows: 9, fromNullKeys: 0, toNullKeys: 0, unmatchedFrom: 1, maxFromPerKey: 3, maxToPerKey: 2, unmatchedKeyedFrom: 1, unmatchedKeyValues: 1, unmatchedShare: 0.1, maxUnmatchedShare: 0.1, maxToPerReferencedKey: 1, maxFromPerReferencedKey: 3, scope: 'referenced_keys' },
+      },
+    });
+    const written = patch.patches.map((item) => item.after).join('\n');
+    for (const line of ['max_unmatched_share: 0.1', 'validation_scope: referenced_keys', 'unmatched_keyed_from: 1', 'unmatched_key_values: 1', 'max_to_per_referenced_key: 1', 'scope: referenced_keys']) expect(written).toContain(line);
+  });
+
   it('names an unknown or ambiguous relation, and a missing snapshot, in plain words', () => {
     writeYaml(projectRoot, 'domains/sales/modeling/more.dql.yaml', `entities:
   - id: archived_customer
@@ -212,6 +284,69 @@ relationships:
   it('writes the snapshot where the builder reads it', () => {
     expect(readWarehouseCatalog(projectRoot).snapshot?.relations).toHaveLength(3);
     expect(JSON.parse(readFileSync(join(projectRoot, WAREHOUSE_CATALOG_PATH), 'utf-8')).fingerprint).toMatch(/^[0-9a-f]{64}$/);
+  });
+
+  // Launch blocker: discovery drafts a join into modeling/model.dql.yaml (here
+  // the legacy relationships.dql.yaml); certifying it on the Modeling page
+  // writes it to the subject area (areas/core.dql.yaml). The draft stayed
+  // behind and `zlens model validate` failed with a duplicate relationship.
+  it('certifying a drafted join into a subject area moves it there, and the model stays valid', () => {
+    writeYaml(projectRoot, 'domains/sales/modeling/relationships.dql.yaml', `relationships:
+  - id: order_to_customer
+    from: order
+    to: customer
+    keys: [{ from: CUSTOMER_ID, to: CUSTOMER_ID }]
+    cardinality: many_to_one
+    fanout: safe
+    status: draft
+    description: Each order is placed by one customer.
+  - id: order_to_archive_customer
+    from: order
+    to: customer
+    keys: [{ from: CUSTOMER_ID, to: CUSTOMER_ID }]
+    cardinality: many_to_one
+    fanout: safe
+    status: draft
+`);
+    const changes: ModelingAuthoringChange[] = [
+      { operation: 'upsert_area', value: { id: 'core', domain: 'sales', name: 'Core models' } },
+      { operation: 'upsert_relationship', value: {
+        id: 'order_to_customer', domain: 'sales', areaId: 'core', from: 'sales::entity::order', to: 'sales::entity::customer',
+        keys: [{ from: 'CUSTOMER_ID', to: 'CUSTOMER_ID' }], cardinality: 'many_to_one', fanout: 'safe', status: 'certified',
+        certifiedAgainst: { from: { grain: 'ORDER_ID', keys: ['ORDER_ID'] }, to: { grain: 'CUSTOMER_ID', keys: ['CUSTOMER_ID'] } },
+      } },
+    ];
+    const preview = previewModelingChanges(projectRoot, changes);
+    expect(preview.patches.map((patch) => patch.path)).toEqual(['domains/sales/modeling/areas/core.dql.yaml', 'domains/sales/modeling/relationships.dql.yaml']);
+    applyModelingChanges(projectRoot, changes, preview.fingerprint);
+
+    const drafts = readFileSync(join(projectRoot, 'domains/sales/modeling/relationships.dql.yaml'), 'utf8');
+    expect(drafts).not.toContain('id: order_to_customer\n');
+    expect(drafts).toContain('id: order_to_archive_customer');
+    const area = readFileSync(join(projectRoot, 'domains/sales/modeling/areas/core.dql.yaml'), 'utf8');
+    // The draft's fields the editor does not set travel with it.
+    expect(area).toContain('description: Each order is placed by one customer.');
+    expect(area).toContain('status: certified');
+
+    const manifest = buildManifest({ projectRoot });
+    expect((manifest.diagnostics ?? []).filter((item) => item.severity === 'error').map((item) => item.message)).toEqual([]);
+    expect(manifest.modeling?.relationships['sales::relationship::order_to_customer']).toMatchObject({ status: 'certified', sourcePath: 'domains/sales/modeling/areas/core.dql.yaml' });
+
+    // Editing it again in its area is an in-place update, not a second move.
+    const again = previewModelingChange(projectRoot, changes[1]!);
+    expect(again.patches.filter((patch) => patch.changed).map((patch) => patch.path)).toEqual([]);
+  });
+
+  it('an entity edited into a subject area moves there instead of being declared twice', () => {
+    mkdirSync(join(projectRoot, 'domains/sales/modeling/areas'), { recursive: true });
+    writeFileSync(join(projectRoot, 'domains/sales/modeling/areas/core.dql.yaml'), 'domain: sales\narea:\n  id: core\n  name: Core models\n');
+    const change: ModelingAuthoringChange = { operation: 'upsert_entity', value: { id: 'order', domain: 'sales', areaId: 'core', dbtModel: 'warehouse.acme.sales.orders', grain: 'ORDER_ID', keys: ['ORDER_ID'] } };
+    const preview = previewModelingChanges(projectRoot, [change]);
+    applyModelingChanges(projectRoot, [change], preview.fingerprint);
+    expect(readFileSync(join(projectRoot, 'domains/sales/modeling/entities.dql.yaml'), 'utf8')).not.toContain('id: order\n');
+    const manifest = buildManifest({ projectRoot });
+    expect((manifest.diagnostics ?? []).filter((item) => item.severity === 'error').map((item) => item.message)).toEqual([]);
+    expect(manifest.modeling?.entities['sales::entity::order']).toMatchObject({ grain: 'ORDER_ID' });
   });
 });
 

@@ -1,0 +1,24 @@
+{
+  "key": "652e621d3c1bea06ecc56982d8472ea4",
+  "operation": "generate",
+  "text": "{\"version\":1,\"kind\":\"analytics\",\"reading\":\"Rank players by points per game (summed points divided by distinct games in which they played) across games dated in calendar year 2017, keeping only players with at least 20 games played, top ten with their games-played count and total points.\",\"measures\":[{\"derived\":{\"kind\":\"ratio\",\"numerator\":\"column:dev.player_game_stats.pts\",\"numeratorAggregation\":\"sum\",\"denominator\":\"column:dev.player_game_stats.game_id\",\"denominatorAggregation\":\"count_distinct\"},\"alias\":\"points_per_game\",\"scope\":[{\"ref\":\"dimension:player_game_stats.played\",\"op\":\"eq\",\"values\":[1],\"source\":\"question\"}]},{\"ref\":\"column:dev.player_game_stats.game_id\",\"aggregation\":\"count_distinct\",\"alias\":\"games_played\",\"scope\":[{\"ref\":\"dimension:player_game_stats.played\",\"op\":\"eq\",\"values\":[1],\"source\":\"question\"}]},{\"ref\":\"column:dev.player_game_stats.pts\",\"aggregation\":\"sum\",\"alias\":\"total_points\"}],\"groupBy\":[{\"ref\":\"dimension:player_game_stats.player_id\",\"role\":\"key\"}],\"display\":[\"dimension:player_game_stats.player_name\"],\"filters\":[{\"ref\":\"measure:1\",\"op\":\"gte\",\"values\":[20],\"source\":\"question\"}],\"ordering\":{\"ref\":\"points_per_game\",\"direction\":\"desc\"},\"limit\":10,\"time\":{\"ref\":\"dimension:player_game_stats.game_date\",\"window\":{\"start\":\"2017-01-01\",\"end\":\"2018-01-01\",\"expression\":\"calendar year 2017\"}},\"expectedShape\":\"ranking\",\"unresolved\":[],\"provenance\":{\"column:dev.player_game_stats.pts\":\"q:points per game\",\"column:dev.player_game_stats.game_id\":\"q:per game / games played\",\"dimension:player_game_stats.played\":\"q:games played\",\"dimension:player_game_stats.player_id\":\"q:rank them\",\"dimension:player_game_stats.player_name\":\"inherited\",\"dimension:player_game_stats.game_date\":\"inherited\",\"measure:1\":\"q:at least 20 games played\",\"block:nba.top_players_by_total_points\":\"removed:ranking changed to points per game with a games-played threshold, which the block does not declare\"}}",
+  "providerName": "claude",
+  "recordedAt": "2026-10-16T18:07:52.590Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 3,
+    "messageRoles": [
+      "system",
+      "user",
+      "user"
+    ],
+    "preCanonicalHash": "652e621d3c1bea06ecc56982d8472ea4f98908a826efa1332ad47dea77e949c9",
+    "postCanonicalHash": "652e621d3c1bea06ecc56982d8472ea4f98908a826efa1332ad47dea77e949c9",
+    "appliedRuleClasses": []
+  }
+}

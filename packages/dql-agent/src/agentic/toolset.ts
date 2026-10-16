@@ -153,7 +153,7 @@ function checkCompatibilityTool(layer: SemanticLayer): AgentToolDefinition {
   return {
     name: 'check_compatibility',
     description:
-      'Check whether governed metrics can be grouped by the requested dimensions. Returns the compatible dimensions and, for each incompatible one, WHY (no_join_path, not_shared_across_metrics, metric_unresolved). Call this before compile_semantic_query when a question asks for a breakdown, and use the compatible list to pick an alternative instead of giving up.',
+      'Check whether governed metrics can be grouped by the requested dimensions. Returns the compatible dimensions and, for each incompatible one, WHY (no_join_path, one_to_many_only, not_shared_across_metrics, metric_unresolved; one_to_many_only means the only path walks a join one-to-many, which would repeat each metric value, so no governed query can group by it). Call this before compile_semantic_query when a question asks for a breakdown, and use the compatible list to pick an alternative instead of giving up.',
     inputSchema: {
       type: 'object',
       additionalProperties: false,
@@ -207,11 +207,14 @@ function checkCompatibilityTool(layer: SemanticLayer): AgentToolDefinition {
           reason: blocked?.reason ?? 'not_modeled',
           explanation: blocked?.reason === 'no_join_path'
             ? 'No declared join path reaches this dimension from the metric. Pick one of the compatible dimensions, or the modeling has to change.'
-            : blocked?.reason === 'not_shared_across_metrics'
-              ? 'One metric in the set cannot reach this dimension. Ask about the metrics separately, or drop the one that cannot.'
-              : blocked?.reason === 'metric_unresolved'
-                ? 'A named metric does not exist in the semantic layer. Re-check the name with search_semantic_layer.'
-                : 'This dimension is not modeled for these metrics.',
+            : blocked?.reason === 'one_to_many_only'
+              ? layer.explainDimensionGap(metricNames, name)
+                ?? 'This dimension is reachable only through a one-to-many join, which would repeat each metric value. Pick one of the compatible dimensions, or the modeling has to change.'
+              : blocked?.reason === 'not_shared_across_metrics'
+                ? 'One metric in the set cannot reach this dimension. Ask about the metrics separately, or drop the one that cannot.'
+                : blocked?.reason === 'metric_unresolved'
+                  ? 'A named metric does not exist in the semantic layer. Re-check the name with search_semantic_layer.'
+                  : 'This dimension is not modeled for these metrics.',
         };
       });
       return {
