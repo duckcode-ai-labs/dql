@@ -14,6 +14,7 @@ import {
   type DashboardDriverDefinitionV1,
   type StoryEditionV1,
   type DashboardStoryBrief,
+  type DashboardViewerFilter,
 } from '../../api/client';
 import { isViewerLink } from '../../api/server-auth';
 import { useNotebook } from '../../store/NotebookStore';
@@ -192,6 +193,7 @@ export function DashboardRenderer({
   appId,
   dashboard,
   variables,
+  viewerFilters,
   editable = false,
   embeddedHeader = false,
   onDashboardChanged,
@@ -209,6 +211,12 @@ export function DashboardRenderer({
   appId: string;
   dashboard: DashboardDocumentResponse['dashboard'];
   variables?: Record<string, unknown>;
+  /**
+   * The viewer's own "Filter by…" choices. Their values are also in
+   * `variables`; this says which tiles they were shown to narrow, so the
+   * server can bind them without the page declaring them.
+   */
+  viewerFilters?: DashboardViewerFilter[];
   editable?: boolean;
   embeddedHeader?: boolean;
   onDashboardChanged?: (dashboard: DashboardDocumentResponse['dashboard']) => void;
@@ -245,7 +253,7 @@ export function DashboardRenderer({
   // With a host, a tile's download is made on the server for the export (HH-17).
   const hosted = useHostUi().host;
   const tileExport = hosted && !editable && !readOnlyLink
-    ? (tileId: string) => (format: ExportFormat) => exportAppTile(appId, dashboard.id, { tileId, format, variables: runVariables })
+    ? (tileId: string) => (format: ExportFormat) => exportAppTile(appId, dashboard.id, { tileId, format, variables: runVariables, ...viewerFilterOption() })
     : undefined;
   /** The open "Why did it move?" panel, if any. */
   const [driverPanel, setDriverPanel] = useState<{
@@ -297,6 +305,14 @@ export function DashboardRenderer({
   const openAnswerInNotebook = useOpenAnswerInNotebook();
   const variablesKey = useMemo(() => JSON.stringify(variables ?? {}), [variables]);
   const runVariables = useMemo<Record<string, unknown>>(() => JSON.parse(variablesKey), [variablesKey]);
+  const viewerFiltersKey = useMemo(() => JSON.stringify(viewerFilters ?? []), [viewerFilters]);
+  const runViewerFilters = useMemo<DashboardViewerFilter[]>(() => JSON.parse(viewerFiltersKey), [viewerFiltersKey]);
+  const viewerFilterIds = useMemo(() => runViewerFilters.map((filter) => filter.column), [runViewerFilters]);
+  // Every run of this page carries the viewer's filters; read through a ref so
+  // the many existing run paths keep their signatures.
+  const viewerFiltersRef = useRef<DashboardViewerFilter[]>(runViewerFilters);
+  viewerFiltersRef.current = runViewerFilters;
+  const viewerFilterOption = () => (viewerFiltersRef.current.length ? { viewerFilters: viewerFiltersRef.current } : {});
   const crossFiltersKey = useMemo(() => JSON.stringify(activeCrossFilters), [activeCrossFilters]);
   const effectiveCrossFilters = useMemo<DashboardDatasetCrossFilter[]>(() => JSON.parse(crossFiltersKey), [crossFiltersKey]);
   const hierarchyDrillsKey = useMemo(() => JSON.stringify(activeHierarchyDrills), [activeHierarchyDrills]);
@@ -406,7 +422,7 @@ export function DashboardRenderer({
       const drilled = drillFilters(effectiveHierarchyDrills.find((drill) => drill.tileId === item.i)?.steps)
         .map((filter) => ({ field: filter.field, op: filter.op as 'eq' | 'in', values: (filter.values ?? []) as Array<string | number | boolean> }));
       const driver = drilled.length ? { ...definition, filters: [...(definition.filters ?? []), ...drilled] } : definition;
-      const result = await api.runDashboard(appId, dashboard.id, runVariables, effectiveCrossFilters.length ? effectiveCrossFilters : undefined, { driverProbe: { fromTileId: item.i, driver } });
+      const result = await api.runDashboard(appId, dashboard.id, runVariables, effectiveCrossFilters.length ? effectiveCrossFilters : undefined, { driverProbe: { fromTileId: item.i, driver }, ...viewerFilterOption() });
       if (driverRequestRef.current !== requestId) return;
       const tile = result.tiles.find((candidate) => candidate.tileType === 'driver');
       setDriverPanel({
@@ -511,6 +527,7 @@ export function DashboardRenderer({
           retryDisabled={Boolean(retryingTileId && retryingTileId !== item.i)}
           onOpenNotebook={(nextTile) => void openTileInNotebook(item, nextTile)}
           activeVariables={runVariables}
+          viewerFilterIds={viewerFilterIds}
           onExport={tileExport?.(item.i)}
           crossFilterFields={datasetCrossFilterFields(dashboard, item)}
           onSelectDatasetMark={(field, values) => applyDatasetMark(item, field, values)}
@@ -587,6 +604,7 @@ export function DashboardRenderer({
           ? { affectedTileIds: schedule.affectedTileIds }
           : visibleTileIdsRef.current.length < dashboard.layout.items.length ? { visibleTileIds: visibleTileIdsRef.current } : {}),
         ...(nextHierarchyDrills.length ? { datasetDrills: nextHierarchyDrills } : {}),
+        ...viewerFilterOption(),
       });
       if (!isCurrent()) return null;
       const accepted = result?.partial && boundedRefresh && priorRun
@@ -630,7 +648,7 @@ export function DashboardRenderer({
     const affectedTileIds = pendingAffectedTileIdsRef.current;
     pendingAffectedTileIdsRef.current = null;
     void runLatest(runVariables, effectiveCrossFilters, effectiveHierarchyDrills, affectedTileIds?.length ? { affectedTileIds } : undefined);
-  }, [dashboard.layout.items.length, effectiveCrossFilters, effectiveHierarchyDrills, runLatest, runVariables, state.activePersona?.userId]);
+  }, [dashboard.layout.items.length, effectiveCrossFilters, effectiveHierarchyDrills, runLatest, runVariables, runViewerFilters, state.activePersona?.userId]);
 
   useEffect(() => {
     const rerun = () => {
@@ -1002,7 +1020,7 @@ export function DashboardRenderer({
   // ─── The click menu and Explore panel (RFC 0009 step 6a) ────────────────
   const { openMarkMenu, overlays: markOverlays } = useMarkInteractions({
     themeMode: state.themeMode,
-    runProbe: (options) => api.runDashboard(appId, dashboard.id, runVariables, effectiveCrossFilters.length ? effectiveCrossFilters : undefined, options),
+    runProbe: (options) => api.runDashboard(appId, dashboard.id, runVariables, effectiveCrossFilters.length ? effectiveCrossFilters : undefined, { ...options, ...viewerFilterOption() }),
     drillsFor: (tileId) => effectiveHierarchyDrills.find((drill) => drill.tileId === tileId)?.steps,
     keepOrExclude: (item, field, value, exclude) => applyDatasetMark(item, field, [value], exclude),
     drillDown: (item, candidate, row) => applyDatasetHierarchyDrill(item, candidate, row),
@@ -1399,6 +1417,7 @@ export function DashboardRenderer({
                       retryDisabled={Boolean(retryingTileId && retryingTileId !== item.i)}
                       onOpenNotebook={(nextTile) => void openTileInNotebook(item, nextTile)}
                       activeVariables={runVariables}
+                      viewerFilterIds={viewerFilterIds}
                       onExport={tileExport?.(item.i)}
                       crossFilterFields={datasetCrossFilterFields(dashboard, item)}
                       onSelectDatasetMark={(field, values) => applyDatasetMark(item, field, values)}
@@ -1514,29 +1533,39 @@ export function dashboardTileFilterNotices(input: {
   item: DashboardLayoutItem;
   tile?: DashboardRunTile;
   activeVariables?: Record<string, unknown>;
+  /** The viewer's own session filters; whether they reached a tile is the server's word, not the document's. */
+  viewerFilterIds?: string[];
 }) {
   const datasetUnboundNotices = input.tile?.dataset?.unboundFilters ?? [];
+  // A viewer filter is never in the page document, so only the server's
+  // applied list says whether it narrowed this tile — for every tile kind.
+  const viewerIds = new Set(input.viewerFilterIds ?? []);
+  const serverApplied = new Set((input.tile?.filters?.applied ?? []).map((entry) => entry.filter));
+  const viewerIgnored = input.tile?.status === 'ok' && input.tile.tileType !== 'text'
+    ? [...viewerIds].filter((filterId) => !serverApplied.has(filterId))
+    : [];
   // Driver tiles run Dataset comparisons with the same page filters.
   if (input.item.query || input.item.driver) {
-    return { unfilteredNotice: null, datasetUnboundNotices };
+    return { unfilteredNotice: tileUnfilteredNotice(viewerIgnored), datasetUnboundNotices };
   }
   const active = Object.entries(input.activeVariables ?? {})
-    .filter(([, value]) => value !== undefined && value !== null && value !== '')
+    .filter(([key, value]) => !viewerIds.has(key) && value !== undefined && value !== null && value !== '')
     .map(([key]) => key);
-  if (active.length === 0) return { unfilteredNotice: null, datasetUnboundNotices };
-  const ignored = active.filter((filterId) => {
+  if (active.length === 0) return { unfilteredNotice: tileUnfilteredNotice(viewerIgnored), datasetUnboundNotices };
+  const declaredIgnored = active.filter((filterId) => {
     const binding: { unsupportedReason?: string; binding?: string; param?: string } | undefined =
       (input.item.filterBindings ?? []).find((candidate) => candidate.filter === filterId)
       ?? (input.item.parameterBindings ?? []).find((candidate) => (candidate.filter || candidate.field || candidate.param) === filterId);
     return !binding || Boolean(binding.unsupportedReason) || !(binding.binding ?? binding.param);
   });
-  if (ignored.length === 0) return { unfilteredNotice: null, datasetUnboundNotices };
+  return { unfilteredNotice: tileUnfilteredNotice([...declaredIgnored, ...viewerIgnored]), datasetUnboundNotices };
+}
+
+function tileUnfilteredNotice(ignored: string[]): { label: string; detail: string } | null {
+  if (ignored.length === 0) return null;
   return {
-    unfilteredNotice: {
-      label: ignored.length === 1 ? `Not filtered by ${ignored[0]}` : `Not filtered by ${ignored.length} page filters`,
-      detail: `This tile has no column bound to ${ignored.join(', ')}, so it shows the full scope while the rest of the page is narrowed.`,
-    },
-    datasetUnboundNotices,
+    label: ignored.length === 1 ? `Not filtered by ${ignored[0]}` : `Not filtered by ${ignored.length} page filters`,
+    detail: `This tile has no column bound to ${ignored.join(', ')}, so it shows the full scope while the rest of the page is narrowed.`,
   };
 }
 
@@ -1571,6 +1600,7 @@ function DashboardTile({
   retryDisabled = false,
   onOpenNotebook,
   activeVariables,
+  viewerFilterIds,
   crossFilterFields = [],
   onSelectDatasetMark,
   onDrillDatasetMark,
@@ -1610,6 +1640,8 @@ function DashboardTile({
   onOpenNotebook?: (tile: DashboardRunTile) => void;
   /** Page filter values in force, so a tile can say when it ignores one. */
   activeVariables?: Record<string, unknown>;
+  /** Which of `activeVariables` are the viewer's own session filters. */
+  viewerFilterIds?: string[];
   /** Server-owned, explicitly authored Dataset mapping origins for this tile. */
   crossFilterFields?: string[];
   onSelectDatasetMark?: (field: string, values: unknown[]) => void;
@@ -1698,7 +1730,7 @@ function DashboardTile({
    * narrower scope, and the two are indistinguishable on screen — the reader
    * compares a filtered tile against an unfiltered one and never knows.
    */
-  const { unfilteredNotice, datasetUnboundNotices } = dashboardTileFilterNotices({ item, tile, activeVariables });
+  const { unfilteredNotice, datasetUnboundNotices } = dashboardTileFilterNotices({ item, tile, activeVariables, viewerFilterIds });
   const comparisonSummary = item.query ? datasetComparisonSummary(item.query.comparison) : undefined;
 
   /**

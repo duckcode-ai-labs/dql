@@ -36,7 +36,7 @@ export async function downloadServerExport(url: string, body: unknown): Promise<
 }
 
 /** One tile of a published App page, run again for the file. */
-export function exportAppTile(appId: string, dashboardId: string, input: { tileId: string; format: ExportFormat; variables?: Record<string, unknown> }): Promise<string> {
+export function exportAppTile(appId: string, dashboardId: string, input: { tileId: string; format: ExportFormat; variables?: Record<string, unknown>; viewerFilters?: Array<{ column: string; values: string[]; tileIds: string[] }> }): Promise<string> {
   return downloadServerExport(`/api/apps/${encodeURIComponent(appId)}/dashboards/${encodeURIComponent(dashboardId)}/export`, input);
 }
 

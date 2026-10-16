@@ -1874,6 +1874,38 @@ export const APP_STYLES = `
   color: var(--dql-app-faint);
 }
 
+.dql-app-filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 26px;
+  padding: 0 4px 0 10px;
+  border: 1px solid var(--dql-app-accent);
+  border-radius: 999px;
+  background: var(--dql-app-surface);
+  color: var(--dql-app-ink);
+  font: 500 12px var(--font-ui);
+}
+
+.dql-app-filter-chip b { font-weight: 600; }
+.dql-app-filter-chip small { color: var(--dql-app-faint); font: 600 11px var(--font-ui); }
+.dql-app-filter-chip.is-partial small, .dql-app-filter-chip.is-none small { color: var(--trust-review, #b26b1f); }
+
+.dql-app-filter-chip-clear {
+  display: inline-grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--dql-app-faint);
+  cursor: pointer;
+}
+
+.dql-app-filter-chip-clear:hover { background: var(--dql-app-control); color: var(--dql-app-ink); }
+.dql-app-filter-chip-clear:focus-visible { outline: 2px solid var(--dql-app-accent); outline-offset: 1px; }
+
 .dql-app-filter-editor {
   display: flex;
   flex-direction: column;

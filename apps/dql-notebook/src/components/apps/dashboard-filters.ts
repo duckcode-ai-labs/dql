@@ -334,3 +334,83 @@ export function defaultParameterFilterValue(id: string): unknown {
   if (/(season|year).*end|end.*(season|year)/.test(normalized)) return 2017;
   return '';
 }
+
+/**
+ * A viewer's own "Filter by…" choice, held for this session only.
+ *
+ * `tileIds` are the tiles the viewer was told it narrows ("Will narrow 1 of 4
+ * tiles") when they applied it; the server re-proves each before binding.
+ */
+export type ViewerDashboardFilter = { column: string; value: string; tileIds: string[] };
+
+/** Apply a choice: a new column is added, an existing one takes the new value. */
+export function applyViewerFilterChoice(
+  current: ViewerDashboardFilter[],
+  next: ViewerDashboardFilter,
+): ViewerDashboardFilter[] {
+  const value = next.value.trim();
+  if (!value) return current;
+  const entry = { column: next.column, value, tileIds: [...new Set(next.tileIds)] };
+  return current.some((filter) => filter.column === next.column)
+    ? current.map((filter) => (filter.column === next.column ? entry : filter))
+    : [...current, entry];
+}
+
+/**
+ * The viewer filters a page run carries. A column the page has since declared
+ * is the declared control's to set, so it is dropped here rather than sent
+ * twice (the server refuses a viewer filter that shadows a declared one).
+ */
+export function viewerFiltersForRun(
+  dashboard: DashboardDocumentResponse['dashboard'] | null,
+  filters: ViewerDashboardFilter[],
+): Array<{ column: string; values: string[]; tileIds: string[] }> {
+  const declared = new Set([
+    ...(dashboard?.filters ?? []).map((filter) => filter.id.toLowerCase()),
+    ...(((dashboard as { params?: Array<{ id: string }> } | null)?.params) ?? []).map((param) => param.id.toLowerCase()),
+  ]);
+  return filters
+    .filter((filter) => !declared.has(filter.column.toLowerCase()))
+    .map((filter) => ({ column: filter.column, values: [filter.value], tileIds: filter.tileIds }));
+}
+
+/**
+ * The page's values with the viewer's filters added, so the story, "Ask about
+ * this App" and each tile's "Not filtered by…" notice read the filtered scope.
+ */
+export function viewerFilterPageVariables(
+  declaredValues: Record<string, unknown>,
+  runFilters: Array<{ column: string; values: string[] }>,
+): Record<string, unknown> {
+  if (runFilters.length === 0) return declaredValues;
+  return {
+    ...declaredValues,
+    ...Object.fromEntries(runFilters.map((filter) => [filter.column, filter.values.length === 1 ? filter.values[0] : filter.values])),
+  };
+}
+
+/**
+ * Which tiles a viewer filter actually narrowed, from the server's own
+ * `filters.applied` on the run on screen — not from what was promised before
+ * it ran. Before that run settles, the promise is all there is.
+ */
+export function viewerFilterReach(
+  dashboard: DashboardDocumentResponse['dashboard'] | null,
+  run: { tiles?: Array<{ tileId?: string; status?: string; filters?: { applied?: Array<{ filter?: string }> } }> } | null,
+  filter: ViewerDashboardFilter,
+): { applied: string[]; unaffected: Array<{ tileId: string; title?: string }>; filterable: number; settled: boolean } {
+  const items = (dashboard?.layout.items ?? []).filter((item) => !isNarrativeTile(item));
+  const settled = Boolean(run?.tiles?.length);
+  const narrowed = new Set(settled
+    ? (run!.tiles ?? [])
+      .filter((tile) => (tile.filters?.applied ?? []).some((entry) => entry.filter === filter.column))
+      .map((tile) => tile.tileId)
+      .filter((tileId): tileId is string => Boolean(tileId))
+    : filter.tileIds);
+  return {
+    applied: items.filter((item) => narrowed.has(item.i)).map((item) => item.i),
+    unaffected: items.filter((item) => !narrowed.has(item.i)).map((item) => ({ tileId: item.i, title: item.title })),
+    filterable: items.length,
+    settled,
+  };
+}

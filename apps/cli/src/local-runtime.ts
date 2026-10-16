@@ -563,6 +563,13 @@ import {
   createAgentRunCancellationError,
 } from '@zlens/agent';
 import { addSqlResultFilter, dashboardFilterableResultColumns, filterableResultColumns, replaceBlockStudioSql } from './sql-result-filter.js';
+import {
+  parseDashboardViewerFilters,
+  viewerFilterBindingsForBlockTile,
+  viewerFilterDeclarations,
+  viewerFilterPageFilters,
+  viewerFilterVariables,
+} from './app-viewer-filters.js';
 import { gatherProposeEnrichment } from './propose-enrich.js';
 import {
   applyAppAutopilotChange,
@@ -20227,6 +20234,13 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
           ? body.variables as Record<string, unknown>
           : {};
         const dashboardVariables = dashboardRuntimeVariables(loaded.dashboard, variables);
+        // A viewer's own "Filter by…" choice: session-only, never a page
+        // declaration. Its value joins the run's variables so the story, Ask
+        // and the run fingerprints all describe the filtered scope.
+        const parsedViewerFilters = parseDashboardViewerFilters((body as Record<string, unknown>).viewerFilters, loaded.dashboard);
+        if (!parsedViewerFilters.ok) throw new DashboardRunRequestError(parsedViewerFilters.error);
+        const viewerFilters = parsedViewerFilters.filters;
+        Object.assign(dashboardVariables, viewerFilterVariables(viewerFilters));
         const requestedTileId = typeof body.tileId === 'string' && body.tileId.trim()
           ? body.tileId.trim()
           : undefined;
@@ -20278,6 +20292,10 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
           && !activeDashboardRun.controller.signal.aborted,
         );
         const tiles: Array<{ tileId: string; status: string; [key: string]: any }> = [];
+        // Each block tile's SQL before any page or viewer filter wrapped it.
+        // Which columns a viewer may filter is a property of the tile, so it
+        // must not shrink because the page is already filtered.
+        const unfilteredBlockSql = new Map<string, string>();
         // HH-14: an AI-written pin's figures on this page, for a person the host keeps needs-review figures from.
         const pinFiguresWithheld = (await figuresRuleForRequest()) === 'withhold_review';
         // The saved TileQuery and a hierarchy-interaction query have distinct
@@ -20468,6 +20486,7 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
           requestValues: variables,
           crossFilters: datasetCrossFilters,
           datasetDrills: Array.from(datasetDrills.values()),
+          ...(viewerFilters.length ? { viewerFilters } : {}),
           requestedTileId: requestedTileId ?? null,
           fullDashboardRun,
           visibleTileIds: requestedVisibleTileIds ?? null,
@@ -20559,6 +20578,11 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
         const executionDashboard = scopedOwners.size > 0
           ? withDriverFilterScopes(loaded.dashboard, scopedOwners)
           : loaded.dashboard;
+        // Block tiles see the viewer's filters as ephemeral declarations; a
+        // tile is bound only where its own SQL proves the column (below).
+        const viewerExecutionDashboard = viewerFilters.length
+          ? { ...executionDashboard, filters: [...(executionDashboard.filters ?? []), ...viewerFilterDeclarations(viewerFilters)] }
+          : executionDashboard;
         let nextTileIndex = 0;
         // App preview is a multi-source execution, so isolate each tile's
         // failure and run a small fixed pool. Four avoids serial 4k-catalog
@@ -22126,14 +22150,24 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
               });
               continue;
             }
+            const blockBaseSql = semanticCompose?.sql ?? blockPlan!.sql;
+            const viewerBindings = viewerFilters.length
+              ? viewerFilterBindingsForBlockTile({
+                tileId: item.i,
+                sql: blockBaseSql,
+                declaredDimensions: block.dimensions ?? [],
+                filters: viewerFilters,
+                dialect: blockTargetConnection.driver,
+              })
+              : [];
             blockFilterApplication = applyDashboardFiltersToBlockExecution({
-              sql: semanticCompose?.sql ?? blockPlan!.sql,
+              sql: blockBaseSql,
               sqlParams: blockPlan?.sqlParams ?? [],
               variables: { ...(blockPlan?.variables ?? {}), ...dashboardVariables },
               block,
-              dashboard: executionDashboard,
+              dashboard: viewerExecutionDashboard,
               tileId: item.i,
-              tileFilterBindings: item.filterBindings,
+              tileFilterBindings: viewerBindings.length ? [...(item.filterBindings ?? []), ...viewerBindings] : item.filterBindings,
             });
             const execution = await analyticalExecutionService.execute({
               sql: blockFilterApplication.sql,
@@ -22143,6 +22177,7 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
               variables: { ...blockFilterApplication.variables, ...blockInvocation.values },
               signal: activeDashboardRun!.controller.signal,
             });
+            unfilteredBlockSql.set(item.i, blockBaseSql);
             tiles.push({
               tileId: item.i,
               status: 'ok',
@@ -22378,7 +22413,7 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
           try { return requireActiveConnection().driver || 'duckdb'; } catch { return 'duckdb'; }
         })();
         const tilesWithFilters = settledTiles.map((tile) => {
-          const executedSql = (tile as { artifact?: { sql?: unknown } }).artifact?.sql;
+          const executedSql = unfilteredBlockSql.get(tile.tileId) ?? (tile as { artifact?: { sql?: unknown } }).artifact?.sql;
           const columns = (tile as { result?: { columns?: string[] } }).result?.columns ?? [];
           if (typeof executedSql !== 'string' || columns.length === 0) return tile;
           try {
@@ -22736,7 +22771,7 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
             if (value === undefined || value === null || value === '' || (Array.isArray(value) && value.length === 0)) return [];
             const text = Array.isArray(value) ? value.map(String).join(', ') : typeof value === 'object' ? JSON.stringify(value) : String(value);
             return [{ id: filter.id, label: filter.label ?? filter.id, value: text.slice(0, 200) }];
-          }),
+          }).concat(viewerFilterPageFilters(viewerFilters)),
           tileTrust: Object.fromEntries(loaded.dashboard.layout.items.map((item) => {
             const tile = tilesWithFilters.find((candidate) => candidate.tileId === item.i);
             return [item.i, readerTileTrust(item as ReaderTrustItem, tile as ReaderTrustTile | undefined)?.state ?? null];
@@ -22752,7 +22787,7 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
           expiresAt: Date.now() + 15 * 60_000,
         };
         if (!staleRun && !partialRun) dashboardRunEvidence.set(runId, runEvidence);
-        const editionScope = storyEditionScope(loaded.dashboard, dashboardVariables, [...datasetCrossFilters, ...Array.from(datasetDrills.values())]);
+        const editionScope = storyEditionScope(loaded.dashboard, dashboardVariables, [...datasetCrossFilters, ...Array.from(datasetDrills.values()), ...viewerFilters]);
         // A complete run of a published story page is an edition: readers can
         // see what changed since the last one. Recording never fails a run.
         const scheduledRun = scheduledPageRuns.get(req);
