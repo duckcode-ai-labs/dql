@@ -1,0 +1,23 @@
+{
+  "key": "e93fccbde58375062ea2e0b5ba1eabff",
+  "operation": "generate",
+  "text": "{\"version\":1,\"kind\":\"analytics\",\"reading\":\"Win rate (won closed opportunities divided by all closed opportunities) for opportunities whose primary competitor is Splunk, broken down by sales region — but the project holds no sales region attribute.\",\"measures\":[{\"derived\":{\"kind\":\"ratio\",\"numerator\":\"column:SALES.OPPORTUNITY_ENHANCED.IS_WON\",\"numeratorAggregation\":\"sum\",\"denominator\":\"column:SALES.OPPORTUNITY_ENHANCED.IS_CLOSED\",\"denominatorAggregation\":\"sum\"},\"alias\":\"win_rate_vs_splunk\"}],\"groupBy\":[],\"display\":[],\"filters\":[{\"ref\":\"dimension:opportunity.COMPETITOR_C\",\"op\":\"eq\",\"values\":[\"Splunk\"],\"source\":\"question\"}],\"expectedShape\":\"grouped\",\"unresolved\":[{\"clause\":\"by sales region\",\"options\":[],\"material\":true,\"question\":\"The project has no sales region attribute on opportunities (or any other model); which field should stand in for sales region, or should the win rate be reported without a regional breakdown?\"}],\"provenance\":{\"column:SALES.OPPORTUNITY_ENHANCED.IS_WON\":\"q:win rate\",\"column:SALES.OPPORTUNITY_ENHANCED.IS_CLOSED\":\"q:win rate\",\"dimension:opportunity.COMPETITOR_C\":\"q:against Splunk\"}}",
+  "providerName": "claude",
+  "recordedAt": "2026-10-16T18:04:14.393Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 2,
+    "messageRoles": [
+      "system",
+      "user"
+    ],
+    "preCanonicalHash": "e93fccbde58375062ea2e0b5ba1eabff2e9986312ca2580fa34b217bac9fd265",
+    "postCanonicalHash": "e93fccbde58375062ea2e0b5ba1eabff2e9986312ca2580fa34b217bac9fd265",
+    "appliedRuleClasses": []
+  }
+}

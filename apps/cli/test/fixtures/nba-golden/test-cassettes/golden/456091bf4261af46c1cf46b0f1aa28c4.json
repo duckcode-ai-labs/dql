@@ -1,0 +1,23 @@
+{
+  "key": "456091bf4261af46c1cf46b0f1aa28c4",
+  "operation": "generate",
+  "text": "{\"version\":1,\"kind\":\"analytics\",\"reading\":\"The question asks for a prediction of which players are most likely to be injured next season, which requires injury data and a forecast that this project does not hold.\",\"measures\":[],\"groupBy\":[],\"display\":[],\"filters\":[],\"expectedShape\":\"ranking\",\"unresolved\":[{\"clause\":\"players most likely to get injured next season\",\"options\":[],\"material\":true,\"question\":\"This project holds only 2016–2017 box-score statistics (points, rebounds, assists, shooting, results) and no injury records or forward-looking predictions; which modeled statistic should be used instead?\"}],\"provenance\":{}}",
+  "providerName": "claude",
+  "recordedAt": "2026-10-16T18:05:06.893Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 2,
+    "messageRoles": [
+      "system",
+      "user"
+    ],
+    "preCanonicalHash": "456091bf4261af46c1cf46b0f1aa28c438b1d1bbd63ef42e54d4a9f2c13cb379",
+    "postCanonicalHash": "456091bf4261af46c1cf46b0f1aa28c438b1d1bbd63ef42e54d4a9f2c13cb379",
+    "appliedRuleClasses": []
+  }
+}

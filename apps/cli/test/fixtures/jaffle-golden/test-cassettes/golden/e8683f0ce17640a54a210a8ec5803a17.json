@@ -1,9 +1,9 @@
 {
   "key": "e8683f0ce17640a54a210a8ec5803a17",
   "operation": "generate",
-  "text": "{\"version\":1,\"kind\":\"analytics\",\"reading\":\"The question asks for churn rate broken down by region, but this project has no churn metric and no region dimension defined anywhere in the vocabulary.\",\"measures\":[],\"groupBy\":[],\"display\":[],\"filters\":[],\"expectedShape\":\"ranking\",\"unresolved\":[{\"clause\":\"churn rate by region\",\"options\":[],\"material\":true}],\"provenance\":{}}",
+  "text": "{\"version\":1,\"kind\":\"analytics\",\"reading\":\"Customer churn rate broken down by geographic region.\",\"measures\":[],\"groupBy\":[],\"display\":[],\"filters\":[],\"expectedShape\":\"grouped\",\"unresolved\":[{\"clause\":\"churn rate\",\"options\":[],\"material\":true,\"question\":\"This project defines no churn metric or churn status (only customer_type new/returning and first/last order timestamps); how should churn be defined, or is there a governed metric I am missing?\"},{\"clause\":\"by region\",\"options\":[\"dimension:locations.location_name\"],\"material\":true,\"question\":\"There is no region dimension; the nearest geography is the Jaffle Shop location (location_name). Should the breakdown be by location instead?\"}],\"provenance\":{\"dimension:locations.location_name\":\"q:by region\"}}",
   "providerName": "claude",
-  "recordedAt": "2026-09-17T18:07:12.394Z",
+  "recordedAt": "2026-10-16T18:07:27.431Z",
   "provenance": {
     "kind": "recorded_provider",
     "replayClassification": "recorded_provider",

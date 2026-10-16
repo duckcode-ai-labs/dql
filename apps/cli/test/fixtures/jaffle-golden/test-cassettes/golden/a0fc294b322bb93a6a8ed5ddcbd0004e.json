@@ -1,0 +1,23 @@
+{
+  "key": "a0fc294b322bb93a6a8ed5ddcbd0004e",
+  "operation": "generate",
+  "text": "{\"version\":1,\"kind\":\"analytics\",\"reading\":\"Count of orders broken down by customer type (new vs returning).\",\"measures\":[{\"ref\":\"metric:orders.orders\"}],\"groupBy\":[{\"ref\":\"dimension:customers.customer_type\",\"role\":\"categorical\"}],\"display\":[],\"filters\":[],\"expectedShape\":\"grouped\",\"unresolved\":[],\"provenance\":{\"metric:orders.orders\":\"q:how many orders\",\"dimension:customers.customer_type\":\"q:by customer type\"}}",
+  "providerName": "claude",
+  "recordedAt": "2026-10-16T18:05:54.371Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 2,
+    "messageRoles": [
+      "system",
+      "user"
+    ],
+    "preCanonicalHash": "a0fc294b322bb93a6a8ed5ddcbd0004e9afd3edf619ea8052e4e3016bf473909",
+    "postCanonicalHash": "a0fc294b322bb93a6a8ed5ddcbd0004e9afd3edf619ea8052e4e3016bf473909",
+    "appliedRuleClasses": []
+  }
+}

@@ -24,6 +24,7 @@
  *
  * Pure: no DOM, no I/O, safe in the browser and on the server.
  */
+import { compareResultMembers } from './result-ranking.js';
 
 export interface ResultColumnContract {
   name?: unknown;
@@ -454,7 +455,7 @@ function outerOrderLimit(sql: string): ResultOrdering | undefined {
  */
 export function resultLeaderRow(
   input: Pick<ResultMeasureInput, 'rows' | 'numericStrings'>,
-  selection: Pick<ResultMeasureSelection, 'primary' | 'rankColumn'> & Partial<Pick<ResultMeasureSelection, 'ordering'>>,
+  selection: Pick<ResultMeasureSelection, 'primary' | 'rankColumn'> & Partial<Pick<ResultMeasureSelection, 'ordering' | 'labelColumn'>>,
 ): Record<string, unknown> | undefined {
   const numericStrings = input.numericStrings ?? false;
   let best: { row: Record<string, unknown>; key: number } | undefined;
@@ -484,10 +485,13 @@ export function resultLeaderRow(
     }
   }
   if (!selection.primary) return undefined;
+  // The highest value leads; an equal value is settled by the row's label,
+  // never by the order the warehouse returned the rows in.
+  const label = selection.labelColumn;
   for (const row of input.rows) {
     const value = toNumber(row?.[selection.primary], numericStrings);
     if (value === undefined) continue;
-    if (!best || value > best.key) best = { row, key: value };
+    if (!best || value > best.key || (value === best.key && label && compareResultMembers(row?.[label], best.row[label]) < 0)) best = { row, key: value };
   }
   return best?.row;
 }

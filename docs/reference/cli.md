@@ -114,6 +114,8 @@ Exits **1** on changes — scriptable like `git diff`.
 | `zlens model discover [path]` | Preview draft domains, entities and joins: from dbt in a dbt-first project, from the warehouse catalog in a warehouse-first one |
 | `zlens model apply-discovery [path] --apply` | Write the previewed drafts as Domain Package proposals (without `--apply`, preview only) |
 | `zlens model explain <id> [path]` | Explain whether a relationship has automatic-join proof |
+| `zlens model validate-relationship <id>\|--all [path] [--certify] [--dry-run]` | Check authored relationships on the warehouse (the Modeling page's Validate) and record the evidence |
+| `zlens model reject-discovery <id> [path] [--reason <text>]` | Stop warehouse discovery proposing a join a reviewer turned down |
 | `zlens lineage [block] [path]` | Answer-layer lineage analysis |
 
 Warehouse sync and discovery flags (see

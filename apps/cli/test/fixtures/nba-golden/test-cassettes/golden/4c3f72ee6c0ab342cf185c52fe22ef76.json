@@ -1,0 +1,23 @@
+{
+  "key": "4c3f72ee6c0ab342cf185c52fe22ef76",
+  "operation": "generate",
+  "text": "{\"version\":1,\"kind\":\"analytics\",\"reading\":\"Rank players by field-goal percentage (made field goals / attempted field goals, summed over games) in calendar 2017, keeping only players with at least 100 field-goal attempts in that year.\",\"measures\":[{\"derived\":{\"kind\":\"ratio\",\"numerator\":\"column:dev.player_game_stats.fgm\",\"numeratorAggregation\":\"sum\",\"denominator\":\"column:dev.player_game_stats.fga\",\"denominatorAggregation\":\"sum\"},\"alias\":\"fg_pct\"},{\"ref\":\"column:dev.player_game_stats.fga\",\"aggregation\":\"sum\",\"alias\":\"attempts\"}],\"groupBy\":[{\"ref\":\"dimension:player_game_stats.player_id\",\"role\":\"key\"}],\"display\":[\"dimension:player_game_stats.player_name\"],\"filters\":[{\"ref\":\"measure:1\",\"op\":\"gte\",\"values\":[100],\"source\":\"question\"}],\"ordering\":{\"ref\":\"fg_pct\",\"direction\":\"desc\"},\"limit\":10,\"time\":{\"ref\":\"dimension:player_game_stats.game_date\",\"window\":{\"start\":\"2017-01-01\",\"end\":\"2018-01-01\",\"expression\":\"in 2017\"}},\"expectedShape\":\"ranking\",\"unresolved\":[],\"provenance\":{\"column:dev.player_game_stats.fgm\":\"q:field-goal percentage\",\"column:dev.player_game_stats.fga\":\"q:field-goal percentage / at least 100 attempts\",\"dimension:player_game_stats.player_id\":\"q:shooters\",\"dimension:player_game_stats.player_name\":\"q:who are\",\"dimension:player_game_stats.game_date\":\"q:in 2017\"}}",
+  "providerName": "claude",
+  "recordedAt": "2026-10-16T18:06:17.487Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 2,
+    "messageRoles": [
+      "system",
+      "user"
+    ],
+    "preCanonicalHash": "4c3f72ee6c0ab342cf185c52fe22ef76e1eebf0bbdf9c926d497c6de4576cb86",
+    "postCanonicalHash": "4c3f72ee6c0ab342cf185c52fe22ef76e1eebf0bbdf9c926d497c6de4576cb86",
+    "appliedRuleClasses": []
+  }
+}

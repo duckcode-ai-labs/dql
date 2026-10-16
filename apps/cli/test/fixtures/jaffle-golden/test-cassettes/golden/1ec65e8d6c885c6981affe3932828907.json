@@ -1,9 +1,9 @@
 {
   "key": "1ec65e8d6c885c6981affe3932828907",
   "operation": "generate",
-  "text": "{\"display\":[],\"expectedShape\":\"scalar\",\"filters\":[],\"groupBy\":[],\"kind\":\"conversation\",\"measures\":[],\"provenance\":{},\"reading\":\"The user is greeting me.\",\"reply\":\"Hi! I can help you explore Jaffle Shop's commerce data—revenue, customers, products, beverage sales, and more. What would you like to know?\",\"unresolved\":[],\"version\":1}",
+  "text": "{\"version\":1,\"kind\":\"conversation\",\"reading\":\"The user is greeting the assistant.\",\"measures\":[],\"groupBy\":[],\"display\":[],\"filters\":[],\"expectedShape\":\"scalar\",\"unresolved\":[],\"provenance\":{},\"reply\":\"Hi! I can answer questions about Jaffle Shop's commerce data — revenue, orders, customers, products, locations, and beverage vs. food performance. For example: \\\"Which beverage products generate the most revenue?\\\", \\\"How has revenue changed by month?\\\", or \\\"Who are the top customers by beverage revenue?\\\" What would you like to know?\"}",
   "providerName": "claude",
-  "recordedAt": "2026-09-17T18:07:19.035Z",
+  "recordedAt": "2026-10-16T18:07:50.084Z",
   "provenance": {
     "kind": "recorded_provider",
     "replayClassification": "recorded_provider",
