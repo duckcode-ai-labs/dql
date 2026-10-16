@@ -1,0 +1,23 @@
+{
+  "key": "c3e93e981b238b45ed101fb4a196186d",
+  "operation": "generate",
+  "text": "SELECT customer_id, customer_name, customer_type, count_lifetime_orders, first_ordered_at, last_ordered_at, lifetime_spend, lifetime_spend_pretax, lifetime_tax_paid FROM jaffle_shop.dev.customers WHERE LOWER(customer_name) = LOWER('Ryan Byrd') LIMIT 500",
+  "providerName": "claude",
+  "recordedAt": "2026-10-16T16:40:24.286Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 2,
+    "messageRoles": [
+      "system",
+      "user"
+    ],
+    "preCanonicalHash": "c3e93e981b238b45ed101fb4a196186db51a2e375b393dcb014b31f5aa018c98",
+    "postCanonicalHash": "c3e93e981b238b45ed101fb4a196186db51a2e375b393dcb014b31f5aa018c98",
+    "appliedRuleClasses": []
+  }
+}

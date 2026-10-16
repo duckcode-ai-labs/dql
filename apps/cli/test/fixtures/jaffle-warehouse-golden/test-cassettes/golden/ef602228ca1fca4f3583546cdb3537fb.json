@@ -1,0 +1,23 @@
+{
+  "key": "ef602228ca1fca4f3583546cdb3537fb",
+  "operation": "generate",
+  "text": "Revenue for a customer: sum of order_total from orders joined to customers by name. Group by customer_id beside the name.\n\nSELECT c.customer_id, c.customer_name, SUM(o.order_total) AS total_revenue\nFROM jaffle_shop.dev.customers c\nJOIN jaffle_shop.dev.orders o ON o.customer_id = c.customer_id\nWHERE LOWER(c.customer_name) = LOWER('Ryan Byrd')\nGROUP BY c.customer_id, c.customer_name",
+  "providerName": "claude",
+  "recordedAt": "2026-10-16T16:39:18.252Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 2,
+    "messageRoles": [
+      "system",
+      "user"
+    ],
+    "preCanonicalHash": "ef602228ca1fca4f3583546cdb3537fbc202d9974045cfe753b25366b20ddf51",
+    "postCanonicalHash": "ef602228ca1fca4f3583546cdb3537fbc202d9974045cfe753b25366b20ddf51",
+    "appliedRuleClasses": []
+  }
+}

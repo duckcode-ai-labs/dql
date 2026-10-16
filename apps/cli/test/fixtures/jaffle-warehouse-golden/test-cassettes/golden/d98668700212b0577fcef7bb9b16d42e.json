@@ -1,0 +1,23 @@
+{
+  "key": "d98668700212b0577fcef7bb9b16d42e",
+  "operation": "generate",
+  "text": "SELECT c.customer_type, SUM(o.order_total) AS revenue, COUNT(DISTINCT c.customer_id) AS customer_count, COUNT(o.order_id) AS order_count FROM jaffle_shop.dev.orders o JOIN jaffle_shop.dev.customers c ON c.customer_id = o.customer_id GROUP BY c.customer_type ORDER BY revenue DESC",
+  "providerName": "claude",
+  "recordedAt": "2026-10-16T16:43:18.012Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 2,
+    "messageRoles": [
+      "system",
+      "user"
+    ],
+    "preCanonicalHash": "d98668700212b0577fcef7bb9b16d42e3763afa4b047d78be9898a683a86771b",
+    "postCanonicalHash": "d98668700212b0577fcef7bb9b16d42e3763afa4b047d78be9898a683a86771b",
+    "appliedRuleClasses": []
+  }
+}

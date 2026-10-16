@@ -1,0 +1,23 @@
+{
+  "key": "9725761f00d8ff8b123d8a7e54342276",
+  "operation": "generate",
+  "text": "NO_SQL: no listed column holds a region (locations have only a name, no region) and nothing in CONTEXT defines a churn rate or a churned-customer flag.",
+  "providerName": "claude",
+  "recordedAt": "2026-10-16T16:40:49.601Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 2,
+    "messageRoles": [
+      "system",
+      "user"
+    ],
+    "preCanonicalHash": "9725761f00d8ff8b123d8a7e54342276a053c7128dd6d3a04752a8612b211f56",
+    "postCanonicalHash": "9725761f00d8ff8b123d8a7e54342276a053c7128dd6d3a04752a8612b211f56",
+    "appliedRuleClasses": []
+  }
+}

@@ -116,12 +116,17 @@ const EXPECTED_TEST_FILES = 189;
 // CTE, a pasted definitions document (sql-checks.test.ts, +3) and names a statement defines itself,
 // JOIN … USING and CAST AS REAL on SQLite (sql-context-validation.test.ts, +4) (port of efc62b64).
 // 2504 with "generate a report of …" kept an analytical question (intent-controller.test.ts, +1) (port of 7bad6cde).
-// 2510 with relationship verdicts that count the keyed rows a join loses and judge cardinality over the keys
-// a join reaches (relationship-validation.test.ts, +6) (port of 71d5c333).
-const EXPECTED_TESTS = 2510;
+// 2510 with drafting from the question where nothing is governed (ask-pipeline.test.ts, +5) (port of 093cb548)
+// and a ref the reading puts where a value goes kept out of the stated values (sql-checks.test.ts, +1) (port of bb54520b).
+// 2514 with a DuckDB table named without its default database, one matcher for the drafted- and the
+// frozen-SQL check (sql-context-validation.test.ts, +4) (port of ebd04d34 and 627009a1).
+// 2521 with relationship verdicts that count the keyed rows a join loses and judge cardinality over the keys
+// a join reaches (relationship-validation.test.ts, +6) (port of 71d5c333) and check_compatibility naming the
+// one-to-many step (agentic/toolset.test.ts, +1) (port of 2bd5ecdf).
+const EXPECTED_TESTS = 2521;
 // The heavy lane's share of EXPECTED_TESTS (catalog.test.ts 72 + project-state.test.ts 4), pinned so
 // a lane run on its own (CI runs the two lanes as separate steps) is audited as exactly as both together.
-// The ordinary lane's share is the difference: 2434.
+// The ordinary lane's share is the difference: 2445.
 const EXPECTED_HEAVY_TESTS = 76;
 
 const LANES = ['all', 'ordinary', 'heavy'];

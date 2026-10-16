@@ -52,6 +52,9 @@ export function questionProper(question: string): string {
   return body.split('\n').filter((line) => !/^\s*#{1,6}\s/.test(line)).join('\n');
 }
 
+/** A vocabulary ref (`column:main.match.match_winner`), which names a field, never a value. */
+const REF_LITERAL = /^(column|dimension|metric|measure|entity|relation|block|concept|term):\S+$/i;
+
 /**
  * The values a question (and its reading, when there is one) states and a
  * correct statement must apply. `namedBlocks` are the blocks the question
@@ -83,7 +86,9 @@ export function statedValues(question: string, intent?: AnalyticalIntentV1, opti
     // A flag value the reading chose ("has_premium is true") is not a value
     // the question stated: the statement may apply it as a join, `= 1` or
     // the bare column, none of which spells the word.
-    for (const literal of literals) if (typeof literal === 'string' && /[A-Za-z]/.test(literal) && literal.length <= 80 && !NOT_VALUES.has(literal.toLowerCase()) && !namedText.has(literal.trim().toLowerCase()) && !/^(true|false|yes|no|y|n|t|f)$/i.test(literal.trim())) add(literal, 'text');
+    // A ref the reading put where a value goes ("column:main.match.match_winner",
+    // comparing two columns) names a field, not a value the data holds.
+    for (const literal of literals) if (typeof literal === 'string' && /[A-Za-z]/.test(literal) && literal.length <= 80 && !NOT_VALUES.has(literal.toLowerCase()) && !namedText.has(literal.trim().toLowerCase()) && !/^(true|false|yes|no|y|n|t|f)$/i.test(literal.trim()) && !REF_LITERAL.test(literal.trim())) add(literal, 'text');
     for (const clause of intent.unresolved) for (const word of properNouns(`x ${named.length ? withoutBlockNames(clause.clause, named) : clause.clause}`)) add(word, 'text');
   }
   return values;

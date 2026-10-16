@@ -1,0 +1,25 @@
+{
+  "key": "be00a959fdeef642a7dae84639b8dc28",
+  "operation": "generate",
+  "text": "{\"version\":1,\"kind\":\"analytics\",\"reading\":\"Show revenue by store location (the project's region grouping) by month so the decline can be seen per location; the cause of the decline and an investment recommendation are judgments the data alone cannot answer.\",\"measures\":[{\"ref\":\"column:dev.orders.subtotal\",\"aggregation\":\"sum\",\"alias\":\"revenue\"}],\"groupBy\":[{\"ref\":\"column:dev.orders.location_id\",\"role\":\"key\"},{\"ref\":\"column:dev.orders.ordered_at\",\"role\":\"time\",\"grain\":\"month\"}],\"display\":[\"column:dev.locations.location_name\"],\"filters\":[],\"ordering\":{\"ref\":\"column:dev.orders.ordered_at\",\"direction\":\"asc\"},\"expectedShape\":\"trend\",\"unresolved\":[{\"clause\":\"revenue\",\"options\":[\"column:dev.orders.subtotal\",\"column:dev.orders.order_total\"],\"material\":true,\"question\":\"Should revenue be the pretax order subtotal or the order total including tax?\"},{\"clause\":\"why is revenue down, and which region should we invest in\",\"options\":[],\"material\":true,\"question\":\"The warehouse can show the monthly revenue trend per location, but the cause of a decline and an investment recommendation are not held in the data — which periods should the trend compare?\"}],\"provenance\":{\"column:dev.orders.subtotal\":\"q:revenue\",\"column:dev.orders.location_id\":\"q:by region\",\"column:dev.locations.location_name\":\"q:by region\",\"column:dev.orders.ordered_at\":\"q:down\"}}",
+  "providerName": "claude",
+  "recordedAt": "2026-10-16T16:43:47.881Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 4,
+    "messageRoles": [
+      "system",
+      "user",
+      "assistant",
+      "user"
+    ],
+    "preCanonicalHash": "be00a959fdeef642a7dae84639b8dc28360f1fcf458503f08d3a6b3f7ec808f6",
+    "postCanonicalHash": "be00a959fdeef642a7dae84639b8dc28360f1fcf458503f08d3a6b3f7ec808f6",
+    "appliedRuleClasses": []
+  }
+}

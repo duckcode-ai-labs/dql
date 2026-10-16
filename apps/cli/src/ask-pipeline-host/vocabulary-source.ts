@@ -218,6 +218,61 @@ function warehouseCatalogSnapshot(path: string): WarehouseCatalogSnapshotV1 | un
   return snapshot;
 }
 
+/** What a warehouse declares about one table: what one row is and how it points at others. */
+export interface DeclaredRelationKeys {
+  relation: string;
+  primaryKey?: string[];
+  foreignKeys: Array<{ columns: string[]; references: { relation: string; columns: string[] } }>;
+}
+
+/** The declared keys of a warehouse-first project's tables, looked up by any spelling of a table. */
+export interface WarehouseFirstCatalog {
+  /** Every relation the synced catalog lists. */
+  size: number;
+  keysOf(relation: string): DeclaredRelationKeys | undefined;
+}
+
+/** A relation's parts, unquoted and lowercased: how a catalog spelling and a quoted SQL spelling meet. */
+function foldedRelation(relation: string): string {
+  return parsePhysicalIdentifier(relation).map((part) => part.value.toLowerCase()).join('.');
+}
+
+/**
+ * THE WAREHOUSE-FIRST CATALOG, with the keys the warehouse declares.
+ *
+ * Only for a project with no dbt project (RFC 0007 warehouse-first): there the
+ * synced catalog is the whole schema and the only account of how its tables
+ * join. A primary key says what one row is; a foreign key says how two tables
+ * connect. A plain text-to-SQL prompt reads both from `CREATE TABLE`; the
+ * drafter had neither. Returns undefined for a dbt or hybrid project (even a
+ * hybrid one whose dbt manifest is unreadable right now), whose prompts stay
+ * as they are.
+ */
+export function warehouseFirstCatalog(manifest: DQLManifest | undefined, projectRoot: string | undefined): WarehouseFirstCatalog | undefined {
+  const provenance = manifest?.dbtProvenance;
+  if (!provenance?.warehouseCatalogPath || provenance.manifestPath || !projectRoot) return undefined;
+  if (manifest?.modeling?.mode && manifest.modeling.mode !== 'warehouse-first') return undefined;
+  const snapshot = warehouseCatalogSnapshot(join(projectRoot, provenance.warehouseCatalogPath));
+  if (!snapshot) return undefined;
+  const exact = new Map<string, DeclaredRelationKeys>();
+  const folded = new Map<string, DeclaredRelationKeys | null>();
+  for (const relation of snapshot.relations) {
+    const keys: DeclaredRelationKeys = {
+      relation: relation.relation,
+      ...(relation.primaryKey?.length ? { primaryKey: relation.primaryKey } : {}),
+      foreignKeys: (relation.foreignKeys ?? []).map((key) => ({ columns: key.columns, references: { relation: key.references.relation, columns: key.references.columns } })),
+    };
+    exact.set(physicalRelationIdentity(relation.relation), keys);
+    // Two tables that differ only by case or quoting are told apart only exactly.
+    const name = foldedRelation(relation.relation);
+    folded.set(name, folded.has(name) ? null : keys);
+  }
+  return {
+    size: snapshot.relations.length,
+    keysOf: (relation) => exact.get(physicalRelationIdentity(relation)) ?? folded.get(foldedRelation(relation)) ?? undefined,
+  };
+}
+
 /**
  * RFC 0007: in warehouse-first and hybrid modeling the warehouse catalog
  * snapshot plays the dbt artifact's part — table and column comments become
