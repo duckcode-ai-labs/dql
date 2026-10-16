@@ -1,0 +1,23 @@
+{
+  "key": "1d0b87bf4e718b948981af7c2fa1727d",
+  "operation": "generate",
+  "text": "{\"version\":1,\"kind\":\"analytics\",\"reading\":\"Rank customers by their lifetime spend (gross, including tax), showing the top 10.\",\"measures\":[{\"ref\":\"metric:customers.lifetime_spend\",\"alias\":\"lifetime_spend\"}],\"groupBy\":[{\"ref\":\"entity:customers.customer\",\"role\":\"key\"}],\"display\":[\"dimension:customers.customer_name\"],\"filters\":[],\"ordering\":{\"ref\":\"metric:customers.lifetime_spend\",\"direction\":\"desc\"},\"limit\":10,\"expectedShape\":\"ranking\",\"unresolved\":[{\"clause\":\"top customers\",\"options\":[\"metric:customers.lifetime_spend\",\"metric:customers.count_lifetime_orders\"],\"material\":false,\"question\":\"Should 'top' mean highest lifetime spend (assumed) or most lifetime orders?\"}],\"provenance\":{\"metric:customers.lifetime_spend\":\"q:top customers\",\"entity:customers.customer\":\"q:customers\",\"dimension:customers.customer_name\":\"q:who are the top customers\"}}",
+  "providerName": "claude",
+  "recordedAt": "2026-10-16T18:03:19.517Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 2,
+    "messageRoles": [
+      "system",
+      "user"
+    ],
+    "preCanonicalHash": "1d0b87bf4e718b948981af7c2fa1727de736d8bd9bc92fb8ee5ecd5debe996e6",
+    "postCanonicalHash": "1d0b87bf4e718b948981af7c2fa1727de736d8bd9bc92fb8ee5ecd5debe996e6",
+    "appliedRuleClasses": []
+  }
+}

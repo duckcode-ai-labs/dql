@@ -1240,6 +1240,19 @@ export interface ManifestModelRelationship {
   attributionBlock?: string;
   importRefs?: string[];
   evidenceExpiresAt?: string;
+  /**
+   * The largest share (0–1) of "from" rows with a key that may find no "to"
+   * row before warehouse validation fails. Omitted: the validator's default
+   * (`DEFAULT_MAX_UNMATCHED_SHARE`, 5%). Part of the validation proof when set.
+   */
+  maxUnmatchedShare?: number;
+  /**
+   * `referenced_keys`: judge the "one" side's uniqueness only over the keys
+   * the other side references, not the whole table. For a join that is unique
+   * for the rows it reaches (a sprint result reaches one race result) though
+   * the table repeats keys elsewhere. Part of the validation proof when set.
+   */
+  validationScope?: ManifestRelationshipValidationScope;
   sourcePath: string;
   fingerprint: string;
   certificationFingerprint?: string;
@@ -1251,6 +1264,8 @@ export interface ManifestModelRelationship {
   /** Only certified, fresh, exported, fanout-safe edges can prove a generated join. */
   automaticJoinAllowed: boolean;
 }
+
+export type ManifestRelationshipValidationScope = 'referenced_keys';
 
 export interface ManifestRelationshipValidationEvidence {
   status: 'passed' | 'failed' | 'error';
@@ -1266,6 +1281,20 @@ export interface ManifestRelationshipValidationEvidence {
   unmatchedFrom: number;
   maxFromPerKey: number;
   maxToPerKey: number;
+  /** "From" rows with a non-null key that find no "to" row (unmatchedFrom less rows with a null key). */
+  unmatchedKeyedFrom?: number;
+  /** How many distinct key values those unmatched rows hold; one value over many rows reads as a placeholder. */
+  unmatchedKeyValues?: number;
+  /** unmatchedKeyedFrom as a share of the "from" rows that have a key. */
+  unmatchedShare?: number;
+  /** The share the verdict allowed. */
+  maxUnmatchedShare?: number;
+  /** Most "to" rows for one key the "from" side references (the fanout the join actually meets). */
+  maxToPerReferencedKey?: number;
+  /** Most "from" rows for one key the "to" side references. */
+  maxFromPerReferencedKey?: number;
+  /** Set when cardinality was judged over the referenced keys only. */
+  scope?: ManifestRelationshipValidationScope;
   message?: string;
 }
 

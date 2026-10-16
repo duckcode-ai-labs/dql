@@ -1,0 +1,23 @@
+{
+  "key": "ceb5bb3d2f8a2256d05d55c643eddfad",
+  "operation": "generate",
+  "text": "{\"version\":1,\"kind\":\"analytics\",\"reading\":\"The user asks for the current weather in Chicago, which is not something the Jaffle Shop commerce project holds.\",\"measures\":[],\"groupBy\":[],\"display\":[],\"filters\":[],\"expectedShape\":\"scalar\",\"unresolved\":[{\"clause\":\"what is the weather in Chicago\",\"options\":[],\"material\":true,\"question\":\"This project holds Jaffle Shop commerce data (revenue, customers, products, beverages) and has no weather data; what commerce question can I answer instead?\"}],\"provenance\":{}}",
+  "providerName": "claude",
+  "recordedAt": "2026-10-16T18:07:55.911Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 2,
+    "messageRoles": [
+      "system",
+      "user"
+    ],
+    "preCanonicalHash": "ceb5bb3d2f8a2256d05d55c643eddfadeb45920978251830d722a795bfe7e5cc",
+    "postCanonicalHash": "ceb5bb3d2f8a2256d05d55c643eddfadeb45920978251830d722a795bfe7e5cc",
+    "appliedRuleClasses": []
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "key": "a463aa3b140fe811c5c061c29a536980",
+  "operation": "generate",
+  "text": "{\"version\":1,\"kind\":\"analytics\",\"reading\":\"Monthly count of lost opportunities (closed and not won) and their total amount, by close-date month, for fiscal year 2026, where the primary competitor recorded on the opportunity is Splunk.\",\"measures\":[{\"ref\":\"dimension:opportunity_enhanced.OPPORTUNITY_ID\",\"aggregation\":\"count_distinct\",\"alias\":\"lost_opportunities_count\",\"scope\":[{\"ref\":\"dimension:opportunity_enhanced.IS_CLOSED\",\"op\":\"is_true\",\"values\":[true],\"source\":\"question\"},{\"ref\":\"dimension:opportunity_enhanced.IS_WON\",\"op\":\"is_false\",\"values\":[false],\"source\":\"question\"}]},{\"ref\":\"dimension:opportunity_enhanced.AMOUNT\",\"aggregation\":\"sum\",\"alias\":\"lost_amount\",\"scope\":[{\"ref\":\"dimension:opportunity_enhanced.IS_CLOSED\",\"op\":\"is_true\",\"values\":[true],\"source\":\"question\"},{\"ref\":\"dimension:opportunity_enhanced.IS_WON\",\"op\":\"is_false\",\"values\":[false],\"source\":\"question\"}]}],\"groupBy\":[{\"ref\":\"dimension:opportunity_enhanced.CLOSE_DATE\",\"role\":\"time\",\"grain\":\"month\"}],\"display\":[],\"filters\":[{\"ref\":\"dimension:opportunity_enhanced.FISCAL_YEAR\",\"op\":\"eq\",\"values\":[2026],\"source\":\"question\"},{\"ref\":\"dimension:opportunity.COMPETITOR_C\",\"op\":\"eq\",\"values\":[\"Splunk\"],\"source\":\"question\"}],\"ordering\":{\"ref\":\"dimension:opportunity_enhanced.CLOSE_DATE\",\"direction\":\"asc\"},\"time\":{\"ref\":\"dimension:opportunity_enhanced.CLOSE_DATE\",\"grain\":\"month\",\"window\":{\"start\":\"2025-02-01\",\"end\":\"2026-02-01\",\"expression\":\"fiscal year FY26 (Feb 2025 through Jan 2026)\"}},\"expectedShape\":\"trend\",\"unresolved\":[{\"clause\":\"competitor involved is Splunk\",\"options\":[\"dimension:opportunity.COMPETITOR_C\",\"dimension:opportunities.TAGS\"],\"material\":false,\"question\":\"Competitor is read from the primary competitor field on the Salesforce opportunity; say so if you meant Salesloft rep tags containing Splunk instead.\"}],\"provenance\":{\"dimension:opportunity_enhanced.OPPORTUNITY_ID\":\"q:Lost opportunities count\",\"dimension:opportunity_enhanced.AMOUNT\":\"q:Lost Amount\",\"dimension:opportunity_enhanced.IS_CLOSED\":\"q:Lost\",\"dimension:opportunity_enhanced.IS_WON\":\"q:Lost\",\"dimension:opportunity_enhanced.CLOSE_DATE\":\"q:by month\",\"dimension:opportunity_enhanced.FISCAL_YEAR\":\"q:fiscal year FY26\",\"dimension:opportunity.COMPETITOR_C\":\"q:competitor involved is Splunk\",\"dimension:opportunities.TAGS\":\"q:competitor involved\"}}",
+  "providerName": "claude",
+  "recordedAt": "2026-10-16T18:03:08.545Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 2,
+    "messageRoles": [
+      "system",
+      "user"
+    ],
+    "preCanonicalHash": "a463aa3b140fe811c5c061c29a53698015944b26918e692a5bcc6fd992434667",
+    "postCanonicalHash": "a463aa3b140fe811c5c061c29a53698015944b26918e692a5bcc6fd992434667",
+    "appliedRuleClasses": []
+  }
+}

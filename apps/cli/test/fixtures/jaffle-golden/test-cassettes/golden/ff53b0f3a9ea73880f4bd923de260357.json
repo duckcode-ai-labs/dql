@@ -1,0 +1,24 @@
+{
+  "key": "ff53b0f3a9ea73880f4bd923de260357",
+  "operation": "generate",
+  "text": "{\"version\":1,\"kind\":\"analytics\",\"reading\":\"Rank the top 10 customers by beverage (drink product) revenue, showing the customer name beside each customer, with the count of distinct orders containing beverages and the number of distinct beverage products bought.\",\"measures\":[{\"ref\":\"metric:order_item.drink_revenue\",\"alias\":\"beverage_revenue\"},{\"ref\":\"entity:order_item.order_id\",\"aggregation\":\"count_distinct\",\"alias\":\"beverage_orders\",\"scope\":[{\"ref\":\"dimension:products.is_drink_item\",\"op\":\"is_true\",\"values\":[true],\"source\":\"inherited\"}]},{\"ref\":\"entity:order_item.product\",\"aggregation\":\"count_distinct\",\"alias\":\"beverage_product_types\",\"scope\":[{\"ref\":\"dimension:products.is_drink_item\",\"op\":\"is_true\",\"values\":[true],\"source\":\"inherited\"}]}],\"groupBy\":[{\"ref\":\"entity:customers.customer\",\"role\":\"key\"}],\"display\":[\"dimension:customers.customer_name\"],\"filters\":[],\"ordering\":{\"ref\":\"metric:order_item.drink_revenue\",\"direction\":\"desc\"},\"limit\":10,\"expectedShape\":\"ranking\",\"unresolved\":[],\"provenance\":{\"metric:order_item.drink_revenue\":\"inherited\",\"entity:order_item.order_id\":\"inherited\",\"entity:order_item.product\":\"inherited\",\"dimension:products.is_drink_item\":\"inherited\",\"entity:customers.customer\":\"inherited\",\"dimension:customers.customer_name\":\"q:include the customer name\",\"block:commerce.top_beverage_customers\":\"removed:block not applicable (groups by label without identity key); expressed with metric, entity and dimension refs instead\"}}",
+  "providerName": "claude",
+  "recordedAt": "2026-10-16T18:13:07.977Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 3,
+    "messageRoles": [
+      "system",
+      "user",
+      "user"
+    ],
+    "preCanonicalHash": "ff53b0f3a9ea73880f4bd923de2603570322f1660375bc6500fbfa6f3d989c7e",
+    "postCanonicalHash": "ff53b0f3a9ea73880f4bd923de2603570322f1660375bc6500fbfa6f3d989c7e",
+    "appliedRuleClasses": []
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "key": "c009cd7e0c98a69e024ee11664db9d7e",
+  "operation": "generate",
+  "text": "{\"version\":1,\"kind\":\"analytics\",\"reading\":\"Rank players by the number of games in calendar 2017 in which they recorded a double-double (10 or more in two of points, rebounds, assists, steals, blocks).\",\"measures\":[],\"groupBy\":[{\"ref\":\"dimension:player_game_stats.player_id\",\"role\":\"key\"}],\"display\":[\"dimension:player_game_stats.player_name\"],\"filters\":[],\"ordering\":{\"ref\":\"double_doubles\",\"direction\":\"desc\"},\"limit\":10,\"time\":{\"ref\":\"dimension:player_game_stats.game_date\",\"window\":{\"start\":\"2017-01-01\",\"end\":\"2018-01-01\",\"expression\":\"in 2017\"}},\"expectedShape\":\"ranking\",\"unresolved\":[{\"clause\":\"double-doubles\",\"options\":[],\"material\":true,\"question\":\"A double-double is a game with 10+ in any two of pts, reb, ast, stl, blk; this project has no metric, column or block that flags such games per row, and the condition (any two of five) cannot be written as a scope predicate. Should a double_double flag be added to player_game_stats?\"}],\"provenance\":{\"dimension:player_game_stats.player_id\":\"q:Which players\",\"dimension:player_game_stats.player_name\":\"q:Which players\",\"dimension:player_game_stats.game_date\":\"q:in 2017\"}}",
+  "providerName": "claude",
+  "recordedAt": "2026-10-16T18:03:59.127Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 2,
+    "messageRoles": [
+      "system",
+      "user"
+    ],
+    "preCanonicalHash": "c009cd7e0c98a69e024ee11664db9d7e19440ae4bad6f00b87878fa8863c8767",
+    "postCanonicalHash": "c009cd7e0c98a69e024ee11664db9d7e19440ae4bad6f00b87878fa8863c8767",
+    "appliedRuleClasses": []
+  }
+}
