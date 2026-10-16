@@ -7,7 +7,7 @@ This page covers the other ways to install and upgrade.
 ## Requirements
 
 - Node.js 20 or newer. CI tests Node 20, 22 and 24.
-- npm 10 or newer.
+- npm 10 or newer. On npm 12, see [npm 12 and install scripts](#npm-12-and-install-scripts).
 - macOS, Linux or Windows.
 
 ## Option A: a new project with npm (recommended)
@@ -52,6 +52,7 @@ You can also install DuckDB or Snowflake from **Settings → Database** with
 ## Option B: add the CLI to an existing ZLens project
 
 ```bash
+npm pkg set allowScripts.better-sqlite3=true --json   # needed on npm 12
 npm i -D @zlens/cli
 npm exec -- zlens doctor
 npm exec -- zlens notebook
@@ -60,9 +61,12 @@ npm exec -- zlens notebook
 ## Option C: a global install
 
 ```bash
-npm i -g @zlens/cli
+npm i -g @zlens/cli --allow-scripts=better-sqlite3
 zlens --version
 ```
+
+npm 12 needs `--allow-scripts=better-sqlite3` for a global install (see
+below); npm 10 and 11 ignore it.
 
 A global install gives you the `zlens` command only. It does not create a
 project. Create one with `zlens init`:
@@ -103,6 +107,54 @@ docker compose --profile slack up    # adds the Slack bot on :3479
 docker compose --profile ollama up   # adds a local Ollama on :11434
 ```
 
+## npm 12 and install scripts
+
+npm 12 blocks a dependency's install script unless the project's
+`package.json` lists the package in `allowScripts`, and prints
+`install scripts blocked because they are not covered by allowScripts`. Two
+packages ZLens uses download their native binary in that script:
+
+| Package | What ZLens uses it for | Where it is allowed |
+|---|---|---|
+| `better-sqlite3` | the local index, run history and caches | your project's `package.json`: projects from `create-zlens-app` 0.2.1 and the sample projects already have it |
+| `duckdb` | the DuckDB driver | `.dql/connectors/package.json`: ZLens writes it when it installs or repairs the driver |
+
+The entry in `package.json` is:
+
+```json
+"allowScripts": {
+  "better-sqlite3": true
+}
+```
+
+**A folder installed without it.** ZLens stops with "ZLens could not load
+better-sqlite3" and `npm run doctor` fails its **SQLite native module** check.
+Approve the script and rebuild, in the project folder:
+
+```bash
+npm install-scripts approve better-sqlite3
+npm rebuild better-sqlite3
+```
+
+**The DuckDB driver.** `zlens notebook` (at startup) and `zlens sync warehouse`
+repair a driver installed without its binary. To do it yourself:
+
+```bash
+npm --prefix .dql/connectors install-scripts approve duckdb
+npm --prefix .dql/connectors rebuild duckdb
+```
+
+**A global install.** `npm install -g` has no `package.json` to allow scripts
+in, so pass the flag (or set it once with
+`npm config set allow-scripts=better-sqlite3 --location=user`):
+
+```bash
+npm install -g @zlens/cli --allow-scripts=better-sqlite3
+```
+
+npm 12 needs Node.js 22.22.2 or newer (or 24.15.0 or newer). npm 10 and 11
+run install scripts as before and ignore `allowScripts`.
+
 ## Run project commands
 
 A project-local CLI is not on your shell's `PATH`. Use one of these:
@@ -132,7 +184,7 @@ Upgrading is a normal npm install of the latest version.
 
 ```bash
 npm i -D @zlens/cli@latest    # project-local (recommended)
-npm i -g @zlens/cli@latest    # global
+npm i -g @zlens/cli@latest --allow-scripts=better-sqlite3   # global
 ```
 
 The first time the workbench opens after an upgrade, it shows **Guided Setup**
@@ -165,8 +217,12 @@ which -a zlens               # an old copy shadowing it?
 hash -r                      # clear the shell's cached path
 npm ls -g @zlens/cli         # installed globally?
 npm prefix -g                # "<prefix>/bin" must be on PATH
-npm i -g @zlens/cli@latest   # reinstall; a failed install never links the command
+npm i -g @zlens/cli@latest --allow-scripts=better-sqlite3   # reinstall; a failed install never links the command
 ```
+
+**"ZLens could not load better-sqlite3" or "Could not locate the bindings
+file".** npm 12 skipped its install script. See
+[npm 12 and install scripts](#npm-12-and-install-scripts).
 
 **A native driver fails to build (`node-gyp rebuild`).** Switch to Node 22
 LTS and retry. On macOS run `xcode-select --install` once. On Linux install

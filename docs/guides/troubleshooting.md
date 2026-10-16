@@ -28,7 +28,7 @@ npx -p @zlens/cli@latest zlens --version   # escape hatch: no PATH needed at all
 which -a zlens          # a stale Homebrew / venv / old global copy shadowing it?
 hash -r                 # clear the shell's cached path, or just open a new terminal
 npm prefix -g           # ensure "<that path>/bin" is on your $PATH
-npm i -g @zlens/cli@latest   # a failed earlier install never links the bin
+npm i -g @zlens/cli@latest --allow-scripts=better-sqlite3   # a failed earlier install never links the bin
 ```
 
 The last one is the usual culprit for existing users: before **1.6.30**, a
@@ -37,13 +37,50 @@ failed `npm i -g` never creates the `zlens` symlink, so the command is missing
 even though "install" appeared to run. Reinstalling `@latest` on any Node ≥20
 fixes it — see [How do I upgrade ZLens?](#how-do-i-upgrade-zlens) below.
 
+### "ZLens could not load better-sqlite3" (npm 12)
+
+npm 12 blocks a dependency's install script unless `package.json` lists it in
+`allowScripts`. `better-sqlite3`, which holds ZLens's local index, downloads
+its native binary in that script, so without the entry `npm install` prints
+`install scripts blocked because they are not covered by allowScripts` and
+every ZLens command that opens the index stops with this message (older ZLens
+versions printed "Could not locate the bindings file"). In the project
+folder:
+
+```bash
+npm install-scripts approve better-sqlite3
+npm rebuild better-sqlite3
+```
+
+To keep fresh clones working, add the entry to `package.json` (projects from
+`create-zlens-app` and the samples already have it):
+
+```json
+"allowScripts": {
+  "better-sqlite3": true
+}
+```
+
+The DuckDB driver has the same script. ZLens allows it in
+`.dql/connectors/package.json` and rebuilds the driver the next time the
+workbench starts or `zlens sync warehouse` runs; by hand:
+
+```bash
+npm --prefix .dql/connectors install-scripts approve duckdb
+npm --prefix .dql/connectors rebuild duckdb
+```
+
+A global install has no `package.json`: reinstall with
+`npm install -g @zlens/cli --allow-scripts=better-sqlite3`. `npm run doctor`
+checks both packages.
+
 ### How do I upgrade ZLens?
 
 ZLens is plain npm packages — upgrading is just installing the latest version.
 
 ```bash
-# Global CLI
-npm i -g @zlens/cli@latest && zlens --version
+# Global CLI (npm 12 needs --allow-scripts=better-sqlite3)
+npm i -g @zlens/cli@latest --allow-scripts=better-sqlite3 && zlens --version
 
 # Project-local CLI (recommended)
 npm i -D @zlens/cli@latest && npx zlens --version

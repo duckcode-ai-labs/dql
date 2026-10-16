@@ -98,6 +98,16 @@ The terminal prints `Notebook ready: http://127.0.0.1:3474` and your browser
 opens it.
 
 > [!NOTE]
+> **npm 12** runs a dependency's install script only when `package.json` lists
+> it in `allowScripts`. The sample already allows `better-sqlite3`, the SQLite
+> library ZLens keeps its index in, and ZLens allows and rebuilds the DuckDB
+> driver in `.dql/connectors` itself. If ZLens says it could not load
+> better-sqlite3 (a folder installed before the sample had the entry), run
+> `npm install-scripts approve better-sqlite3` then
+> `npm rebuild better-sqlite3`. See
+> [npm 12 and install scripts](https://duckcode-ai-labs.github.io/zlens/get-started/install/#npm-12-and-install-scripts).
+
+> [!NOTE]
 > The sample also has `./setup.sh`, which runs steps 1 and 2 (except
 > `npm run notebook`) in one go. Do not run `create-zlens-app` inside the
 > sample: it creates a second, empty workspace in `dql/`.
@@ -135,7 +145,7 @@ connect it, choose schemas, and ZLens drafts the models for you to certify.
 command everywhere:
 
 ```bash
-npm i -g @zlens/cli          # install or upgrade
+npm i -g @zlens/cli --allow-scripts=better-sqlite3   # install or upgrade (npm 12 needs the flag)
 zlens --version
 cd your-dbt-repo && zlens init ./dql
 ```
