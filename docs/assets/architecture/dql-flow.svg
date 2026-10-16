@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1800" height="920" viewBox="0 0 1800 920" role="img" aria-labelledby="title desc">
-  <title id="title">DQL 10-second architecture flow</title>
-  <desc id="desc">A clear flow from dbt and optional DataLex context into certified DQL blocks, then into apps, notebooks, agents, and CI.</desc>
+  <title id="title">ZLens 10-second architecture flow</title>
+  <desc id="desc">A clear flow from dbt and optional DataLex context into certified DQL blocks in ZLens, then into apps, notebooks, agents, and CI.</desc>
   <defs>
     <style>
       .bg { fill: #fbfaf7; }
@@ -27,11 +27,11 @@
   </defs>
 
   <rect class="bg" width="1800" height="920"/>
-  <text x="80" y="86" class="title">DQL: certified analytics files for dashboards, notebooks and agents</text>
-  <text x="80" y="128" class="subtitle">Read left to right. DQL imports context, certifies reusable blocks, then serves the same trusted assets everywhere.</text>
+  <text x="80" y="86" class="title">ZLens: certified analytics files for dashboards, notebooks and agents</text>
+  <text x="80" y="128" class="subtitle">Read left to right. ZLens imports context, certifies reusable blocks, then serves the same trusted assets everywhere.</text>
 
   <text x="104" y="210" class="label">INPUTS</text>
-  <text x="528" y="210" class="label">DQL CORE</text>
+  <text x="528" y="210" class="label">ZLENS CORE</text>
   <text x="1198" y="210" class="label">CONSUMPTION</text>
 
   <rect x="80" y="250" width="310" height="150" class="card source"/>
@@ -50,7 +50,7 @@
   <circle cx="538" cy="292" r="26" fill="#bbf7d0"/>
   <text x="530" y="301" class="num">3</text>
   <text x="538" y="344" class="cardTitle">Sync context</text>
-  <text x="538" y="382" class="cardText">import dbt and warehouse shape</text>
+  <text x="538" y="382" class="cardText">dbt and warehouse shape</text>
 
   <rect x="496" y="464" width="310" height="150" class="card dql"/>
   <circle cx="538" cy="506" r="26" fill="#bbf7d0"/>
@@ -92,11 +92,11 @@
   <text x="1388" y="753" class="cardText">drift and trust gates</text>
 
   <rect x="496" y="704" width="310" height="112" class="card draft"/>
-  <text x="538" y="754" class="cardTitle">Review-required drafts</text>
+  <text x="538" y="754" class="cardTitle">Drafts for review</text>
   <text x="538" y="790" class="cardText">AI SQL stays labeled</text>
   <path class="arrow dash" d="M651 704 L651 614"/>
 
   <rect x="80" y="844" width="1620" height="52" rx="22" fill="#ffffff" stroke="#e2e8f0" stroke-width="2"/>
   <text x="118" y="878" class="noteStrong">10-second takeaway:</text>
-  <text x="338" y="878" class="note">DQL makes one reviewed answer layer power Apps, notebooks, agents and CI instead of letting every surface invent its own SQL.</text>
+  <text x="346" y="878" class="note">ZLens makes one reviewed answer layer power Apps, notebooks, agents and CI instead of letting every surface invent its own SQL.</text>
 </svg>
