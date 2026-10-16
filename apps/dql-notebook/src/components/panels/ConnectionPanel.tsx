@@ -164,9 +164,12 @@ function chooseFallbackDefault(connections: Record<string, any>): string | undef
 export function ConnectionPanel({
   variant = 'panel',
   onConfigured,
+  onMetadataSynced,
 }: {
   variant?: 'panel' | 'page' | 'setup';
   onConfigured?: (detail: string) => void;
+  /** Apply and synchronize (or Refresh metadata) finished: Guided Setup can draft models from it. */
+  onMetadataSynced?: (result: { status: WarehouseMetadataStatus; warehouseCatalog?: WarehouseCatalogSummary }) => void;
 } = {}) {
   const state = useNotebookStore(useShallow((store) => ({
     settingsTab: store.settingsTab,
@@ -218,6 +221,9 @@ export function ConnectionPanel({
         setMetadataScopeText(formatMetadataScopeEditor(
           connInfo.metadataScope.selectedScopes ?? connInfo.metadataScope.scopes,
         ));
+      } else if ((connInfo as ConnectionInfo).modelingMode === 'warehouse-first') {
+        // Without dbt there are no dbt relations to index: the chosen schemas are the model.
+        setMetadataMode('selected_scopes');
       }
     });
   }, []);
@@ -377,6 +383,7 @@ export function ConnectionPanel({
         ...(metadataMode === 'dbt_relations' ? {} : { scopes }),
       });
       applyMetadataResponse(response);
+      onMetadataSynced?.(response);
       setMetadataMessage(
         `Ready · ${response.status.relationCount.toLocaleString()} relations · `
         + `${response.status.columnCount.toLocaleString()} columns · `
@@ -397,6 +404,7 @@ export function ConnectionPanel({
     try {
       const response = await api.refreshConnectionMetadata(info.default);
       applyMetadataResponse(response);
+      onMetadataSynced?.(response);
       setMetadataMessage(
         `Refreshed · ${response.status.relationCount.toLocaleString()} relations · `
         + `${response.status.columnCount.toLocaleString()} columns`

@@ -168,6 +168,7 @@ const initialState: NotebookState = {
   blockStudioImportOpen: false,
   blockStudioDbtStatus: null,
   setupOpen: false,
+  setupModelSource: null,
   inspectorOpen: false,
   inspectorContext: null,
   apps: [],
@@ -848,10 +849,10 @@ function notebookReducer(state: NotebookState, action: NotebookAction): Notebook
       return { ...state, blockStudioDbtStatus: action.status };
 
     case 'OPEN_SETUP':
-      return { ...state, setupOpen: true };
+      return { ...state, setupOpen: true, setupModelSource: action.modelSource ?? null };
 
     case 'CLOSE_SETUP':
-      return { ...state, setupOpen: false };
+      return { ...state, setupOpen: false, setupModelSource: null };
 
     case 'OPEN_GLOBAL_AI':
       return {

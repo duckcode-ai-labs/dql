@@ -1499,6 +1499,8 @@ export interface NotebookState {
   blockStudioDbtStatus: BlockStudioDbtStatus | null;
   /** Full-screen Setup Onboarding wizard overlay (5-step workspace setup). */
   setupOpen: boolean;
+  /** The Welcome screen's answer to "Where does your data model live?", preselected in Guided Setup. */
+  setupModelSource: 'dbt' | 'warehouse' | 'both' | 'existing' | null;
   inspectorOpen: boolean;
   inspectorContext: InspectorContext | null;
   // Apps surface (Phase 1)
@@ -1618,7 +1620,7 @@ export type NotebookAction =
   // Global AI right rail
   | { type: 'OPEN_GLOBAL_AI'; context?: GlobalAiContext; audience?: GlobalAiAudience; autoRun?: { text: string; mode?: string } }
   | { type: 'CLOSE_GLOBAL_AI' }
-  | { type: 'OPEN_SETUP' }
+  | { type: 'OPEN_SETUP'; modelSource?: 'dbt' | 'warehouse' | 'both' | 'existing' }
   | { type: 'CLOSE_SETUP' }
   | { type: 'TOGGLE_GLOBAL_AI'; context?: GlobalAiContext; audience?: GlobalAiAudience }
   | { type: 'SET_GLOBAL_AI_CONTEXT'; context: GlobalAiContext; audience?: GlobalAiAudience };
