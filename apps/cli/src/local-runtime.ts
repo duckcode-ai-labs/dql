@@ -29371,6 +29371,18 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
           requireActiveConnection(requestConnection(body) ?? connection),
           projectRoot,
         );
+        // A ${NAME} still in the connection is an environment variable this
+        // server does not have. Connecting anyway would test the wrong thing
+        // (DuckDB would even create a file named after the placeholder).
+        const unsetEnvironment = connectionEnvironmentReferences(target, {}).map((reference) => reference.name);
+        if (unsetEnvironment.length) {
+          res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+          res.end(serializeJSON({
+            ok: false,
+            message: `${unsetEnvironment.join(', ')} ${unsetEnvironment.length === 1 ? 'is' : 'are'} not set. Export ${unsetEnvironment.length === 1 ? 'it' : 'them'} in the shell that starts zlens notebook, then restart it.`,
+          }));
+          return;
+        }
         const connector = await executor.getConnector(target);
         const result = await validateConnectionForTest(connector, target);
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
