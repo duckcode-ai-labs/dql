@@ -85,14 +85,15 @@ opens it. Leave the terminal running.
 
 ## 5. Finish the guided setup
 
-<!-- TODO(lead): once feat/setup-where-does-your-model-live merges, check whether step 1 now opens on "Where does your data model live?" (pick dbt project) for the sample, and update these steps -->
-
 The first time, ZLens opens **Guided Setup** in four steps.
 
-1. **Connect your dbt project.** You see **dbt project ready**, and the path
-   field shows `.` (this folder). Click **Preview**. ZLens shows the models, sources and
-   metrics it found and says **Nothing has changed yet**. Click
-   **Apply project**, then **Continue to database**.
+1. **Where does your data model live?** The sample is already a ZLens
+   project on a dbt project, so **dbt project** is selected, and below it,
+   under **Connect your dbt project**, you see **dbt project ready** with
+   the path field showing `.` (this folder). Click **Preview**. ZLens shows
+   the models, sources and metrics it found and says **Nothing has changed
+   yet**. Click **Apply project**, then **Continue to database**. (No dbt
+   project of your own? See [No dbt? Start from your database](no-dbt.md).)
 2. **Connect your database.** The sample's DuckDB connection is already set
    up: you see **DuckDB · configured** and **Test passed**. Click
    **Continue to optional AI**.

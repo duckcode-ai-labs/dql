@@ -54,7 +54,7 @@ Everything is a file in your project, so it is reviewed in git like code. ZLens 
 | Package | What it is |
 |---|---|
 | [`@zlens/cli`](https://www.npmjs.com/package/@zlens/cli) | The `zlens` command and the workbench |
-| [`create-zlens-app`](https://www.npmjs.com/package/create-zlens-app) | Creates a new ZLens project |
+| [`create-zlens-app`](https://www.npmjs.com/package/create-zlens-app) | Creates a new ZLens project, on a dbt project or a database alone |
 | [`@zlens/mcp`](https://www.npmjs.com/package/@zlens/mcp) | The MCP server for AI agents |
 
 [GitHub](https://github.com/duckcode-ai-labs/zlens) ·

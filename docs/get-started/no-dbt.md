@@ -75,15 +75,25 @@ to it. Otherwise the project has no connection yet; you add one in the next
 step.
 
 Plain `zlens init`, without the flag, does not switch modes on its own. If
-you started that way, open **Modeling** in the workbench and click
-**Model my warehouse without dbt**.
+you started that way, choose **Database only** in Guided Setup (see
+[below](#or-use-guided-setup)), or open **Modeling** in the workbench and
+click **Model my warehouse without dbt**.
 
-<!-- TODO(lead): confirm against feat/create-zlens-app-warehouse -->
 You can also create the project with `create-zlens-app`, which adds npm
 scripts and installs the CLI into the project:
-`npx create-zlens-app my-app --warehouse duckdb` creates a database-only
-project, and `npx create-zlens-app my-app --dbt <path>` one that reads the
-dbt project at `<path>`.
+
+```bash
+npx create-zlens-app my-analytics --warehouse duckdb --database-path ./jaffle_shop.duckdb
+```
+
+`--warehouse <driver>` creates a database-only project: `warehouse-first`
+modeling, no dbt block, a `default` connection stub for that driver (secrets
+as `${ENV_VAR}` placeholders) and the same npm scripts as a dbt project,
+where `npm run sync` runs `zlens sync warehouse`. `--database-path` is for
+DuckDB and SQLite files. `--dbt <path>` creates one that reads the dbt
+project at `<path>`. Run without either flag and with no dbt project next to
+it, it asks whether the workspace is for a dbt project or a database only;
+in CI or with piped input it keeps writing a dbt config for you to edit.
 
 ## 3. Connect your database
 
@@ -265,30 +275,41 @@ answer the question from it as **Certified**. Metrics you add with
 
 ## Or use Guided Setup
 
-<!-- TODO(lead): confirm against feat/setup-where-does-your-model-live once it merges -->
-
 The first time you run `zlens notebook`, **Guided Setup** opens. Its first
 step asks **Where does your data model live?**:
 
 - **dbt project**: ZLens reads your dbt project. See
   [Add ZLens to your dbt project](your-dbt-project.md).
 - **Database only**: the path on this page.
-- **Both**: a dbt project plus schemas dbt does not cover (a `hybrid`
-  project).
-- **Open an existing ZLens project**: for a folder that already has a
-  `dql.config.json`, such as a teammate's repository. Setup reads its
-  modeling mode, asks only for credentials or environment variables and the
-  connection test, runs the sync, and skips the modeling questions.
+- **Both**: a dbt project plus schemas dbt doesn't cover (a `hybrid`
+  project). Apply the dbt project on the same step; the next step adds the
+  other schemas.
+- **Open an existing ZLens project**: for a folder whose `dql.config.json`
+  already sets up the data model, such as a teammate's repository. Setup
+  shows the mode the project uses, then asks only for the connection's
+  credentials and tests it. It lists the environment variables the
+  connection reads (`${NAME}` values) and which are not set yet. Export those
+  in the shell that starts `zlens notebook` and restart it. Then click
+  **Synchronize**, which reads the dbt project and the saved schemas again;
+  the models and certifications come from the repository, so there are no
+  modeling questions.
 
 With **Database only**, Setup walks through the steps above:
 
-1. Connect your database and test it.
-2. Choose the schemas to model.
+1. Connect your database and test it (**Save connection** tests it first).
+2. Under **Metadata scope**, click **Find available databases & schemas** and
+   tick the schemas to model.
 3. Click **Apply and synchronize**.
 4. Click **Draft my models**. It runs the same discovery as
-   `zlens model discover --validate`.
-5. Review and certify the drafts in **Modeling**.
+   `zlens model discover --validate` and says what it drafted, for example
+   *Drafted 13 models and 23 joins from 13 tables, each join checked on the
+   data*. Nothing is saved yet.
+5. On the last step, **Review drafted models** opens **Modeling** with the
+   drafts as a proposal. Save it, then certify the joins Ask may rely on, as
+   in [step 6](#6-review-and-certify).
 6. Ask a question.
+
+You can run Guided Setup again from **Settings → Overview → Guided Setup**.
 
 ## Which databases work
 
