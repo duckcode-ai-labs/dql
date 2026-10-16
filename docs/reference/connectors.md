@@ -1,8 +1,8 @@
 # Connectors
 
 ZLens uses a flat install. The CLI installs quickly and does not bundle
-every database driver. Configure connections in `dql.config.json` or through
-the notebook connection panel.
+every database driver. Configure connections in `dql.config.json` or in
+**Settings → Database** (see [Connect a database](../get-started/connect-database.md)).
 
 ## Active connectors
 
@@ -33,7 +33,7 @@ Every connector honours the same execution contract:
 
 ## Project-local driver install
 
-Open the notebook connection panel and use **Install connector**; saving a
+Open **Settings → Database** and use **Install connector**; saving a
 connection also installs what it needs. ZLens installs driver packages into:
 
 ```text
@@ -62,7 +62,7 @@ into the database packages it actually uses.
 
 ## Credentials
 
-Secrets typed on the Connections page never go into `dql.config.json`. They
+Secrets typed in **Settings → Database** never go into `dql.config.json`. They
 are written to `.dql/local/private/connection-secrets.json` (git-ignored,
 readable only by your user, mode 0600), and the config keeps a reference in
 their place:
@@ -71,7 +71,7 @@ their place:
 { "driver": "postgresql", "host": "db.example.com", "username": "reader", "password": "${secret:warehouse.password}" }
 ```
 
-The Connections page never receives a saved secret back: it shows a mask, and
+The page never receives a saved secret back: it shows a mask, and
 saving the mask keeps the stored value. A password already written literally
 in an older config keeps working and moves to the private file the next time
 the connection is saved from the page. `${ENV_VAR}` references keep working as

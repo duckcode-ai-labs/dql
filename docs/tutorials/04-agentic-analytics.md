@@ -1,5 +1,9 @@
 # 04 — Agentic analytics
 
+!!! warning "Archived page"
+    This page was written for an earlier version of ZLens and may not match the
+    current product. See [About the archive](../archive.md) for the current page.
+
 **Who this is for:** anyone who wants AI to answer data questions **from
 governed blocks**, not from improvised SQL.
 
@@ -206,7 +210,7 @@ zlens connect claude-code
 
 `zlens connect claude-code` writes project-local `.mcp.json` plus `CLAUDE.md`.
 `zlens connect codex` writes project-local `.codex/config.toml` plus `AGENTS.md`.
-Full setup for every client is in [Connect an AI agent (MCP)](../guides/mcp.md).
+Full setup for every client is in [Connect an AI agent (MCP)](../agents/index.md).
 
 The server exposes workflow tools such as `inspect_dql_project`, `ask_dql`,
 `query_via_block`, `query_via_metadata`, `build_dql_block`, and

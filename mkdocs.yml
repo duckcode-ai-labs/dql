@@ -9,10 +9,7 @@ theme:
   name: material
   language: en
   features:
-    - navigation.tabs
-    - navigation.tabs.sticky
     - navigation.sections
-    - navigation.indexes
     - navigation.top
     - navigation.footer
     - search.suggest
@@ -58,6 +55,41 @@ markdown_extensions:
 
 plugins:
   - search
+  - redirects:
+      # Pages merged into the journey-first docs (October 2026). Keep these
+      # forever: external links, the README and published npm READMEs point
+      # at the old URLs. The old .md files remain as short "moved" notes for
+      # GitHub readers and are excluded from the site below.
+      redirect_maps:
+        01-quickstart.md: get-started/index.md
+        02-concepts.md: get-started/concepts.md
+        03-install.md: get-started/install.md
+        04-dql-in-5-concepts.md: get-started/concepts.md
+        guides/README.md: index.md
+        guides/connect-warehouse.md: get-started/connect-database.md
+        guides/import-dbt.md: get-started/your-dbt-project.md
+        guides/authoring-blocks.md: blocks/block-studio.md
+        guides/block-studio.md: blocks/block-studio.md
+        guides/mcp.md: agents/index.md
+        guides/versioning.md: notebooks/version-and-diff.md
+        guides/ask-trace-observability.md: ask/how-it-answered.md
+        guides/home-and-following.md: apps/index.md
+
+# Embeds feature clips: {{ clip("<id>") }} on a line of its own.
+hooks:
+  - scripts/mkdocs/clips.py
+
+extra_css:
+  - stylesheets/zlens.css
+
+extra_javascript:
+  - javascripts/clips.js
+
+copyright: >-
+  <a href="https://duckcode-ai-labs.github.io/zlens/architecture/overview/">Architecture</a> ·
+  <a href="https://github.com/duckcode-ai-labs/zlens/blob/main/CONTRIBUTING.md">Contributing</a> ·
+  <a href="https://github.com/duckcode-ai-labs/zlens/blob/main/SUPPORT.md">Support</a> ·
+  Apache-2.0
 
 extra:
   social:
@@ -67,60 +99,104 @@ extra:
       link: https://discord.gg/Dnm6bUvk
 
 # Internal artifacts kept out of the published site. docs/README.md is the
-# github.com landing page for docs/; index.md is the site home.
+# github.com landing page for docs/; index.md is the site home. The "moved"
+# notes are for GitHub readers only; the redirects above serve the site.
 exclude_docs: |
   /README.md
   oss-readiness-checklist.md
   rfcs/0000-template.md
   contribute/
+  /01-quickstart.md
+  /02-concepts.md
+  /03-install.md
+  /04-dql-in-5-concepts.md
+  guides/README.md
+  guides/connect-warehouse.md
+  guides/import-dbt.md
+  guides/authoring-blocks.md
+  guides/block-studio.md
+  guides/mcp.md
+  guides/versioning.md
+  guides/ask-trace-observability.md
+  guides/home-and-following.md
 
 nav:
   - Home: index.md
-  - Getting started:
-      - Quickstart: 01-quickstart.md
-      - ZLens in 5 concepts: 04-dql-in-5-concepts.md
-      - Install: 03-install.md
-      - Concepts: 02-concepts.md
-      - The DataLex + ZLens stack: datalex-and-dql.md
-  - Tutorials:
-      - tutorials/README.md
-      - 01 Getting started: tutorials/01-getting-started.md
-      - 02 Authoring blocks: tutorials/02-authoring-blocks.md
-      - 03 Dashboards & Apps: tutorials/03-dashboards-and-apps.md
-      - 04 Agentic analytics: tutorials/04-agentic-analytics.md
-      - 05 CI and verify: tutorials/05-ci-and-verify.md
-  - Guides:
-      - guides/README.md
-      - Authoring blocks: guides/authoring-blocks.md
-      - Block Studio: guides/block-studio.md
-      - Notebook research engine: guides/notebook-research.md
-      - Dashboards: guides/dashboards.md
-      - Connect an AI agent (MCP): guides/mcp.md
-      - Hosted servers: guides/hosted-servers.md
-      - Import dbt: guides/import-dbt.md
-      - Connect a warehouse: guides/connect-warehouse.md
-      - Migrate from earlier versions: guides/migrate.md
-      - Versioning policy: guides/versioning.md
-      - Troubleshooting: guides/troubleshooting.md
-      - FAQ: guides/faq.md
-  - Architecture:
-      - Overview: architecture/overview.md
-      - Graduated trust + promotion loop: architecture/graduated-trust.md
-      - Lineage model: architecture/lineage-model.md
-      - OpenLineage integration: architecture/openlineage.md
-      - dbt integration: architecture/dbt-integration.md
-      - Plugin API: architecture/plugin-api.md
+  - Get started:
+      - Quickstart: get-started/index.md
+      - Install: get-started/install.md
+      - Find your way around: get-started/workbench.md
+      - Connect a database: get-started/connect-database.md
+      - Set up an AI provider: get-started/ai-provider.md
+      - Add ZLens to your dbt project: get-started/your-dbt-project.md
+      - Concepts: get-started/concepts.md
+  - Ask and trust:
+      - Ask a question: ask/index.md
+      - Answers that need review: ask/needs-review.md
+      - When Ask refuses: ask/refusals.md
+      - How Ask answered: ask/how-it-answered.md
+      - Cite your team's documents: ask/team-documents.md
+  - Build blocks:
+      - Blocks: blocks/index.md
+      - Import SQL: blocks/import-sql.md
+      - Block Studio: blocks/block-studio.md
+      - Save and certify: blocks/certify.md
+  - Notebooks:
+      - Work in a notebook: notebooks/index.md
+      - Version and diff your work: notebooks/version-and-diff.md
+  - Apps and dashboards:
+      - Read an App: apps/index.md
+      - Build an App: apps/build.md
+      - Ask about an App: apps/ask-about-an-app.md
+  - Lineage: lineage/index.md
+  - Connect your AI agent:
+      - Connect an agent (MCP): agents/index.md
+      - MCP tools: agents/tools.md
   - Reference:
-      - Language: reference/language.md
       - CLI: reference/cli.md
+      - DQL language: reference/language.md
       - Project layout: reference/project-layout.md
       - File formats: reference/file-formats.md
-      - Semantic layer: reference/semantic-layer.md
       - Connectors: reference/connectors.md
+      - Semantic layer: reference/semantic-layer.md
+      - Modeling and Domain Packages: datalex-and-dql.md
+      - Ask traces: reference/ask-traces.md
+      - CI and zlens verify: tutorials/05-ci-and-verify.md
+      - Migrate from other tools: guides/migrate.md
+      - Workbook to dashboard: migrations/workbook-to-dashboard.md
       - Compatibility: reference/compatibility.md
-  - Community:
+      - Troubleshooting: guides/troubleshooting.md
+      - FAQ: guides/faq.md
+  - Architecture and contributing:
+      - Overview: architecture/overview.md
+      - Graduated trust: architecture/graduated-trust.md
+      - Answer flow: agentic-answer-flow.md
+      - Agentic loop:
+          - architecture/agentic-loop/README.md
+          - Control loop: architecture/agentic-loop/01-control-loop.md
+          - Intent and routing: architecture/agentic-loop/02-intent-and-routing.md
+          - Search and grounding: architecture/agentic-loop/03-search-and-grounding.md
+          - Tools and executors: architecture/agentic-loop/04-tools-and-executors.md
+          - Evaluation and trust: architecture/agentic-loop/05-evaluation-and-trust.md
+          - Self-correction: architecture/agentic-loop/06-self-correction.md
+          - Memory and learning: architecture/agentic-loop/07-memory-and-learning.md
+      - Lineage model: architecture/lineage-model.md
+      - App AI: architecture/generative-app-builder.md
+      - dbt integration: architecture/dbt-integration.md
+      - OpenLineage: architecture/openlineage.md
+      - Plugin API: architecture/plugin-api.md
+      - Hosted servers: guides/hosted-servers.md
       - Contributing: https://github.com/duckcode-ai-labs/zlens/blob/main/CONTRIBUTING.md
       - Roadmap: https://github.com/duckcode-ai-labs/zlens/blob/main/ROADMAP.md
-      - Support & triage: https://github.com/duckcode-ai-labs/zlens/blob/main/SUPPORT.md
+      - Support and triage: https://github.com/duckcode-ai-labs/zlens/blob/main/SUPPORT.md
       - Manifest spec: https://github.com/duckcode-ai/manifest-spec
       - DataLex (sister repo): https://github.com/duckcode-ai/DataLex
+  - Archive:
+      - About the archive: archive.md
+      - Tutorials: tutorials/README.md
+      - 01 Getting started: tutorials/01-getting-started.md
+      - 02 Authoring blocks: tutorials/02-authoring-blocks.md
+      - 03 Dashboards and Apps: tutorials/03-dashboards-and-apps.md
+      - 04 Agentic analytics: tutorials/04-agentic-analytics.md
+      - Notebook research engine: guides/notebook-research.md
+      - Static dashboards: guides/dashboards.md

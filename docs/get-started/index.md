@@ -1,0 +1,127 @@
+# Quickstart
+
+Run ZLens on a small sample dbt project and get your first result. It takes
+about ten minutes.
+
+You end with:
+
+- the ZLens workbench open at `http://127.0.0.1:3474`
+- the sample DuckDB database connected
+- a notebook with your first query result
+
+{{ clip("quickstart") }}
+
+## Before you start
+
+You need:
+
+- Node.js 20 or newer (`node -v`)
+- Python 3.9 to 3.13, to build the sample with dbt (`python3 --version`)
+- git
+
+No warehouse account, hosted service or sign-in is needed.
+
+## 1. Get the sample dbt project
+
+The sample is the Jaffle Shop dbt project on DuckDB. Clone it and build its
+database:
+
+```bash
+git clone https://github.com/duckcode-ai/jaffle-shop-duckdb.git
+cd jaffle-shop-duckdb
+python3 -m venv .venv
+.venv/bin/pip install -r requirements.txt
+.venv/bin/dbt deps --profiles-dir .
+.venv/bin/dbt seed --profiles-dir .
+.venv/bin/dbt build --profiles-dir . --exclude resource_type:seed
+```
+
+You now have `jaffle_shop.duckdb` and `target/manifest.json` in the folder.
+
+!!! note
+    The sample repository also has a `setup.sh` script. It installs an old
+    pre-ZLens CLI, so use the commands above instead.
+
+## 2. Add ZLens
+
+From the `jaffle-shop-duckdb` folder:
+
+```bash
+npx create-zlens-app@latest dql
+cd dql
+npm install
+npm install --prefix .dql/connectors duckdb
+```
+
+- `create-zlens-app` makes a `dql/` folder for ZLens and finds the dbt project
+  in the folder above. It prints `detected sibling dbt project`.
+- `npm install` installs the ZLens CLI into this folder. No global install is
+  needed.
+- The last command installs the DuckDB driver. Other databases need their own
+  driver; see [Connect a database](connect-database.md).
+
+## 3. Import the dbt project
+
+```bash
+npm run sync
+```
+
+ZLens reads the dbt manifest and builds its index. The last line is:
+
+```text
+✓ dbt sync complete — manifest, metadata, and agent index share the refreshed project state (… indexed object(s)).
+```
+
+## 4. Open the workbench
+
+```bash
+npm run notebook
+```
+
+The terminal prints `Notebook ready: http://127.0.0.1:3474` and your browser
+opens it. Leave the terminal running.
+
+## 5. Finish the guided setup
+
+The first time, ZLens opens **Guided Setup** in four steps.
+
+1. **Connect your dbt project.** You see **dbt project ready**, and the path
+   field shows `..`. Click **Preview**. ZLens shows the models, sources and
+   metrics it found and says **Nothing has changed yet**. Click
+   **Apply project**, then **Continue to database**.
+2. **Connect your database.** Under **dbt profiles**, the `jaffle_shop` profile
+   is listed. Click **Import & test**. The status changes to
+   **DuckDB · configured** and **Test passed**. Click **Continue to optional AI**.
+3. **Set up an AI provider.** This step is optional. Ask needs a model, but
+   notebooks, blocks, Apps and lineage do not. Set one up now
+   ([how](ai-provider.md)) or click **Continue to finish**.
+4. **Where do you want to start?** Click **Finish setup**.
+
+You can run the setup again later from **Settings → Overview → Guided Setup**.
+
+## 6. Run your first query
+
+1. In the left rail, click **Notebooks**.
+2. Click **New Notebook**, type a name such as `Customer orders`, and click
+   **Create notebook**.
+3. Click **Create DQL query**, then **Switch to SQL cell**.
+4. Type this query:
+
+    ```sql
+    select customer_name, count_lifetime_orders, lifetime_spend
+    from dev.customers
+    order by lifetime_spend desc
+    limit 10
+    ```
+
+5. Press **Shift+Enter**.
+
+The cell shows **Success** and a table of ten customers. The notebook saves
+itself as `notebooks/customer_orders.dqlnb`.
+
+## Next
+
+- [Find your way around](workbench.md) the workbench.
+- [Ask a question](../ask/index.md) in plain English.
+- [Save the query as a block](../blocks/index.md) and certify it.
+- [Add ZLens to your own dbt project](your-dbt-project.md).

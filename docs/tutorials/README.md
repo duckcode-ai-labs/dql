@@ -1,5 +1,9 @@
 # ZLens Tutorials
 
+!!! warning "Archived page"
+    This page was written for an earlier version of ZLens and may not match the
+    current product. See [About the archive](../archive.md) for the current page.
+
 Hands-on walkthroughs that take you from a plain dbt project to certified
 blocks, dashboards in an App, agent answers, and a CI gate.
 

@@ -1,56 +1,49 @@
-# Migrate from Metabase / Looker / Hex
+# Migrate from other tools
 
-> ~varies by source · scaffold first, refine by hand
+Moving to ZLens from Looker, Metabase, Tableau, Hex or a folder of SQL
+scripts starts with the SQL behind your reports.
 
-ZLens's migration tooling doesn't promise a one-click swap — it scaffolds a
-starting point that you refine. Expect ~80% of simple queries to compile
-cleanly; the remaining 20% surface as `// TODO` comments in the generated
-`.dql` files.
+## Bring the SQL over
 
-## From Looker (LookML)
+1. Export or copy the SQL of the reports you want to keep into `.sql` files,
+   one query per file (or several queries in one file).
+2. Import them:
 
-```bash
-zlens migrate looker --input path/to/lookml/
-```
+    ```bash
+    zlens import sql ./legacy-sql --domain finance --owner you@example.com
+    ```
 
-Maps views → DQL tables, measures → metrics, dimensions → dimensions. Liquid
-templating becomes `// TODO` comments with the original inline.
+    `zlens migrate raw-sql --input ./legacy-sql` does the same thing.
 
-## From Metabase
+3. Review the drafts and certify the ones that are right. You can also do the
+   import in the workbench. See [Import SQL](../blocks/import-sql.md).
 
-```bash
-zlens migrate metabase --input export.json
-```
+Each query becomes a draft block with a name, description, grain and outputs
+drafted by AI, a preview of its rows, and a default test. Nothing is
+certified until a person certifies it.
 
-Reads a Metabase collection export. Questions become notebooks; saved SQL
-becomes blocks.
+## What `zlens migrate <tool>` does today
 
-## From Hex
+`zlens migrate looker`, `metabase`, `tableau` and `dbt` do not read your
+exports yet. They print the approach for that tool and an example of the block
+it would produce. Use the import above for real content.
 
-```bash
-zlens migrate hex --input workspace.zip
-```
-
-Cells map 1:1. Python cells are preserved as markdown with the original source
-for manual port.
-
-## From raw SQL
-
-```bash
-zlens migrate raw-sql --input queries/
-```
-
-Each `.sql` file becomes a block scaffold with a generated chart spec
-inferred from column types.
-
-## Verify
-
-After any migration:
+## Check the result
 
 ```bash
 zlens validate .
-zlens fmt .
 ```
 
-`validate` flags unresolved references; `fmt` canonicalizes the scaffolded
-output so the initial commit is clean.
+`zlens validate` reports unresolved references in the imported blocks.
+
+## Upgrade older ZLens or DQL files
+
+These `migrate` commands work on your own project files:
+
+| Command | Does |
+|---|---|
+| `zlens migrate format --check` | Lists `.dql` and `.dqlnb` files that are not in the canonical format. Run without `--check` to rewrite them. |
+| `zlens migrate layout --to domain-first --dry-run` | Previews moving older folders into the `domains/` layout. |
+| `zlens migrate parameters --check` | Audits older block parameters. |
+| `zlens migrate modeling --to dbt-first --dry-run` | Previews adopting dbt-first modeling. Use `--apply` to write. |
+| `zlens migrate datalex --input <manifest.json> --dry-run` | Converts DataLex business semantics into dbt-first overlays. |
