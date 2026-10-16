@@ -176,6 +176,8 @@ SELECT date_trunc('month', ordered_at) AS month, SUM(price) AS revenue FROM sale
     expect(products.status).toBe('ok');
     expect(products.filters.applied).toEqual([expect.objectContaining({ filter: 'product_name', mode: 'predicate' })]);
     expect(products.artifact.sql).toContain('_dql_filter.product_name = $');
+    // Still offered while filtered, so the viewer can change or clear it.
+    expect(products.filterableColumns).toEqual([expect.objectContaining({ column: 'product_name' })]);
     expect(trend.status).toBe('ok');
     expect(trend.filters.applied).toEqual([]);
     expect(trend.filters.skipped).toEqual([expect.objectContaining({ filter: 'product_name' })]);

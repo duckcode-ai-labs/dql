@@ -78,6 +78,30 @@ test('opens an App and shows its dashboard', async ({ page }) => {
   await expect(page.getByText('Orders overview').first()).toBeVisible();
 });
 
+test('an App viewer filter narrows the tile, shows a chip, and clears back to the whole page', async ({ page }) => {
+  await page.getByRole('button', { name: 'Apps', exact: true }).click();
+  await page.getByText('Smoke Orders').first().click();
+  // Top customers lists every seeded customer (three); one customer is the concrete "after".
+  await expect(page.getByText('Showing 1–3 of 3 rows')).toBeVisible({ timeout: 30_000 });
+
+  await page.getByRole('combobox', { name: 'Filter this page by' }).selectOption('customer_name');
+  const value = page.getByRole('combobox', { name: 'Customer Name value' });
+  const firstCustomer = await value.locator('option').nth(1).getAttribute('value');
+  expect(firstCustomer).toBeTruthy();
+  await value.selectOption(firstCustomer!);
+  await page.getByRole('button', { name: 'Apply', exact: true }).click();
+
+  const chip = page.getByTestId('app-viewer-filter-chip');
+  await expect(chip).toContainText('Customer Name:');
+  await expect(chip).toContainText(firstCustomer!);
+  await expect(chip).toContainText('Narrows 1 of 1 tile');
+  await expect(page.getByText('Showing 1–1 of 1 row', { exact: true })).toBeVisible({ timeout: 30_000 });
+
+  await page.getByRole('button', { name: 'Clear the Customer Name filter' }).click();
+  await expect(chip).toHaveCount(0);
+  await expect(page.getByText('Showing 1–3 of 3 rows')).toBeVisible({ timeout: 30_000 });
+});
+
 test('Ask a certified question and see the Certified label', async ({ page }) => {
   test.fixme(!ASK_CASSETTES_FRESH, 'Blocked on readiness plan O3: answerability cassettes are stale.');
   await page.getByRole('button', { name: 'Ask', exact: true }).first().click();

@@ -2990,6 +2990,18 @@ export interface DashboardRunOptions {
   driverProbe?: { fromTileId: string; driver: DashboardDriverDefinitionV1 };
   /** A drill view of one Dataset tile by any approved field, or its rows; runs bounded and changes nothing (RFC 0009 step 6a). */
   exploreProbe?: { fromTileId: string; query: TileQuery };
+  /**
+   * A viewer's own "Filter by…" choices: session-only, never saved to the
+   * page. The server re-proves each named tile can take the column.
+   */
+  viewerFilters?: DashboardViewerFilter[];
+}
+
+/** One "Filter by…" choice: a result column, its value(s), and the tiles it was shown to narrow. */
+export interface DashboardViewerFilter {
+  column: string;
+  values: string[];
+  tileIds: string[];
 }
 
 /**
@@ -8514,7 +8526,7 @@ export const api = {
     // so the viewer shows why a page did not run, not a generic failure.
     return request<DashboardRunResponse>(
       `/api/apps/${encodeURIComponent(appId)}/dashboards/${encodeURIComponent(dashboardId)}/run`,
-      { method: 'POST', body: JSON.stringify({ variables: variables ?? {}, ...(crossFilters?.length ? { crossFilters } : {}), ...(options?.runScope ? { runScope: options.runScope } : {}), ...(options?.refresh ? { refresh: true } : {}), ...(options?.fullRun ? { fullRun: true } : {}), ...(options?.tileId ? { tileId: options.tileId } : {}), ...(options?.visibleTileIds !== undefined ? { visibleTileIds: options.visibleTileIds } : {}), ...(options?.affectedTileIds !== undefined ? { affectedTileIds: options.affectedTileIds } : {}), ...(options?.datasetDrills?.length ? { datasetDrills: options.datasetDrills } : {}), ...(options?.driverProbe ? { driverProbe: options.driverProbe } : {}), ...(options?.exploreProbe ? { exploreProbe: options.exploreProbe } : {}) }) },
+      { method: 'POST', body: JSON.stringify({ variables: variables ?? {}, ...(crossFilters?.length ? { crossFilters } : {}), ...(options?.runScope ? { runScope: options.runScope } : {}), ...(options?.refresh ? { refresh: true } : {}), ...(options?.fullRun ? { fullRun: true } : {}), ...(options?.tileId ? { tileId: options.tileId } : {}), ...(options?.visibleTileIds !== undefined ? { visibleTileIds: options.visibleTileIds } : {}), ...(options?.affectedTileIds !== undefined ? { affectedTileIds: options.affectedTileIds } : {}), ...(options?.datasetDrills?.length ? { datasetDrills: options.datasetDrills } : {}), ...(options?.driverProbe ? { driverProbe: options.driverProbe } : {}), ...(options?.exploreProbe ? { exploreProbe: options.exploreProbe } : {}), ...(options?.viewerFilters?.length ? { viewerFilters: options.viewerFilters } : {}) }) },
     );
   },
 
@@ -8527,7 +8539,7 @@ export const api = {
   ): Promise<DashboardRunResponse> {
     return request<DashboardRunResponse>(
       `/api/app-builds/${encodeURIComponent(draftId)}/dashboards/${encodeURIComponent(dashboardId)}/run`,
-      { method: 'POST', body: JSON.stringify({ variables: variables ?? {}, ...(crossFilters?.length ? { crossFilters } : {}), ...(options?.runScope ? { runScope: options.runScope } : {}), ...(options?.refresh ? { refresh: true } : {}), ...(options?.fullRun ? { fullRun: true } : {}), ...(options?.tileId ? { tileId: options.tileId } : {}), ...(options?.visibleTileIds !== undefined ? { visibleTileIds: options.visibleTileIds } : {}), ...(options?.affectedTileIds !== undefined ? { affectedTileIds: options.affectedTileIds } : {}), ...(options?.datasetDrills?.length ? { datasetDrills: options.datasetDrills } : {}), ...(options?.driverProbe ? { driverProbe: options.driverProbe } : {}), ...(options?.exploreProbe ? { exploreProbe: options.exploreProbe } : {}) }) },
+      { method: 'POST', body: JSON.stringify({ variables: variables ?? {}, ...(crossFilters?.length ? { crossFilters } : {}), ...(options?.runScope ? { runScope: options.runScope } : {}), ...(options?.refresh ? { refresh: true } : {}), ...(options?.fullRun ? { fullRun: true } : {}), ...(options?.tileId ? { tileId: options.tileId } : {}), ...(options?.visibleTileIds !== undefined ? { visibleTileIds: options.visibleTileIds } : {}), ...(options?.affectedTileIds !== undefined ? { affectedTileIds: options.affectedTileIds } : {}), ...(options?.datasetDrills?.length ? { datasetDrills: options.datasetDrills } : {}), ...(options?.driverProbe ? { driverProbe: options.driverProbe } : {}), ...(options?.exploreProbe ? { exploreProbe: options.exploreProbe } : {}), ...(options?.viewerFilters?.length ? { viewerFilters: options.viewerFilters } : {}) }) },
     );
   },
 

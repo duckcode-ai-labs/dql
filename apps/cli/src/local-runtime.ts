@@ -20292,6 +20292,10 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
           && !activeDashboardRun.controller.signal.aborted,
         );
         const tiles: Array<{ tileId: string; status: string; [key: string]: any }> = [];
+        // Each block tile's SQL before any page or viewer filter wrapped it.
+        // Which columns a viewer may filter is a property of the tile, so it
+        // must not shrink because the page is already filtered.
+        const unfilteredBlockSql = new Map<string, string>();
         // HH-14: an AI-written pin's figures on this page, for a person the host keeps needs-review figures from.
         const pinFiguresWithheld = (await figuresRuleForRequest()) === 'withhold_review';
         // The saved TileQuery and a hierarchy-interaction query have distinct
@@ -22173,6 +22177,7 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
               variables: { ...blockFilterApplication.variables, ...blockInvocation.values },
               signal: activeDashboardRun!.controller.signal,
             });
+            unfilteredBlockSql.set(item.i, blockBaseSql);
             tiles.push({
               tileId: item.i,
               status: 'ok',
@@ -22408,7 +22413,7 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
           try { return requireActiveConnection().driver || 'duckdb'; } catch { return 'duckdb'; }
         })();
         const tilesWithFilters = settledTiles.map((tile) => {
-          const executedSql = (tile as { artifact?: { sql?: unknown } }).artifact?.sql;
+          const executedSql = unfilteredBlockSql.get(tile.tileId) ?? (tile as { artifact?: { sql?: unknown } }).artifact?.sql;
           const columns = (tile as { result?: { columns?: string[] } }).result?.columns ?? [];
           if (typeof executedSql !== 'string' || columns.length === 0) return tile;
           try {

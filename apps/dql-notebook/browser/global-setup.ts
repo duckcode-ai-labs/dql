@@ -22,6 +22,11 @@ function seedProject(projectDir: string): void {
   const connectorRoot = installDuckdbConnector(projectDir);
   const warehouse = join(projectDir, 'jaffle_shop.duckdb');
   run('node', [join(repoRoot, 'scripts/seed-eval-warehouse.mjs'), '--connector-root', connectorRoot, '--out', warehouse, '--schema', 'dev']);
+  // The fixture's certified blocks read unqualified tables (top_customers:
+  // `FROM dim_customers`), so the smoke App's tile only returns rows when the
+  // same tables also exist in the default schema. The App filter journey needs
+  // real rows to show a filter narrowing them.
+  run('node', [join(repoRoot, 'scripts/seed-eval-warehouse.mjs'), '--connector-root', connectorRoot, '--out', warehouse]);
   if (!existsSync(warehouse) || statSync(warehouse).size < 1000) {
     throw new Error(`Seeded warehouse missing or empty: ${warehouse}`);
   }

@@ -40,6 +40,7 @@ import {
   Users,
   Wrench,
   Workflow,
+  X,
 } from 'lucide-react';
 import { useDispatch, useNotebookStore } from '../../store/NotebookStore';
 import {
@@ -86,11 +87,16 @@ import { DashboardRenderer } from './DashboardRenderer';
 import { PersonaSwitcher } from './PersonaSwitcher';
 import {
   addDashboardFilterToDocument,
+  applyViewerFilterChoice,
   dashboardFilterCandidates,
   dashboardFilterCoverage,
   defaultParameterFilterValue,
   deriveDashboardFilters,
   removeDashboardFilterFromDocument,
+  viewerFilterPageVariables,
+  viewerFilterReach,
+  viewerFiltersForRun,
+  type ViewerDashboardFilter,
 } from './dashboard-filters';
 import { semanticApprovalState } from './app-semantic-approval';
 import { appCertificationRollup, appLifecycleLabel } from './app-certification';
@@ -2146,7 +2152,7 @@ function AppWorkspaceSurface({
   dashboardFilters,
   dashboardFilterValues,
   themeMode,
-  variables,
+  variables: declaredVariables,
   onBack,
   onRetryDashboardLoad,
   onExperienceChange,
@@ -2331,17 +2337,39 @@ function AppWorkspaceSurface({
    * not change the page's saved scope for everyone else; an author promotes one
    * deliberately with "Save to page" while customizing.
    */
-  const [sessionFilters, setSessionFilters] = useState<Array<{ id: string; column: string }>>([]);
+  const [sessionFilters, setSessionFilters] = useState<ViewerDashboardFilter[]>([]);
   useEffect(() => { setSessionFilters([]); }, [dashboardDoc?.dashboard.id]);
+  // The choice is held here and sent with every run of this page. It used to
+  // be written into the page's declared-filter values, which only ever apply
+  // filters the page declares — so the value was dropped and nothing narrowed.
   const applySessionFilter = useCallback((column: string, value: string) => {
-    setSessionFilters((current) => (current.some((entry) => entry.column === column) ? current : [...current, { id: column, column }]));
-    onDashboardFilterChange({ id: column, type: 'select', bindsTo: column } as never, value);
-    onApplyDashboardFilters();
-  }, [onApplyDashboardFilters, onDashboardFilterChange]);
-  const saveSessionFilterToPage = useCallback((column: string) => {
-    addDashboardFilter(column);
+    setSessionFilters((current) => applyViewerFilterChoice(current, { column, value, tileIds: coverageFor(column).applied }));
+  }, [coverageFor]);
+  const clearSessionFilter = useCallback((column: string) => {
     setSessionFilters((current) => current.filter((entry) => entry.column !== column));
-  }, [addDashboardFilter]);
+  }, []);
+  const saveSessionFilterToPage = useCallback((column: string) => {
+    const entry = sessionFilters.find((candidate) => candidate.column === column);
+    addDashboardFilter(column);
+    // Keep the viewer's value once the column is a declared page filter.
+    if (entry) onDashboardFilterChange({ id: column, type: 'select', bindsTo: column } as never, entry.value);
+    setSessionFilters((current) => current.filter((candidate) => candidate.column !== column));
+  }, [addDashboardFilter, onDashboardFilterChange, sessionFilters]);
+  const viewerFilters = useMemo(
+    () => viewerFiltersForRun(dashboardDoc?.dashboard ?? null, sessionFilters),
+    [dashboardDoc?.dashboard, sessionFilters],
+  );
+  // Everything that describes the page's scope — the run, its story, "Ask
+  // about this App", tile notices — reads the declared values plus these.
+  const variables = useMemo(
+    () => viewerFilterPageVariables(declaredVariables, viewerFilters),
+    [declaredVariables, viewerFilters],
+  );
+  const activeSessionColumns = useMemo(() => new Set(viewerFilters.map((filter) => filter.column)), [viewerFilters]);
+  const pickerCandidates = useMemo(
+    () => filterCandidates.filter((candidate) => !activeSessionColumns.has(candidate.column)),
+    [activeSessionColumns, filterCandidates],
+  );
 
   const removeDashboardFilter = useCallback((filterId: string) => {
     if (!dashboardDoc) return;
@@ -2430,11 +2458,14 @@ function AppWorkspaceSurface({
       autoRun: { text: question, mode: 'ask' },
     });
   }, [dispatch, isEditable, onExplainChange, workspaceAppId, workspaceAppName, dashboardDoc, variables, currentPageRunId]);
-  const askAboutAppFilters = useMemo(() => dashboardFilters.flatMap((filter) => {
-    const value = dashboardFilterValues[filter.id];
-    const text = Array.isArray(value) ? value.map(String).join(', ') : typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean' ? String(value) : '';
-    return text.trim() ? [{ label: formatBusinessLabel((filter as { label?: string }).label ?? filter.id), value: text.slice(0, 80) }] : [];
-  }), [dashboardFilters, dashboardFilterValues]);
+  const askAboutAppFilters = useMemo(() => [
+    ...dashboardFilters.flatMap((filter) => {
+      const value = dashboardFilterValues[filter.id];
+      const text = Array.isArray(value) ? value.map(String).join(', ') : typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean' ? String(value) : '';
+      return text.trim() ? [{ label: formatBusinessLabel((filter as { label?: string }).label ?? filter.id), value: text.slice(0, 80) }] : [];
+    }),
+    ...viewerFilters.map((filter) => ({ label: formatBusinessLabel(filter.column), value: filter.values.join(', ').slice(0, 80) })),
+  ], [dashboardFilters, dashboardFilterValues, viewerFilters]);
 
   const handleAskChart = useCallback(async ({ tileId, runId, question }: { tileId: string; runId: string; question: string }) => {
     if (!workspaceAppId || !dashboardDoc) return;
@@ -2741,7 +2772,7 @@ function AppWorkspaceSurface({
                 and `deriveDashboardFilters` also drops a declared filter it
                 considers unusable, which hid the row on pages that had one. */}
             {section === 'dashboards' && dashboardDoc
-              && (dashboardFilters.length > 0 || filterCandidates.length > 0 || isEditable) ? (
+              && (dashboardFilters.length > 0 || filterCandidates.length > 0 || sessionFilters.length > 0 || isEditable) ? (
               <section className="dql-app-filter-row" aria-label="Dashboard filters">
                 {dashboardFilters.length > 0 ? (
                   <>
@@ -2776,17 +2807,46 @@ function AppWorkspaceSurface({
                 {/* The viewer's own control. Filtering a dashboard is a reading
                     act, so it belongs here rather than behind Edit. */}
                 <DashboardFilterPicker
-                  candidates={filterCandidates}
+                  candidates={pickerCandidates}
                   coverageFor={coverageFor}
                   onApply={applySessionFilter}
                 />
                 {sessionFilters.length > 0 ? (
-                  <div className="dql-app-filter-session">
+                  <div className="dql-app-filter-session" aria-label="Your filters">
+                    {sessionFilters.map((entry) => {
+                      const label = formatBusinessLabel(entry.column);
+                      const reach = viewerFilterReach(dashboardDoc.dashboard, dashboardRun, entry);
+                      const reachText = reach.applied.length === 0
+                        ? 'No tile can apply it'
+                        : `${reach.settled ? 'Narrows' : 'Narrowing'} ${reach.applied.length} of ${reach.filterable} tile${reach.filterable === 1 ? '' : 's'}`;
+                      return (
+                        <span
+                          key={entry.column}
+                          className={`dql-app-filter-chip${reach.applied.length === 0 ? ' is-none' : reach.unaffected.length > 0 ? ' is-partial' : ''}`}
+                          data-testid="app-viewer-filter-chip"
+                          title={reach.unaffected.length
+                            ? `Not filtered by ${label}: ${reach.unaffected.map((tile) => tile.title ?? tile.tileId).join('; ')}`
+                            : `Every tile on this page is filtered by ${label}.`}
+                        >
+                          <b>{label}:</b>
+                          <span className="dql-app-filter-chip-value">{entry.value}</span>
+                          <small>{reachText}</small>
+                          <button
+                            type="button"
+                            className="dql-app-filter-chip-clear"
+                            aria-label={`Clear the ${label} filter`}
+                            onClick={() => clearSessionFilter(entry.column)}
+                          >
+                            <X size={12} aria-hidden="true" />
+                          </button>
+                        </span>
+                      );
+                    })}
                     <span>Your filters, this session only.</span>
                     {isEditable
                       ? sessionFilters.map((entry) => (
                           <button
-                            key={entry.id}
+                            key={entry.column}
                             type="button"
                             className="dql-apps-btn dql-apps-btn-line"
                             disabled={filterBusy}
@@ -2872,6 +2932,7 @@ function AppWorkspaceSurface({
                   editable={isEditable}
                   embeddedHeader
                   variables={variables}
+                  viewerFilters={viewerFilters}
                   selectedBlockId={selectedBlockId}
                   onBlockFocus={setSelectedBlockId}
                   onAskBlock={handleAskBlock}
