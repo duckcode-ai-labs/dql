@@ -346,8 +346,10 @@ async function prepareLanes(gate, options, { registryUrl, shims }) {
     await gate.check('machine', `npm ${spec} lane: install npm@${spec} and a Node it supports`, async () => {
       const resolved = await sh(`npm view npm@${spec} version --json`, { cwd: gate.out, env: process.env, logFile: path.join(gate.logs, `npm${spec}-setup.log`) });
       expectRun(resolved, `npm view npm@${spec} version`);
-      const versions = JSON.parse(resolved.output.trim());
-      const npmVersion = Array.isArray(versions) ? versions[versions.length - 1] : versions;
+      const versions = [JSON.parse(resolved.output.trim())].flat();
+      // As `npm install npm@12` picks: the `latest` tag when it matches, else the highest match.
+      const latest = (await sh('npm view npm dist-tags.latest', { cwd: gate.out, env: process.env })).output.trim();
+      const npmVersion = versions.includes(latest) ? latest : versions[versions.length - 1];
       const engines = (await sh(`npm view npm@${npmVersion} engines.node`, { cwd: gate.out, env: process.env })).output.trim();
       let nodeDir = path.dirname(process.execPath);
       if (options.node) nodeDir = statSync(options.node).isDirectory() ? options.node : path.dirname(options.node);
