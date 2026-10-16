@@ -1,0 +1,23 @@
+{
+  "key": "9b31e3c618a1bdcf58ccf1cef58c4efe",
+  "operation": "generate",
+  "text": "{\"version\":1,\"kind\":\"analytics\",\"reading\":\"Compare the two named players, LeBron James and Stephen Curry, on per-game points, rebounds and assists (totals divided by games actually played) for games dated in calendar 2017.\",\"measures\":[{\"derived\":{\"kind\":\"ratio\",\"numerator\":\"column:dev.player_game_stats.pts\",\"numeratorAggregation\":\"sum\",\"denominator\":\"column:dev.player_game_stats.game_id\",\"denominatorAggregation\":\"count_distinct\"},\"alias\":\"points_per_game\",\"scope\":[{\"ref\":\"dimension:player_game_stats.played\",\"op\":\"eq\",\"values\":[1],\"source\":\"question\"}]},{\"derived\":{\"kind\":\"ratio\",\"numerator\":\"column:dev.player_game_stats.reb\",\"numeratorAggregation\":\"sum\",\"denominator\":\"column:dev.player_game_stats.game_id\",\"denominatorAggregation\":\"count_distinct\"},\"alias\":\"rebounds_per_game\",\"scope\":[{\"ref\":\"dimension:player_game_stats.played\",\"op\":\"eq\",\"values\":[1],\"source\":\"question\"}]},{\"derived\":{\"kind\":\"ratio\",\"numerator\":\"column:dev.player_game_stats.ast\",\"numeratorAggregation\":\"sum\",\"denominator\":\"column:dev.player_game_stats.game_id\",\"denominatorAggregation\":\"count_distinct\"},\"alias\":\"assists_per_game\",\"scope\":[{\"ref\":\"dimension:player_game_stats.played\",\"op\":\"eq\",\"values\":[1],\"source\":\"question\"}]}],\"groupBy\":[{\"ref\":\"dimension:player_game_stats.player_id\",\"role\":\"key\"}],\"display\":[\"dimension:player_game_stats.player_name\"],\"filters\":[{\"ref\":\"dimension:player_game_stats.player_name\",\"op\":\"in\",\"values\":[\"LeBron James\",\"Stephen Curry\"],\"source\":\"question\"}],\"time\":{\"ref\":\"dimension:player_game_stats.game_date\",\"window\":{\"start\":\"2017-01-01\",\"end\":\"2018-01-01\",\"expression\":\"in 2017\"}},\"expectedShape\":\"comparison\",\"unresolved\":[],\"provenance\":{\"column:dev.player_game_stats.pts\":\"q:points\",\"column:dev.player_game_stats.reb\":\"q:rebounds\",\"column:dev.player_game_stats.ast\":\"q:assists\",\"column:dev.player_game_stats.game_id\":\"q:per game\",\"dimension:player_game_stats.played\":\"q:per game\",\"dimension:player_game_stats.player_id\":\"q:LeBron James and Stephen Curry\",\"dimension:player_game_stats.player_name\":\"q:LeBron James and Stephen Curry\",\"dimension:player_game_stats.game_date\":\"q:in 2017\"}}",
+  "providerName": "claude",
+  "recordedAt": "2026-10-16T18:05:58.469Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 2,
+    "messageRoles": [
+      "system",
+      "user"
+    ],
+    "preCanonicalHash": "9b31e3c618a1bdcf58ccf1cef58c4efe38514872a554d281362c4234e52b8b60",
+    "postCanonicalHash": "9b31e3c618a1bdcf58ccf1cef58c4efe38514872a554d281362c4234e52b8b60",
+    "appliedRuleClasses": []
+  }
+}

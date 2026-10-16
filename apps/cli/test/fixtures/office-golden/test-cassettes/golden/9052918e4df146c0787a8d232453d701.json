@@ -1,0 +1,23 @@
+{
+  "key": "9052918e4df146c0787a8d232453d701",
+  "operation": "generate",
+  "text": "{\"version\":1,\"kind\":\"analytics\",\"reading\":\"List the opportunities whose Salesloft rep tags include \\\"Splunk\\\".\",\"measures\":[],\"groupBy\":[{\"ref\":\"dimension:opportunities.OPPORTUNITY_ID\",\"role\":\"key\"}],\"display\":[\"dimension:opportunity_enhanced.ACCOUNT_NAME\",\"dimension:opportunities.TAGS\"],\"filters\":[{\"ref\":\"dimension:opportunities.TAGS\",\"op\":\"contains\",\"values\":[\"Splunk\"],\"source\":\"question\"}],\"expectedShape\":\"lookup\",\"population\":\"matching\",\"unresolved\":[],\"provenance\":{\"dimension:opportunities.OPPORTUNITY_ID\":\"q:Which opportunities\",\"dimension:opportunities.TAGS\":\"q:tagged Splunk\",\"dimension:opportunity_enhanced.ACCOUNT_NAME\":\"q:Which opportunities\"}}",
+  "providerName": "claude",
+  "recordedAt": "2026-10-16T18:03:47.812Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 2,
+    "messageRoles": [
+      "system",
+      "user"
+    ],
+    "preCanonicalHash": "9052918e4df146c0787a8d232453d7014bdf28921bbf8da133335e9079fd1879",
+    "postCanonicalHash": "9052918e4df146c0787a8d232453d7014bdf28921bbf8da133335e9079fd1879",
+    "appliedRuleClasses": []
+  }
+}

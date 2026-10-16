@@ -1,0 +1,23 @@
+{
+  "key": "d1bc6727bd5fbb70cc624614539e41cb",
+  "operation": "generate",
+  "text": "```sql\nSELECT o.OPPORTUNITY_ID, e.ACCOUNT_NAME, o.TAGS\nFROM OFFICE_DW.SALESLOFT.OPPORTUNITIES AS o\nLEFT JOIN OFFICE_DW.SALES.OPPORTUNITY_ENHANCED AS e\n  ON e.OPPORTUNITY_ID = o.OPPORTUNITY_ID\nWHERE LOWER(o.TAGS) LIKE '%splunk%'\nGROUP BY o.OPPORTUNITY_ID, e.ACCOUNT_NAME, o.TAGS\nLIMIT 500\n```",
+  "providerName": "claude",
+  "recordedAt": "2026-10-16T18:03:58.288Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 2,
+    "messageRoles": [
+      "system",
+      "user"
+    ],
+    "preCanonicalHash": "d1bc6727bd5fbb70cc624614539e41cb14341511d0a81cfe2e0b024b13c4b715",
+    "postCanonicalHash": "d1bc6727bd5fbb70cc624614539e41cb14341511d0a81cfe2e0b024b13c4b715",
+    "appliedRuleClasses": []
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "key": "7161310f5e96ae4a67be17a14733f973",
+  "operation": "generate",
+  "text": "SELECT player_id, player_name, SUM(pts) AS total_points, COUNT(DISTINCT game_id) AS games_played FROM \"nba_golden\".\"dev\".\"player_game_stats\" WHERE LOWER(player_name) = LOWER('Totally Imaginary Person') AND played = 1 AND game_date >= '2017-01-01' AND game_date < '2018-01-01' GROUP BY player_id, player_name ORDER BY total_points DESC LIMIT 500",
+  "providerName": "claude",
+  "recordedAt": "2026-10-16T18:04:52.790Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 2,
+    "messageRoles": [
+      "system",
+      "user"
+    ],
+    "preCanonicalHash": "7161310f5e96ae4a67be17a14733f9734a0bc7388642e34e5a8cb4d187c8ad3b",
+    "postCanonicalHash": "7161310f5e96ae4a67be17a14733f9734a0bc7388642e34e5a8cb4d187c8ad3b",
+    "appliedRuleClasses": []
+  }
+}
