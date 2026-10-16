@@ -249,7 +249,11 @@ export function relationColumnsProbeSql(relations: string[], maxRelations = 8, o
     // schema directly; prefixing it with the dbt catalog produces a relation
     // that does not exist. Keep exact database identity for Snowflake while
     // retaining a valid local-MetricFlow discovery path.
-    const source = driver.toLowerCase() === 'bigquery'
+    // SQLite has no information_schema: the same rows come from its catalog
+    // pragmas (every attached schema), as the warehouse catalog sync reads them.
+    const source = driver.toLowerCase() === 'sqlite'
+      ? "(SELECT t.schema AS table_schema, t.name AS table_name, p.name AS column_name, p.type AS data_type, p.cid + 1 AS ordinal_position FROM pragma_table_list t JOIN pragma_table_info(t.name, t.schema) p WHERE t.type IN ('table', 'view') AND t.schema NOT IN ('temp', 'information_schema') AND t.name NOT LIKE 'sqlite_%') sqlite_columns"
+      : driver.toLowerCase() === 'bigquery'
       // BigQuery has no session information_schema: read the project's
       // columns in the connection's location.
       ? `${database ? `\`${database.value.replace(/`/g, '')}\`.` : ''}\`region-${(location ?? 'US').toLowerCase()}\`.INFORMATION_SCHEMA.COLUMNS`
@@ -287,6 +291,9 @@ function currentCatalogExpression(driver: string): string {
     case 'mysql':
     case 'clickhouse':
     case 'athena':
+      return 'NULL';
+    case 'sqlite':
+      // SQLite has no CURRENT_DATABASE() and no catalog above the `main` schema.
       return 'NULL';
     default:
       return 'CURRENT_DATABASE()';

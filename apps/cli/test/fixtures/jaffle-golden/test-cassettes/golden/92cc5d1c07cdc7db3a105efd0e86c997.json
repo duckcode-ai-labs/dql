@@ -1,0 +1,23 @@
+{
+  "key": "92cc5d1c07cdc7db3a105efd0e86c997",
+  "operation": "generate",
+  "text": "{\"version\":1,\"kind\":\"analytics\",\"reading\":\"Show the beverage category: the beverage products (products where is_drink_item is true) with their product revenue, one row per beverage product.\",\"measures\":[{\"ref\":\"metric:order_item.revenue\",\"aggregation\":\"sum\",\"alias\":\"beverage_revenue\"}],\"groupBy\":[{\"ref\":\"entity:products.product\",\"role\":\"key\"}],\"display\":[\"dimension:products.product_name\",\"dimension:products.product_type\"],\"filters\":[{\"ref\":\"dimension:products.is_drink_item\",\"op\":\"is_true\",\"values\":[true],\"source\":\"question\"}],\"ordering\":{\"ref\":\"metric:order_item.revenue\",\"direction\":\"desc\"},\"expectedShape\":\"grouped\",\"unresolved\":[{\"clause\":\"bevereage catogery\",\"question\":\"Do you want the beverage products with their revenue (default), the top customers by beverage revenue, or just the list of beverage products with no measure?\",\"options\":[\"block:commerce.beverage_revenue_by_product\",\"block:commerce.top_beverage_customers\",\"dimension:products.product_type\"],\"material\":false}],\"provenance\":{\"metric:order_item.revenue\":\"q:bevereage catogery\",\"entity:products.product\":\"q:bevereage catogery\",\"dimension:products.product_name\":\"q:bevereage catogery\",\"dimension:products.product_type\":\"q:catogery\",\"dimension:products.is_drink_item\":\"q:bevereage\"}}",
+  "providerName": "claude",
+  "recordedAt": "2026-10-16T18:07:12.130Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 2,
+    "messageRoles": [
+      "system",
+      "user"
+    ],
+    "preCanonicalHash": "92cc5d1c07cdc7db3a105efd0e86c997766e12feb8e4ec4cce1cdae36f4c8acf",
+    "postCanonicalHash": "92cc5d1c07cdc7db3a105efd0e86c997766e12feb8e4ec4cce1cdae36f4c8acf",
+    "appliedRuleClasses": []
+  }
+}

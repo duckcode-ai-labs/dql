@@ -1,0 +1,23 @@
+{
+  "key": "5708a4897bde3696d59e2fd5c974f88a",
+  "operation": "generate",
+  "text": "{\"version\":1,\"kind\":\"analytics\",\"reading\":\"The overall average order value (pre-tax spend divided by number of orders) across all customers, with no breakdown or time window.\",\"measures\":[{\"ref\":\"metric:customers.average_order_value\"}],\"groupBy\":[],\"display\":[],\"filters\":[],\"expectedShape\":\"scalar\",\"unresolved\":[],\"provenance\":{\"metric:customers.average_order_value\":\"q:average order value\"}}",
+  "providerName": "claude",
+  "recordedAt": "2026-10-16T18:06:02.985Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 2,
+    "messageRoles": [
+      "system",
+      "user"
+    ],
+    "preCanonicalHash": "5708a4897bde3696d59e2fd5c974f88a27a160f61bebac7c044e35bbd28007b8",
+    "postCanonicalHash": "5708a4897bde3696d59e2fd5c974f88a27a160f61bebac7c044e35bbd28007b8",
+    "appliedRuleClasses": []
+  }
+}

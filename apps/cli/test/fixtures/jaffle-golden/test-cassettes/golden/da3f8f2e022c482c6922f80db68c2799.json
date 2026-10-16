@@ -1,0 +1,23 @@
+{
+  "key": "da3f8f2e022c482c6922f80db68c2799",
+  "operation": "generate",
+  "text": "{\"version\":1,\"kind\":\"analytics\",\"reading\":\"Total product revenue (excluding tax) for August 2025, so Research can compare it against the prior period and investigate what drove the change.\",\"measures\":[{\"ref\":\"metric:order_item.revenue\"}],\"groupBy\":[],\"display\":[],\"filters\":[],\"time\":{\"ref\":\"dimension:order_item.ordered_at\",\"window\":{\"start\":\"2025-08-01\",\"end\":\"2025-09-01\",\"expression\":\"in August 2025\"}},\"expectedShape\":\"scalar\",\"unresolved\":[{\"clause\":\"why did revenue change\",\"options\":[],\"material\":false,\"question\":\"Causal driver analysis is performed by Research by comparing August 2025 against the prior period.\"}],\"provenance\":{\"metric:order_item.revenue\":\"q:revenue\",\"dimension:order_item.ordered_at\":\"q:in August 2025\"}}",
+  "providerName": "claude",
+  "recordedAt": "2026-10-16T18:12:13.084Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 2,
+    "messageRoles": [
+      "system",
+      "user"
+    ],
+    "preCanonicalHash": "da3f8f2e022c482c6922f80db68c2799c6462100c887c04f2b1b01c29cb1c098",
+    "postCanonicalHash": "da3f8f2e022c482c6922f80db68c2799c6462100c887c04f2b1b01c29cb1c098",
+    "appliedRuleClasses": []
+  }
+}

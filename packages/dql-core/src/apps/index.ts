@@ -236,6 +236,9 @@ export type { StoryBinding, StoryBindingCatalog, StoryBindingTileInput, StoryTex
 export { columnNameTokens, detectResultOrdering, isRankColumnName, nonMeasureColumnRole, resultLeaderRow, selectResultMeasures } from './result-measures.js';
 export type { ColumnNameRole, ResultColumnContract, ResultMeasureInput, ResultMeasureSelection, ResultOrdering, ResultSourceHint } from './result-measures.js';
 
+export { rankResultRows, compareResultMembers } from './result-ranking.js';
+export type { RankedResultRow, RankResultRowsOptions } from './result-ranking.js';
+
 export {
   checkCanvasHtml, fillCanvasHtml, escapeHtml, MAX_CANVAS_HTML, annotateCanvasHtml, canvasContainerPath, canvasNodeAt, canvasPieceKind,
   insertCanvasNodes, moveCanvasNode, parseCanvasHtml, rebindCanvasValue, removeCanvasNode, replaceCanvasNode, serializeCanvasNodes,

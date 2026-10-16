@@ -1,0 +1,23 @@
+{
+  "key": "1128c6c39e0cb7a050459641739f9ea9",
+  "operation": "generate",
+  "text": "SELECT player_id, player_name, SUM(fgm) * 1.0 / SUM(fga) AS fg_pct, SUM(fga) AS attempts FROM \"nba_golden\".\"dev\".\"player_game_stats\" WHERE game_date >= '2017-01-01' AND game_date < '2018-01-01' GROUP BY player_id, player_name HAVING SUM(fga) >= 100 ORDER BY fg_pct DESC, player_name ASC LIMIT 10",
+  "providerName": "claude",
+  "recordedAt": "2026-10-16T18:06:21.483Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 2,
+    "messageRoles": [
+      "system",
+      "user"
+    ],
+    "preCanonicalHash": "1128c6c39e0cb7a050459641739f9ea9757f0b88a7c0971a5a16ef7be26e6c1b",
+    "postCanonicalHash": "1128c6c39e0cb7a050459641739f9ea9757f0b88a7c0971a5a16ef7be26e6c1b",
+    "appliedRuleClasses": []
+  }
+}

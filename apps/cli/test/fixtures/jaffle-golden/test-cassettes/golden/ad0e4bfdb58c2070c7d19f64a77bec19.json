@@ -1,0 +1,23 @@
+{
+  "key": "ad0e4bfdb58c2070c7d19f64a77bec19",
+  "operation": "generate",
+  "text": "{\"version\":1,\"kind\":\"analytics\",\"reading\":\"Total product revenue (excluding tax) broken down by customer, one row per customer with the customer's name.\",\"measures\":[{\"ref\":\"metric:order_item.revenue\"}],\"groupBy\":[{\"ref\":\"entity:customers.customer\",\"role\":\"key\"}],\"display\":[\"dimension:customers.customer_name\"],\"filters\":[],\"ordering\":{\"ref\":\"metric:order_item.revenue\",\"direction\":\"desc\"},\"expectedShape\":\"grouped\",\"unresolved\":[],\"provenance\":{\"metric:order_item.revenue\":\"q:revenue\",\"entity:customers.customer\":\"q:shopper\",\"dimension:customers.customer_name\":\"q:shopper\"}}",
+  "providerName": "claude",
+  "recordedAt": "2026-10-16T18:11:58.231Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 2,
+    "messageRoles": [
+      "system",
+      "user"
+    ],
+    "preCanonicalHash": "ad0e4bfdb58c2070c7d19f64a77bec19dc18cc50b7d1a9bfb650bb6fef098d2a",
+    "postCanonicalHash": "ad0e4bfdb58c2070c7d19f64a77bec19dc18cc50b7d1a9bfb650bb6fef098d2a",
+    "appliedRuleClasses": []
+  }
+}

@@ -19,6 +19,7 @@ import {
   type CubeDefinition,
   type TimeDimensionDefinition,
   parseSemanticDisplayFormat,
+  qualifyBareSqlIdentifiers,
 } from '../semantic-layer.js';
 import type { SemanticLayerProvider, SemanticLayerProviderConfig } from './provider.js';
 
@@ -53,6 +54,13 @@ interface DbtSemanticModel {
     relation_name?: string;
   };
   defaults?: { agg_time_dimension?: string };
+  /**
+   * Model-level primary entity (dbt 1.7+). Declared when no entity row is the
+   * model's key — a fact table or bridge whose grain has no single column —
+   * and still names the model for MetricFlow: its dimensions are addressed
+   * `<primary_entity>__<dimension>`.
+   */
+  primary_entity?: string | null;
   /** dbt column descriptions of the underlying model, the fallback definition for a dimension that declares none. */
   columnDescriptions?: Record<string, string>;
   entities?: Array<{
@@ -263,8 +271,9 @@ export class DbtProvider implements SemanticLayerProvider {
     // Convert each semantic model into a DQL CubeDefinition. Build the primary-entity
     // index first so foreign-entity joins resolve to the right target cube + key.
     const entityIndex = buildPrimaryEntityIndex(allModels);
+    const keyIndex = buildEntityKeyIndex(allModels);
     for (const model of allModels) {
-      registerSemanticModel(layer, model, 'yaml', entityIndex);
+      registerSemanticModel(layer, model, 'yaml', entityIndex, keyIndex);
     }
 
     // Convert dbt metrics together so derived/ratio/cumulative metrics inherit
@@ -369,8 +378,9 @@ function loadFromManifestJson(manifestPath: string, artifactKind: 'manifest' | '
   }
 
   const entityIndex = buildPrimaryEntityIndex(models);
+  const keyIndex = buildEntityKeyIndex(models);
   for (const model of models) {
-    registerSemanticModel(layer, model, artifactKind, entityIndex);
+    registerSemanticModel(layer, model, artifactKind, entityIndex, keyIndex);
   }
   for (const metric of convertDbtMetrics(dbtMetrics, measureLookup)) layer.addMetric(metric);
   for (const savedQuery of savedQueries) {
@@ -854,20 +864,105 @@ function dbtSource(
  */
 export type PrimaryEntityIndex = Map<string, { cube: string; key: string } | null>;
 
-/** Build the primary-entity → {cube, key} index across all semantic models. */
+/**
+ * Build the primary-entity → {cube, key} index across all semantic models.
+ * One `type: primary` model is the target even when other models carry the
+ * entity as `unique` or `natural` (a per-policy agent table keyed by policy):
+ * those join the primary model one-to-one instead. Two primary models, or
+ * several unique ones and no primary, stay ambiguous.
+ */
 export function buildPrimaryEntityIndex(models: DbtSemanticModel[]): PrimaryEntityIndex {
-  const index: PrimaryEntityIndex = new Map();
+  const candidates = new Map<string, Array<{ cube: string; key: string; primary: boolean }>>();
   for (const model of models) {
     for (const entity of model.entities ?? []) {
       if (entity.type === 'primary' || entity.type === 'natural' || entity.type === 'unique') {
-        const target = { cube: model.name, key: entity.expr ?? entity.name };
-        const existing = index.get(entity.name);
-        if (existing === undefined) index.set(entity.name, target);
-        // A bare foreign entity cannot safely select between two primary model
-        // targets. Retain the ambiguity explicitly so conversion emits no
-        // model-authoritative join instead of depending on manifest order.
-        else if (existing && existing.cube !== target.cube) index.set(entity.name, null);
+        const list = candidates.get(entity.name) ?? [];
+        if (!list.some((candidate) => candidate.cube === model.name)) {
+          list.push({ cube: model.name, key: entity.expr ?? entity.name, primary: entity.type === 'primary' });
+        }
+        candidates.set(entity.name, list);
       }
+    }
+  }
+  const index: PrimaryEntityIndex = new Map();
+  for (const [name, list] of candidates) {
+    const primaries = list.filter((candidate) => candidate.primary);
+    const pool = primaries.length > 0 ? primaries : list;
+    // A bare foreign entity cannot safely select between two primary model
+    // targets. Retain the ambiguity explicitly so conversion emits no
+    // model-authoritative join instead of depending on manifest order.
+    index.set(name, pool.length === 1 ? { cube: pool[0]!.cube, key: pool[0]!.key } : null);
+  }
+  return index;
+}
+
+/**
+ * The ON clause for an entity join. An entity's `expr` is a SQL expression, not
+ * a column name: a composite key is often a concatenation
+ * (`policy_id || '-' || coverage_id`) or a list of columns
+ * (`policy_id, coverage_id`). Prefixing the whole expression with `${left}.`
+ * qualified only its first column and left the rest ambiguous between the two
+ * joined tables, so every column is qualified on its own side, and a column
+ * list pairs up position by position.
+ */
+export function entityJoinSql(leftExpr: string, rightExpr: string): string | null {
+  const leftParts = splitTopLevelCommas(leftExpr);
+  const rightParts = splitTopLevelCommas(rightExpr);
+  if (leftParts.length !== rightParts.length || leftParts.length === 0) return null;
+  return leftParts
+    .map((part, index) => `${qualifyEntityKey(part, '${left}')} = ${qualifyEntityKey(rightParts[index]!, '${right}')}`)
+    .join(' AND ');
+}
+
+function qualifyEntityKey(expr: string, side: '${left}' | '${right}'): string {
+  const trimmed = expr.trim();
+  if (/^[A-Za-z_][A-Za-z0-9_$]*$/.test(trimmed)) return `${side}.${trimmed}`;
+  // A placeholder is not an identifier the scanner can skip, so qualify with a
+  // sentinel and swap it for the placeholder afterwards.
+  const sentinel = '__dql_entity_side__';
+  return qualifyBareSqlIdentifiers(trimmed, sentinel).split(`${sentinel}.`).join(`${side}.`);
+}
+
+function splitTopLevelCommas(expr: string): string[] {
+  const parts: string[] = [];
+  let depth = 0;
+  let quote: string | undefined;
+  let current = '';
+  for (const char of expr) {
+    if (quote) {
+      current += char;
+      if (char === quote) quote = undefined;
+      continue;
+    }
+    if (char === "'" || char === '"' || char === '`') quote = char;
+    else if (char === '(') depth += 1;
+    else if (char === ')') depth = Math.max(0, depth - 1);
+    else if (char === ',' && depth === 0) {
+      parts.push(current.trim());
+      current = '';
+      continue;
+    }
+    current += char;
+  }
+  if (current.trim()) parts.push(current.trim());
+  return parts.filter(Boolean);
+}
+
+/**
+ * Every model keyed by each entity name (primary, unique, or natural). Unlike
+ * {@link PrimaryEntityIndex} it keeps all of them: two models keyed by the same
+ * entity hold one row per key each, so they join one-to-one.
+ */
+export type EntityKeyIndex = Map<string, Array<{ cube: string; key: string }>>;
+
+export function buildEntityKeyIndex(models: DbtSemanticModel[]): EntityKeyIndex {
+  const index: EntityKeyIndex = new Map();
+  for (const model of models) {
+    for (const entity of model.entities ?? []) {
+      if (entity.type !== 'primary' && entity.type !== 'natural' && entity.type !== 'unique') continue;
+      const keyed = index.get(entity.name) ?? [];
+      keyed.push({ cube: model.name, key: entity.expr ?? entity.name });
+      index.set(entity.name, keyed);
     }
   }
   return index;
@@ -878,8 +973,9 @@ function registerSemanticModel(
   model: DbtSemanticModel,
   artifactKind: 'manifest' | 'semantic_manifest' | 'yaml' = 'yaml',
   entityIndex: PrimaryEntityIndex = new Map(),
+  keyIndex: EntityKeyIndex = new Map(),
 ): void {
-  const cube = convertSemanticModel(model, artifactKind, entityIndex);
+  const cube = convertSemanticModel(model, artifactKind, entityIndex, keyIndex);
   layer.addCube(cube);
   layer.addSemanticModel(convertSemanticModelDetail(model, cube));
   for (const measure of model.measures ?? []) {
@@ -910,10 +1006,18 @@ function grainsAtOrAbove(base: TimeGrain | undefined): TimeGrain[] {
 }
 
 /** The MetricFlow primary-entity name of a semantic model — the head used to
- * qualify its dimensions as `<primaryEntity>__<dim>`. First primary/natural/
- * unique entity wins (matches buildPrimaryEntityIndex). Falls back to the model
- * name so a qualifiedName is always producible. */
-function primaryEntityNameOf(model: DbtSemanticModel): string {
+ * qualify its dimensions as `<primaryEntity>__<dim>`. A declared `type:
+ * primary` entity wins, then the model-level `primary_entity:` (a model whose
+ * grain has no key column), then the first natural/unique entity. Falls back
+ * to the model name so a qualifiedName is always producible. Ignoring the
+ * model-level key made every dimension of such a model `<model>__<dim>`,
+ * which MetricFlow does not recognise, and authors renamed their semantic
+ * models after the entity to work around it. */
+export function primaryEntityNameOf(model: Pick<DbtSemanticModel, 'name' | 'entities' | 'primary_entity'>): string {
+  const declared = (model.entities ?? []).find((entity) => entity.type === 'primary');
+  if (declared) return declared.name;
+  const modelLevel = typeof model.primary_entity === 'string' ? model.primary_entity.trim() : '';
+  if (modelLevel) return modelLevel;
   for (const entity of model.entities ?? []) {
     if (entity.type === 'primary' || entity.type === 'natural' || entity.type === 'unique') {
       return entity.name;
@@ -927,6 +1031,7 @@ function convertSemanticModel(
   model: DbtSemanticModel,
   artifactKind: 'manifest' | 'semantic_manifest' | 'yaml' = 'yaml',
   entityIndex: PrimaryEntityIndex = new Map(),
+  keyIndex: EntityKeyIndex = new Map(),
 ): CubeDefinition {
   const tableName = resolveTableName(model);
   const domain = deriveDbtDomain(model);
@@ -1041,16 +1146,35 @@ function convertSemanticModel(
     if (entity.type !== 'foreign') continue;
     const leftKey = entity.expr ?? entity.name;
     const target = entityIndex.get(entity.name);
+    const sql = entityJoinSql(leftKey, target?.key ?? entity.expr ?? entity.name);
+    // Key shapes that cannot be paired (two columns on one side, one on the
+    // other) have no join; the compiler then refuses rather than guess.
+    if (!sql) continue;
     joins.push({
       name: target?.cube ?? entity.name,
       left: model.name,
       right: target?.cube ?? entity.name,
       type: 'left',
-      sql: `\${left}.${leftKey} = \${right}.${target?.key ?? entity.expr ?? entity.name}`,
+      sql,
       // The foreign-entity name this join traverses — the compatibility service
       // concatenates these to build MetricFlow multi-hop group-by names.
       entity: entity.name,
     });
+  }
+
+  // One-to-one joins. A model keyed by the same entity as another — a subtype
+  // table such as loss_payment beside claim_amount, both one row per claim
+  // amount — joins it on that key, as MetricFlow joins primary to primary.
+  // Without it, "which amounts are loss payments" could only be written as
+  // `claim_amount_id in (from loss_payment)` inside every measure.
+  for (const entity of model.entities ?? []) {
+    if (entity.type !== 'primary' && entity.type !== 'natural' && entity.type !== 'unique') continue;
+    for (const peer of keyIndex.get(entity.name) ?? []) {
+      if (peer.cube === model.name || joins.some((join) => join.right === peer.cube)) continue;
+      const sql = entityJoinSql(entity.expr ?? entity.name, peer.key);
+      if (!sql) continue;
+      joins.push({ name: peer.cube, left: model.name, right: peer.cube, type: 'left', sql, entity: entity.name });
+    }
   }
 
   // MetricFlow's global time axis.

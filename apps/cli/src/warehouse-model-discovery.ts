@@ -12,6 +12,8 @@
  * saw. Everything stays a draft: AI and heuristics draft, people certify.
  */
 
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import {
   resolveWarehouseRelation,
   type DQLManifest,
@@ -22,7 +24,7 @@ import {
   type WarehouseCatalogRelationV1,
   type WarehouseCatalogSnapshotV1,
 } from '@zlens/core';
-import { profileRelationshipOnWarehouse, suggestRelationshipKeys } from '@zlens/agent';
+import { looksLikePlaceholder, profileRelationshipOnWarehouse, suggestRelationshipKeys } from '@zlens/agent';
 
 export type RelationshipEvidenceSource = 'declared_foreign_key' | 'view_join' | 'query_history' | 'shared_key' | 'named_for_table' | 'same_name';
 
@@ -77,6 +79,45 @@ export interface DiscoveredRelationship {
   validationError?: string;
 }
 
+/** A drafted join discovery holds back, with the reason, so a person can still write it knowingly. */
+export interface WithheldRelationship extends DiscoveredRelationship {
+  reason: string;
+}
+
+/** A join discovery found again but does not propose, because a reviewer removed or rejected it. */
+export interface DismissedRelationship {
+  from: string;
+  to: string;
+  fromRelation: string;
+  toRelation: string;
+  keys: Array<{ from: string; to: string }>;
+  reason: string;
+}
+
+/**
+ * What reviewers decided about drafted joins, kept in `.dql/modeling-discovery.json`
+ * (shared in git, like the catalog snapshot): a join discovery wrote as a
+ * draft (`applied`) and one a reviewer turned down (`rejected`). A join that
+ * was applied and is no longer modeled was removed by a reviewer; neither is
+ * proposed again.
+ */
+export interface DiscoveryDecision {
+  /** Warehouse relation ids, as the catalog snapshot names them. */
+  from: string;
+  to: string;
+  keys: Array<{ from: string; to: string }>;
+  decision: 'applied' | 'rejected';
+  at: string;
+  reason?: string;
+}
+
+export interface DiscoveryLedgerV1 {
+  version: 1;
+  relationships: DiscoveryDecision[];
+}
+
+export const DISCOVERY_LEDGER_PATH = '.dql/modeling-discovery.json';
+
 export interface WarehouseDiscoveryReport {
   catalogFingerprint: string;
   capturedAt: string;
@@ -88,6 +129,12 @@ export interface WarehouseDiscoveryReport {
   existingRelationships: number;
   /** The modeled joins as `<relation id>|<relation id>|<from>=<to>` (lower case), so later checks leave them alone too. */
   modeledJoins?: string[];
+  /** Joins found but not proposed because a reviewer removed or rejected them. */
+  dismissed?: DismissedRelationship[];
+  /** Their signatures, in the modeledJoins form, so later checks leave them alone too. */
+  dismissedJoins?: string[];
+  /** Joins only a name suggested that the warehouse did not back (validation only). */
+  withheld?: WithheldRelationship[];
   validated: boolean;
   /** Opt-in query-history evidence: how much was read, or why it could not be. */
   queryHistory?: { statements: number; joins: number } | { error: string };
@@ -119,6 +166,12 @@ export function cheapToRead(relation: WarehouseCatalogRelationV1): boolean {
 /** A join seen fewer times than this in query history is noise, not evidence. */
 const MIN_OBSERVED_JOINS = 2;
 const GENERIC_SCHEMAS = new Set(['main', 'public', 'dbo', 'default']);
+/** Evidence that is only a column name: the data has to back it before it is proposed. */
+const NAME_ONLY_EVIDENCE = new Set<RelationshipEvidenceSource>(['same_name', 'named_for_table', 'shared_key']);
+/** A column named like a reference: two tables that both carry it should agree on it for a joined row. */
+const REFERENCE_NAME = /_(id|key|code|no)$/i;
+/** Joined rows must agree on the tables' other shared references at least this often. */
+const MIN_CORROBORATION = 0.5;
 const TABLE_PREFIX = /^(stg|dim|fct|fact|int|base|raw|src|tbl|vw|v)_+/i;
 
 function slug(value: string): string {
@@ -157,6 +210,8 @@ export function discoverWarehouseModel(input: {
   existingDomains?: Iterable<string>;
   /** Opt-in: joins seen in recent query history. */
   observedJoins?: ObservedJoin[];
+  /** What reviewers decided about earlier drafts (`.dql/modeling-discovery.json`). */
+  decisions?: DiscoveryDecision[];
 }): WarehouseDiscoveryReport {
   const { snapshot } = input;
   const existingDomains = new Set(input.existingDomains ?? []);
@@ -330,12 +385,32 @@ export function discoverWarehouseModel(input: {
     modeled.add(`${fromEntity.dbtUniqueId}|${toEntity.dbtUniqueId}|${keys}`);
     modeled.add(`${toEntity.dbtUniqueId}|${fromEntity.dbtUniqueId}|${relationship.keys.map((pair) => `${pair.to.toLowerCase()}=${pair.from.toLowerCase()}`).sort().join('&')}`);
   }
+  // A join a reviewer rejected, or removed after discovery wrote it, stays
+  // out: finding it again is not new evidence.
+  const dismissedBy = new Map<string, string>();
+  const modeledNow = new Set([...modeled].map((signature) => signature.toLowerCase()));
+  for (const decision of input.decisions ?? []) {
+    const signature = joinSignature(decision.from, decision.to, decision.keys);
+    const removed = decision.decision === 'applied' && !modeledNow.has(signature);
+    if (decision.decision !== 'rejected' && !removed) continue;
+    const reason = decision.decision === 'rejected'
+      ? `rejected by a reviewer${decision.reason ? `: ${decision.reason}` : ''}`
+      : 'removed by a reviewer after discovery drafted it';
+    dismissedBy.set(signature, reason);
+    dismissedBy.set(joinSignature(decision.to, decision.from, decision.keys.map((pair) => ({ from: pair.to, to: pair.from }))), reason);
+  }
   const relationships: DiscoveredRelationship[] = [];
+  const dismissed: DismissedRelationship[] = [];
   const relationshipIds = new Map<string, Set<string>>();
   let existingRelationships = 0;
   for (const [signature, relationship] of [...candidates.entries()].sort(([a], [b]) => a.localeCompare(b))) {
     if (modeled.has(signature)) {
       existingRelationships += 1;
+      continue;
+    }
+    const dismissal = dismissedBy.get(joinSignature(signature.split('|')[0]!, signature.split('|')[1]!, relationship.keys));
+    if (dismissal) {
+      dismissed.push({ from: relationship.from, to: relationship.to, fromRelation: relationship.fromRelation, toRelation: relationship.toRelation, keys: relationship.keys, reason: dismissal });
       continue;
     }
     relationship.evidence.sort((a, b) => EVIDENCE_ORDER.indexOf(a.source) - EVIDENCE_ORDER.indexOf(b.source));
@@ -357,8 +432,50 @@ export function discoverWarehouseModel(input: {
     relationships,
     existingRelationships,
     modeledJoins: [...modeled].map((signature) => signature.toLowerCase()).sort(),
+    ...(dismissed.length ? { dismissed } : {}),
+    ...(dismissedBy.size ? { dismissedJoins: [...dismissedBy.keys()].sort() } : {}),
     validated: false,
   };
+}
+
+/** One spelling for a join, whichever list it comes from: `<from id>|<to id>|<from>=<to>&…`, lower case, keys sorted. */
+export function joinSignature(fromRelationId: string, toRelationId: string, keys: Array<{ from: string; to: string }>): string {
+  return `${fromRelationId}|${toRelationId}|${keys.map((pair) => `${pair.from}=${pair.to}`.toLowerCase()).sort().join('&')}`.toLowerCase();
+}
+
+/** Reviewer decisions about drafted joins; an unreadable or missing file is no decisions. */
+export function readDiscoveryLedger(projectRoot: string): DiscoveryLedgerV1 {
+  const path = join(projectRoot, DISCOVERY_LEDGER_PATH);
+  if (!existsSync(path)) return { version: 1, relationships: [] };
+  try {
+    const parsed = JSON.parse(readFileSync(path, 'utf8')) as Partial<DiscoveryLedgerV1>;
+    const relationships = Array.isArray(parsed.relationships) ? parsed.relationships.filter((item): item is DiscoveryDecision =>
+      Boolean(item) && typeof item.from === 'string' && typeof item.to === 'string' && Array.isArray(item.keys)
+      && (item.decision === 'applied' || item.decision === 'rejected')) : [];
+    return { version: 1, relationships };
+  } catch {
+    return { version: 1, relationships: [] };
+  }
+}
+
+/**
+ * Record decisions about drafted joins. One entry per join; a rejection is
+ * never downgraded to "applied" by a later apply of the same join.
+ */
+export function recordDiscoveryDecisions(projectRoot: string, decisions: DiscoveryDecision[]): void {
+  if (decisions.length === 0) return;
+  const ledger = readDiscoveryLedger(projectRoot);
+  const bySignature = new Map(ledger.relationships.map((item) => [joinSignature(item.from, item.to, item.keys), item]));
+  for (const decision of decisions) {
+    const signature = joinSignature(decision.from, decision.to, decision.keys);
+    const current = bySignature.get(signature);
+    if (current?.decision === 'rejected' && decision.decision === 'applied') continue;
+    bySignature.set(signature, decision);
+  }
+  const relationships = [...bySignature.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([, item]) => item);
+  const path = join(projectRoot, DISCOVERY_LEDGER_PATH);
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, `${JSON.stringify({ version: 1, relationships }, null, 2)}\n`, 'utf8');
 }
 
 /**
@@ -421,7 +538,7 @@ export async function inferSharedKeyJoins(
   // Joins already drafted in this report, or already modeled, are left alone
   // (either direction), identified by table id.
   const relationIdOf = new Map(report.entities.map((entity) => [`${entity.domain}::${entity.id}`, entity.relationId]));
-  const known = new Set<string>(report.modeledJoins ?? []);
+  const known = new Set<string>([...(report.modeledJoins ?? []), ...(report.dismissedJoins ?? [])]);
   for (const item of report.relationships) {
     const fromId = relationIdOf.get(`${item.fromDomain}::${item.from}`);
     const toId = relationIdOf.get(`${item.toDomain}::${item.to}`);
@@ -525,6 +642,8 @@ export async function validateWarehouseDiscovery(
   }
   const limit = options.maxRelationships ?? 200;
   const relationships: DiscoveredRelationship[] = [];
+  const withheld: WithheldRelationship[] = [...(report.withheld ?? [])];
+  const columnsOf = new Map(snapshot.relations.map((relation) => [relation.relation, relation.columns]));
   for (const [index, relationship] of report.relationships.entries()) {
     if (index >= limit) {
       relationships.push({ ...relationship, validationError: `not validated: discovery validates at most ${limit} relationships per run` });
@@ -537,12 +656,66 @@ export async function validateWarehouseDiscovery(
     try {
       const keyTypes = relationship.keys.map((pair) => ({ from: typesOf.get(relationship.fromRelation)?.get(pair.from.toLowerCase()), to: typesOf.get(relationship.toRelation)?.get(pair.to.toLowerCase()) }));
       const profile = await profileRelationshipOnWarehouse({ fromRelation: relationship.fromRelation, toRelation: relationship.toRelation, keys: relationship.keys, keyTypes }, execute, quote, new Date(), options.dialect);
-      relationships.push({ ...relationship, cardinality: profile.proposed.cardinality, fanout: profile.proposed.fanout, validation: profile.evidence });
+      const checked: DiscoveredRelationship = { ...relationship, cardinality: profile.proposed.cardinality, fanout: profile.proposed.fanout, validation: profile.evidence };
+      // A column name is where to look, not evidence: a join only a name
+      // suggests is proposed when the data backs it as a reference.
+      const nameOnly = relationship.evidence.every((item) => NAME_ONLY_EVIDENCE.has(item.source));
+      const objection = nameOnly ? await nameOnlyObjection(checked, columnsOf, execute, quote) : undefined;
+      if (objection) withheld.push({ ...checked, reason: objection });
+      else relationships.push(checked);
     } catch (error) {
       relationships.push({ ...relationship, validationError: error instanceof Error ? error.message.split('\n')[0]!.slice(0, 200) : String(error) });
     }
   }
-  return { ...report, entities, relationships, validated: true };
+  return { ...report, entities, relationships, ...(withheld.length ? { withheld } : {}), validated: true };
+}
+
+/**
+ * Why a join only a column name suggests is not a reference, or undefined
+ * when the warehouse backs it. Three ways a shared name misleads:
+ * - the values are not found on the other side (or the key repeats there);
+ * - the rows that miss all hold one value, a placeholder such as 0 or -1;
+ * - two tables each number their own rows 1, 2, 3…, so every value is found
+ *   but the joined rows disagree on the other references both tables carry.
+ * Aggregates only.
+ */
+async function nameOnlyObjection(
+  relationship: DiscoveredRelationship,
+  columnsOf: Map<string, WarehouseCatalogRelationV1['columns']>,
+  execute: (sql: string) => Promise<{ rows: Array<Record<string, unknown>> }>,
+  quote: (identifier: string) => string,
+): Promise<string | undefined> {
+  const evidence = relationship.validation;
+  if (!evidence) return undefined;
+  const fromName = relationship.fromRelation.split('.').pop()!;
+  const toName = relationship.toRelation.split('.').pop()!;
+  const keyText = relationship.keys.map((pair) => pair.from).join(', ');
+  if (evidence.status !== 'passed') return `only the column name suggests it, and the warehouse does not back it: ${evidence.message ?? 'validation failed'}`;
+  const lost = evidence.unmatchedKeyedFrom ?? 0;
+  if (looksLikePlaceholder({ ...evidence, keyedFrom: evidence.fromRows - evidence.fromNullKeys })) {
+    return `${lost.toLocaleString('en-US')} ${fromName} rows hold one ${keyText} value that is nowhere in ${toName}, a placeholder, so the name alone does not make ${keyText} a reference`;
+  }
+  if (evidence.maxFromPerKey > 1 || evidence.maxToPerKey > 1) return undefined;
+  // One-to-one on a name: corroborate on the other references both tables carry.
+  const keyColumns = new Set(relationship.keys.flatMap((pair) => [pair.from.toLowerCase(), pair.to.toLowerCase()]));
+  const toColumns = new Map((columnsOf.get(relationship.toRelation) ?? []).map((column) => [column.name.toLowerCase(), column]));
+  const shared = (columnsOf.get(relationship.fromRelation) ?? []).flatMap((column) => {
+    const other = toColumns.get(column.name.toLowerCase());
+    if (!other || keyColumns.has(column.name.toLowerCase()) || !REFERENCE_NAME.test(column.name)) return [];
+    if ((column.type && NON_KEY_TYPE.test(column.type)) || (other.type && NON_KEY_TYPE.test(other.type))) return [];
+    return [{ from: column.name, to: other.name }];
+  }).slice(0, 4);
+  if (shared.length === 0) return undefined;
+  const quoteRelation = (relation: string) => relation.split('.').map(quote).join('.');
+  const on = relationship.keys.map((pair) => `f.${quote(pair.from)} = t.${quote(pair.to)}`).join(' AND ');
+  const comparable = shared.map((pair) => `f.${quote(pair.from)} IS NOT NULL AND t.${quote(pair.to)} IS NOT NULL`).join(' AND ');
+  const agree = shared.map((pair) => `f.${quote(pair.from)} = t.${quote(pair.to)}`).join(' AND ');
+  const row = (await execute(`SELECT COUNT(*) AS compared, SUM(CASE WHEN ${agree} THEN 1 ELSE 0 END) AS agreeing FROM ${quoteRelation(relationship.fromRelation)} f JOIN ${quoteRelation(relationship.toRelation)} t ON ${on} WHERE ${comparable}`)).rows[0] ?? {};
+  const compared = Number(row.compared ?? row.COMPARED ?? 0);
+  const agreeing = Number(row.agreeing ?? row.AGREEING ?? 0);
+  if (!(compared > 0) || agreeing / compared >= MIN_CORROBORATION) return undefined;
+  const columns = shared.map((pair) => pair.from).join(', ');
+  return `every ${keyText} value is found in ${toName}, but ${(compared - agreeing).toLocaleString('en-US')} of ${compared.toLocaleString('en-US')} joined rows disagree on ${columns}: the two tables number their rows separately and the values match by coincidence, not as a reference`;
 }
 
 /** The reviewed-change batch that writes a discovery report as drafts. Existing entities and domains are kept as they are. */

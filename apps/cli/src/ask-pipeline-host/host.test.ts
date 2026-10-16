@@ -856,6 +856,23 @@ describe('Snowflake physical metadata identity', () => {
     expect(sql).toContain("'MAIN' AS table_catalog");
   });
 
+  it('reads SQLite columns from its pragmas, for every attached schema, with no catalog', async () => {
+    const sql = relationColumnsProbeSql(['main.cards', 'dev.orders'], 2, 0, 'sqlite')!;
+    expect(sql).not.toContain('CURRENT_DATABASE');
+    expect(sql).not.toContain('information_schema.columns');
+    const { default: Database } = await import('better-sqlite3');
+    const db = new Database(':memory:');
+    db.exec(`CREATE TABLE cards (id INTEGER, name TEXT, type TEXT); ATTACH DATABASE ':memory:' AS dev; CREATE TABLE dev.orders (order_id INTEGER, amount REAL)`);
+    const rows = db.prepare(sql).all() as Array<Record<string, unknown>>;
+    expect(rows.map((row) => `${row.table_schema}.${row.table_name}.${row.column_name}`)).toEqual([
+      'dev.orders.order_id', 'dev.orders.amount', 'main.cards.id', 'main.cards.name', 'main.cards.type',
+    ]);
+    expect(rows.every((row) => row.table_catalog === null && row.dql_column_total !== undefined)).toBe(true);
+    const relations = relationsFromProbeRows(rows, true, 0);
+    expect(relations.find((relation) => relation.name === 'cards')).toMatchObject({ columnCompleteness: 'complete' });
+    db.close();
+  });
+
   it('maps a probe result only to the exact requested database and keys cache evidence by role', () => {
     const [mapped] = underAskedNames([
       { database: 'DB_A', schema: 'PUBLIC', name: 'EVENTS', columns: [{ name: 'EVENT_ID', dataType: 'NUMBER' }], columnCompleteness: 'partial' },

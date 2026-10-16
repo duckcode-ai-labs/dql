@@ -89,7 +89,21 @@ git push origin zlens-v0.2.0
 
    It is not pack-only: the script rebuilds the whole workspace first (about
    a minute and a half on a laptop), then packs every package into
-   `.release-artifacts/`.
+   `.release-artifacts/`. It then installs the packed CLI into a clean folder,
+   with every sibling `@zlens/*` tarball pinned through npm `overrides`, and
+   runs `zlens --version`, the `dql` alias and `create-zlens-app --help`
+   (`node scripts/smoke-cli-install.mjs --tarballs .release-artifacts @zlens/cli@0.2.0`
+   runs that step alone).
+
+   After publishing, the tag workflow waits until npm lists every published
+   version before it runs the install smoke. `npm publish` returns while npm
+   is still processing the package; in the 0.1.0 run the smoke started eight
+   seconds after `@zlens/cli` was published, got `E404`, and failed the run,
+   although npm listed the version about five minutes later. The wait polls
+   `npm view <name>@<version>` for up to 30 minutes
+   (`ZLENS_RELEASE_REGISTRY_WAIT_MS` changes that), and the smoke retries an
+   `E404` or `ETARGET` from `npm install` for up to ten more. If the wait runs
+   out, re-run the workflow: versions already on npm are skipped.
 7. After a release candidate, point `next` at it and check `latest` did not
    move. The tag workflow already publishes an rc with `--tag next`, so run
    this only if `next` is wrong. Each command needs an npm login with publish

@@ -244,6 +244,9 @@ describe('SemanticLayer', () => {
     });
     expect(valid?.sql).toContain('ORDER BY revenue DESC, customer_name ASC\nLIMIT 10');
 
+    // A registry path is a lookup identity, never SQL. When it names a selected
+    // dimension it orders by that dimension's projected alias (a semantic
+    // block's `order_by` repeats the spelling of its `dimensions`)...
     expect(layer.composeQuery({
       metrics: ['revenue'],
       dimensions: ['customer__customer_name'],
@@ -251,6 +254,15 @@ describe('SemanticLayer', () => {
         { name: 'revenue', direction: 'desc' },
         { name: 'customer__customer_name', direction: 'asc' },
       ],
+      limit: 10,
+      driver: 'duckdb',
+    })?.sql).toContain('ORDER BY revenue DESC, customer_name ASC\nLIMIT 10');
+
+    // ...and a name that is neither projected nor a selected member still refuses.
+    expect(layer.composeQuery({
+      metrics: ['revenue'],
+      dimensions: ['customer__customer_name'],
+      orderBy: [{ name: 'customer__customer_region', direction: 'asc' }],
       limit: 10,
       driver: 'duckdb',
     })).toBeNull();

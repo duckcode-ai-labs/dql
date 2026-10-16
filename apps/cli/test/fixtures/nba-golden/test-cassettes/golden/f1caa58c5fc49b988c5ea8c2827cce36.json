@@ -1,0 +1,23 @@
+{
+  "key": "f1caa58c5fc49b988c5ea8c2827cce36",
+  "operation": "generate",
+  "text": "{\"version\":1,\"kind\":\"analytics\",\"reading\":\"Rank players by total points scored in games dated in calendar year 2030, highest first (top 10).\",\"measures\":[{\"ref\":\"column:dev.player_game_stats.pts\",\"aggregation\":\"sum\",\"alias\":\"total_points\",\"scope\":[{\"ref\":\"dimension:player_game_stats.played\",\"op\":\"eq\",\"values\":[1],\"source\":\"question\"}]}],\"groupBy\":[{\"ref\":\"dimension:player_game_stats.player_id\",\"role\":\"key\"}],\"display\":[\"dimension:player_game_stats.player_name\"],\"filters\":[],\"ordering\":{\"ref\":\"total_points\",\"direction\":\"desc\"},\"limit\":10,\"time\":{\"ref\":\"dimension:player_game_stats.game_date\",\"window\":{\"start\":\"2030-01-01\",\"end\":\"2031-01-01\",\"expression\":\"in calendar 2030\"}},\"expectedShape\":\"ranking\",\"unresolved\":[{\"clause\":\"calendar 2030\",\"options\":[],\"material\":true,\"question\":\"This project only holds games dated in calendar 2016 and 2017; no data exists for 2030. Did you mean 2016, 2017, or both?\"}],\"provenance\":{\"column:dev.player_game_stats.pts\":\"q:scoring leaders\",\"dimension:player_game_stats.played\":\"q:scoring leaders\",\"dimension:player_game_stats.player_id\":\"q:scoring leaders\",\"dimension:player_game_stats.player_name\":\"q:scoring leaders\",\"dimension:player_game_stats.game_date\":\"q:calendar 2030\"}}",
+  "providerName": "claude",
+  "recordedAt": "2026-10-16T18:04:21.658Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 2,
+    "messageRoles": [
+      "system",
+      "user"
+    ],
+    "preCanonicalHash": "f1caa58c5fc49b988c5ea8c2827cce36d4d74839a348442817873a650487c3bf",
+    "postCanonicalHash": "f1caa58c5fc49b988c5ea8c2827cce36d4d74839a348442817873a650487c3bf",
+    "appliedRuleClasses": []
+  }
+}
