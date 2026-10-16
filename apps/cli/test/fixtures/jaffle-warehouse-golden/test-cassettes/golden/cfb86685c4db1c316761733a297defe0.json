@@ -1,0 +1,23 @@
+{
+  "key": "cfb86685c4db1c316761733a297defe0",
+  "operation": "generate",
+  "text": "{\"version\":1,\"kind\":\"analytics\",\"reading\":\"Total revenue including tax across all orders, i.e. the sum of order totals (subtotal plus tax paid) over the orders table, with no breakdown or time window.\",\"measures\":[{\"ref\":\"column:dev.orders.order_total\",\"aggregation\":\"sum\",\"alias\":\"revenue_including_tax\"}],\"groupBy\":[],\"display\":[],\"filters\":[],\"expectedShape\":\"scalar\",\"unresolved\":[],\"provenance\":{\"column:dev.orders.order_total\":\"q:revenue ... including tax\"}}",
+  "providerName": "claude",
+  "recordedAt": "2026-10-16T14:09:40.696Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 2,
+    "messageRoles": [
+      "system",
+      "user"
+    ],
+    "preCanonicalHash": "cfb86685c4db1c316761733a297defe05bdd5021e4a9f36cb402361c4801c119",
+    "postCanonicalHash": "cfb86685c4db1c316761733a297defe05bdd5021e4a9f36cb402361c4801c119",
+    "appliedRuleClasses": []
+  }
+}

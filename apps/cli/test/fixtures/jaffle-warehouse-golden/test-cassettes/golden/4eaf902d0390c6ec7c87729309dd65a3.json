@@ -1,0 +1,23 @@
+{
+  "key": "4eaf902d0390c6ec7c87729309dd65a3",
+  "operation": "generate",
+  "text": "{\"version\":1,\"kind\":\"analytics\",\"reading\":\"Revenue from drink order lines (sum of order-item price where is_drink_item is true), broken down by product.\",\"measures\":[{\"ref\":\"column:dev.order_items.product_price\",\"aggregation\":\"sum\",\"alias\":\"beverage_revenue\",\"scope\":[{\"ref\":\"column:dev.order_items.is_drink_item\",\"op\":\"is_true\",\"values\":[true],\"source\":\"question\"}]}],\"groupBy\":[{\"ref\":\"column:dev.order_items.product_id\",\"role\":\"key\"}],\"display\":[\"column:dev.order_items.product_name\"],\"filters\":[],\"ordering\":{\"ref\":\"beverage_revenue\",\"direction\":\"desc\"},\"expectedShape\":\"grouped\",\"unresolved\":[],\"provenance\":{\"column:dev.order_items.product_price\":\"q:revenue\",\"column:dev.order_items.is_drink_item\":\"q:beverage\",\"column:dev.order_items.product_id\":\"q:by product\",\"column:dev.order_items.product_name\":\"q:by product\"}}",
+  "providerName": "claude",
+  "recordedAt": "2026-10-16T14:02:28.063Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 2,
+    "messageRoles": [
+      "system",
+      "user"
+    ],
+    "preCanonicalHash": "4eaf902d0390c6ec7c87729309dd65a304fbbac77c96c26acda6c5cc92a719ea",
+    "postCanonicalHash": "4eaf902d0390c6ec7c87729309dd65a304fbbac77c96c26acda6c5cc92a719ea",
+    "appliedRuleClasses": []
+  }
+}

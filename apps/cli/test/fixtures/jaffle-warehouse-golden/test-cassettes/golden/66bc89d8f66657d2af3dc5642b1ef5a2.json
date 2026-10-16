@@ -1,0 +1,24 @@
+{
+  "key": "66bc89d8f66657d2af3dc5642b1ef5a2",
+  "operation": "generate",
+  "text": "{\"version\":1,\"kind\":\"analytics\",\"reading\":\"For the customer named \\\"Ryan byrd\\\", report two figures side by side: total revenue (sum of order-line product price across all lines) and beverage revenue (the same sum restricted to drink items).\",\"measures\":[{\"ref\":\"column:dev.order_items.product_price\",\"aggregation\":\"sum\",\"alias\":\"total_revenue\"},{\"ref\":\"column:dev.order_items.product_price\",\"aggregation\":\"sum\",\"scope\":[{\"ref\":\"column:dev.order_items.is_drink_item\",\"op\":\"is_true\",\"values\":[true],\"source\":\"question\"}],\"alias\":\"beverage_revenue\"}],\"groupBy\":[],\"display\":[],\"filters\":[{\"ref\":\"column:dev.customers.customer_name\",\"op\":\"eq\",\"values\":[\"Ryan byrd\"],\"source\":\"question\"}],\"expectedShape\":\"comparison\",\"unresolved\":[{\"clause\":\"total revenue\",\"options\":[\"column:dev.order_items.product_price\",\"column:dev.orders.order_total\"],\"material\":false,\"question\":\"Total revenue is read as pretax order-line product revenue (same basis as beverage revenue); say so if you want the order total including tax instead.\"}],\"provenance\":{\"column:dev.order_items.product_price\":\"q:total revenue and beverage revenue\",\"column:dev.order_items.is_drink_item\":\"q:beverage revenue\",\"column:dev.customers.customer_name\":\"q:\\\"Ryan byrd\\\"\",\"column:dev.orders.customer_id\":\"removed:new subject is a single named customer, no ranking by customer\",\"measure:0 ordering\":\"removed:no ranking requested\",\"limit\":\"removed:no ranking requested\"}}",
+  "providerName": "claude",
+  "recordedAt": "2026-10-16T14:11:24.688Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 3,
+    "messageRoles": [
+      "system",
+      "user",
+      "user"
+    ],
+    "preCanonicalHash": "66bc89d8f66657d2af3dc5642b1ef5a20ba50bf7e45c0e04662d3eaf3bd69cef",
+    "postCanonicalHash": "66bc89d8f66657d2af3dc5642b1ef5a20ba50bf7e45c0e04662d3eaf3bd69cef",
+    "appliedRuleClasses": []
+  }
+}

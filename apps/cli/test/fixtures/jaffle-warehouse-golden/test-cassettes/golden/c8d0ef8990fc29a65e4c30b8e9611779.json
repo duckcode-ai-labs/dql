@@ -1,0 +1,23 @@
+{
+  "key": "c8d0ef8990fc29a65e4c30b8e9611779",
+  "operation": "generate",
+  "text": "{\"version\":1,\"kind\":\"analytics\",\"reading\":\"Total revenue (sum of order totals) for the customer named \\\"Ryan Byrd\\\", as a single number.\",\"measures\":[{\"ref\":\"column:dev.orders.order_total\",\"aggregation\":\"sum\",\"alias\":\"total_revenue\"}],\"groupBy\":[],\"display\":[],\"filters\":[{\"ref\":\"column:dev.customers.customer_name\",\"op\":\"eq\",\"values\":[\"Ryan Byrd\"],\"source\":\"question\"}],\"expectedShape\":\"scalar\",\"unresolved\":[{\"clause\":\"total revenue\",\"options\":[\"column:dev.orders.order_total\",\"column:dev.orders.subtotal\"],\"material\":true,\"question\":\"Should total revenue include tax (order_total) or be the pretax subtotal?\"}],\"provenance\":{\"column:dev.orders.order_total\":\"q:total revenue\",\"column:dev.orders.subtotal\":\"q:total revenue\",\"column:dev.customers.customer_name\":\"q:\\\"Ryan Byrd\\\"\"}}",
+  "providerName": "claude",
+  "recordedAt": "2026-10-16T14:03:22.619Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 2,
+    "messageRoles": [
+      "system",
+      "user"
+    ],
+    "preCanonicalHash": "c8d0ef8990fc29a65e4c30b8e96117797fa884f073ac9a857300173290a6d95a",
+    "postCanonicalHash": "c8d0ef8990fc29a65e4c30b8e96117797fa884f073ac9a857300173290a6d95a",
+    "appliedRuleClasses": []
+  }
+}

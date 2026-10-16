@@ -1,0 +1,23 @@
+{
+  "key": "1c168554a27eba724f1991b95590120a",
+  "operation": "generate",
+  "text": "{\"version\":1,\"kind\":\"analytics\",\"reading\":\"Rank customers by their total beverage (drink item) revenue from order lines, highest first, top 10.\",\"measures\":[{\"ref\":\"column:dev.order_items.product_price\",\"aggregation\":\"sum\",\"alias\":\"beverage_revenue\",\"scope\":[{\"ref\":\"column:dev.order_items.is_drink_item\",\"op\":\"is_true\",\"values\":[true],\"source\":\"question\"}]}],\"groupBy\":[{\"ref\":\"column:dev.orders.customer_id\",\"role\":\"key\"}],\"display\":[\"column:dev.customers.customer_name\"],\"filters\":[],\"ordering\":{\"ref\":\"beverage_revenue\",\"direction\":\"desc\"},\"limit\":10,\"expectedShape\":\"ranking\",\"unresolved\":[],\"provenance\":{\"column:dev.order_items.product_price\":\"q:top customers for beverage product category\",\"column:dev.order_items.is_drink_item\":\"q:beverage product category\",\"column:dev.orders.customer_id\":\"q:customers\",\"column:dev.customers.customer_name\":\"q:who are the top customers\"}}",
+  "providerName": "claude",
+  "recordedAt": "2026-10-16T14:00:10.951Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 2,
+    "messageRoles": [
+      "system",
+      "user"
+    ],
+    "preCanonicalHash": "1c168554a27eba724f1991b95590120a02e9863e9a591db74c96d085278f59bd",
+    "postCanonicalHash": "1c168554a27eba724f1991b95590120a02e9863e9a591db74c96d085278f59bd",
+    "appliedRuleClasses": []
+  }
+}

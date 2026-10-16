@@ -1,0 +1,23 @@
+{
+  "key": "1cb476f2fffaa815dbf22d0c7b56421d",
+  "operation": "generate",
+  "text": "{\"version\":1,\"kind\":\"analytics\",\"reading\":\"The average order value across all orders: total order_total divided by the number of distinct orders.\",\"measures\":[{\"derived\":{\"kind\":\"ratio\",\"numerator\":\"column:dev.orders.order_total\",\"numeratorAggregation\":\"sum\",\"denominator\":\"column:dev.orders.order_id\",\"denominatorAggregation\":\"count_distinct\"},\"alias\":\"average_order_value\"}],\"groupBy\":[],\"display\":[],\"filters\":[],\"expectedShape\":\"scalar\",\"unresolved\":[{\"clause\":\"order value\",\"options\":[\"column:dev.orders.order_total\",\"column:dev.orders.subtotal\"],\"material\":false,\"question\":\"Order value is read as order_total (including tax); use subtotal if you want pretax value.\"}],\"provenance\":{\"column:dev.orders.order_total\":\"q:average order value\",\"column:dev.orders.order_id\":\"q:average order value\"}}",
+  "providerName": "claude",
+  "recordedAt": "2026-10-16T14:04:00.400Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 2,
+    "messageRoles": [
+      "system",
+      "user"
+    ],
+    "preCanonicalHash": "1cb476f2fffaa815dbf22d0c7b56421de6e16fbdcda8f1ffcf6bf4fd63ba1ad8",
+    "postCanonicalHash": "1cb476f2fffaa815dbf22d0c7b56421de6e16fbdcda8f1ffcf6bf4fd63ba1ad8",
+    "appliedRuleClasses": []
+  }
+}

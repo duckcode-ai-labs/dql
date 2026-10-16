@@ -1,0 +1,23 @@
+{
+  "key": "fa47711cc00fb2ebbd8fbc251e757fd7",
+  "operation": "generate",
+  "text": "NO_SQL: No listed column holds weather data; the project only contains Jaffle Shop orders, customers, products and locations.",
+  "providerName": "claude",
+  "recordedAt": "2026-10-16T14:06:07.127Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 2,
+    "messageRoles": [
+      "system",
+      "user"
+    ],
+    "preCanonicalHash": "fa47711cc00fb2ebbd8fbc251e757fd72ad356526615f1d500d51ebab4c332cc",
+    "postCanonicalHash": "fa47711cc00fb2ebbd8fbc251e757fd72ad356526615f1d500d51ebab4c332cc",
+    "appliedRuleClasses": []
+  }
+}

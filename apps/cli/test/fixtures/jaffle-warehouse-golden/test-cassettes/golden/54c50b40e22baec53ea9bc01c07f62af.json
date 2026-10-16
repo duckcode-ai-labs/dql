@@ -1,0 +1,23 @@
+{
+  "key": "54c50b40e22baec53ea9bc01c07f62af",
+  "operation": "generate",
+  "text": "SELECT o.customer_id, c.customer_name, SUM(oi.product_price) AS total_revenue, SUM(CASE WHEN oi.is_drink_item = 1 THEN oi.product_price ELSE 0 END) AS beverage_revenue FROM jaffle_shop.dev.order_items AS oi JOIN jaffle_shop.dev.orders AS o ON oi.order_id = o.order_id JOIN jaffle_shop.dev.customers AS c ON o.customer_id = c.customer_id WHERE LOWER(c.customer_name) = LOWER('Ryan byrd') GROUP BY o.customer_id, c.customer_name LIMIT 500",
+  "providerName": "claude",
+  "recordedAt": "2026-10-16T14:11:48.283Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 2,
+    "messageRoles": [
+      "system",
+      "user"
+    ],
+    "preCanonicalHash": "54c50b40e22baec53ea9bc01c07f62afb13528a7ad4c60456f2d5d6748bc4753",
+    "postCanonicalHash": "54c50b40e22baec53ea9bc01c07f62afb13528a7ad4c60456f2d5d6748bc4753",
+    "appliedRuleClasses": []
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "key": "15bf8aecf744b820ef9847fc108f7d72",
+  "operation": "generate",
+  "text": "{\"version\":1,\"kind\":\"analytics\",\"reading\":\"Total revenue broken down by customer (shopper), showing each customer's name.\",\"measures\":[{\"ref\":\"column:dev.orders.subtotal\",\"aggregation\":\"sum\",\"alias\":\"revenue\"}],\"groupBy\":[{\"ref\":\"column:dev.orders.customer_id\",\"role\":\"key\"}],\"display\":[\"column:dev.customers.customer_name\"],\"filters\":[],\"ordering\":{\"ref\":\"revenue\",\"direction\":\"desc\"},\"expectedShape\":\"grouped\",\"unresolved\":[{\"clause\":\"revenue\",\"options\":[\"column:dev.orders.subtotal\",\"column:dev.orders.order_total\"],\"material\":true,\"question\":\"Should revenue be the pretax order subtotal or the order total including tax? (No governed revenue metric is defined in this project.)\"}],\"provenance\":{\"column:dev.orders.subtotal\":\"q:revenue\",\"column:dev.orders.customer_id\":\"q:by shopper\",\"column:dev.customers.customer_name\":\"q:by shopper\"}}",
+  "providerName": "claude",
+  "recordedAt": "2026-10-16T14:10:27.658Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 2,
+    "messageRoles": [
+      "system",
+      "user"
+    ],
+    "preCanonicalHash": "15bf8aecf744b820ef9847fc108f7d721c63238ac7855fbd76c5eff0fd15831d",
+    "postCanonicalHash": "15bf8aecf744b820ef9847fc108f7d721c63238ac7855fbd76c5eff0fd15831d",
+    "appliedRuleClasses": []
+  }
+}

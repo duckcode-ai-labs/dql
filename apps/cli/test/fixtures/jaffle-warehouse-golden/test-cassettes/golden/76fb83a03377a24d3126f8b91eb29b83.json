@@ -1,0 +1,23 @@
+{
+  "key": "76fb83a03377a24d3126f8b91eb29b83",
+  "operation": "generate",
+  "text": "{\"version\":1,\"kind\":\"analytics\",\"reading\":\"Count the total number of orders in the orders table, with no breakdown or time window.\",\"measures\":[{\"ref\":\"column:dev.orders.order_id\",\"aggregation\":\"count_distinct\",\"alias\":\"order_count\"}],\"groupBy\":[],\"display\":[],\"filters\":[],\"expectedShape\":\"scalar\",\"unresolved\":[],\"provenance\":{\"column:dev.orders.order_id\":\"q:how many orders\"}}",
+  "providerName": "claude",
+  "recordedAt": "2026-10-16T14:07:09.370Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 2,
+    "messageRoles": [
+      "system",
+      "user"
+    ],
+    "preCanonicalHash": "76fb83a03377a24d3126f8b91eb29b831332610fc9eae050ac15c9af14d54856",
+    "postCanonicalHash": "76fb83a03377a24d3126f8b91eb29b831332610fc9eae050ac15c9af14d54856",
+    "appliedRuleClasses": []
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "key": "6032c3b27167143d74c5f432debc471e",
+  "operation": "generate",
+  "text": "SELECT\n  SUM(CASE WHEN strftime('%Y-%m', ordered_at) = '2025-07' THEN subtotal ELSE 0 END) AS sales_pretax_2025_07,\n  SUM(CASE WHEN strftime('%Y-%m', ordered_at) = '2025-08' THEN subtotal ELSE 0 END) AS sales_pretax_2025_08,\n  (SUM(CASE WHEN strftime('%Y-%m', ordered_at) = '2025-08' THEN subtotal ELSE 0 END) - SUM(CASE WHEN strftime('%Y-%m', ordered_at) = '2025-07' THEN subtotal ELSE 0 END)) * 100.0 / NULLIF(SUM(CASE WHEN strftime('%Y-%m', ordered_at) = '2025-07' THEN subtotal ELSE 0 END), 0) AS sales_pretax_growth_pct\nFROM jaffle_shop.dev.orders\nWHERE strftime('%Y-%m', ordered_at) IN ('2025-07', '2025-08')",
+  "providerName": "claude",
+  "recordedAt": "2026-10-16T14:09:24.391Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 2,
+    "messageRoles": [
+      "system",
+      "user"
+    ],
+    "preCanonicalHash": "6032c3b27167143d74c5f432debc471eaa6e7549d1a9b95f9f80b01a75e127b5",
+    "postCanonicalHash": "6032c3b27167143d74c5f432debc471eaa6e7549d1a9b95f9f80b01a75e127b5",
+    "appliedRuleClasses": []
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "key": "31a5701976a85a0380c47134d5a0502c",
+  "operation": "generate",
+  "text": "{\"version\":1,\"kind\":\"analytics\",\"reading\":\"For the customer named \\\"Ryan byrd\\\", show two figures side by side: total product revenue (sum of order-line prices) and beverage revenue (sum of order-line prices for drink items only).\",\"measures\":[{\"ref\":\"column:dev.order_items.product_price\",\"aggregation\":\"sum\",\"alias\":\"total_revenue\"},{\"ref\":\"column:dev.order_items.product_price\",\"aggregation\":\"sum\",\"alias\":\"beverage_revenue\",\"scope\":[{\"ref\":\"column:dev.order_items.is_drink_item\",\"op\":\"is_true\",\"values\":[true],\"source\":\"question\"}]}],\"groupBy\":[],\"display\":[],\"filters\":[{\"ref\":\"column:dev.customers.customer_name\",\"op\":\"eq\",\"values\":[\"Ryan byrd\"],\"source\":\"question\"}],\"expectedShape\":\"comparison\",\"unresolved\":[{\"clause\":\"total revenue\",\"options\":[\"column:dev.order_items.product_price\",\"column:dev.orders.order_total\"],\"material\":false,\"question\":\"Total revenue is read as pretax product revenue from order lines (consistent with the beverage split); say so if you want the order total including tax instead.\"}],\"provenance\":{\"column:dev.order_items.product_price\":\"q:total revenue\",\"column:dev.order_items.is_drink_item\":\"q:beverage revenue\",\"column:dev.customers.customer_name\":\"q:\\\"Ryan byrd\\\"\"}}",
+  "providerName": "claude",
+  "recordedAt": "2026-10-16T14:03:35.445Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 2,
+    "messageRoles": [
+      "system",
+      "user"
+    ],
+    "preCanonicalHash": "31a5701976a85a0380c47134d5a0502cb1b050c1e766d3ad65d6617b2132f941",
+    "postCanonicalHash": "31a5701976a85a0380c47134d5a0502cb1b050c1e766d3ad65d6617b2132f941",
+    "appliedRuleClasses": []
+  }
+}

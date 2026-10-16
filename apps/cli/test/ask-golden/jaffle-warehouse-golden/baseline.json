@@ -1,26 +1,23 @@
 {
-  "_comment": "Baseline on main (221f4f92, after #109) for the warehouse-only golden eval. askGolden: the Ask pipeline lane per case. 'jaffle-golden' and 'jaffle-warehouse-golden' are cassette replays, what CI runs; 'jaffle-golden:live' is one live run with the claude-code provider (Claude subscription CLI), not gated. The warehouse-only cassettes were recorded live with the same provider, so its replay is that live run, judged with golden.json's tier policy. router: zlens eval routes for the same questions (scripts/eval-golden-router-compare.mjs). CI fails only when the warehouse-only lane drops below a floor. See README.md.",
+  "_comment": "Baseline for the warehouse-only golden eval: main 221f4f92 (after #109) for jaffle-golden, and port PR 1/6 (#113) for jaffle-warehouse-golden, whose cassettes were re-recorded live with claude-code because a database-only project now shows Ask its catalog columns (floor.askGolden 29 -> 32). askGolden: the Ask pipeline lane per case. 'jaffle-golden' and 'jaffle-warehouse-golden' are cassette replays, what CI runs; 'jaffle-golden:live' is one live run with the claude-code provider (Claude subscription CLI), not gated. The warehouse-only cassettes were recorded live with the same provider, so its replay is that live run, judged with golden.json's tier policy. router: zlens eval routes for the same questions (scripts/eval-golden-router-compare.mjs). CI fails only when the warehouse-only lane drops below a floor. See README.md.",
   "floor": {
-    "askGolden": 29,
+    "askGolden": 32,
     "router": 22
   },
   "askGolden": {
     "jaffle-warehouse-golden": {
-      "commit": "d6e453bb9d5c8f036c809e2ccfe0234d30cc6b44",
+      "commit": "9c356c77ad2fa968cab914ae6b49152d80a4c490",
       "dirty": false,
       "provider": "cassette replay",
-      "passed": 29,
+      "passed": 32,
       "total": 45,
       "cases": [
         {
           "lane": "questions",
           "id": "top-beverage-customers",
-          "pass": false,
+          "pass": true,
           "route": "generated_answer",
-          "trust": "review_required",
-          "reasons": [
-            "rows differ from reference: column drink_revenue (aliases drink_revenue, beverage_revenue, revenue) not in result columns customer_id, customer_name, beverage_spend, beverage_items"
-          ]
+          "trust": "review_required"
         },
         {
           "lane": "questions",
@@ -57,7 +54,7 @@
           "route": "clarify",
           "trust": "not_applicable",
           "reasons": [
-            "no result rows: clarify/needs_clarification/needs_clarification \u2014 No revenue metric or column is exposed in this vocabulary; should revenue come from the orders table (order total) or the order_items table (line-item product revenue), and w"
+            "no result rows: clarify/needs_clarification/needs_clarification \u2014 This project defines no revenue metric: should revenue be pretax product revenue (sum of order-line product_price / order subtotal) or the order total including tax?\nThis pro"
           ]
         },
         {
@@ -70,9 +67,12 @@
         {
           "lane": "questions",
           "id": "revenue-by-location",
-          "pass": true,
-          "route": "generated_answer",
-          "trust": "review_required"
+          "pass": false,
+          "route": "clarify",
+          "trust": "not_applicable",
+          "reasons": [
+            "no result rows: clarify/needs_clarification/needs_clarification \u2014 Should revenue be the order total including tax (order_total) or the pretax subtotal (subtotal)?\nShould revenue be the order total including tax (order_total) or the pretax s"
+          ]
         },
         {
           "lane": "questions",
@@ -106,8 +106,8 @@
           "lane": "questions",
           "id": "ryan-byrd-total-revenue",
           "pass": true,
-          "route": "generated_answer",
-          "trust": "review_required"
+          "route": "clarify",
+          "trust": "not_applicable"
         },
         {
           "lane": "questions",
@@ -137,7 +137,7 @@
           "route": "clarify",
           "trust": "not_applicable",
           "reasons": [
-            "no result rows: clarify/needs_clarification/needs_clarification \u2014 No governed definition of a \"large\" order exists; should it be orders above a certain order_total (and what threshold), or orders with more than a certain number of items?\nNo"
+            "no result rows: clarify/needs_clarification/needs_clarification \u2014 No metric or term defines a \"large\" order in this project \u2014 should \"large\" mean an order total above some amount (and what threshold), or an order with more than some number "
           ]
         },
         {
@@ -163,9 +163,12 @@
         {
           "lane": "questions",
           "id": "supplies-cost-by-product",
-          "pass": true,
-          "route": "generated_answer",
-          "trust": "review_required"
+          "pass": false,
+          "route": "clarify",
+          "trust": "not_applicable",
+          "reasons": [
+            "no result rows: clarify/needs_clarification/needs_clarification \u2014 Do you mean the catalog supply cost per product (from the supplies table) or the supply cost actually incurred on sold order lines (from order_items)?\nDo you mean the catalog"
+          ]
         },
         {
           "lane": "questions",
@@ -174,7 +177,7 @@
           "route": "generated_answer",
           "trust": "review_required",
           "reasons": [
-            "rows differ from reference: column beverage_revenue (aliases beverage_revenue, drink_revenue, revenue) not in result columns product_id, product_name, product_type, product_price"
+            "rows differ from reference: column beverage_revenue (aliases beverage_revenue, drink_revenue, revenue) not in result columns product_id, product_name, product_type"
           ]
         },
         {
@@ -212,7 +215,7 @@
           "route": "clarify",
           "trust": "not_applicable",
           "reasons": [
-            "no result rows: clarify/needs_clarification/needs_clarification \u2014 Should revenue be pretax spend (lifetime_spend_pretax) or spend including tax (lifetime_spend)? No governed revenue metric exists in this project.\nShould revenue be pretax sp"
+            "no result rows: clarify/needs_clarification/needs_clarification \u2014 Should revenue be the pretax order subtotal or the order total including tax? No governed revenue metric is defined.\nShould revenue be the pretax order subtotal or the order "
           ]
         },
         {
@@ -281,10 +284,10 @@
           "lane": "questions",
           "id": "growth-jul-aug",
           "pass": false,
-          "route": "clarify",
-          "trust": "not_applicable",
+          "route": "generated_answer",
+          "trust": "review_required",
           "reasons": [
-            "no result rows: clarify/needs_clarification/needs_clarification \u2014 The vocabulary exposes no metric or column for pre-tax sales; which relation's pre-tax amount column (an order subtotal on dev.orders, or line-item product revenue on dev.ord"
+            "rows differ from reference: column revenue_july (aliases revenue_july, revenue_jul, revenue_jul_2025, july_revenue, revenue_july_2025, jul_revenue) not in result columns sales_pretax_2025_07, sales_pretax_2025_08, sales_pretax_growth_pct"
           ]
         },
         {
@@ -294,18 +297,15 @@
           "route": "clarify",
           "trust": "not_applicable",
           "reasons": [
-            "no result rows: clarify/needs_clarification/needs_clarification \u2014 The vocabulary exposes no revenue metric or amount column; should revenue be the order-line product amount (order_items) or the order total (orders)?\nThe vocabulary exposes n"
+            "no result rows: clarify/needs_clarification/needs_clarification \u2014 Should revenue be the pretax order subtotal or the order total including tax?\nShould revenue be the pretax order subtotal or the order total including tax?"
           ]
         },
         {
           "lane": "questions",
           "id": "revenue-including-tax",
-          "pass": false,
-          "route": "clarify",
-          "trust": "not_applicable",
-          "reasons": [
-            "no result rows: clarify/needs_clarification/needs_clarification \u2014 The vocabulary exposes no metric or column for a tax-inclusive total; the orders relation (one row per order) is the only place such a total would live \u2014 which column on dev."
-          ]
+          "pass": true,
+          "route": "generated_answer",
+          "trust": "review_required"
         },
         {
           "lane": "questions",
@@ -314,15 +314,15 @@
           "route": "clarify",
           "trust": "not_applicable",
           "reasons": [
-            "no result rows: clarify/needs_clarification/needs_clarification \u2014 Should revenue be measured as total spend including tax (lifetime_spend) or pretax spend (lifetime_spend_pretax)?\nShould revenue be measured as total spend including tax (lif"
+            "no result rows: clarify/needs_clarification/needs_clarification \u2014 Should revenue be the pretax order subtotal or the order total including tax?\nShould revenue be the pretax order subtotal or the order total including tax?"
           ]
         },
         {
           "lane": "questions",
           "id": "region-why-invest",
           "pass": true,
-          "route": "generated_answer",
-          "trust": "blocked"
+          "route": "clarify",
+          "trust": "not_applicable"
         },
         {
           "lane": "questions",
@@ -334,32 +334,23 @@
         {
           "lane": "conversation",
           "id": "q1-top-beverage-customers",
-          "pass": false,
+          "pass": true,
           "route": "generated_answer",
-          "trust": "review_required",
-          "reasons": [
-            "rows differ from reference: column drink_revenue (aliases drink_revenue, beverage_revenue, revenue) not in result columns customer_id, customer_name, beverage_spend, beverage_items"
-          ]
+          "trust": "review_required"
         },
         {
           "lane": "conversation",
           "id": "q2-include-customer-name",
-          "pass": false,
+          "pass": true,
           "route": "generated_answer",
-          "trust": "review_required",
-          "reasons": [
-            "rows differ from reference: column drink_revenue (aliases drink_revenue, beverage_revenue, revenue) not in result columns customer_id, customer_name, beverage_spend, beverage_items"
-          ]
+          "trust": "review_required"
         },
         {
           "lane": "conversation",
           "id": "q3-beverage-correction",
-          "pass": false,
+          "pass": true,
           "route": "generated_answer",
-          "trust": "review_required",
-          "reasons": [
-            "rows differ from reference: column drink_revenue (aliases drink_revenue, beverage_revenue, revenue) not in result columns customer_id, customer_name, beverage_spend, beverage_items"
-          ]
+          "trust": "review_required"
         },
         {
           "lane": "conversation",

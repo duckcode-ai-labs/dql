@@ -1,0 +1,23 @@
+{
+  "key": "5c8740c7d499c6f480c97be5eefe4604",
+  "operation": "generate",
+  "text": "{\"version\":1,\"kind\":\"analytics\",\"reading\":\"The customer churn rate, broken down by geographic region.\",\"measures\":[],\"groupBy\":[],\"display\":[],\"filters\":[],\"expectedShape\":\"grouped\",\"unresolved\":[{\"clause\":\"churn rate\",\"options\":[],\"material\":true,\"question\":\"This project defines no churn metric or churn/active-status column; customers only carry first_ordered_at and last_ordered_at. How should churn be defined, or is there a governed metric I should look for?\"},{\"clause\":\"by region\",\"options\":[\"column:dev.locations.location_id\"],\"material\":true,\"question\":\"There is no region dimension in this project; locations are the only geographic entity. Should the breakdown be by store location instead?\"}],\"provenance\":{\"column:dev.locations.location_id\":\"q:by region\"}}",
+  "providerName": "claude",
+  "recordedAt": "2026-10-16T14:05:32.721Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 2,
+    "messageRoles": [
+      "system",
+      "user"
+    ],
+    "preCanonicalHash": "5c8740c7d499c6f480c97be5eefe460406f831eb62feeaf31e9a8a36233304a7",
+    "postCanonicalHash": "5c8740c7d499c6f480c97be5eefe460406f831eb62feeaf31e9a8a36233304a7",
+    "appliedRuleClasses": []
+  }
+}
