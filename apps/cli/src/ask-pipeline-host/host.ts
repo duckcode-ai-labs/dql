@@ -71,7 +71,7 @@ import {
   type PhysicalIdentifierPartV1,
   renderCard,
   validateSqlAgainstLocalContext,
-  executionRelationIdentity,
+  inspectedRelationMatches,
   type AgentMessage,
   type RuntimeSchemaTable,
   priorWithoutValues,
@@ -2313,9 +2313,9 @@ export function createAskPipelineHost(deps: AskPipelineHostDeps): AskPipelineHos
           // statement is proven before execution. Read-only-ness is proven by
           // the tier itself.
           if (!/could not be parsed/i.test(validation.error)) return { error: `the drafted SQL was not accepted: ${validation.error}` };
-          const inspected = new Set(runtimeSchema.map((table) => executionRelationIdentityFor(table.relation, dialect)));
+          // One matcher with the validator: on DuckDB `main.claim` is the inspected `acme.main.claim`.
           const read = relationsInSql(sql).filter((relation) => parsePhysicalIdentifier(relation).length >= 2);
-          const foreign = read.find((relation) => !inspected.has(executionRelationIdentityFor(relation, dialect)));
+          const foreign = read.find((relation) => !inspectedRelationMatches(relation, runtimeSchema, dialect));
           if (foreign) return { error: `the drafted SQL reads ${foreign}, which this request did not inspect` };
           if (read.length === 0) return { error: 'the drafted SQL names no inspected relation' };
           return { sql, relations: read, proof: [`reads only the inspected physical bindings: ${read.join(', ')} (the SQL parser could not read this dialect; relations proven by name)`], engine: dialect };
@@ -2645,10 +2645,12 @@ export function createAskPipelineHost(deps: AskPipelineHostDeps): AskPipelineHos
           // the warehouse's identifier rule. That proof needs no SQL parser; a
           // third-party parser that cannot read a dialect (three-part names on
           // SQLite, a window clause) must never veto a governed statement.
-          const inspected = new Set(runtimeSchema.map((table) => executionRelationIdentityFor(table.relation, connection.driver)));
+          // A DuckDB statement may leave the default database out
+          // (`main.claim` for the inspected `acme_insurance.main.claim`),
+          // exactly as the drafted-SQL check accepts it: one matcher for both.
           const foreign = relationsInSql(candidate.sql)
             .filter((relation) => parsePhysicalIdentifier(relation).length >= 2)
-            .find((relation) => !inspected.has(executionRelationIdentityFor(relation, connection.driver)));
+            .find((relation) => !inspectedRelationMatches(relation, runtimeSchema, connection.driver));
           if (foreign) throw new Error(`the frozen SQL reads ${foreign}, which this request did not inspect (it inspected ${runtimeSchema.map((table) => table.relation).join(', ')}). Use the exact bound physical relation.`);
           if (candidate.tier !== 'exploratory') return;
           // Drafted SQL was parsed and validated when it was drafted; the same
@@ -3204,16 +3206,6 @@ function relationsInSql(sql: string): string[] {
     if (name) found.add(name);
   }
   return [...found];
-}
-
-/**
- * The identity a warehouse gives a relation written in SQL: one rule with the
- * validator (`executionRelationIdentity`). Snowflake keeps quote state;
- * DuckDB, SQLite and the other engines whose table names ignore quoting and
- * case compare quoted and unquoted names alike, case-insensitively.
- */
-function executionRelationIdentityFor(relation: string, driver: string | undefined): string {
-  return executionRelationIdentity(relation, driver);
 }
 
 /** Exact Snowflake-aware identity for a relation already written in SQL. */

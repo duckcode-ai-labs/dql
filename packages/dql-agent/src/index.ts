@@ -1120,6 +1120,7 @@ export type {
 export {
   validateSqlAgainstLocalContext,
   executionRelationIdentity,
+  inspectedRelationMatches,
 } from "./metadata/sql-context-validation.js";
 export { upgradeVectorIndexForProject, awaitVectorIndexUpgrade } from "./metadata/catalog.js";
 export { indexedVectorProviderId } from "./metadata/catalog-indexed-provider.js";

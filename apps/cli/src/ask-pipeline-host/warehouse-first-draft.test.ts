@@ -9,9 +9,9 @@ import { certifiedBlocksForDraft, createAskPipelineRouteExecutor } from './host.
 /**
  * A warehouse-first project (no dbt): the synced catalog is the whole account
  * of the data. The drafter reads every table of it when it fits, with the keys
- * the warehouse declares, and where nothing is governed it drafts from the
- * question itself. On any project the drafter reads the certified blocks
- * nearest the question.
+ * the warehouse declares; where nothing is governed it drafts from the
+ * question itself; and on DuckDB a statement may leave the default database
+ * out of a table's name.
  */
 type Table = { columns: string[]; primaryKey?: string[]; foreignKeys?: Array<{ columns: string[]; references: { relation: string; columns: string[] } }> };
 
@@ -171,6 +171,23 @@ describe('where nothing is governed, the SQL is drafted from the question itself
   it('a project with a certified block is read first', async () => {
     const { readings } = await ask({ blocks: [{ name: 'invoice_totals', description: 'Invoice totals by country.', sql: 'SELECT c.country, SUM(i.total) AS total FROM main.invoices i JOIN main.customers c ON c.customer_id = i.customer_id GROUP BY 1', certified: true }] }, 'Total invoice amount for each customer country', () => sql, rows);
     expect(readings).toBeGreaterThan(0);
+  });
+});
+
+describe('on DuckDB a statement may leave the default database out', () => {
+  it('a drafted statement reading main.invoices for the inspected shop.main.invoices runs, through both the drafted- and the frozen-SQL check', async () => {
+    const sql = 'SELECT c.country, SUM(i.total) AS total FROM main.invoices i JOIN main.customers c ON c.customer_id = i.customer_id GROUP BY c.country';
+    const { result, executed } = await ask({ driver: 'duckdb', database: 'shop' }, 'Total invoice amount for each customer country', () => sql, [{ country: 'NO', total: 10 }]);
+    expect(result.status).toBe('completed');
+    expect(result.trustState).toBe('review_required');
+    expect(executed.some((statement) => statement.includes('FROM main.invoices i'))).toBe(true);
+  });
+
+  it('on SQLite the same spelling stays exact', async () => {
+    const sql = 'SELECT c.country, SUM(i.total) AS total FROM other.invoices i JOIN other.customers c ON c.customer_id = i.customer_id GROUP BY c.country';
+    const { result, executed } = await ask({}, 'Total invoice amount for each customer country', () => sql, [{ country: 'NO', total: 10 }]);
+    expect(result.status).not.toBe('completed');
+    expect(executed.some((statement) => statement.includes('FROM other.invoices'))).toBe(false);
   });
 });
 
