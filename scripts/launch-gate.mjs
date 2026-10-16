@@ -554,8 +554,10 @@ export async function main(argv = process.argv.slice(2)) {
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  main().then((code) => { process.exitCode = code; }, (error) => {
+  // Exit explicitly: pooled upstream connections from the registry's fetches
+  // would otherwise keep the process alive after the summary.
+  main().then((code) => process.exit(code), (error) => {
     console.error(`launch gate error: ${error instanceof Error ? error.stack : String(error)}`);
-    process.exitCode = 2;
+    process.exit(2);
   });
 }
