@@ -12,7 +12,7 @@
 
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
-import { dirname, join, resolve, basename, relative } from 'node:path';
+import { dirname, join, resolve, basename, relative, isAbsolute } from 'node:path';
 import { createInterface } from 'node:readline';
 import { fileURLToPath } from 'node:url';
 
@@ -212,6 +212,13 @@ function canPrompt() {
 function createPrompter() {
   const terminal = Boolean(process.stdin.isTTY && process.stdout.isTTY);
   const rl = createInterface({ input: process.stdin, output: process.stdout, terminal });
+  // Without a listener, Ctrl-C at a question only pauses readline; quit
+  // instead, before anything has been written.
+  rl.on('SIGINT', () => {
+    process.stdout.write('\n');
+    rl.close();
+    process.exit(130);
+  });
   // The async iterator buffers lines, so piped answers that arrive before
   // the question is asked are not lost.
   const lines = rl[Symbol.asyncIterator]();
@@ -279,7 +286,7 @@ function warehouseConnection(target, driver, databasePath) {
     // Stored relative to the project (the runtime resolves it from there),
     // so dql.config.json stays portable.
     const rel = relative(target, databasePath);
-    connection.filepath = rel.startsWith('..') ? rel : `./${rel}`;
+    connection.filepath = rel.startsWith('..') || isAbsolute(rel) ? rel : `./${rel}`;
   }
   return connection;
 }
