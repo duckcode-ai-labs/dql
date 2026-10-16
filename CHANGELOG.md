@@ -6,6 +6,26 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 
 ---
 
+## Unreleased
+
+### DuckDB extension downloads can be turned off for good
+
+- `ZLENS_DUCKDB_AUTOINSTALL=off` (`DQL_DUCKDB_AUTOINSTALL` still read) now
+  keeps DuckDB from downloading any extension, not only from auto-installing
+  one: every connection of a database opened with the switch off starts with
+  `autoinstall_known_extensions` and `autoload_known_extensions` off (each
+  connector, each consistent read scope, a pooled reopen), an `INSTALL` that
+  would download (from DuckDB's repository, a named one or a URL) and a `SET`,
+  `RESET` or `PRAGMA` that turns either setting back on are refused before
+  they reach the engine, and a statement that needs an extension the install
+  does not have fails with one plain sentence ("the httpfs extension is not
+  installed and extension downloads are off on this install
+  (ZLENS_DUCKDB_AUTOINSTALL=off); ask an administrator to bundle it") instead
+  of the engine's text, which offered `INSTALL` and the auto settings and
+  named a server path. An extension already in `extension_directory` still
+  loads with `LOAD <name>`; an `INSTALL` from a local path still installs.
+  See [Connectors](docs/reference/connectors.md), "Extension downloads".
+
 ## v0.1.0 - 2026-10-13
 
 The first release under the name **ZLens**. ZLens is the product; DQL stays

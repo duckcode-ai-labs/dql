@@ -182,12 +182,25 @@ Then query files from SQL:
 select * from read_csv_auto('./data/orders.csv')
 ```
 
+### Extension downloads
+
 By default DuckDB installs a known extension the first time a statement needs
 it (for example `httpfs` to read a URL), downloading it from DuckDB's
-extension repository. Set `ZLENS_DUCKDB_AUTOINSTALL=off` to have DuckDB use only
-the extensions already installed: a statement that needs another one then
-fails with "Missing Extension" instead of downloading it. Hosts that must not
-fetch code at run time set this.
+extension repository at `extensions.duckdb.org`, and `INSTALL <name>` downloads
+one on request. Set `ZLENS_DUCKDB_AUTOINSTALL=off` (the old name
+`DQL_DUCKDB_AUTOINSTALL` is still read) to have DuckDB use only the extensions
+already installed: every connection starts with `autoinstall_known_extensions`
+and `autoload_known_extensions` off, an `INSTALL` that would download (from
+DuckDB's repository, a named one or a URL) is refused before it reaches the
+engine, and a statement that needs an extension this install does not have
+fails with one plain sentence: "the httpfs extension is not installed and
+extension downloads are off on this install (ZLENS_DUCKDB_AUTOINSTALL=off); ask
+an administrator to bundle it". Nothing is requested from any repository. An
+extension an administrator bundled into DuckDB's `extension_directory` still
+loads with an explicit `LOAD <name>` (or `INSTALL <name> FROM '<local path>'`),
+and the extensions built into the driver (`json`, `parquet`) work as before.
+Hosts that must not fetch code at run time set this; unset or `on` keeps
+DuckDB's default.
 
 ### When ZLens serves people through a host
 
