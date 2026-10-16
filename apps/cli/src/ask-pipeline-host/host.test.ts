@@ -1,10 +1,11 @@
+import { answeredArtifactTitle } from './host.js';
 import { describe, expect, it, vi } from 'vitest';
 import type { QueryExecutor } from '@zlens/connectors';
 import type { AgentMessage, AgentProvider, AgentRunRequest } from '@zlens/agent';
 import type { ConnectionConfig } from '@zlens/connectors';
 import { buildVocabularyIndex, classifyWarehouseError, createAgentRunBudget, parseIntent, physicalRelationBinding, type AnalyticalIntentV1 } from '@zlens/agent';
 import { SemanticLayer } from '@zlens/core';
-import { preferredJoinHints, preferredJoinLine, skillsForDraft, mentionsName, joinHintUsed, hintsForQuestion, joinsAnyRelation, sharedKeyPair, relationsFromCatalogHits, missingFieldWords, relationsWithColumnWords, columnProbeBudgetMs, columnsForPhysicalEntry, connectionKey, physicalRelationName, relationColumnsProbeSql, relationDatabases, relationsFromProbeRows, relevantRelationsForQuestion, snowflakeShowColumnsRows, underAskedNames, coverageEvaluations, governedCoverageDoubt, effectiveAnsweredTrust, answeredArtifactTitle, createAskPipelineRouteExecutor, explainOutOfScope, explainOutOfScopeWords, gapPresentation, groundIntentLiterals, knownMissingRelation, memberCandidatesSql, normalizeExecutedRow, prepareBlockForAsk, recordRelationEvidence, resetRelationEvidence, runtimeSchemaForVocabulary, toExecutorResult, tracedProbes, vocabularyViewKey } from './host.js';
+import { preferredJoinHints, preferredJoinLine, skillsForDraft, mentionsName, joinHintUsed, hintsForQuestion, joinsAnyRelation, sharedKeyPair, relationsFromCatalogHits, missingFieldWords, relationsWithColumnWords, columnProbeBudgetMs, columnsForPhysicalEntry, connectionKey, physicalRelationName, relationColumnsProbeSql, relationDatabases, relationsFromProbeRows, relevantRelationsForQuestion, snowflakeShowColumnsRows, underAskedNames, coverageEvaluations, governedCoverageDoubt, effectiveAnsweredTrust, createAskPipelineRouteExecutor, explainOutOfScope, explainOutOfScopeWords, gapPresentation, groundIntentLiterals, knownMissingRelation, memberCandidatesSql, normalizeExecutedRow, prepareBlockForAsk, recordRelationEvidence, resetRelationEvidence, runtimeSchemaForVocabulary, toExecutorResult, tracedProbes, vocabularyViewKey } from './host.js';
 
 function scripted(replies: string[]): AgentProvider & { calls: AgentMessage[][] } {
   const calls: AgentMessage[][] = [];
