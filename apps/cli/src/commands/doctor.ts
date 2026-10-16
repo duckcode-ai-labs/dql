@@ -19,6 +19,9 @@ import {
 import { listRemoteMcpSettings } from '../llm/mcp-config.js';
 import { listProviderSettings } from '../settings/provider-settings.js';
 import { describeNpmInvocation, resolveNpmInvocation } from '../npm-runtime.js';
+import { betterSqlite3Help, probeBetterSqlite3, type BetterSqlite3Probe } from '../native-deps.js';
+import { connectorBindingError } from '../connector-native.js';
+import { nativeBindingHelp, nativeInstallContextFor } from '@zlens/connectors';
 import { fetchLatestPublishedDqlVersion, resolveDqlRuntimeVersionStatus } from '../version-status.js';
 import { resolveRetrievalHealthStatus } from '../retrieval-health.js';
 import { getSemanticRuntimeStatus, explainMissingSemanticRuntime } from '../semantic-runtime.js';
@@ -64,6 +67,7 @@ export async function runDoctor(targetPath: string | null, flags: CLIFlags, rest
   const checks: Check[] = [
     checkNodeVersion(),
     checkNpmExecutable(),
+    checkSqliteNativeBinding(),
     checkProjectCliVersion(projectRoot),
     {
       name: 'Project root',
@@ -144,7 +148,7 @@ export async function runDoctor(targetPath: string | null, flags: CLIFlags, rest
   console.log('');
   for (const check of checks) {
     console.log(`  ${check.advisory ? '!' : check.ok ? '✓' : '✗'} ${check.name}`);
-    console.log(`    ${check.detail}`);
+    console.log(`    ${check.detail.split('\n').join('\n    ')}`);
   }
   console.log('');
   console.log(`  Summary: ${passed}/${checks.length} checks passed`);
@@ -823,12 +827,47 @@ function checkDuckDBDependency(projectRoot: string): Check {
     };
   }
 
+  if (status.installed) {
+    // Installed is not loadable: npm 12 blocks duckdb's install script, which
+    // downloads its native binary, unless package.json allows it.
+    const broken = connectorBindingError([status.installPath, projectRoot], 'duckdb');
+    if (broken) {
+      return {
+        name: 'DuckDB connector package',
+        ok: false,
+        detail: nativeBindingHelp({
+          packageName: 'duckdb',
+          role: 'the DuckDB driver ZLens queries DuckDB and local files with',
+          error: broken.error,
+          context: nativeInstallContextFor(broken.packageDir),
+        }),
+      };
+    }
+  }
+
   return {
     name: 'DuckDB connector package',
     ok: status.installed,
     detail: status.installed
       ? `installed at ${status.installPath} or project node_modules`
       : `missing; install from the notebook Connections page or run ${status.installCommand}`,
+  };
+}
+
+/**
+ * better-sqlite3 holds ZLens's local index, run history and caches. npm 12
+ * installs it without its native binary unless package.json allows its
+ * install script; every other command stops with this same message.
+ */
+export function checkSqliteNativeBinding(probe: () => BetterSqlite3Probe = probeBetterSqlite3): Check {
+  const result = probe();
+  if (result.ok) {
+    return { name: 'SQLite native module (better-sqlite3)', ok: true, detail: 'loads' };
+  }
+  return {
+    name: 'SQLite native module (better-sqlite3)',
+    ok: false,
+    detail: betterSqlite3Help(result.error, result.packageDir),
   };
 }
 

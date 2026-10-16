@@ -35,6 +35,7 @@ import { runPromote } from "./commands/promote.js";
 import { runEval } from "./commands/eval.js";
 import { runPropose } from "./commands/propose.js";
 import { runModel } from "./commands/model.js";
+import { explainNativeDependencyError, sqlitePreflightMessage } from "./native-deps.js";
 
 const HELP = `
   zlens — ZLens CLI
@@ -377,6 +378,15 @@ async function main() {
     process.exit(1);
   }
 
+  // npm 12 blocks better-sqlite3's install script unless package.json allows
+  // it: catch the missing native binary here, before it surfaces as "Could
+  // not locate the bindings file" from inside some store.
+  const preflight = sqlitePreflightMessage(command);
+  if (preflight) {
+    console.error(`Error: ${preflight}`);
+    process.exit(1);
+  }
+
   try {
     switch (command) {
       case "init":
@@ -479,7 +489,8 @@ async function main() {
         process.exit(1);
     }
   } catch (err) {
-    console.error(`Error: ${err instanceof Error ? err.message : String(err)}`);
+    const native = explainNativeDependencyError(err);
+    console.error(`Error: ${native ?? (err instanceof Error ? err.message : String(err))}`);
     process.exit(1);
   }
 }

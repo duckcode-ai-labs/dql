@@ -13,7 +13,17 @@ export {
 } from './result-types.js';
 export { ConnectionPoolManager } from './connection-pool.js';
 export { QueryExecutor } from './query-executor.js';
-export { MissingConnectorDependencyError } from './optional-dependency.js';
+export { MissingConnectorDependencyError, ConnectorNativeBindingError } from './optional-dependency.js';
+export {
+  NATIVE_INSTALL_SCRIPT_PACKAGES,
+  isNativeBindingError,
+  isNodeAbiMismatch,
+  nativeBindingHelp,
+  nativeInstallContextFor,
+  packageManagerFromUserAgent,
+  type NativeBindingHelpOptions,
+  type NativeInstallContext,
+} from './native-binding.js';
 export type { SQLParamSpec } from './sql-params.js';
 export { buildParamValues, expandArrayParameters, normalizeSQLPlaceholders } from './sql-params.js';
 export { SnowflakeConnector } from './drivers/snowflake.js';
