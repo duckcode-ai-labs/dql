@@ -33,6 +33,8 @@ interface Setup {
   database?: string;
   driver?: string;
   blocks?: Array<{ name: string; description: string; sql: string; certified: boolean }>;
+  /** A value profile in the project's cache (what a sync with agent.valueProfile writes), and whether the project allows it now. */
+  valueProfile?: { written: boolean; allowed?: boolean; fingerprint?: string };
 }
 
 function project(setup: Setup) {
@@ -46,6 +48,11 @@ function project(setup: Setup) {
     ...(table.primaryKey ? { primaryKey: table.primaryKey } : {}), ...(table.foreignKeys ? { foreignKeys: table.foreignKeys } : {}),
   }));
   writeFileSync(join(projectRoot, '.dql', 'warehouse-catalog.json'), JSON.stringify({ version: 1, driver: setup.driver ?? 'sqlite', connectionId: 'default', scopes: [{ catalogOrDatabase: setup.database ?? 'main', schemas: ['main'] }], relations, capturedAt: '2026-09-22T00:00:00.000Z', fingerprint: 'sha256:test' }));
+  if (setup.valueProfile?.written) {
+    // What the columns hold, as a sync with agent.valueProfile writes it.
+    mkdirSync(join(projectRoot, '.dql', 'cache'), { recursive: true });
+    writeFileSync(join(projectRoot, '.dql', 'cache', 'value-profile.json'), JSON.stringify({ version: 1, catalogFingerprint: setup.valueProfile.fingerprint ?? 'sha256:test', capturedAt: '2026-09-22T00:00:00.000Z', skippedSensitive: 0, relations: { [`${prefix}.customers`]: { country: { examples: ['Brazil', 'Canada'] } }, [`${prefix}.invoices`]: { total: { min: '0.99', max: '25.86' } } } }));
+  }
   const blocks = Object.fromEntries((setup.blocks ?? []).map((block) => [block.name, {
     name: block.name, description: block.description, sql: block.sql, filePath: `blocks/${block.name}.dql`, domain: 'shop', owner: 'analytics@shop.test',
     status: block.certified ? 'certified' : 'draft', tags: [], certification: block.certified ? { status: 'certified' } : undefined,
@@ -81,6 +88,7 @@ async function ask(setup: Setup, question: string, draft: (prompt: string) => st
       if (/HAVING COUNT\(\*\) > 1/.test(sql)) return { columns: [], rowCount: 0, executionTimeMs: 1, rows: [] };
       return { columns: Object.keys(rows[0] ?? {}), rowCount: rows.length, executionTimeMs: 1, rows };
     }) } as unknown as QueryExecutor,
+    ...(setup.valueProfile?.allowed !== undefined ? { valueProfileAllowed: () => setup.valueProfile!.allowed! } : {}),
     resolveConnection: async () => ({ driver: setup.driver ?? 'sqlite' } as ConnectionConfig),
     getSemanticLayer: () => undefined,
     getManifest: () => ({ snapshotId: `snapshot:${projectRoot}`, manifest: manifest as never }),
@@ -217,5 +225,37 @@ describe('the certified blocks an AI-written statement reads', () => {
     expect(prompts[0]).not.toContain('invoice_drafts');
     const receipt = (result as { askPipelineReceipt?: { dispatches: Array<{ label?: string; blocks?: string[] }> } }).askPipelineReceipt;
     expect(receipt?.dispatches.find((dispatch) => dispatch.blocks)?.blocks).toEqual(['block:shop.invoice_totals']);
+  });
+});
+
+describe('the value profile reaches the drafter only when the project allows it', () => {
+  const question = 'Total invoice amount for each customer country';
+
+  it('opted in: the stored values and ranges sit beside their columns', async () => {
+    const prompt = (await ask({ valueProfile: { written: true, allowed: true } }, question, declined)).prompts[0]!;
+    expect(prompt).toMatch(/column:main\.customers\.country[^\n]* holds 'Brazil', 'Canada'/);
+    expect(prompt).toMatch(/column:main\.invoices\.total[^\n]* ranges 0\.99 to 25\.86/);
+  });
+
+  it('not allowed (off, switched off since the sync, or under a host), absent, or of another catalog: no value is shown', async () => {
+    for (const valueProfile of [
+      { written: true, allowed: false },
+      { written: true, allowed: true, fingerprint: 'sha256:another-catalog' },
+      // On disk, but the host never said it may be used: the default is no.
+      { written: true },
+      { written: false, allowed: true },
+    ]) {
+      const prompt = (await ask({ valueProfile }, question, declined)).prompts[0]!;
+      expect(prompt).toContain('executable relation:main.customers');
+      expect(prompt).not.toContain(" holds 'Brazil'");
+      expect(prompt).not.toContain('ranges 0.99');
+    }
+  });
+
+  it('a dbt or hybrid project never shows it', async () => {
+    for (const kind of ['dbt', 'hybrid'] as const) {
+      const prompt = (await ask({ project: kind, valueProfile: { written: true, allowed: true } }, question, declined)).prompts[0] ?? '';
+      expect(prompt).not.toContain(" holds 'Brazil'");
+    }
   });
 });

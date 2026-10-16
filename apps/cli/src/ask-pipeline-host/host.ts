@@ -81,6 +81,7 @@ import { buildProjectVocabulary, buildVocabularySource, embeddedManifestRelation
 import { groupingKeyLabels, keyLabelLine, keyLabels, unnamedGroupingKeys, unnamedKeyFailure, type EntityKey, type KeyLabel, type KeyReference } from './key-labels.js';
 import { businessIdentifierLine, businessIdentifiers, modelingEntityTexts, certifiedJoinViolations, classifySqlJoins, ledgerJoins, markerTableLine, markerTables, modeledJoinPaths, modelingRelationshipEdges, sameRelation, sharedParentShortcuts, type LedgerJoin } from './join-relationships.js';
 import { readEnv } from '@zlens/core';
+import { readValueProfile, renderColumnProfile } from '../value-profile.js';
 
 /**
  * THE ASK PIPELINE HOST.
@@ -130,6 +131,12 @@ export interface AskPipelineHostDeps {
    * Without it, they may (single-user, the person's chosen model).
    */
   valuesMayReachModel?(request: AgentRunRequest, provider: AgentProvider): boolean | Promise<boolean>;
+  /**
+   * Whether the project's column value profile (`agent.valueProfile`, example
+   * values and ranges) may reach the SQL drafter. Absent: it may not; the
+   * profile is opt-in because its values reach the provider with the prompt.
+   */
+  valueProfileAllowed?(): boolean;
   /** Compile on the project's active semantic engine; throws with the engine's message. */
   compileSemantic(request: SemanticCompileRequest, connection: ConnectionConfig, context?: AskSemanticCompileContext): Promise<SemanticCompileOutput>;
   /** The engine `compileSemantic` will use, known before preparation so the binder can speak its dialect. */
@@ -2115,14 +2122,31 @@ export function createAskPipelineHost(deps: AskPipelineHostDeps): AskPipelineHos
       // the tables that name a grouped key, added above, among them), with the
       // keys the warehouse declares. Above the budget it chooses as before.
       const warehouseKeys = warehouseFirstCatalog(deps.getManifest().manifest, deps.projectRoot);
+      // WHAT THE COLUMNS HOLD, when the project opted in (agent.valueProfile)
+      // and the profile describes this catalog: a few stored values or the
+      // range beside each column. The values reach the provider with this
+      // prompt, which is why it is opt-in and never under a host.
+      const valueProfile = warehouseKeys && deps.valueProfileAllowed?.() === true
+        ? readValueProfile(deps.projectRoot, deps.getManifest().manifest?.dbtProvenance?.warehouseCatalogFingerprint)
+        : undefined;
+      const profiled = new Map(Object.entries(valueProfile?.relations ?? {}).map(([relation, columns]) => [physicalRelationIdentity(relation), new Map(Object.entries(columns).map(([column, profile]) => [column.toLowerCase(), profile]))]));
+      const columnCard = (item: VocabularyEntry): string => {
+        const card = renderCard(item);
+        const relation = entryPhysicalRelation(item);
+        if (!profiled.size || !relation) return card;
+        const column = (item.physical?.column ?? item.name.split('.').pop() ?? '').toLowerCase();
+        return `${card}${renderColumnProfile(profiled.get(physicalRelationIdentity(relation))?.get(column))}`;
+      };
+      // The values take room: the whole schema may be larger when they are shown.
+      const wholeSchemaChars = profiled.size ? WHOLE_SCHEMA_WITH_VALUES_CHARS : WHOLE_SCHEMA_CHARS;
       let wholeSchema = false;
       if (warehouseKeys) {
         const described = current.entries
           .filter((item) => item.kind === 'relation' && entryPhysicalRelation(item) !== undefined && current.entries.some((column) => column.kind === 'column' && samePhysicalEntry(column, item)))
           .map((item) => entryPhysicalRelation(item)!);
-        const size = current.entries.filter((item) => item.kind === 'column').reduce((total, item) => total + renderCard(item).length + 1, 0) + described.length * 160;
+        const size = current.entries.filter((item) => item.kind === 'column').reduce((total, item) => total + columnCard(item).length + 1, 0) + described.length * 160;
         const unseen = described.filter((relation) => !relations.some((known) => physicalRelationIdentity(known) === physicalRelationIdentity(relation)));
-        if (unseen.length > 0 && size <= WHOLE_SCHEMA_CHARS) {
+        if (unseen.length > 0 && size <= wholeSchemaChars) {
           relations.push(...unseen);
           wholeSchema = true;
         }
@@ -2248,13 +2272,13 @@ export function createAskPipelineHost(deps: AskPipelineHostDeps): AskPipelineHos
           const shownAs = (target: string) => { const table = warehouseKeys?.keysOf(target); return (table && relations.find((known) => warehouseKeys?.keysOf(known) === table)) ?? target; };
           const lines = [
             entry ? `- executable relation:${relation} [${entry.physical?.binding?.columnCompleteness ?? 'partial'} columns; logical ${entry.physical?.binding?.logicalRelation ?? entry.model ?? relation}]` : `- executable relation:${relation}`,
-            ...current.entries.filter((item) => item.kind === 'column' && samePhysicalEntry(item, entry)).map((item) => renderCard(item)),
+            ...current.entries.filter((item) => item.kind === 'column' && samePhysicalEntry(item, entry)).map((item) => columnCard(item)),
             // What one row is, and how this table points at others, as the
             // warehouse declares them (warehouse-first projects only).
             ...(declared?.primaryKey ? [`  primary key (${declared.primaryKey.join(', ')}): one row per ${declared.primaryKey.join(', ')}`] : []),
             ...(declared?.foreignKeys ?? []).map((key) => `  foreign key (${key.columns.join(', ')}) references ${shownAs(key.references.relation)} (${key.references.columns.join(', ')})`),
           ];
-          const cap = wholeSchema ? WHOLE_SCHEMA_CHARS : 18_000;
+          const cap = wholeSchema ? wholeSchemaChars : 18_000;
           for (const line of lines) { if (chars + line.length > cap) break; cards.push(line); chars += line.length + 1; }
         }
         const dialect = connection?.driver ?? 'duckdb';
@@ -3180,6 +3204,8 @@ export function connectionKey(connection: ConnectionConfig): string {
 
 /** The schema a warehouse-first draft may read whole: about ten thousand tokens. */
 const WHOLE_SCHEMA_CHARS = 40_000;
+/** The same with the column value profile beside each column: about fifteen thousand tokens. */
+const WHOLE_SCHEMA_WITH_VALUES_CHARS = 60_000;
 
 /**
  * What a draft for an engine must know that the model gets wrong by default.
