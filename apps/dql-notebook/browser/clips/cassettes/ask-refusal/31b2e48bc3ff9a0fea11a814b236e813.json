@@ -1,0 +1,23 @@
+{
+  "key": "31b2e48bc3ff9a0fea11a814b236e813",
+  "operation": "generate",
+  "text": "{\"version\":1,\"kind\":\"analytics\",\"reading\":\"The user asks for the employee churn rate, which requires employee/HR data this Jaffle Shop commerce project does not hold.\",\"measures\":[],\"groupBy\":[],\"display\":[],\"filters\":[],\"expectedShape\":\"scalar\",\"unresolved\":[{\"clause\":\"employee churn rate\",\"options\":[],\"material\":true,\"question\":\"This project holds customers, orders, order items, products, locations and supplies only; there is no employee or HR data, so employee churn cannot be measured here.\"}],\"provenance\":{}}",
+  "providerName": "claude",
+  "recordedAt": "2026-10-16T02:47:17.307Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 2,
+    "messageRoles": [
+      "system",
+      "user"
+    ],
+    "preCanonicalHash": "31b2e48bc3ff9a0fea11a814b236e81379508786eb0b7805178bbaa075e1e347",
+    "postCanonicalHash": "31b2e48bc3ff9a0fea11a814b236e81379508786eb0b7805178bbaa075e1e347",
+    "appliedRuleClasses": []
+  }
+}

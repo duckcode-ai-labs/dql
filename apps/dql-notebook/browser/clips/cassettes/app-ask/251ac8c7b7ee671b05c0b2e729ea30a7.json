@@ -1,0 +1,23 @@
+{
+  "key": "251ac8c7b7ee671b05c0b2e729ea30a7",
+  "operation": "generate",
+  "text": "{\"version\":1,\"kind\":\"analytics\",\"reading\":\"Show the trend of gross order revenue (and order count) per calendar month.\",\"measures\":[{\"ref\":\"block:commerce.monthly_revenue\"}],\"groupBy\":[],\"display\":[],\"filters\":[],\"expectedShape\":\"trend\",\"unresolved\":[],\"provenance\":{\"block:commerce.monthly_revenue\":\"q:How has revenue changed by month\"}}",
+  "providerName": "claude",
+  "recordedAt": "2026-10-16T02:46:20.917Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 2,
+    "messageRoles": [
+      "system",
+      "user"
+    ],
+    "preCanonicalHash": "251ac8c7b7ee671b05c0b2e729ea30a7bffc4af875727d63172861b37364c46b",
+    "postCanonicalHash": "251ac8c7b7ee671b05c0b2e729ea30a7bffc4af875727d63172861b37364c46b",
+    "appliedRuleClasses": []
+  }
+}
