@@ -1,8 +1,8 @@
 # Release process
 
 ZLens uses one version across its publishable packages. The current version is
-`0.1.0` (see `apps/cli/package.json`), the first release under the ZLens
-package names. The packages it replaces (`@duckcodeailabs/*`,
+`0.2.0` (see `apps/cli/package.json`). `0.1.0` was the first release under the
+ZLens package names. The packages it replaces (`@duckcodeailabs/*`,
 `create-dql-app`) ended at `1.17.2`; their last git tag is `v1.14.3-rc.1`,
 because `1.13.5` to `1.17.2` were published by hand. The repository is
 `duckcode-ai-labs/zlens` (renamed from `duckcode-ai-labs/dql`; GitHub
@@ -84,7 +84,7 @@ git push origin zlens-v0.2.0
    stops with `Release tag is required. Use --tag latest or --tag next.`:
 
    ```bash
-   node scripts/release-packages.mjs --dry-run --tag latest --expected-version 0.1.0
+   node scripts/release-packages.mjs --dry-run --tag latest --expected-version 0.2.0
    ```
 
    It is not pack-only: the script rebuilds the whole workspace first (about

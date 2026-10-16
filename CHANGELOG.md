@@ -8,23 +8,199 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
-### DuckDB extension downloads can be turned off for good
+## v0.2.0 - 2026-10-16
 
-- `ZLENS_DUCKDB_AUTOINSTALL=off` (`DQL_DUCKDB_AUTOINSTALL` still read) now
-  keeps DuckDB from downloading any extension, not only from auto-installing
-  one: every connection of a database opened with the switch off starts with
-  `autoinstall_known_extensions` and `autoload_known_extensions` off (each
-  connector, each consistent read scope, a pooled reopen), an `INSTALL` that
-  would download (from DuckDB's repository, a named one or a URL) and a `SET`,
-  `RESET` or `PRAGMA` that turns either setting back on are refused before
-  they reach the engine, and a statement that needs an extension the install
-  does not have fails with one plain sentence ("the httpfs extension is not
-  installed and extension downloads are off on this install
-  (ZLENS_DUCKDB_AUTOINSTALL=off); ask an administrator to bundle it") instead
-  of the engine's text, which offered `INSTALL` and the auto settings and
-  named a server path. An extension already in `extension_directory` still
-  loads with `LOAD <name>`; an `INSTALL` from a local path still installs.
-  See [Connectors](docs/reference/connectors.md), "Extension downloads".
+Certified answers on your warehouse. This release adds a database-only path,
+from install to a certified join, and fixes what testing 0.1.0 found in Ask,
+Apps, Modeling, lineage and the CLI.
+
+To upgrade, run `npm i -D @zlens/cli@^0.2.0` in each project, or
+`npm i -g @zlens/cli` for a global install. A project that declares
+`"@zlens/cli": "^0.1.0"` stays on 0.1.x, because a caret range below 1.0 does
+not cross minor versions. No project files need to change, unless a model
+or join declares a `status:` ZLens does not know (see Modeling).
+
+### New: start from your database, no dbt needed
+
+- **Guided Setup asks "Where does your data model live?"** Pick **dbt
+  project**, **Database only**, **Both** (a dbt project plus schemas dbt does
+  not cover), or **Open an existing ZLens project**. The Welcome screen offers
+  the same choice.
+  - **Database only** connects your database, lets you choose schemas,
+    synchronizes them, then **Draft my models** drafts entities and joins
+    from the tables, keys and comments and checks each join on the data.
+    The drafts open in **Modeling** for you to review and certify.
+  - **Open an existing ZLens project** (a teammate's repository) uses the
+    mode `dql.config.json` already sets. It asks only for the connection's
+    credentials, lists the `${NAME}` environment variables the connection
+    reads and which are not set, tests the connection and synchronizes.
+- **`create-zlens-app --warehouse <driver>`** creates a database-only
+  workspace: `warehouse-first` modeling, no dbt block, a `default`
+  connection stub with secrets as `${ENV_VAR}` placeholders, and
+  `npm run sync` running `zlens sync warehouse`. `--database-path <file>`
+  sets a DuckDB or SQLite file. `--dbt <path>` wires a dbt project without
+  detection or prompts. Run without either flag and with no dbt project
+  nearby, it asks whether the workspace is for a dbt project or a database
+  only; CI and piped runs keep the old default. Ctrl-C at that prompt now
+  exits without writing anything.
+- A new sample, [jaffle-shop-warehouse](https://github.com/duckcode-ai/jaffle-shop-warehouse),
+  is the Jaffle Shop as a plain DuckDB file with a database-only workspace
+  already set up.
+- A connection test with an unset `${NAME}` placeholder now fails and names
+  the variable, instead of testing the placeholder text (DuckDB used to
+  create a file named after it).
+
+### Modeling
+
+- **Certifying a drafted join moves it.** Certifying a join that discovery
+  drafted used to save the certified copy in the area file and leave the
+  draft behind, so `zlens model validate` failed with a duplicate
+  relationship. The same reviewed change now removes the draft, keeps its
+  description, and the review shows both files. Editing an entity into an
+  area works the same way.
+- **Discovery picks the right grain.** A table's own unique `<table>_id` is
+  its grain before any name column; when it repeats, `<table>_uuid`, `uuid`
+  and `<table>_key` are checked. On the Jaffle Shop warehouse, `products` and
+  `supplies` now get `product_id` and `supply_uuid`.
+- **A join needs data behind it.** A many-to-one or one-to-one join fails its
+  check when more than 5% of keyed rows find no match (`max_unmatched_share`
+  changes the limit per relationship). `zlens model discover --validate`
+  holds back a join that only a column name suggests when the data does not
+  back it.
+- New commands: `zlens model validate-relationship <id>|--all [--certify]
+  [--dry-run]` checks joins on the warehouse, and
+  `zlens model reject-discovery <id>` turns a drafted join down.
+- An unknown `status:` on a model or join (for example `approved`) is now an
+  error, not a silent draft.
+
+### Ask
+
+- **Answer labels agree.** An answer's heading, badge, note and result card
+  now come from one trust decision. On an App, *What is beverage revenue by
+  product?* was headed **AI-generated answer**, noted "Built from semantic
+  metrics" and carded **Certified block answer**; it now reads **Governed**
+  throughout, and only SQL the AI wrote is called AI-generated.
+- **Drafted SQL joins names, not keys.** "What is the average order value at
+  each store?" used to answer with store UUIDs. Ask now adds the table that
+  holds the name, with the join spelled out, and sends back once a draft that
+  groups by a bare key. Answers never read raw UUIDs or hashes aloud; rows
+  keyed only by them say so.
+- **Database-only projects: drafting reads the whole schema.** When the
+  synced tables fit, the SQL drafter sees all of them (not five chosen by word
+  overlap), with each table's declared primary and foreign keys. With no
+  certified block or metric in scope, the question goes to the drafter as
+  asked, so a restatement can no longer change its meaning.
+  `ZLENS_ASK_DRAFT_FIRST=0` keeps the old order.
+- **Checks on drafted SQL no longer block correct SQL**, and an answer gets
+  one trust decision. Checking a join's row counts no longer runs the join, so
+  `zlens model discover --validate` on a many-to-many view takes seconds,
+  not minutes, and a real warehouse does not bill for it.
+- A database-only project's tables now carry their columns into Ask, so Ask
+  no longer reports columns it was never shown as missing.
+- An entity named like a built-in JavaScript property (for example
+  `constructor`, from a Formula 1 `constructors` table) no longer blocks every
+  question on the project.
+- **Optional: show the SQL drafter what the columns hold** (database-only
+  projects). With `"agent": { "valueProfile": { "mode": "sampled" } }` in
+  `dql.config.json`, `zlens sync warehouse` also reads the three most frequent
+  values of each text column and the range of each number, and Ask's SQL
+  drafter sees them. Off by default. These values reach your AI provider.
+  Contact details, credentials, personal names and pay are never read, and
+  values that look like emails, phone numbers, URLs or keys are dropped.
+  Set `"mode": "off"` to stop; the next sync deletes the file. See
+  [No dbt? Start from your database](docs/get-started/no-dbt.md#optional-show-the-drafter-what-the-columns-hold).
+- **Optional: a second look at AI-drafted results.** With
+  `"agent": { "resultReview": { "mode": "on" } }` in `dql.config.json`, or
+  `ZLENS_ASK_RESULT_REVIEW=1`, every AI-drafted answer gets one more AI call
+  that sees the question, the SQL and the result's shape (row count, distinct
+  and empty values per column, never a value) and can ask for one revision.
+  Off by default: it adds a few seconds per drafted answer.
+  `ZLENS_ASK_RESULT_REVIEW=0` forces it off. See
+  [Needs review](docs/ask/needs-review.md).
+- Semantic layer: ratio metrics run in the native engine, and a metric is
+  never offered a dimension it can only reach one-to-many (which would
+  double-count). When a dimension is out of reach, the message names the join
+  that blocks it.
+- Every Ask on the Jaffle Shop sample failed with
+  `(sql ?? '').trim is not a function` when MetricFlow was not installed (a
+  dbt `count` measure with `expr: 1`). Fixed.
+
+### Apps
+
+- **Filter by… works.** A viewer's filter now narrows the tiles that can take
+  it, shows a chip naming the tiles it narrowed (a tile it cannot reach says
+  "Not filtered by …"), and reaches the page's story, **Ask about this App**
+  and exports. Before, no value reached the run.
+- The page story picks its clearest signals by value (the largest, ties
+  settled by name), not by row order; a tile ordered on purpose, such as a
+  bottom-N, is still read in its own order.
+- The line under the App's Ask box is readable in every theme (it was below
+  WCAG AA contrast).
+
+### Lineage
+
+- The status bar says what lineage was built from: **the dbt manifest**,
+  **the synced warehouse catalog**, or both. A project without dbt was told
+  its lineage was "Compiled from the dbt manifest".
+- `FROM "main"."orders"` is read as the table `main.orders`, not the schema
+  `main`.
+
+### CLI while the workbench runs
+
+- With `zlens notebook` running on a DuckDB project, `zlens certify`,
+  `zlens sync warehouse`, `zlens model discover --validate`,
+  `zlens model validate-relationship` and `zlens doctor` run their queries
+  through the workbench instead of failing with DuckDB's "Could not set lock
+  on file". They say so in one line. Only read queries go through it.
+- When another program holds the DuckDB file, the error now says which
+  process, and what to do: stop the workbench with Ctrl+C, or close dbt or
+  the SQL client. See [Troubleshooting](docs/guides/troubleshooting.md).
+
+### AI agents (MCP)
+
+- **`zlens mcp test` fails honestly.** It printed **Ready** and exited 0 even
+  when its checks failed. Every check is now required: **Ready** only when
+  all pass, otherwise a **Fix:** line per failed check and exit code 1 (text
+  and `--format json`).
+- Hints and MCP tool errors now say to start the workbench with
+  `zlens notebook` (or `npm run notebook`); they named `zlens serve`, which
+  serves a built bundle and does not start in a project folder.
+
+### DuckDB and other databases
+
+- SQLite: Ask reads a table's columns (it asked for `information_schema`,
+  which SQLite does not have).
+- `ZLENS_DUCKDB_AUTOINSTALL=off` (`DQL_DUCKDB_AUTOINSTALL` is still read) now
+  stops DuckDB from downloading any extension, on every connection ZLens
+  opens. An `INSTALL` that would download, or a setting that turns automatic
+  downloads back on, is refused. A query that needs a missing extension fails
+  with one plain sentence that names it. Extensions already installed still
+  load with `LOAD <name>`. See [Connectors](docs/reference/connectors.md),
+  "Extension downloads".
+
+### Docs
+
+- New README and docs home with the tagline "Certified answers on your
+  warehouse", the ZLens logo and real product screenshots.
+- Docs reorganised around what you do: Get started, Ask and trust, Build
+  blocks, Notebooks, Apps, Lineage, Connect your AI agent, Reference. Moved
+  pages redirect.
+- Short feature clips in the docs and README, recorded from the real product
+  on the Jaffle Shop sample (`pnpm docs:clips`).
+- The quickstart installs ZLens into the sample's own workspace
+  (`npm install`, `npm run sync`, `npm run notebook`), and warns not to run
+  `create-zlens-app` inside it.
+- New page: [No dbt? Start from your database](https://duckcode-ai-labs.github.io/zlens/get-started/no-dbt/).
+- CI checks that every `zlens` command and flag in the docs exists.
+
+### Releasing
+
+- The release workflow waits for npm to list the published packages before
+  its install check. The 0.1.0 run published everything, then failed that
+  check because npm was still processing the packages.
+- `scripts/launch-gate.mjs` installs the packed release on a clean folder and
+  follows the README quickstart for both samples, in a browser, before a tag
+  is pushed.
 
 ## v0.1.0 - 2026-10-13
 
