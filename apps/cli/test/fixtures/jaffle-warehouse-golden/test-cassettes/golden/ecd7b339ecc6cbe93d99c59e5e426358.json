@@ -1,0 +1,23 @@
+{
+  "key": "ecd7b339ecc6cbe93d99c59e5e426358",
+  "operation": "generate",
+  "text": "{\"version\":1,\"kind\":\"analytics\",\"reading\":\"Rank customers by lifetime spend and return the top 10, showing each customer's name.\",\"measures\":[{\"ref\":\"column:dev.customers.lifetime_spend\",\"aggregation\":\"sum\",\"alias\":\"lifetime_spend\"}],\"groupBy\":[{\"ref\":\"column:dev.customers.customer_id\",\"role\":\"key\"}],\"display\":[\"column:dev.customers.customer_name\"],\"filters\":[],\"ordering\":{\"ref\":\"column:dev.customers.lifetime_spend\",\"direction\":\"desc\"},\"limit\":10,\"expectedShape\":\"ranking\",\"unresolved\":[{\"clause\":\"top customers\",\"options\":[\"column:dev.customers.lifetime_spend\",\"column:dev.customers.count_lifetime_orders\"],\"material\":false,\"question\":\"Should 'top' be measured by lifetime spend (default) or by number of lifetime orders?\"}],\"provenance\":{\"column:dev.customers.lifetime_spend\":\"q:top customers\",\"column:dev.customers.customer_id\":\"q:customers\",\"column:dev.customers.customer_name\":\"q:who are\",\"column:dev.customers.count_lifetime_orders\":\"q:top customers\"}}",
+  "providerName": "claude",
+  "recordedAt": "2026-10-16T13:38:01.402Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 2,
+    "messageRoles": [
+      "system",
+      "user"
+    ],
+    "preCanonicalHash": "ecd7b339ecc6cbe93d99c59e5e426358ad7212c9cc2b546080d5073c30336778",
+    "postCanonicalHash": "ecd7b339ecc6cbe93d99c59e5e426358ad7212c9cc2b546080d5073c30336778",
+    "appliedRuleClasses": []
+  }
+}

@@ -37,7 +37,11 @@ import { readEnv } from '@zlens/core';
  *
  * Baseline honesty: the legacy runtime's baseline (17/34) is documented in
  * `baseline-report-authoritative_v2.json`, never asserted. The pipeline's
- * suite carries no known-failure exemptions: every case must pass.
+ * suite carries no known-failure exemptions: every case must pass. The one
+ * exception is a lane that declares `gate: "floor"` in its `golden.json`
+ * (the warehouse-only lane, `ask-golden-jaffle-warehouse.test.ts`): it
+ * measures a gap still being closed, so it records every case and fails only
+ * below the floor its committed baseline sets.
  */
 
 type Outcome = 'rows' | 'clarify_or_rows' | 'gap' | 'conversation' | 'answered_with_caveat' | 'gap_or_caveat';
@@ -60,11 +64,33 @@ const here = dirname(fileURLToPath(import.meta.url));
  * certified blocks and non-unique player names).
  */
 const FIXTURE = readEnv('ZLENS_ASK_GOLDEN_FIXTURE') ?? 'jaffle-golden';
-const goldenDir = FIXTURE === 'jaffle-golden' ? resolve(here, '../test/ask-golden') : resolve(here, '../test/ask-golden', FIXTURE);
+const caseDirOf = (fixture: string) => fixture === 'jaffle-golden' ? resolve(here, '../test/ask-golden') : resolve(here, '../test/ask-golden', fixture);
+const goldenDir = caseDirOf(FIXTURE);
 const fixtureDir = resolve(here, '../test/fixtures', FIXTURE);
-const questions = (JSON.parse(readFileSync(join(goldenDir, 'questions.json'), 'utf8')) as { questions: GoldenCase[] }).questions;
-const conversation = (JSON.parse(readFileSync(join(goldenDir, 'conversation.json'), 'utf8')) as { turns: GoldenCase[] }).turns;
-const seed = JSON.parse(readFileSync(join(fixtureDir, 'seeds', 'seed.json'), 'utf8')) as GoldenSeed;
+/**
+ * A lane may borrow another lane's cases and seed through `golden.json` in its
+ * case directory. `jaffle-warehouse-golden` asks jaffle-golden's questions over
+ * jaffle-golden's seed, with no dbt manifest:
+ *   - `questionsFrom` / `seedFrom`: the fixture whose cases and seed are used;
+ *   - `tierPolicy`: the trust a case must carry here, by the tier it carries
+ *     there (a database-only project has no dbt metrics, so `governed` becomes
+ *     `reviewable`: right rows, any honest label);
+ *   - `gate: 'floor'`: cases are recorded, not asserted one by one; the lane
+ *     fails only when fewer pass than `floor.askGolden` in the committed
+ *     `baseline` file. Ports that raise the score raise the floor with it.
+ */
+interface LaneConfig { questionsFrom?: string; seedFrom?: string; tierPolicy?: Partial<Record<Tier, Tier>>; gate?: 'every_case' | 'floor'; baseline?: string }
+const laneConfigPath = join(goldenDir, 'golden.json');
+const LANE = (existsSync(laneConfigPath) ? JSON.parse(readFileSync(laneConfigPath, 'utf8')) : {}) as LaneConfig;
+const FLOOR_GATE = LANE.gate === 'floor';
+const questionsDir = LANE.questionsFrom ? caseDirOf(LANE.questionsFrom) : goldenDir;
+const withTierPolicy = (spec: GoldenCase): GoldenCase => {
+  const tier = LANE.tierPolicy?.[spec.tier];
+  return tier ? { ...spec, tier } : spec;
+};
+const questions = (JSON.parse(readFileSync(join(questionsDir, 'questions.json'), 'utf8')) as { questions: GoldenCase[] }).questions.map(withTierPolicy);
+const conversation = (JSON.parse(readFileSync(join(questionsDir, 'conversation.json'), 'utf8')) as { turns: GoldenCase[] }).turns.map(withTierPolicy);
+const seed = JSON.parse(readFileSync(join(resolve(here, '../test/fixtures', LANE.seedFrom ?? FIXTURE), 'seeds', 'seed.json'), 'utf8')) as GoldenSeed;
 
 const LIVE = readEnv('ZLENS_ASK_GOLDEN_LIVE') === '1';
 // The built product scales its run deadline for a subscription CLI (~35 s a
@@ -198,6 +224,14 @@ async function startGolden(): Promise<Harness> {
   cpSync(fixtureDir, root, { recursive: true });
   rmSync(join(root, '.dql'), { recursive: true, force: true });
   rmSync(join(root, 'test-cassettes'), { recursive: true, force: true });
+  // A database-only fixture commits the catalog `zlens sync warehouse` wrote:
+  // it is project source there, not runtime state. Everything else under
+  // .dql/ stays dropped.
+  const catalog = join(fixtureDir, '.dql', 'warehouse-catalog.json');
+  if (existsSync(catalog)) {
+    mkdirSync(join(root, '.dql'), { recursive: true });
+    cpSync(catalog, join(root, '.dql', 'warehouse-catalog.json'));
+  }
   if (LIVE) {
     mkdirSync(join(root, '.dql'), { recursive: true });
     for (const file of ['provider-settings.json', 'oauth-credentials.json']) {
@@ -352,11 +386,46 @@ function judge(spec: GoldenCase, run: any, run0?: any): Verdict {
   return { pass: reasons.length === 0, reasons, observed };
 }
 
+/**
+ * `ZLENS_ASK_GOLDEN_BASELINE_OUT=<file>` records a full run's per-case results
+ * in a baseline file: under the fixture's name for a cassette replay (what CI
+ * runs), under `<fixture>:live` for a live run. A replay of a floor-gated lane
+ * also sets `floor.askGolden` to its score.
+ */
+function writeBaseline(path: string, passed: number) {
+  const baseline = (existsSync(path) ? JSON.parse(readFileSync(path, 'utf8')) : {}) as Record<string, any>;
+  const build = buildIdentity();
+  const key = LIVE ? `${FIXTURE}:live` : FIXTURE;
+  baseline.askGolden = {
+    ...(baseline.askGolden ?? {}),
+    [key]: {
+      commit: build.commit,
+      dirty: build.dirty === 'true',
+      provider: LIVE ? `live${RECORD ? ', recorded to cassettes' : ''}` : 'cassette replay',
+      passed,
+      total: report.length,
+      cases: report.map((entry) => ({
+        lane: entry.lane, id: entry.id, pass: entry.pass, route: entry.route ?? null, trust: entry.trust ?? null,
+        ...(entry.pass ? {} : { reasons: (entry.reasons as string[] | undefined ?? []).map((reason) => reason.slice(0, 240)) }),
+      })),
+    },
+  };
+  if (FLOOR_GATE && !LIVE) baseline.floor = { ...(baseline.floor ?? {}), askGolden: passed };
+  writeFileSync(path, `${JSON.stringify(baseline, null, 2)}\n`);
+}
+
+/** A floor-gated lane scores a refused request as a failed case instead of stopping. */
+function httpFailure(status: number, raw: unknown): Verdict {
+  return { pass: false, reasons: [`HTTP ${status}: ${JSON.stringify(raw).slice(0, 300)}`], observed: { status: `http_${status}` } };
+}
+
 function record(lane: string, spec: GoldenCase, verdict: Verdict, extra: Record<string, unknown> = {}) {
   report.push({ lane, id: spec.id, question: spec.question, pass: verdict.pass, reasons: verdict.reasons, ...verdict.observed, ...extra });
 }
 
 function assertVerdict(spec: GoldenCase, verdict: Verdict) {
+  // A floor-gated lane records every case and asserts the total at the end.
+  if (FLOOR_GATE) return;
   // The pipeline's suite carries no known-failure exemptions. The legacy
   // runtime's baseline (17/34) is documented in
   // test/ask-golden/baseline-report-authoritative_v2.json, not asserted.
@@ -393,6 +462,8 @@ describe('golden harness', () => {
     writeFileSync(file, JSON.stringify({ build: buildIdentity(), passed, total: report.length, cases: report }, null, 2));
     // eslint-disable-next-line no-console
     console.log(`\n[ask-golden] ${passed}/${report.length} passed · report ${file}`);
+    const baselineOut = readEnv('ZLENS_ASK_GOLDEN_BASELINE_OUT');
+    if (baselineOut && ONLY.size === 0 && REPEAT === 1) writeBaseline(baselineOut, passed);
   });
 
   describe.skipIf(selected(questions).length === 0)('questions', () => {
@@ -400,8 +471,8 @@ describe('golden harness', () => {
       const verdicts: Verdict[] = [];
       for (let attempt = 0; attempt < REPEAT; attempt += 1) {
         const { status, run, raw } = await ask(spec.question);
-        expect(status, JSON.stringify(raw).slice(0, 400)).toBe(201);
-        verdicts.push(judge(spec, run));
+        if (!FLOOR_GATE) expect(status, JSON.stringify(raw).slice(0, 400)).toBe(201);
+        verdicts.push(status === 201 ? judge(spec, run) : httpFailure(status, raw));
       }
       const verdict = verdicts[0]!;
       record('questions', spec, verdict, {
@@ -472,11 +543,38 @@ describe('golden harness', () => {
     beforeAll(async () => { threadId = await createThread(); });
     it.each(selected(conversation).map((turn) => [turn.id, turn] as const))('%s', async (_id, spec) => {
       const { status, run, raw } = await ask(spec.question, threadId);
-      expect(status, JSON.stringify(raw).slice(0, 400)).toBe(201);
-      const verdict = judge(spec, run, previous);
+      if (!FLOOR_GATE) expect(status, JSON.stringify(raw).slice(0, 400)).toBe(201);
+      const verdict = status === 201 ? judge(spec, run, previous) : httpFailure(status, raw);
       previous = run;
       record('conversation', spec, verdict, { threadId, keeps: spec.keeps });
       assertVerdict(spec, verdict);
     }, 240_000);
+  });
+
+  // The floor: runs last, after every case above has been recorded.
+  describe.skipIf(!FLOOR_GATE || ONLY.size > 0 || REPEAT > 1)('floor', () => {
+    it('passes at least as many cases as the committed baseline', () => {
+      const baselinePath = join(goldenDir, LANE.baseline ?? 'baseline.json');
+      const baseline = JSON.parse(readFileSync(baselinePath, 'utf8')) as {
+        floor: { askGolden: number };
+        askGolden: Record<string, { cases: Array<{ lane: string; id: string; pass: boolean }> }>;
+      };
+      const floor = baseline.floor.askGolden;
+      const passed = report.filter((entry) => entry.pass).length;
+      const before = new Set((baseline.askGolden[FIXTURE]?.cases ?? []).filter((item) => item.pass).map((item) => `${item.lane}:${item.id}`));
+      const now = new Set(report.filter((entry) => entry.pass).map((entry) => `${entry.lane}:${entry.id}`));
+      const lost = [...before].filter((key) => !now.has(key));
+      const gained = [...now].filter((key) => !before.has(key));
+      const line = `${FIXTURE}: ${passed}/${report.length} passed (floor ${floor})`
+        + (gained.length ? ` · newly passing: ${gained.join(', ')}` : '')
+        + (lost.length ? ` · no longer passing: ${lost.join(', ')}` : '');
+      // eslint-disable-next-line no-console
+      console.log(`\n[ask-golden] ${line}`);
+      const summary = process.env.GITHUB_STEP_SUMMARY;
+      if (summary) {
+        try { writeFileSync(summary, `### Ask golden, warehouse-only lane\n\n${line}\n\n`, { flag: 'a' }); } catch { /* summary is best effort */ }
+      }
+      expect(passed, `${line}. Raise the floor in ${baselinePath} when a change lifts the score; a drop below it is a regression.`).toBeGreaterThanOrEqual(floor);
+    });
   });
 });

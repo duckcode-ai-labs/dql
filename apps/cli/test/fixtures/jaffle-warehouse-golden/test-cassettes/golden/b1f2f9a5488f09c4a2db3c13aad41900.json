@@ -1,0 +1,23 @@
+{
+  "key": "b1f2f9a5488f09c4a2db3c13aad41900",
+  "operation": "generate",
+  "text": "{\"version\":1,\"kind\":\"analytics\",\"reading\":\"The user wants something restricted to the beverage product category, but neither the measure nor a governed category/type field is identifiable in this project's vocabulary.\",\"measures\":[],\"groupBy\":[],\"display\":[],\"filters\":[],\"expectedShape\":\"lookup\",\"unresolved\":[{\"clause\":\"beverage category\",\"options\":[],\"material\":true,\"question\":\"The vocabulary exposes no product category/type field or beverage-scoped metric, and the question names no measure — do you want the list of beverage products, or a figure (e.g. revenue, order count) for the beverage category?\"}],\"provenance\":{}}",
+  "providerName": "claude",
+  "recordedAt": "2026-10-16T13:43:57.477Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 2,
+    "messageRoles": [
+      "system",
+      "user"
+    ],
+    "preCanonicalHash": "b1f2f9a5488f09c4a2db3c13aad41900a4f23dd6d30adf6b00e468a19bc69c37",
+    "postCanonicalHash": "b1f2f9a5488f09c4a2db3c13aad41900a4f23dd6d30adf6b00e468a19bc69c37",
+    "appliedRuleClasses": []
+  }
+}

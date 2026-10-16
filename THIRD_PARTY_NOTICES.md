@@ -67,6 +67,13 @@ licence (GitHub reports none), so the manifest's code was replaced on
   [`jaffle-shop-generator`](https://github.com/dbt-labs/jaffle-shop-generator),
   which is Apache-2.0.
 
+**`apps/cli/test/fixtures/jaffle-warehouse-golden`** holds no dbt metadata. Its
+warehouse catalog (`.dql/warehouse-catalog.json`: relation, column and type
+names) was read by `zlens sync warehouse` from a DuckDB built from
+jaffle-golden's sample rows, and its modeling YAML was drafted from that
+catalog by `zlens model discover`. The rows themselves are not copied: the
+lane reads jaffle-golden's `seeds/seed.json`.
+
 The Apache-2.0 predecessors
 [`jaffle_shop_duckdb`](https://github.com/dbt-labs/jaffle_shop_duckdb) and
 [`jaffle-shop-classic`](https://github.com/dbt-labs/jaffle-shop-classic) were

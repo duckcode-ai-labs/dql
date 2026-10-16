@@ -1,0 +1,23 @@
+{
+  "key": "1a6c699ad7e6b0c64186db766e652699",
+  "operation": "generate",
+  "text": "NO_SQL: No listed column holds weather conditions or a Chicago location/weather measure; the warehouse only holds customers, orders, products, locations, and supplies.",
+  "providerName": "claude",
+  "recordedAt": "2026-10-16T13:44:39.899Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 2,
+    "messageRoles": [
+      "system",
+      "user"
+    ],
+    "preCanonicalHash": "1a6c699ad7e6b0c64186db766e652699e41171229685b9aef66c99858795ece0",
+    "postCanonicalHash": "1a6c699ad7e6b0c64186db766e652699e41171229685b9aef66c99858795ece0",
+    "appliedRuleClasses": []
+  }
+}

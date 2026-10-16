@@ -1,0 +1,23 @@
+{
+  "key": "ef72961a62b360b205d736eb44a4b9a7",
+  "operation": "generate",
+  "text": "SELECT c.customer_id, c.customer_name, COUNT(DISTINCT o.order_id) AS order_count\nFROM jaffle_shop.dev.customers c\nLEFT JOIN jaffle_shop.dev.orders o ON o.customer_id = c.customer_id\nGROUP BY c.customer_id, c.customer_name\nORDER BY order_count DESC\nLIMIT 500",
+  "providerName": "claude",
+  "recordedAt": "2026-10-16T13:39:08.433Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 2,
+    "messageRoles": [
+      "system",
+      "user"
+    ],
+    "preCanonicalHash": "ef72961a62b360b205d736eb44a4b9a753d16dbd8ea5658590f095664884e5df",
+    "postCanonicalHash": "ef72961a62b360b205d736eb44a4b9a753d16dbd8ea5658590f095664884e5df",
+    "appliedRuleClasses": []
+  }
+}

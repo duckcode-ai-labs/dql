@@ -1,0 +1,23 @@
+{
+  "key": "3c5c27913b437b6c7d89dda234c8c298",
+  "operation": "generate",
+  "text": "SELECT SUM(subtotal) - SUM(order_cost) AS gross_profit, 100.0 * (SUM(subtotal) - SUM(order_cost)) / SUM(subtotal) AS gross_margin_pct FROM jaffle_shop.dev.orders WHERE ordered_at >= '2025-01-01' AND ordered_at < '2026-01-01'",
+  "providerName": "claude",
+  "recordedAt": "2026-10-16T13:47:18.584Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 2,
+    "messageRoles": [
+      "system",
+      "user"
+    ],
+    "preCanonicalHash": "3c5c27913b437b6c7d89dda234c8c29869ba034845d730515d8476444809be27",
+    "postCanonicalHash": "3c5c27913b437b6c7d89dda234c8c29869ba034845d730515d8476444809be27",
+    "appliedRuleClasses": []
+  }
+}
