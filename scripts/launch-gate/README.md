@@ -7,11 +7,31 @@ a release tag only after a run on the tagged commit has zero failures.
 
 ```bash
 pnpm install --frozen-lockfile
-node scripts/launch-gate.mjs --out ../gate-runs/gate-$(date +%Y%m%d-%H%M%S)
+node scripts/launch-gate.mjs --out ../gate-runs/gate-$(date +%Y%m%d-%H%M%S) --node <folder with Node 24>
 ```
 
-It takes 20 to 40 minutes: the dbt build, two `npm install`s, and Ask
-answered by a live model.
+It runs everything below twice, once per **npm lane**: the npm on your PATH
+(`system`) and **npm 12**. npm 12 blocks dependency install scripts unless
+`package.json` allows them, which is how 0.2.0 shipped a `better-sqlite3`
+without its native binary to npm 12 users while a gate on npm 10 passed.
+`--npm system,12` is the default; `--npm system` runs one lane.
+
+npm 12 needs Node `^22.22.2 || ^24.15.0 || >=26`. The gate installs
+`npm@12` into `<out>/lanes/` and puts it first on the lane's PATH, with the
+Node from `--node <folder>` (or the gate's own Node when it is new enough).
+Without a suitable Node, the lane's setup row fails and tells you so. To get
+one without touching your system Node:
+
+```bash
+V=v24.22.0; mkdir -p ../node24 && cd ../node24
+curl -fsSLO https://nodejs.org/dist/$V/node-$V-darwin-arm64.tar.gz
+curl -fsSL https://nodejs.org/dist/$V/SHASUMS256.txt | grep "node-$V-darwin-arm64.tar.gz" | shasum -a 256 -c -
+tar xzf node-$V-darwin-arm64.tar.gz && cd -
+node scripts/launch-gate.mjs --node ../node24/node-$V-darwin-arm64/bin
+```
+
+It takes 40 to 80 minutes: per lane, the dbt build, the `npm install`s, and
+Ask answered by a live model.
 
 ## What it does
 
@@ -38,8 +58,13 @@ answered by a live model.
 4. **dbt sample** (`duckcode-ai/jaffle-shop-duckdb`), as the README says:
    - `git clone`; the Python venv; `pip install`; `dbt deps`, `dbt seed` and
      `dbt build`;
-   - `npm install`, the DuckDB driver, `npm run sync`, `npm run validate`;
-   - `npm run notebook`;
+   - `npm install` (no install script may be blocked: the sample's
+     `package.json` allows `better-sqlite3`), then `better-sqlite3` must open
+     a database;
+   - the DuckDB driver (on npm 12 its script is blocked here), `npm run sync`,
+     `npm run validate`;
+   - `npm run notebook`, after which the DuckDB driver in `.dql/connectors`
+     must load (on npm 12, ZLens has rebuilt it by then);
    - then, in the browser (`apps/dql-notebook/browser/gate/dbt-sample.gate.ts`):
      - Guided Setup with the dbt project (Preview, Apply project, DuckDB
        configured and tested, Finish setup);
@@ -52,7 +77,8 @@ answered by a live model.
      - two App Ask questions, each of which must carry exactly one kind of
        trust label;
    - then `zlens connect claude-code`, `zlens mcp test` with the workbench up
-     (must pass), `zlens doctor` while it runs (no DuckDB lock error), and
+     (must pass), `zlens doctor` while it runs (no DuckDB lock error, and
+     its SQLite native module and DuckDB driver checks pass), and
      `zlens mcp test` with it stopped (must fail and say Not ready).
 5. **Warehouse sample** (`duckcode-ai/jaffle-shop-warehouse`, no dbt): the same
    steps without dbt. In the browser (`warehouse-sample.gate.ts`):
@@ -66,8 +92,12 @@ answered by a live model.
      "Compiled from the dbt manifest".
 6. **`create-zlens-app`** in an empty folder:
    - `npx create-zlens-app@<version> my-analytics --warehouse duckdb`;
-   - checks the generated config;
-   - `npm install`, then `npx zlens --version`.
+   - checks the generated config, including `allowScripts` for
+     `better-sqlite3`;
+   - `npm install` (no script blocked), `npx zlens --version`, and
+     `better-sqlite3` opens a database;
+   - the driver step it prints, `npm install --prefix .dql/connectors duckdb`:
+     no script blocked, and the driver loads.
 
 The sample's own `@zlens/cli` range is a check of its own. If the range would
 not install the packed version (`^0.1.0` never installs 0.2.0), that row
@@ -97,10 +127,11 @@ Under `--out`:
 | Path | What |
 |---|---|
 | `summary.md`, `summary.json` | The pass/fail table, with commit, version and the PATH entries hidden. |
-| `logs/` | Every command, its output and exit code, one file per step. |
-| `evidence/` | A screenshot (and notes) per browser check, passed or failed. |
+| `logs/` | Every command, its output and exit code, one file per lane and step. |
+| `evidence/<lane>/` | A screenshot (and notes) per browser check, passed or failed. |
 | `playwright/` | Traces and failure screenshots from Playwright. |
-| `dbt/`, `warehouse/`, `create/` | The folders the quickstart ran in. |
+| `<lane>/dbt/`, `<lane>/warehouse/`, `<lane>/create/` | The folders the quickstart ran in, per npm lane (`system`, `npm12`). |
+| `lanes/` | The npm versions the gate installed for its lanes. |
 
 The exit code is 0 only when every row passed.
 

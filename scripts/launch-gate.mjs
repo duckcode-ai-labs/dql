@@ -3,6 +3,7 @@
 //
 //   node scripts/launch-gate.mjs [--out <dir>] [--tarballs <dir>] [--only dbt,warehouse,create]
 //                                [--port <first port>] [--python <bin>]
+//                                [--npm system,12] [--node <dir of a node binary>]
 //
 // It packs the release from this checkout (the same tarballs `npm publish`
 // would upload), serves them from a local registry, and then follows the
@@ -10,9 +11,16 @@
 // for `create-zlens-app --warehouse duckdb`. Every check is one row of a
 // pass/fail table; logs and screenshots are kept as evidence under --out.
 // Exit code 0 only when every row passed.
+//
+// It runs all of that once per npm "lane": the system npm, and npm 12
+// (`--npm system,12`, the default). npm 12 blocks dependency install scripts
+// unless package.json allows them, which left better-sqlite3 without its
+// native binary in 0.2.0; a gate on npm 10 alone could not see it. npm 12
+// needs Node ^22.22.2 || ^24.15.0 || >=26: when the gate's own Node is older,
+// pass --node <folder with a newer node binary>.
 
 import { spawn } from 'node:child_process';
-import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, symlinkSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -46,6 +54,8 @@ export function parseGateArguments(argv, now = new Date()) {
     only: new Set(['dbt', 'warehouse', 'create']),
     port: 3620,
     python: 'python3',
+    npm: ['system', '12'],
+    node: null,
   };
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
@@ -63,6 +73,12 @@ export function parseGateArguments(argv, now = new Date()) {
       options.only = new Set(parts);
     } else if (arg === '--port') options.port = Number(value());
     else if (arg === '--python') options.python = value();
+    else if (arg === '--npm') {
+      const lanes = value().split(',').map((part) => part.trim()).filter(Boolean);
+      for (const lane of lanes) if (lane !== 'system' && !/^\d+(\.\d+){0,2}$/.test(lane)) throw new Error(`Unknown --npm lane: ${lane} (use system, or an npm version such as 12)`);
+      if (lanes.length === 0) throw new Error('--npm needs at least one lane.');
+      options.npm = [...new Set(lanes)];
+    } else if (arg === '--node') options.node = path.resolve(value());
     else if (arg === '--help' || arg === '-h') options.help = true;
     else throw new Error(`Unknown argument: ${arg}`);
   }
@@ -91,6 +107,34 @@ export function rangeAllows(range, version) {
   if (bMajor > 0) return major === bMajor;
   if (bMinor > 0) return major === 0 && minor === bMinor;
   return major === 0 && minor === 0 && patch === bPatch;
+}
+
+/**
+ * Whether a Node version satisfies an `engines.node` range as npm 12 writes
+ * it: `||` alternatives of `^x.y.z`, `>=x.y.z`, `x.y.z` or `x` (any x.*).
+ */
+export function nodeSatisfies(range, version) {
+  const parse = (text) => String(text).replace(/^v/, '').split('.').map((part) => Number(part) || 0);
+  const compare = (a, b) => {
+    for (let index = 0; index < 3; index += 1) if ((a[index] ?? 0) !== (b[index] ?? 0)) return (a[index] ?? 0) - (b[index] ?? 0);
+    return 0;
+  };
+  const have = parse(version);
+  return String(range).split('||').map((part) => part.trim()).filter(Boolean).some((alternative) => {
+    return alternative.split(/\s+/).every((comparator) => {
+      const match = /^(\^|>=|>|<=|<|=)?v?(\d+(?:\.\d+){0,2})$/.exec(comparator);
+      if (!match) return false;
+      const [, op = '', base] = match;
+      const want = parse(base);
+      const cmp = compare(have, want);
+      if (op === '^') return cmp >= 0 && have[0] === want[0];
+      if (op === '>=') return cmp >= 0;
+      if (op === '>') return cmp > 0;
+      if (op === '<=') return cmp <= 0;
+      if (op === '<') return cmp < 0;
+      return base.split('.').length === 1 ? have[0] === want[0] : cmp === 0;
+    });
+  });
 }
 
 // ── processes ──────────────────────────────────────────────────────────────
@@ -202,7 +246,7 @@ function expectRun(result, what, { contains } = {}) {
  * config, npm pointed at the gate's registry, and no dbt / mf / zlens from a
  * developer's PATH (the quickstart uses the sample's own .venv/bin/dbt).
  */
-function cleanEnv({ out, registryUrl, shims }) {
+function cleanEnv({ out, registryUrl, shims, prepend = [] }) {
   const env = {};
   for (const [key, value] of Object.entries(process.env)) {
     if (/^(npm_|pnpm_|PNPM_|INIT_CWD$|PLAYWRIGHT_|TEST_|ZLENS_|DQL_|VIRTUAL_ENV$|CONDA_)/i.test(key)) continue;
@@ -230,7 +274,7 @@ function cleanEnv({ out, registryUrl, shims }) {
   const npmrc = path.join(out, 'npmrc');
   writeFileSync(npmrc, '');
   Object.assign(env, {
-    PATH: [shims, ...keep].join(path.delimiter),
+    PATH: [shims, ...prepend, ...keep].join(path.delimiter),
     npm_config_registry: registryUrl,
     npm_config_cache: path.join(out, 'npm-cache'),
     npm_config_userconfig: npmrc,
@@ -269,8 +313,70 @@ async function packTarballs(gate, options) {
   return { version, sha, dirty, packDir };
 }
 
-async function runBrowserChecks(gate, { sample, url, projectDir, env }) {
-  const report = path.join(gate.out, `playwright-${sample}.json`);
+// ── npm lanes ──────────────────────────────────────────────────────────────
+
+/** Loads better-sqlite3 from the project and opens a database: what every ZLens store does first. */
+const LOAD_SQLITE = `node -e "const D = require('better-sqlite3'); new D(':memory:').close(); console.log('better-sqlite3 loads')"`;
+/** Loads the DuckDB driver from .dql/connectors, as the connector does. */
+const LOAD_DUCKDB = `node -e "const d = require('./.dql/connectors/node_modules/duckdb'); new d.Database(':memory:').close(); console.log('duckdb loads')"`;
+const BLOCKED_SCRIPTS = /install-scripts[^\n]*(better-sqlite3|duckdb)@/g;
+
+/** The packages whose install scripts npm said it blocked. */
+function blockedScripts(output) {
+  return [...new Set([...output.matchAll(BLOCKED_SCRIPTS)].map((match) => match[1]))];
+}
+
+/**
+ * Set up each npm lane's clean shell. `system` is the npm on PATH; a version
+ * (`12`) is installed into the gate's folder and put first on PATH, with the
+ * Node it needs (`--node`, else the gate's own Node when it satisfies npm's
+ * engines). A lane that cannot be set up is a failed row, never skipped.
+ */
+async function prepareLanes(gate, options, { registryUrl, shims }) {
+  const lanes = [];
+  for (const spec of options.npm) {
+    if (spec === 'system') {
+      const { env, removed } = cleanEnv({ out: gate.out, registryUrl, shims });
+      const npmVersion = (await sh('npm --version', { cwd: gate.out, env })).output.trim();
+      const nodeVersion = (await sh('node --version', { cwd: gate.out, env })).output.trim();
+      lanes.push({ id: 'system', label: `npm ${npmVersion.split('.')[0]}`, npmVersion, nodeVersion, env, removed });
+      continue;
+    }
+    let lane = null;
+    await gate.check('machine', `npm ${spec} lane: install npm@${spec} and a Node it supports`, async () => {
+      const resolved = await sh(`npm view npm@${spec} version --json`, { cwd: gate.out, env: process.env, logFile: path.join(gate.logs, `npm${spec}-setup.log`) });
+      expectRun(resolved, `npm view npm@${spec} version`);
+      const versions = JSON.parse(resolved.output.trim());
+      const npmVersion = Array.isArray(versions) ? versions[versions.length - 1] : versions;
+      const engines = (await sh(`npm view npm@${npmVersion} engines.node`, { cwd: gate.out, env: process.env })).output.trim();
+      let nodeDir = path.dirname(process.execPath);
+      if (options.node) nodeDir = statSync(options.node).isDirectory() ? options.node : path.dirname(options.node);
+      const nodeVersion = (await sh(`"${path.join(nodeDir, 'node')}" --version`, { cwd: gate.out, env: process.env })).output.trim();
+      if (!nodeSatisfies(engines, nodeVersion)) {
+        throw new Error(`npm ${npmVersion} needs Node ${engines}; ${path.join(nodeDir, 'node')} is ${nodeVersion}. Pass --node <folder with a node binary that satisfies it>, e.g. Node 24 from https://nodejs.org/dist/latest-v24.x/.`);
+      }
+      const prefix = path.join(gate.out, 'lanes', `npm-${npmVersion}`);
+      mkdirSync(prefix, { recursive: true });
+      expectRun(await sh(`npm install --prefix "${prefix}" --no-audit --no-fund npm@${npmVersion}`, {
+        cwd: gate.out, env: { ...process.env, PATH: `${nodeDir}${path.delimiter}${process.env.PATH}` }, logFile: path.join(gate.logs, `npm${spec}-setup.log`),
+      }), `npm install npm@${npmVersion}`);
+      const npmBin = path.join(prefix, 'node_modules', '.bin');
+      const { env, removed } = cleanEnv({ out: gate.out, registryUrl, shims, prepend: [npmBin, nodeDir] });
+      const seenNpm = (await sh('npm --version', { cwd: gate.out, env })).output.trim();
+      const seenNode = (await sh('node --version', { cwd: gate.out, env })).output.trim();
+      if (seenNpm !== npmVersion || seenNode !== nodeVersion) throw new Error(`the lane's shell runs npm ${seenNpm} on node ${seenNode}, expected npm ${npmVersion} on ${nodeVersion}`);
+      lane = { id: `npm${spec}`, label: `npm ${spec}`, npmVersion, nodeVersion, env, removed };
+      return `npm ${npmVersion} on node ${nodeVersion} (${nodeDir}); npm's engines: ${engines}`;
+    }, { evidence: `logs/npm${spec}-setup.log` });
+    if (lane) lanes.push(lane);
+  }
+  return lanes;
+}
+
+async function runBrowserChecks(gate, { sample, url, projectDir, env, lane, area }) {
+  const report = path.join(gate.out, `playwright-${lane.id}-${sample}.json`);
+  const evidenceDir = path.join(gate.evidence, lane.id);
+  mkdirSync(evidenceDir, { recursive: true });
   const result = await sh(
     `pnpm --filter @zlens/notebook-app exec playwright test --config playwright.gate.config.ts ${SAMPLES[sample].spec}`,
     {
@@ -280,17 +386,17 @@ async function runBrowserChecks(gate, { sample, url, projectDir, env }) {
         ...env.passThrough,
         ZLENS_GATE_BASE_URL: url,
         ZLENS_GATE_PROJECT_DIR: projectDir,
-        ZLENS_GATE_EVIDENCE_DIR: gate.evidence,
+        ZLENS_GATE_EVIDENCE_DIR: evidenceDir,
         ZLENS_GATE_SAMPLE: sample,
         ZLENS_GATE_REPORT: report,
-        ZLENS_GATE_OUTPUT_DIR: path.join(gate.out, 'playwright', sample),
+        ZLENS_GATE_OUTPUT_DIR: path.join(gate.out, 'playwright', lane.id, sample),
       },
-      logFile: path.join(gate.logs, `${sample}-browser.log`),
+      logFile: path.join(gate.logs, `${lane.id}-${sample}-browser.log`),
       timeoutMs: 60 * 60 * 1000,
     },
   );
   if (!existsSync(report)) {
-    gate.record({ area: sample, check: 'browser checks', status: 'fail', detail: `Playwright wrote no report (exit ${result.status}): ${result.output.slice(-600)}`, evidence: `logs/${sample}-browser.log` });
+    gate.record({ area, check: 'browser checks', status: 'fail', detail: `Playwright wrote no report (exit ${result.status}): ${result.output.slice(-600)}`, evidence: `logs/${lane.id}-${sample}-browser.log` });
     return;
   }
   const json = JSON.parse(readFileSync(report, 'utf8'));
@@ -308,35 +414,38 @@ async function runBrowserChecks(gate, { sample, url, projectDir, env }) {
     const error = (last?.errors ?? []).map((entry) => entry.message ?? '').join('\n').replace(/\x1b\[[0-9;]*m/g, '');
     const slug = spec.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60);
     gate.record({
-      area: sample,
+      area,
       check: spec.title,
       status,
       detail: status === 'pass' ? notes.join(' · ') : `${error.split('\n').filter(Boolean).slice(0, 4).join(' ⏎ ')}${notes.length ? ` (notes: ${notes.join(' · ')})` : ''}`,
-      evidence: `evidence/${sample}-${slug}.png`,
+      evidence: `evidence/${lane.id}/${sample}-${slug}.png`,
     });
   }
 }
 
-async function sampleFlow(gate, sample, ctx) {
-  const { env, registryUrl, version, options } = ctx;
+async function sampleFlow(gate, sample, ctx, lane) {
+  const { registryUrl, version, options } = ctx;
+  const { env } = lane;
   const meta = SAMPLES[sample];
-  const workDir = path.join(gate.out, sample);
+  const area = `${sample} · ${lane.label}`;
+  const workDir = path.join(gate.out, lane.id, sample);
   mkdirSync(workDir, { recursive: true });
   const projectDir = path.join(workDir, meta.dir);
-  const log = (name) => path.join(gate.logs, `${sample}-${name}.log`);
+  const logName = (name) => `${lane.id}-${sample}-${name}.log`;
+  const log = (name) => path.join(gate.logs, logName(name));
   const run = (command, name, extra = {}) => sh(command, { cwd: projectDir, env, logFile: log(name), ...extra });
 
-  if (!(await gate.check(sample, `git clone ${meta.repo.replace('https://github.com/', '')}`, async () => {
+  if (!(await gate.check(area, `git clone ${meta.repo.replace('https://github.com/', '')}`, async () => {
     expectRun(await sh(`git clone ${meta.repo}`, { cwd: workDir, env, logFile: log('clone') }), 'git clone');
     const head = (await sh('git rev-parse --short HEAD', { cwd: projectDir, env })).output.trim();
     return `at ${head}`;
-  }, { evidence: `logs/${sample}-clone.log` }))) return;
+  }, { evidence: `logs/${logName('clone')}` }))) return;
 
   // The sample's own @zlens/cli range decides what `npm install` installs.
   const pkgPath = path.join(projectDir, 'package.json');
   const pkg = JSON.parse(readFileSync(pkgPath, 'utf8'));
   const range = pkg.devDependencies?.['@zlens/cli'] ?? pkg.dependencies?.['@zlens/cli'];
-  const allowed = await gate.check(sample, `sample's @zlens/cli range installs ${version}`, async () => {
+  const allowed = await gate.check(area, `sample's @zlens/cli range installs ${version}`, async () => {
     if (!rangeAllows(range, version)) {
       throw new Error(`package.json declares "@zlens/cli": "${range}", so \`npm install\` would not install ${version}. Bump the sample to "^${version}" when ${version} is published.`);
     }
@@ -350,7 +459,7 @@ async function sampleFlow(gate, sample, ctx) {
   }
 
   if (sample === 'dbt') {
-    const ok = await gate.check(sample, 'README step 1: python venv, pip install, dbt deps/seed/build', async () => {
+    const ok = await gate.check(area, 'README step 1: python venv, pip install, dbt deps/seed/build', async () => {
       const steps = [
         `${options.python} -m venv .venv`,
         '.venv/bin/pip install -r requirements.txt',
@@ -361,53 +470,71 @@ async function sampleFlow(gate, sample, ctx) {
       for (const step of steps) expectRun(await run(step, 'dbt'), step);
       if (!existsSync(path.join(projectDir, 'target', 'manifest.json'))) throw new Error('no target/manifest.json after dbt build');
       return `${(await run(`${options.python} --version`, 'dbt')).output.trim()}; jaffle_shop.duckdb and target/manifest.json built`;
-    }, { evidence: `logs/${sample}-dbt.log` });
+    }, { evidence: `logs/${logName('dbt')}` });
     if (!ok) return;
   }
 
-  if (!(await gate.check(sample, 'npm install (installs @zlens/cli from the packed release)', async () => {
-    expectRun(await run('npm install', 'npm-install'), 'npm install');
+  if (!(await gate.check(area, 'npm install (installs @zlens/cli from the packed release)', async () => {
+    const install = await run('npm install', 'npm-install');
+    expectRun(install, 'npm install');
     const installed = JSON.parse(readFileSync(path.join(projectDir, 'node_modules', '@zlens', 'cli', 'package.json'), 'utf8')).version;
     const zlens = await run('npx zlens --version', 'npm-install');
     expectRun(zlens, 'npx zlens --version');
     if (zlens.output.trim() !== `zlens ${version}` || installed !== version) throw new Error(`installed ${installed}, \`npx zlens --version\` says ${zlens.output.trim()}`);
     const lock = readFileSync(path.join(projectDir, 'package-lock.json'), 'utf8');
     if (!lock.includes(`${registryUrl}-/gate/zlens-cli-${version}.tgz`)) throw new Error('package-lock.json does not resolve @zlens/cli to the packed tarball');
-    return `zlens ${version} from the packed tarball`;
-  }, { evidence: `logs/${sample}-npm-install.log` }))) return;
+    const blocked = blockedScripts(install.output);
+    if (blocked.length) throw new Error(`npm blocked the install script of ${blocked.join(', ')}: the sample's package.json needs "allowScripts": { "better-sqlite3": true }`);
+    return `zlens ${version} from the packed tarball; no install script blocked`;
+  }, { evidence: `logs/${logName('npm-install')}` }))) return;
 
-  await gate.check(sample, 'npm install --prefix .dql/connectors duckdb', async () => {
-    expectRun(await run('npm install --prefix .dql/connectors duckdb', 'duckdb'), 'duckdb driver install');
+  await gate.check(area, 'better-sqlite3 native binary loads', async () => {
+    const result = await run(LOAD_SQLITE, 'native');
+    expectRun(result, 'require better-sqlite3 + open :memory:');
+    return 'opens an in-memory database';
+  }, { evidence: `logs/${logName('native')}` });
+
+  await gate.check(area, 'npm install --prefix .dql/connectors duckdb', async () => {
+    const result = await run('npm install --prefix .dql/connectors duckdb', 'duckdb');
+    expectRun(result, 'duckdb driver install');
     const duckdb = JSON.parse(readFileSync(path.join(projectDir, '.dql', 'connectors', 'node_modules', 'duckdb', 'package.json'), 'utf8')).version;
-    return `duckdb ${duckdb}`;
-  }, { evidence: `logs/${sample}-duckdb.log` });
+    const blocked = blockedScripts(result.output);
+    return `duckdb ${duckdb}${blocked.includes('duckdb') ? '; npm blocked its install script (ZLens allows and rebuilds it on sync / notebook start)' : ''}`;
+  }, { evidence: `logs/${logName('duckdb')}` });
 
-  await gate.check(sample, 'npm run sync', async () => {
+  await gate.check(area, 'npm run sync', async () => {
     const result = await run('npm run sync', 'sync');
     if (sample === 'dbt') expectRun(result, 'npm run sync', { contains: /✓ dbt sync complete/ });
     else expectRun(result, 'npm run sync', { contains: /✓ Warehouse catalog: 13 relation\(s\)/ });
     return result.output.trim().split('\n').filter((line) => line.includes('✓')).slice(-1)[0]?.trim() ?? '';
-  }, { evidence: `logs/${sample}-sync.log` });
+  }, { evidence: `logs/${logName('sync')}` });
 
-  await gate.check(sample, 'npm run validate', async () => {
+  await gate.check(area, 'npm run validate', async () => {
     const result = await run('npm run validate', 'validate');
     expectRun(result, 'npm run validate');
     return result.output.trim().split('\n').slice(-1)[0]?.trim() ?? '';
-  }, { evidence: `logs/${sample}-validate.log` });
+  }, { evidence: `logs/${logName('validate')}` });
 
   const port = await freePort(ctx.nextPort());
   let workbench = null;
-  const started = await gate.check(sample, 'npm run notebook (Notebook ready)', async () => {
+  const started = await gate.check(area, 'npm run notebook (Notebook ready)', async () => {
     workbench = await startWorkbench({ cwd: projectDir, env, port, logFile: log('notebook') });
-    return `${workbench.url} (README: 3474; the gate uses a free port and passes --port)`;
-  }, { evidence: `logs/${sample}-notebook.log` });
+    const repaired = /rebuilding it/.test(workbench.output()) ? '; ZLens rebuilt the DuckDB driver npm had installed without its binary' : '';
+    return `${workbench.url} (README: 3474; the gate uses a free port and passes --port)${repaired}`;
+  }, { evidence: `logs/${logName('notebook')}` });
   if (!started) return;
+
+  await gate.check(area, 'DuckDB driver native binary loads (.dql/connectors)', async () => {
+    const result = await run(LOAD_DUCKDB, 'native');
+    expectRun(result, 'require .dql/connectors duckdb + open :memory:');
+    return 'opens an in-memory database';
+  }, { evidence: `logs/${logName('native')}` });
 
   const runtimeEnv = { ...env, ZLENS_RUNTIME_URL: workbench.url };
   try {
-    await runBrowserChecks(gate, { sample, url: workbench.url, projectDir, env: { passThrough: {} } });
+    await runBrowserChecks(gate, { sample, url: workbench.url, projectDir, env: { passThrough: {} }, lane, area });
 
-    await gate.check(sample, 'zlens connect claude-code writes the MCP config', async () => {
+    await gate.check(area, 'zlens connect claude-code writes the MCP config', async () => {
       const result = await run('npx zlens connect claude-code', 'connect');
       expectRun(result, 'npx zlens connect claude-code');
       const mcpPath = path.join(projectDir, '.mcp.json');
@@ -416,42 +543,47 @@ async function sampleFlow(gate, sample, ctx) {
       const server = config.mcpServers?.dql;
       if (!server) throw new Error(`.mcp.json has no mcpServers.dql: ${JSON.stringify(config).slice(0, 300)}`);
       return `.mcp.json mcpServers.dql: ${server.command} ${(server.args ?? []).join(' ')}`;
-    }, { evidence: `logs/${sample}-connect.log` });
+    }, { evidence: `logs/${logName('connect')}` });
 
-    await gate.check(sample, 'zlens mcp test passes with the workbench up', async () => {
+    await gate.check(area, 'zlens mcp test passes with the workbench up', async () => {
       const result = await sh('npx zlens mcp test', { cwd: projectDir, env: runtimeEnv, logFile: log('mcp-test-up') });
       expectRun(result, 'zlens mcp test (workbench up)', { contains: /Ready/ });
       if (/Not ready/.test(result.output)) throw new Error('printed Not ready');
       return `exit 0, Ready (ZLENS_RUNTIME_URL=${workbench.url})`;
-    }, { evidence: `logs/${sample}-mcp-test-up.log` });
+    }, { evidence: `logs/${logName('mcp-test-up')}` });
 
-    await gate.check(sample, 'CLI works while the workbench runs (zlens doctor)', async () => {
+    await gate.check(area, 'CLI works while the workbench runs (zlens doctor)', async () => {
       const result = await run('npx zlens doctor .', 'doctor-while-running');
       const lockError = /Could not set lock|Conflicting lock/i;
       if (lockError.test(result.output)) {
         throw new Error(`DuckDB lock error while the workbench runs: ${result.output.split('\n').find((line) => lockError.test(line))?.trim()}`);
       }
-      return `exit ${result.status}, no DuckDB lock error`;
-    }, { evidence: `logs/${sample}-doctor-while-running.log` });
+      const nativeFailure = /✗ (SQLite native module|DuckDB connector package)/.exec(result.output);
+      if (nativeFailure) throw new Error(`doctor failed its ${nativeFailure[1]} check`);
+      return `exit ${result.status}, no DuckDB lock error; SQLite native module and DuckDB driver checks pass`;
+    }, { evidence: `logs/${logName('doctor-while-running')}` });
   } finally {
     await workbench.stop();
   }
 
-  await gate.check(sample, 'zlens mcp test fails with the workbench down', async () => {
+  await gate.check(area, 'zlens mcp test fails with the workbench down', async () => {
     const result = await sh('npx zlens mcp test', { cwd: projectDir, env: runtimeEnv, logFile: log('mcp-test-down') });
     if (result.status === 0) throw new Error('exit 0 with no workbench running');
     if (!/Not ready/.test(result.output)) throw new Error(`exit ${result.status} but no "Not ready" summary`);
     return `exit ${result.status}, Not ready with Fix: lines`;
-  }, { evidence: `logs/${sample}-mcp-test-down.log` });
+  }, { evidence: `logs/${logName('mcp-test-down')}` });
 }
 
-async function createFlow(gate, ctx) {
-  const { env, version } = ctx;
-  const workDir = path.join(gate.out, 'create', 'empty');
+async function createFlow(gate, ctx, lane) {
+  const { version } = ctx;
+  const { env } = lane;
+  const area = `create · ${lane.label}`;
+  const workDir = path.join(gate.out, lane.id, 'create', 'empty');
   mkdirSync(workDir, { recursive: true });
-  const log = path.join(gate.logs, 'create.log');
+  const logName = `${lane.id}-create.log`;
+  const log = path.join(gate.logs, logName);
   const appDir = path.join(workDir, 'my-analytics');
-  const created = await gate.check('create', `npx create-zlens-app@${version} my-analytics --warehouse duckdb (empty folder)`, async () => {
+  const created = await gate.check(area, `npx create-zlens-app@${version} my-analytics --warehouse duckdb (empty folder)`, async () => {
     const result = await sh(`npx --yes create-zlens-app@${version} my-analytics --warehouse duckdb`, { cwd: workDir, env, logFile: log });
     expectRun(result, 'create-zlens-app');
     const config = JSON.parse(readFileSync(path.join(appDir, 'dql.config.json'), 'utf8'));
@@ -464,17 +596,30 @@ async function createFlow(gate, ctx) {
     const range = pkg.devDependencies?.['@zlens/cli'];
     if (!rangeAllows(range, version)) problems.push(`@zlens/cli range ${range} does not install ${version}`);
     if (!/zlens sync warehouse/.test(pkg.scripts?.sync ?? '')) problems.push(`npm run sync is "${pkg.scripts?.sync}"`);
+    if (pkg.allowScripts?.['better-sqlite3'] !== true) problems.push('package.json does not allow better-sqlite3\'s install script (npm 12)');
     if (problems.length) throw new Error(problems.join('; '));
-    return `warehouse-first, duckdb default connection, @zlens/cli ${range}, sync = ${pkg.scripts.sync}`;
-  }, { evidence: 'logs/create.log' });
+    return `warehouse-first, duckdb default connection, @zlens/cli ${range}, sync = ${pkg.scripts.sync}, allowScripts better-sqlite3`;
+  }, { evidence: `logs/${logName}` });
   if (!created) return;
-  await gate.check('create', 'npm install in the new project; zlens runs', async () => {
-    expectRun(await sh('npm install', { cwd: appDir, env, logFile: log }), 'npm install');
+  if (!(await gate.check(area, 'npm install in the new project; zlens runs; better-sqlite3 loads', async () => {
+    const install = await sh('npm install', { cwd: appDir, env, logFile: log });
+    expectRun(install, 'npm install');
+    const blocked = blockedScripts(install.output);
+    if (blocked.length) throw new Error(`npm blocked the install script of ${blocked.join(', ')}`);
     const zlens = await sh('npx zlens --version', { cwd: appDir, env, logFile: log });
     expectRun(zlens, 'npx zlens --version');
     if (zlens.output.trim() !== `zlens ${version}`) throw new Error(`npx zlens --version says ${zlens.output.trim()}`);
-    return zlens.output.trim();
-  }, { evidence: 'logs/create.log' });
+    expectRun(await sh(LOAD_SQLITE, { cwd: appDir, env, logFile: log }), 'require better-sqlite3 + open :memory:');
+    return `${zlens.output.trim()}; better-sqlite3 opens a database`;
+  }, { evidence: `logs/${logName}` }))) return;
+  await gate.check(area, 'printed driver step: npm install --prefix .dql/connectors duckdb; duckdb loads', async () => {
+    const install = await sh('npm install --prefix .dql/connectors duckdb', { cwd: appDir, env, logFile: log });
+    expectRun(install, 'duckdb driver install');
+    const blocked = blockedScripts(install.output);
+    if (blocked.length) throw new Error(`npm blocked the install script of ${blocked.join(', ')}: .dql/connectors/package.json should allow it`);
+    expectRun(await sh(LOAD_DUCKDB, { cwd: appDir, env, logFile: log }), 'require .dql/connectors duckdb + open :memory:');
+    return 'no install script blocked; duckdb opens a database';
+  }, { evidence: `logs/${logName}` });
 }
 
 function writeSummary(gate, meta) {
@@ -486,7 +631,8 @@ function writeSummary(gate, meta) {
     `- commit: ${meta.sha}${meta.dirty ? ' (with uncommitted changes)' : ''}`,
     `- version: ${meta.version} (packed tarballs served from a local registry)`,
     `- started: ${meta.started}, finished: ${new Date().toISOString()}`,
-    `- node ${process.version}; commands hidden from the clean shell: ${meta.removed.length ? meta.removed.join(', ') : 'none'}`,
+    `- npm lanes: ${meta.lanes.length ? meta.lanes.map((lane) => `${lane.label} = npm ${lane.npmVersion} on node ${lane.nodeVersion}`).join('; ') : 'none could be set up'}`,
+    `- gate node ${process.version}; commands hidden from the clean shell: ${meta.removed.length ? meta.removed.join(', ') : 'none'}`,
     '',
     '| # | Area | Check | Result | Detail | Evidence |',
     '|---|---|---|---|---|---|',
@@ -518,36 +664,42 @@ export async function main(argv = process.argv.slice(2)) {
   mkdirSync(shims, { recursive: true });
   // `zlens notebook` opens a browser with open/xdg-open; the gate's browser is Playwright.
   for (const name of ['open', 'xdg-open']) writeFileSync(path.join(shims, name), '#!/bin/sh\nexit 0\n', { mode: 0o755 });
-  const { env, removed } = cleanEnv({ out: options.out, registryUrl: registry.url, shims });
+  const { env: machineEnv, removed } = cleanEnv({ out: options.out, registryUrl: registry.url, shims });
 
   await gate.check('machine', 'prerequisites: node 20+, git, python, claude CLI', async () => {
-    const node = await sh('node --version', { cwd: options.out, env });
+    const node = await sh('node --version', { cwd: options.out, env: machineEnv });
     if (Number(node.output.trim().replace(/^v/, '').split('.')[0]) < 20) throw new Error(`node ${node.output.trim()}`);
-    expectRun(await sh('git --version', { cwd: options.out, env }), 'git --version');
-    const python = await sh(`${options.python} --version`, { cwd: options.out, env });
+    expectRun(await sh('git --version', { cwd: options.out, env: machineEnv }), 'git --version');
+    const python = await sh(`${options.python} --version`, { cwd: options.out, env: machineEnv });
     expectRun(python, `${options.python} --version`);
-    const claude = await sh('claude --version', { cwd: options.out, env });
+    const claude = await sh('claude --version', { cwd: options.out, env: machineEnv });
     expectRun(claude, 'claude --version (the claude-code provider runs the local claude CLI)');
     return `node ${node.output.trim()}, ${python.output.trim()}, claude ${claude.output.trim()}`;
   });
 
-  const ctx = { env, registryUrl: registry.url, version, options, nextPort: () => { const port = nextPort; nextPort += 1; return port; } };
+  const lanes = await prepareLanes(gate, options, { registryUrl: registry.url, shims });
+  const ctx = { registryUrl: registry.url, version, options, nextPort: () => { const port = nextPort; nextPort += 1; return port; } };
   try {
-    for (const sample of ['dbt', 'warehouse']) {
-      if (!options.only.has(sample)) continue;
-      console.log(`\n▸ ${sample} sample`);
-      await sampleFlow(gate, sample, ctx);
-    }
-    if (options.only.has('create')) {
-      console.log('\n▸ create-zlens-app');
-      await createFlow(gate, ctx);
+    for (const lane of lanes) {
+      for (const sample of ['dbt', 'warehouse']) {
+        if (!options.only.has(sample)) continue;
+        console.log(`\n▸ ${sample} sample · ${lane.label} (npm ${lane.npmVersion}, node ${lane.nodeVersion})`);
+        await sampleFlow(gate, sample, ctx, lane);
+      }
+      if (options.only.has('create')) {
+        console.log(`\n▸ create-zlens-app · ${lane.label}`);
+        await createFlow(gate, ctx, lane);
+      }
     }
   } finally {
     await registry.stop();
     writeFileSync(path.join(gate.logs, 'registry-requests.log'), `${registry.requests.join('\n')}\n`);
   }
 
-  const failed = writeSummary(gate, { sha, dirty, version, started, removed, out: options.out });
+  const failed = writeSummary(gate, {
+    sha, dirty, version, started, removed, out: options.out,
+    lanes: lanes.map(({ id, label, npmVersion, nodeVersion }) => ({ id, label, npmVersion, nodeVersion })),
+  });
   console.log(`\n${readFileSync(path.join(options.out, 'summary.md'), 'utf8')}`);
   console.log(failed === 0 ? '✓ launch gate passed' : `✗ launch gate: ${failed} check(s) failed`);
   return failed === 0 ? 0 : 1;
