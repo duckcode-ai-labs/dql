@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { dirname, join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { buildManifest, collectInputFiles, modelingModeOf } from './builder.js';
-import { isWarehouseNodeId, loadWarehouseNodeAuthoringDetail, previewModelingChange } from './dbt-first-authoring.js';
+import { applyModelingChanges, isWarehouseNodeId, loadWarehouseNodeAuthoringDetail, previewModelingChange, previewModelingChanges, type ModelingAuthoringChange } from './dbt-first-authoring.js';
 import {
   WAREHOUSE_CATALOG_PATH,
   diffWarehouseCatalogs,
@@ -284,6 +284,69 @@ ${extra}${evidence}`;
   it('writes the snapshot where the builder reads it', () => {
     expect(readWarehouseCatalog(projectRoot).snapshot?.relations).toHaveLength(3);
     expect(JSON.parse(readFileSync(join(projectRoot, WAREHOUSE_CATALOG_PATH), 'utf-8')).fingerprint).toMatch(/^[0-9a-f]{64}$/);
+  });
+
+  // Launch blocker: discovery drafts a join into modeling/model.dql.yaml (here
+  // the legacy relationships.dql.yaml); certifying it on the Modeling page
+  // writes it to the subject area (areas/core.dql.yaml). The draft stayed
+  // behind and `zlens model validate` failed with a duplicate relationship.
+  it('certifying a drafted join into a subject area moves it there, and the model stays valid', () => {
+    writeYaml(projectRoot, 'domains/sales/modeling/relationships.dql.yaml', `relationships:
+  - id: order_to_customer
+    from: order
+    to: customer
+    keys: [{ from: CUSTOMER_ID, to: CUSTOMER_ID }]
+    cardinality: many_to_one
+    fanout: safe
+    status: draft
+    description: Each order is placed by one customer.
+  - id: order_to_archive_customer
+    from: order
+    to: customer
+    keys: [{ from: CUSTOMER_ID, to: CUSTOMER_ID }]
+    cardinality: many_to_one
+    fanout: safe
+    status: draft
+`);
+    const changes: ModelingAuthoringChange[] = [
+      { operation: 'upsert_area', value: { id: 'core', domain: 'sales', name: 'Core models' } },
+      { operation: 'upsert_relationship', value: {
+        id: 'order_to_customer', domain: 'sales', areaId: 'core', from: 'sales::entity::order', to: 'sales::entity::customer',
+        keys: [{ from: 'CUSTOMER_ID', to: 'CUSTOMER_ID' }], cardinality: 'many_to_one', fanout: 'safe', status: 'certified',
+        certifiedAgainst: { from: { grain: 'ORDER_ID', keys: ['ORDER_ID'] }, to: { grain: 'CUSTOMER_ID', keys: ['CUSTOMER_ID'] } },
+      } },
+    ];
+    const preview = previewModelingChanges(projectRoot, changes);
+    expect(preview.patches.map((patch) => patch.path)).toEqual(['domains/sales/modeling/areas/core.dql.yaml', 'domains/sales/modeling/relationships.dql.yaml']);
+    applyModelingChanges(projectRoot, changes, preview.fingerprint);
+
+    const drafts = readFileSync(join(projectRoot, 'domains/sales/modeling/relationships.dql.yaml'), 'utf8');
+    expect(drafts).not.toContain('id: order_to_customer\n');
+    expect(drafts).toContain('id: order_to_archive_customer');
+    const area = readFileSync(join(projectRoot, 'domains/sales/modeling/areas/core.dql.yaml'), 'utf8');
+    // The draft's fields the editor does not set travel with it.
+    expect(area).toContain('description: Each order is placed by one customer.');
+    expect(area).toContain('status: certified');
+
+    const manifest = buildManifest({ projectRoot });
+    expect((manifest.diagnostics ?? []).filter((item) => item.severity === 'error').map((item) => item.message)).toEqual([]);
+    expect(manifest.modeling?.relationships['sales::relationship::order_to_customer']).toMatchObject({ status: 'certified', sourcePath: 'domains/sales/modeling/areas/core.dql.yaml' });
+
+    // Editing it again in its area is an in-place update, not a second move.
+    const again = previewModelingChange(projectRoot, changes[1]!);
+    expect(again.patches.filter((patch) => patch.changed).map((patch) => patch.path)).toEqual([]);
+  });
+
+  it('an entity edited into a subject area moves there instead of being declared twice', () => {
+    mkdirSync(join(projectRoot, 'domains/sales/modeling/areas'), { recursive: true });
+    writeFileSync(join(projectRoot, 'domains/sales/modeling/areas/core.dql.yaml'), 'domain: sales\narea:\n  id: core\n  name: Core models\n');
+    const change: ModelingAuthoringChange = { operation: 'upsert_entity', value: { id: 'order', domain: 'sales', areaId: 'core', dbtModel: 'warehouse.acme.sales.orders', grain: 'ORDER_ID', keys: ['ORDER_ID'] } };
+    const preview = previewModelingChanges(projectRoot, [change]);
+    applyModelingChanges(projectRoot, [change], preview.fingerprint);
+    expect(readFileSync(join(projectRoot, 'domains/sales/modeling/entities.dql.yaml'), 'utf8')).not.toContain('id: order\n');
+    const manifest = buildManifest({ projectRoot });
+    expect((manifest.diagnostics ?? []).filter((item) => item.severity === 'error').map((item) => item.message)).toEqual([]);
+    expect(manifest.modeling?.entities['sales::entity::order']).toMatchObject({ grain: 'ORDER_ID' });
   });
 });
 

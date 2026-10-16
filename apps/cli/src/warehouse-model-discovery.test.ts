@@ -224,3 +224,41 @@ describe('reading joins out of view SQL', () => {
     expect(viewJoins('select 1')).toEqual([]);
   });
 });
+
+// Launch blocker: on jaffle-shop-warehouse `zlens model discover --validate`
+// chose `product_name` as the grain of products (a label) and no grain for
+// supplies, where `product_id` and `supply_uuid` are unique.
+describe('a table’s grain is its own identity column', () => {
+  it('prefers the unique `<table>_id` over a unique label other tables happen to reference, and finds `<table>_uuid` when the id repeats', async () => {
+    const t = (name: string, columns: Array<[string, string]>, rows: number) => ({
+      id: warehouseRelationId({ schema: 'dev', name }), schema: 'dev', name, relation: `dev.${name}`, kind: 'table' as const,
+      columns: columns.map(([column, type]) => ({ name: column, type })), rowCountEstimate: rows,
+    });
+    const jaffle = normalizeWarehouseCatalog({
+      version: 1, driver: 'sqlite', connectionId: 'default', scopes: [{ catalogOrDatabase: 'dev', schemas: ['dev'] }], capturedAt: '2026-10-16T00:00:00.000Z',
+      relations: [
+        t('products', [['product_id', 'TEXT'], ['product_name', 'TEXT'], ['product_price', 'INTEGER']], 3),
+        t('order_items', [['order_item_id', 'TEXT'], ['product_id', 'TEXT'], ['product_name', 'TEXT']], 4),
+        t('supplies', [['supply_uuid', 'TEXT'], ['supply_id', 'TEXT'], ['product_id', 'TEXT'], ['supply_cost', 'INTEGER']], 4),
+      ],
+    });
+    const db = new Database(':memory:');
+    db.exec(`
+      ATTACH ':memory:' AS dev;
+      CREATE TABLE dev.products (product_id TEXT, product_name TEXT, product_price INTEGER);
+      CREATE TABLE dev.order_items (order_item_id TEXT, product_id TEXT, product_name TEXT);
+      CREATE TABLE dev.supplies (supply_uuid TEXT, supply_id TEXT, product_id TEXT, supply_cost INTEGER);
+      INSERT INTO dev.products VALUES ('BEV-1', 'tea', 3), ('BEV-2', 'coffee', 4), ('JAF-1', 'jaffle', 9);
+      INSERT INTO dev.order_items VALUES ('i1', 'BEV-1', 'tea'), ('i2', 'BEV-2', 'coffee'), ('i3', 'JAF-1', 'jaffle'), ('i4', 'BEV-1', 'tea');
+      INSERT INTO dev.supplies VALUES ('u1', 'SUP-1', 'BEV-1', 1), ('u2', 'SUP-1', 'BEV-2', 1), ('u3', 'SUP-2', 'JAF-1', 2), ('u4', 'SUP-3', 'JAF-1', 1);
+    `);
+    const execute = async (sql: string) => ({ rows: db.prepare(sql).all() as Array<Record<string, unknown>> });
+    const report = await validateWarehouseDiscovery(discoverWarehouseModel({ snapshot: jaffle, projectName: 'jaffle' }), jaffle, execute, (identifier) => `"${identifier}"`);
+    expect(report.entities.find((entity) => entity.id === 'product')).toMatchObject({ grain: 'product_id', keys: ['product_id'], grainSource: 'unique_column' });
+    expect(report.entities.find((entity) => entity.id === 'supply')).toMatchObject({ grain: 'supply_uuid', keys: ['supply_uuid'], grainSource: 'unique_column' });
+    expect(report.entities.find((entity) => entity.id === 'order_item')).toMatchObject({ grain: 'order_item_id' });
+    // The label join is still found; it no longer decides the grain.
+    expect(report.relationships.some((item) => item.keys[0]!.from === 'product_name' && item.to === 'product')).toBe(true);
+    db.close();
+  });
+});
