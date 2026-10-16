@@ -85,6 +85,8 @@ opens it. Leave the terminal running.
 
 ## 5. Finish the guided setup
 
+<!-- TODO(lead): once feat/setup-where-does-your-model-live merges, check whether step 1 now opens on "Where does your data model live?" (pick dbt project) for the sample, and update these steps -->
+
 The first time, ZLens opens **Guided Setup** in four steps.
 
 1. **Connect your dbt project.** You see **dbt project ready**, and the path
@@ -127,9 +129,16 @@ The sample ships with its ZLens workspace. For your own dbt project, create
 one with `npx create-zlens-app@latest dql` from the dbt repo; see
 [Add ZLens to your dbt project](your-dbt-project.md).
 
+## No dbt?
+
+ZLens also works straight on your database: connect it, choose the schemas
+to model, and ZLens drafts the entities and joins for you to certify. See
+[No dbt? Start from your database](no-dbt.md).
+
 ## Next
 
 - [Find your way around](workbench.md) the workbench.
 - [Ask a question](../ask/index.md) in plain English.
 - [Save the query as a block](../blocks/index.md) and certify it.
-- [Add ZLens to your own dbt project](your-dbt-project.md).
+- [Add ZLens to your own dbt project](your-dbt-project.md), or
+  [start from your database](no-dbt.md) without dbt.

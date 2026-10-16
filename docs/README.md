@@ -6,12 +6,13 @@ same pages are plain Markdown here.
 ## Get started
 
 1. [Quickstart](./get-started/index.md): run ZLens on a sample dbt project
-2. [Install](./get-started/install.md)
-3. [Find your way around](./get-started/workbench.md)
-4. [Connect a database](./get-started/connect-database.md)
-5. [Set up an AI provider](./get-started/ai-provider.md)
-6. [Add ZLens to your dbt project](./get-started/your-dbt-project.md)
-7. [Concepts](./get-started/concepts.md)
+2. [No dbt? Start from your database](./get-started/no-dbt.md)
+3. [Install](./get-started/install.md)
+4. [Find your way around](./get-started/workbench.md)
+5. [Connect a database](./get-started/connect-database.md)
+6. [Set up an AI provider](./get-started/ai-provider.md)
+7. [Add ZLens to your dbt project](./get-started/your-dbt-project.md)
+8. [Concepts](./get-started/concepts.md)
 
 ## Ask and trust
 
