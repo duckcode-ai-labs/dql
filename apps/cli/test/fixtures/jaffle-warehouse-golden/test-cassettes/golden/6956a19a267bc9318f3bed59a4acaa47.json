@@ -1,0 +1,23 @@
+{
+  "key": "6956a19a267bc9318f3bed59a4acaa47",
+  "operation": "generate",
+  "text": "SELECT l.location_id, l.location_name, SUM(oi.product_price) AS food_revenue\nFROM jaffle_shop.dev.order_items AS oi\nJOIN jaffle_shop.dev.orders AS o ON oi.order_id = o.order_id\nJOIN jaffle_shop.dev.locations AS l ON o.location_id = l.location_id\nWHERE oi.is_food_item = 1\nGROUP BY l.location_id, l.location_name\nORDER BY food_revenue DESC\nLIMIT 500",
+  "providerName": "claude",
+  "recordedAt": "2026-10-16T16:41:46.808Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 2,
+    "messageRoles": [
+      "system",
+      "user"
+    ],
+    "preCanonicalHash": "6956a19a267bc9318f3bed59a4acaa476765487a53c8a095318a9c6ddb4f2875",
+    "postCanonicalHash": "6956a19a267bc9318f3bed59a4acaa476765487a53c8a095318a9c6ddb4f2875",
+    "appliedRuleClasses": []
+  }
+}

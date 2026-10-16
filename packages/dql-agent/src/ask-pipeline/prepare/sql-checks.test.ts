@@ -77,6 +77,14 @@ describe('the checks an AI-drafted statement passes before it runs', () => {
     expect(statedValues(question).map((item) => item.value)).toEqual(['Mumbai', 'Indians']);
   });
 
+  it('a ref the reading put where a value goes is a field, not a value the SQL must spell', () => {
+    const intent = { version: 1, kind: 'analytics', reading: 'x', measures: [], groupBy: [], display: [], filters: [{ ref: 'column:main.match.team_1', op: 'eq', values: ['column:main.match.match_winner'], source: 'question' }], unresolved: [], provenance: {}, expectedShape: 'grouped' } as never;
+    expect(statedValues('which team won', intent)).toEqual([]);
+    // A text value beside it is still a value the statement must apply.
+    const both = { version: 1, kind: 'analytics', reading: 'x', measures: [{ ref: 'column:main.match.win_margin', aggregation: 'sum', scope: [{ ref: 'column:main.match.venue', op: 'eq', values: ['metric:shop.revenue', 'Eden Gardens'] }] }], groupBy: [], display: [], filters: [{ ref: 'column:main.match.team_1', op: 'eq', values: ['column:main.match.match_winner'], source: 'question' }], unresolved: [], provenance: {}, expectedShape: 'grouped' } as never;
+    expect(statedValues('which team won', both).map((item) => item.value)).toEqual(['Eden Gardens']);
+  });
+
   it('guards the rows a statement returns and recognises aggregation', () => {
     expect(withRowGuard('SELECT a FROM t ORDER BY a;', 501)).toBe('SELECT a FROM t ORDER BY a\nLIMIT 501');
     expect(withRowGuard('SELECT a FROM t LIMIT 10', 501)).toBe('SELECT a FROM t LIMIT 10');

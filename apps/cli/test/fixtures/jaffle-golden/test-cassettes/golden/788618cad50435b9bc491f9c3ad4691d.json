@@ -1,0 +1,23 @@
+{
+  "key": "788618cad50435b9bc491f9c3ad4691d",
+  "operation": "generate",
+  "text": "{\"version\":1,\"kind\":\"analytics\",\"reading\":\"Beverage (drink) revenue broken down by product, one row per product identified by its product key with the product name as label.\",\"measures\":[{\"ref\":\"metric:order_item.drink_revenue\"}],\"groupBy\":[{\"ref\":\"entity:order_item.product\",\"role\":\"key\"}],\"display\":[\"dimension:products.product_name\"],\"filters\":[],\"ordering\":{\"ref\":\"metric:order_item.drink_revenue\",\"direction\":\"desc\"},\"expectedShape\":\"grouped\",\"unresolved\":[],\"provenance\":{\"metric:order_item.drink_revenue\":\"q:beverage revenue\",\"entity:order_item.product\":\"q:by product\",\"dimension:products.product_name\":\"q:by product\"}}",
+  "providerName": "claude",
+  "recordedAt": "2026-10-16T15:51:19.862Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 2,
+    "messageRoles": [
+      "system",
+      "user"
+    ],
+    "preCanonicalHash": "788618cad50435b9bc491f9c3ad4691d43357ce77f7b33d68ef3f09f5ffbd96e",
+    "postCanonicalHash": "788618cad50435b9bc491f9c3ad4691d43357ce77f7b33d68ef3f09f5ffbd96e",
+    "appliedRuleClasses": []
+  }
+}

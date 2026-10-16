@@ -1,23 +1,26 @@
 {
-  "_comment": "Baseline for the warehouse-only golden eval: main 221f4f92 (after #109) for jaffle-golden, and port PR 1/6 (#113) for jaffle-warehouse-golden, whose cassettes were re-recorded live with claude-code because a database-only project now shows Ask its catalog columns (floor.askGolden 29 -> 32). askGolden: the Ask pipeline lane per case. 'jaffle-golden' and 'jaffle-warehouse-golden' are cassette replays, what CI runs; 'jaffle-golden:live' is one live run with the claude-code provider (Claude subscription CLI), not gated. The warehouse-only cassettes were recorded live with the same provider, so its replay is that live run, judged with golden.json's tier policy. router: zlens eval routes for the same questions (scripts/eval-golden-router-compare.mjs). CI fails only when the warehouse-only lane drops below a floor. See README.md.",
+  "_comment": "Baseline for the warehouse-only golden eval: main 221f4f92 (after #109) for jaffle-golden, and port PR 2/6 (#115) for jaffle-warehouse-golden, whose cassettes were re-recorded live with claude-code because a database-only project's drafter now reads the whole schema and drafts from the question (PR 1/6, #113, re-recorded them before for catalog columns: floor.askGolden 29 -> 32; PR 2/6 replays 34: floor.askGolden 32 -> 34). askGolden: the Ask pipeline lane per case. 'jaffle-golden' and 'jaffle-warehouse-golden' are cassette replays, what CI runs; 'jaffle-golden:live' is one live run with the claude-code provider (Claude subscription CLI), not gated. The warehouse-only cassettes were recorded live with the same provider, so its replay is that live run, judged with golden.json's tier policy. router: zlens eval routes for the same questions (scripts/eval-golden-router-compare.mjs). CI fails only when the warehouse-only lane drops below a floor. See README.md.",
   "floor": {
-    "askGolden": 32,
+    "askGolden": 34,
     "router": 22
   },
   "askGolden": {
     "jaffle-warehouse-golden": {
-      "commit": "9c356c77ad2fa968cab914ae6b49152d80a4c490",
-      "dirty": false,
+      "commit": "03112c87e696e0ed0aa2e7f1443ca1f84d587725",
+      "dirty": true,
       "provider": "cassette replay",
-      "passed": 32,
+      "passed": 34,
       "total": 45,
       "cases": [
         {
           "lane": "questions",
           "id": "top-beverage-customers",
-          "pass": true,
+          "pass": false,
           "route": "generated_answer",
-          "trust": "review_required"
+          "trust": "review_required",
+          "reasons": [
+            "rows differ from reference: column drink_revenue (aliases drink_revenue, beverage_revenue, revenue) not in result columns customer_id, customer_name, beverage_spend, beverage_items"
+          ]
         },
         {
           "lane": "questions",
@@ -30,8 +33,8 @@
           "lane": "questions",
           "id": "top-5-customers-by-revenue",
           "pass": true,
-          "route": "clarify",
-          "trust": "not_applicable"
+          "route": "generated_answer",
+          "trust": "review_required"
         },
         {
           "lane": "questions",
@@ -44,8 +47,8 @@
           "lane": "questions",
           "id": "total-revenue",
           "pass": true,
-          "route": "clarify",
-          "trust": "not_applicable"
+          "route": "generated_answer",
+          "trust": "review_required"
         },
         {
           "lane": "questions",
@@ -54,7 +57,7 @@
           "route": "clarify",
           "trust": "not_applicable",
           "reasons": [
-            "no result rows: clarify/needs_clarification/needs_clarification \u2014 This project defines no revenue metric: should revenue be pretax product revenue (sum of order-line product_price / order subtotal) or the order total including tax?\nThis pro"
+            "no result rows: clarify/needs_clarification/needs_clarification — No governed revenue metric exists here: should revenue be the pretax order subtotal or the order total including tax?\nNo governed revenue metric exists here: should revenue b"
           ]
         },
         {
@@ -67,12 +70,9 @@
         {
           "lane": "questions",
           "id": "revenue-by-location",
-          "pass": false,
-          "route": "clarify",
-          "trust": "not_applicable",
-          "reasons": [
-            "no result rows: clarify/needs_clarification/needs_clarification \u2014 Should revenue be the order total including tax (order_total) or the pretax subtotal (subtotal)?\nShould revenue be the order total including tax (order_total) or the pretax s"
-          ]
+          "pass": true,
+          "route": "generated_answer",
+          "trust": "review_required"
         },
         {
           "lane": "questions",
@@ -98,9 +98,12 @@
         {
           "lane": "questions",
           "id": "food-vs-drink",
-          "pass": true,
+          "pass": false,
           "route": "generated_answer",
-          "trust": "review_required"
+          "trust": "review_required",
+          "reasons": [
+            "rows differ from reference: column food_revenue (aliases food_revenue) not in result columns category, revenue"
+          ]
         },
         {
           "lane": "questions",
@@ -137,7 +140,7 @@
           "route": "clarify",
           "trust": "not_applicable",
           "reasons": [
-            "no result rows: clarify/needs_clarification/needs_clarification \u2014 No metric or term defines a \"large\" order in this project \u2014 should \"large\" mean an order total above some amount (and what threshold), or an order with more than some number "
+            "no result rows: clarify/needs_clarification/needs_clarification — The project has no definition of a \"large\" order — should it be measured by order total (and above what amount) or by number of items (and above what count)?\nThe project has "
           ]
         },
         {
@@ -153,22 +156,16 @@
         {
           "lane": "questions",
           "id": "customer-profile-ryan",
-          "pass": false,
+          "pass": true,
           "route": "generated_answer",
-          "trust": "review_required",
-          "reasons": [
-            "rows differ from reference: column count_lifetime_orders (aliases count_lifetime_orders, order_count) not in result columns customer_id, customer_name, customer_type, lifetime_orders, lifetime_spend, lifetime_spend_pretax, lifetime_tax_paid"
-          ]
+          "trust": "review_required"
         },
         {
           "lane": "questions",
           "id": "supplies-cost-by-product",
-          "pass": false,
-          "route": "clarify",
-          "trust": "not_applicable",
-          "reasons": [
-            "no result rows: clarify/needs_clarification/needs_clarification \u2014 Do you mean the catalog supply cost per product (from the supplies table) or the supply cost actually incurred on sold order lines (from order_items)?\nDo you mean the catalog"
-          ]
+          "pass": true,
+          "route": "generated_answer",
+          "trust": "review_required"
         },
         {
           "lane": "questions",
@@ -204,19 +201,19 @@
         {
           "lane": "questions",
           "id": "customers-with-most-orders",
-          "pass": true,
+          "pass": false,
           "route": "generated_answer",
-          "trust": "review_required"
+          "trust": "review_required",
+          "reasons": [
+            "rows differ from reference: expected 10 rows, got 14"
+          ]
         },
         {
           "lane": "questions",
           "id": "revenue-by-customer-type",
-          "pass": false,
-          "route": "clarify",
-          "trust": "not_applicable",
-          "reasons": [
-            "no result rows: clarify/needs_clarification/needs_clarification \u2014 Should revenue be the pretax order subtotal or the order total including tax? No governed revenue metric is defined.\nShould revenue be the pretax order subtotal or the order "
-          ]
+          "pass": true,
+          "route": "generated_answer",
+          "trust": "review_required"
         },
         {
           "lane": "questions",
@@ -256,12 +253,9 @@
         {
           "lane": "questions",
           "id": "revenue-by-location-including-empty",
-          "pass": false,
-          "route": "clarify",
-          "trust": "not_applicable",
-          "reasons": [
-            "no result rows: clarify/needs_clarification/needs_clarification \u2014 Should revenue be the pretax order subtotal or the order total including tax?\nShould revenue be the pretax order subtotal or the order total including tax?"
-          ]
+          "pass": true,
+          "route": "generated_answer",
+          "trust": "review_required"
         },
         {
           "lane": "questions",
@@ -273,12 +267,9 @@
         {
           "lane": "questions",
           "id": "gross-margin-2025",
-          "pass": false,
+          "pass": true,
           "route": "generated_answer",
-          "trust": "review_required",
-          "reasons": [
-            "rows differ from reference: no row matches {\"gross_profit\":9781.32,\"gross_margin\":0.796070643769838}"
-          ]
+          "trust": "review_required"
         },
         {
           "lane": "questions",
@@ -287,7 +278,7 @@
           "route": "generated_answer",
           "trust": "review_required",
           "reasons": [
-            "rows differ from reference: column revenue_july (aliases revenue_july, revenue_jul, revenue_jul_2025, july_revenue, revenue_july_2025, jul_revenue) not in result columns sales_pretax_2025_07, sales_pretax_2025_08, sales_pretax_growth_pct"
+            "rows differ from reference: column revenue_july (aliases revenue_july, revenue_jul, revenue_jul_2025, revenue_2025_07, july_revenue, revenue_july_2025, jul_revenue) not in result columns july_2025_sales_pretax, august_2025_sales_pretax, abs"
           ]
         },
         {
@@ -297,7 +288,7 @@
           "route": "clarify",
           "trust": "not_applicable",
           "reasons": [
-            "no result rows: clarify/needs_clarification/needs_clarification \u2014 Should revenue be the pretax order subtotal or the order total including tax?\nShould revenue be the pretax order subtotal or the order total including tax?"
+            "no result rows: clarify/needs_clarification/needs_clarification — Should revenue be the order total including tax, or the pretax order subtotal?\nShould revenue be the order total including tax, or the pretax order subtotal?"
           ]
         },
         {
@@ -311,10 +302,10 @@
           "lane": "questions",
           "id": "new-vs-returning",
           "pass": false,
-          "route": "clarify",
-          "trust": "not_applicable",
+          "route": "generated_answer",
+          "trust": "review_required",
           "reasons": [
-            "no result rows: clarify/needs_clarification/needs_clarification \u2014 Should revenue be the pretax order subtotal or the order total including tax?\nShould revenue be the pretax order subtotal or the order total including tax?"
+            "rows differ from reference: column new_customer_revenue (aliases new_customer_revenue, new_revenue, first_order_revenue) not in result columns customer_type, revenue, customer_count, order_count"
           ]
         },
         {
@@ -334,9 +325,12 @@
         {
           "lane": "conversation",
           "id": "q1-top-beverage-customers",
-          "pass": true,
+          "pass": false,
           "route": "generated_answer",
-          "trust": "review_required"
+          "trust": "review_required",
+          "reasons": [
+            "rows differ from reference: column drink_revenue (aliases drink_revenue, beverage_revenue, revenue) not in result columns customer_id, customer_name, beverage_spend, beverage_items"
+          ]
         },
         {
           "lane": "conversation",
@@ -846,7 +840,7 @@
           "route": "clarify",
           "trust": "not_applicable",
           "reasons": [
-            "no result rows: clarify/needs_clarification/needs_clarification \u2014 Do you mean each product's unit supply cost (sum of its supply lines in supplies), or the total supply cost incurred across items actually sold (order_items.supply_cost)?\nDo "
+            "no result rows: clarify/needs_clarification/needs_clarification — Do you mean each product's unit supply cost (sum of its supply lines in supplies), or the total supply cost incurred across items actually sold (order_items.supply_cost)?\nDo "
           ]
         },
         {

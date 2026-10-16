@@ -1,9 +1,9 @@
 {
   "key": "43f32e0276a6c1ca28ae9a1f4c384cbb",
   "operation": "generate",
-  "text": "{\"version\":1,\"kind\":\"analytics\",\"reading\":\"Total revenue across all orders, with no breakdown or time window.\",\"measures\":[{\"ref\":\"column:dev.orders.subtotal\",\"aggregation\":\"sum\",\"alias\":\"revenue\"}],\"groupBy\":[],\"display\":[],\"filters\":[],\"expectedShape\":\"scalar\",\"unresolved\":[{\"clause\":\"revenue\",\"options\":[\"column:dev.orders.subtotal\",\"column:dev.orders.order_total\"],\"material\":true,\"question\":\"Should revenue be the pretax order subtotal or the order total including tax?\"}],\"provenance\":{\"column:dev.orders.subtotal\":\"q:revenue\",\"column:dev.orders.order_total\":\"q:revenue\"}}",
+  "text": "{\"version\":1,\"kind\":\"analytics\",\"reading\":\"Total revenue across all orders, as a single number with no breakdown or time window.\",\"measures\":[{\"ref\":\"column:dev.orders.order_total\",\"aggregation\":\"sum\",\"alias\":\"revenue\"}],\"groupBy\":[],\"display\":[],\"filters\":[],\"expectedShape\":\"scalar\",\"unresolved\":[{\"clause\":\"revenue\",\"options\":[\"column:dev.orders.order_total\",\"column:dev.orders.subtotal\"],\"material\":true,\"question\":\"Should revenue be the order total including tax, or the pretax order subtotal?\"}],\"provenance\":{\"column:dev.orders.order_total\":\"q:revenue\",\"column:dev.orders.subtotal\":\"q:revenue\"}}",
   "providerName": "claude",
-  "recordedAt": "2026-10-16T14:09:33.709Z",
+  "recordedAt": "2026-10-16T16:43:05.451Z",
   "provenance": {
     "kind": "recorded_provider",
     "replayClassification": "recorded_provider",

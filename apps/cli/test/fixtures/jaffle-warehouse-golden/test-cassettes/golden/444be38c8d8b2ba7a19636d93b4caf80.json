@@ -1,0 +1,23 @@
+{
+  "key": "444be38c8d8b2ba7a19636d93b4caf80",
+  "operation": "generate",
+  "text": "SELECT SUM(subtotal) AS revenue_2025, SUM(order_cost) AS cost_2025, SUM(subtotal) - SUM(order_cost) AS gross_profit_2025, 100.0 * (SUM(subtotal) - SUM(order_cost)) / SUM(subtotal) AS gross_margin_pct_2025 FROM jaffle_shop.dev.orders WHERE strftime('%Y', ordered_at) = '2025'",
+  "providerName": "claude",
+  "recordedAt": "2026-10-16T16:42:49.331Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 2,
+    "messageRoles": [
+      "system",
+      "user"
+    ],
+    "preCanonicalHash": "444be38c8d8b2ba7a19636d93b4caf80c67a3c6772bd75d7eaef4f760bc52b7b",
+    "postCanonicalHash": "444be38c8d8b2ba7a19636d93b4caf80c67a3c6772bd75d7eaef4f760bc52b7b",
+    "appliedRuleClasses": []
+  }
+}

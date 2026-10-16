@@ -71,13 +71,13 @@ import {
   type PhysicalIdentifierPartV1,
   renderCard,
   validateSqlAgainstLocalContext,
-  executionRelationIdentity,
+  inspectedRelationMatches,
   type AgentMessage,
   type RuntimeSchemaTable,
   priorWithoutValues,
   sqlStringValues,
 } from '@zlens/agent';
-import { buildProjectVocabulary, buildVocabularySource, embeddedManifestRelations, namedBlockNotServed, normalizeRelationName, type VocabularySourceInput } from './vocabulary-source.js';
+import { buildProjectVocabulary, buildVocabularySource, embeddedManifestRelations, namedBlockNotServed, normalizeRelationName, warehouseFirstCatalog, type VocabularySourceInput } from './vocabulary-source.js';
 import { groupingKeyLabels, keyLabelLine, keyLabels, unnamedGroupingKeys, unnamedKeyFailure, type EntityKey, type KeyLabel, type KeyReference } from './key-labels.js';
 import { businessIdentifierLine, businessIdentifiers, modelingEntityTexts, certifiedJoinViolations, classifySqlJoins, ledgerJoins, markerTableLine, markerTables, modeledJoinPaths, modelingRelationshipEdges, sameRelation, sharedParentShortcuts, type LedgerJoin } from './join-relationships.js';
 import { readEnv } from '@zlens/core';
@@ -709,6 +709,36 @@ export function skillsForDraft(entries: VocabularyEntry[], text: string, max = 2
     .map((item) => item.entry);
 }
 
+/**
+ * THE CERTIFIED BLOCKS AN AI-WRITTEN STATEMENT READS. A certified block that
+ * does not answer the question exactly is still how the team computes a
+ * report near it: its joins, filters and definitions were approved. At most
+ * two, ranked by the words they share with the question and its reading, and
+ * by the chosen tables their SQL reads; a block that shares no word is not
+ * shown, and a draft block never is.
+ */
+export function certifiedBlocksForDraft(entries: VocabularyEntry[], text: string, relations: string[], max = 2): VocabularyEntry[] {
+  const words = (value: string) => new Set((value.toLowerCase().replace(/[_."]/g, ' ').match(SKILL_WORD) ?? []).filter((word) => !SKILL_STOPWORDS.has(word)));
+  const tail = (relation: string) => relation.replace(/["`\[\]]/g, '').split('.').pop()!.toLowerCase();
+  const wanted = words(text);
+  const chosen = new Set(relations.map(tail));
+  return entries
+    .filter((entry) => entry.kind === 'block' && entry.certified === true && Boolean(entry.sql))
+    .map((entry, index) => {
+      const own = words(`${entry.name} ${entry.label ?? ''} ${entry.description ?? ''} ${(entry.contract?.outputs ?? []).join(' ')}`);
+      let shared = 0;
+      for (const word of wanted) if (own.has(word)) shared += 1;
+      const reads = new Set([...entry.sql!.matchAll(/\b(?:from|join)\s+((?:"[^"]+"|`[^`]+`|[A-Za-z_][\w$]*)(?:\.(?:"[^"]+"|`[^`]+`|[A-Za-z_][\w$]*)){0,2})/gi)].map((match) => tail(match[1]!)));
+      let tables = 0;
+      for (const name of reads) if (chosen.has(name)) tables += 1;
+      return { entry, shared, tables, index };
+    })
+    .filter((item) => item.shared > 0 && (item.tables > 0 || item.shared >= 2))
+    .sort((a, b) => (b.shared + b.tables) - (a.shared + a.tables) || a.index - b.index)
+    .slice(0, max)
+    .map((item) => item.entry);
+}
+
 /** A declared relationship two tables of an AI-written statement both carry the keys of. */
 export type PreferredJoin = { name: string; certified: boolean; from: string; to: string; keys: Array<{ from: string; to: string }>; cardinality?: string };
 
@@ -1248,7 +1278,7 @@ type AskPipelineRunInput = Parameters<typeof runAskPipeline>[0];
 
 /** What one pipeline run keeps for its own receipt: drafting calls, checks and host steps. */
 interface AskRunState {
-  draftDispatches: Array<{ purpose: string; ms: number; reply?: string; promptChars?: number; at?: number; attempt?: number; label?: 'draft' | 'redraft' | 'fix' | 'retry_empty' | 'widen'; outcome?: 'sql' | 'declined' | 'rejected' | 'error' }>;
+  draftDispatches: Array<{ purpose: string; ms: number; reply?: string; promptChars?: number; at?: number; attempt?: number; /** Certified blocks the drafter was given as the team's approved computations. */ blocks?: string[]; label?: 'draft' | 'redraft' | 'fix' | 'retry_empty' | 'widen'; outcome?: 'sql' | 'declined' | 'rejected' | 'error' }>;
   // The checks drafted SQL was held to, recorded for the run views (the
   // notes sent back to the model are built separately and never from these).
   hostChecks: Array<{ id: 'stated_values' | 'required_filters' | 'join_fanout' | 'certified_joins' | 'catalog_columns' | 'read_only' | 'key_labels'; label: string; passed: boolean; message: string; attempt: number }>;
@@ -2077,6 +2107,26 @@ export function createAskPipelineHost(deps: AskPipelineHostDeps): AskPipelineHos
         for (const relation of missing) { relations.push(relation); namingTables.push(relation); }
         keyLines.push(keyLabelLine(item));
       }
+      // THE WHOLE SCHEMA WHEN IT FITS. On a warehouse-first project the synced
+      // catalog is the entire account of the data, and a plain text-to-SQL
+      // prompt reads every table of it. Choosing five by word overlap meant a
+      // needed table was simply never shown. When every described table fits
+      // the budget, the drafter sees all of them, the chosen ones first (with
+      // the tables that name a grouped key, added above, among them), with the
+      // keys the warehouse declares. Above the budget it chooses as before.
+      const warehouseKeys = warehouseFirstCatalog(deps.getManifest().manifest, deps.projectRoot);
+      let wholeSchema = false;
+      if (warehouseKeys) {
+        const described = current.entries
+          .filter((item) => item.kind === 'relation' && entryPhysicalRelation(item) !== undefined && current.entries.some((column) => column.kind === 'column' && samePhysicalEntry(column, item)))
+          .map((item) => entryPhysicalRelation(item)!);
+        const size = current.entries.filter((item) => item.kind === 'column').reduce((total, item) => total + renderCard(item).length + 1, 0) + described.length * 160;
+        const unseen = described.filter((relation) => !relations.some((known) => physicalRelationIdentity(known) === physicalRelationIdentity(relation)));
+        if (unseen.length > 0 && size <= WHOLE_SCHEMA_CHARS) {
+          relations.push(...unseen);
+          wholeSchema = true;
+        }
+      }
       const needsColumns = relations.filter((relation) => {
         const entry = current.entries.find((item) => item.kind === 'relation' && entryPhysicalRelation(item) !== undefined && physicalRelationIdentity(entryPhysicalRelation(item)!) === physicalRelationIdentity(relation));
         return !entry || entry.physical?.binding?.columnCompleteness !== 'complete' || !current.entries.some((item) => item.kind === 'column' && samePhysicalEntry(item, entry));
@@ -2099,7 +2149,7 @@ export function createAskPipelineHost(deps: AskPipelineHostDeps): AskPipelineHos
       // Only tables whose columns are known can be drafted over.
       relations = relations.filter((relation) => current.entries.some((item) => item.kind === 'column' && (() => { const physical = entryPhysicalRelation(item); return physical !== undefined && physicalRelationIdentity(physical) === physicalRelationIdentity(relation); })()));
       if (relations.length === 0) return { unavailable: true, error: 'the tables that match the question could not be described on this connection' };
-      hostStep({ phase: 'schema', title: `Chose ${relations.length === 1 ? 'the table' : 'the tables'} ${relations.join(', ')}`, state: 'done', detail: `picked from ${refs.length ? 'the fields the reading named' : 'the words of the question'}${catalogPicked.length ? `; found by the catalog search: ${catalogPicked.join(', ')}` : ''}${bridged.length ? `; added to connect them over modeled relationships: ${bridged.join(', ')}` : ''}${namingTables.length ? `; added because they name what the answer groups by: ${namingTables.join(', ')}` : ''}${needsColumns.length ? `; columns of ${needsColumns.slice(0, 4).join(', ')} read from the warehouse` : ''}` });
+      hostStep({ phase: 'schema', title: wholeSchema ? `Showed the whole schema: all ${relations.length} tables${relations.some((relation) => { const keys = warehouseKeys?.keysOf(relation); return Boolean(keys?.primaryKey || keys?.foreignKeys.length); }) ? ', with the keys the warehouse declares' : ''}` : `Chose ${relations.length === 1 ? 'the table' : 'the tables'} ${relations.join(', ')}`, state: 'done', detail: `picked from ${refs.length ? 'the fields the reading named' : 'the words of the question'}${catalogPicked.length ? `; found by the catalog search: ${catalogPicked.join(', ')}` : ''}${bridged.length ? `; added to connect them over modeled relationships: ${bridged.join(', ')}` : ''}${namingTables.length ? `; added because they name what the answer groups by: ${namingTables.join(', ')}` : ''}${needsColumns.length ? `; columns of ${needsColumns.slice(0, 4).join(', ')} read from the warehouse` : ''}` });
       // THE CONTEXT THE DRAFT READS: what the user said, the previous reading,
       // and what the project says about this data (domain notes, business
       // terms the question uses, approved hints).
@@ -2149,6 +2199,12 @@ export function createAskPipelineHost(deps: AskPipelineHostDeps): AskPipelineHos
         .map(markerTableLine);
       // The number people know a table's rows by, beside its internal key.
       const identifierLines = businessIdentifiers(relations, sourceColumns).map(businessIdentifierLine);
+      // THE TEAM'S CERTIFIED REPORTS NEAR THE QUESTION: their SQL is how the
+      // team joins and defines these tables, reused where the question
+      // overlaps. Draft blocks are never shown; the answer stays review-required.
+      const draftBlocks = certifiedBlocksForDraft(current.entries, `${question} ${intent?.reading ?? ''}`, relations);
+      const blockLines = draftBlocks
+        .map((entry) => `- certified block ${entry.label ?? entry.name} (how the team joins these tables and defines its measures, for a report near this question: reuse its joins and definitions where the question overlaps it; which rows to keep, the grouping and the output come from the question, not the block; write the SQL for ${connection?.driver ?? 'duckdb'} even where the block's syntax differs)${entry.description ? `: ${entry.description.replace(/\s+/g, ' ').slice(0, 300)}` : ''}. Its certified SQL: ${entry.sql!.replace(/\s+/g, ' ').slice(0, 1500)}`);
       // THE PROJECT'S WRITTEN RULES: the skills selected for this request whose
       // text shares the most words with the question and the chosen tables,
       // long enough to carry a definition (the reading step sees a short card).
@@ -2163,6 +2219,7 @@ export function createAskPipelineHost(deps: AskPipelineHostDeps): AskPipelineHos
         ...metricLines,
         ...joinLines,
         ...keyLines,
+        ...blockLines,
         ...markerLines,
         ...identifierLines,
         ...skillLines,
@@ -2186,22 +2243,31 @@ export function createAskPipelineHost(deps: AskPipelineHostDeps): AskPipelineHos
             const physical = entryPhysicalRelation(item);
             return physical !== undefined && physicalRelationIdentity(physical) === physicalRelationIdentity(relation);
           });
+          const declared = warehouseKeys?.keysOf(relation);
+          // A foreign key names the table it points at as the cards spell it.
+          const shownAs = (target: string) => { const table = warehouseKeys?.keysOf(target); return (table && relations.find((known) => warehouseKeys?.keysOf(known) === table)) ?? target; };
           const lines = [
             entry ? `- executable relation:${relation} [${entry.physical?.binding?.columnCompleteness ?? 'partial'} columns; logical ${entry.physical?.binding?.logicalRelation ?? entry.model ?? relation}]` : `- executable relation:${relation}`,
             ...current.entries.filter((item) => item.kind === 'column' && samePhysicalEntry(item, entry)).map((item) => renderCard(item)),
+            // What one row is, and how this table points at others, as the
+            // warehouse declares them (warehouse-first projects only).
+            ...(declared?.primaryKey ? [`  primary key (${declared.primaryKey.join(', ')}): one row per ${declared.primaryKey.join(', ')}`] : []),
+            ...(declared?.foreignKeys ?? []).map((key) => `  foreign key (${key.columns.join(', ')}) references ${shownAs(key.references.relation)} (${key.references.columns.join(', ')})`),
           ];
-          for (const line of lines) { if (chars + line.length > 18_000) break; cards.push(line); chars += line.length + 1; }
+          const cap = wholeSchema ? WHOLE_SCHEMA_CHARS : 18_000;
+          for (const line of lines) { if (chars + line.length > cap) break; cards.push(line); chars += line.length + 1; }
         }
         const dialect = connection?.driver ?? 'duckdb';
         const messages: AgentMessage[] = [
           { role: 'system', content: `You write exactly ONE read-only SQL statement for ${dialect} that answers the question from the tables below. No certified block or semantic metric answers it, so you choose the tables, columns, joins and filters. Use ONLY the executable physical relations and columns listed below, spelled exactly as listed (including database and quoting where shown). Join two relations only on columns that exist in both. Apply every restriction the question states; when unsure how a text value is stored, match it case-insensitively; aggregate at the grain the question asks for; when the answer lists people or things, select and group by their id column beside the name (two can share a name); a term with a standard definition (a double-double, a win rate, a repeat customer) is computed from the listed columns that define it, and the definition is not a missing field; order and limit as it asks; never return more than 500 rows. No DDL or DML, no comments, no explanation. The CONTEXT lines are what the user and the project have said about this data (definitions, rules, where values are kept): follow them, and use a table or field the user names as named. A semantic metric listed in CONTEXT is computed exactly as it is defined there. A preferred join listed in CONTEXT is how those tables join unless the question needs another. When no column is dedicated to a restriction the question states, apply it to the text, tag, category or custom field that most plausibly holds that value, matched case-insensitively (a partial match is allowed). Reply exactly NO_SQL: followed by one sentence naming what is missing only when no listed column could hold a measure or a restriction the question asks for, and never substitute a different measure for the one asked. Otherwise return the SQL only.` },
-          { role: 'user', content: `QUESTION: ${question}\n${reason ? `WHY NO GOVERNED ANSWER: ${reason.slice(0, 600)}\n` : ''}${intent ? `READING: ${shownToModel(intent.reading)}\nINTENT: ${shownToModel(JSON.stringify({ measures: intent.measures, groupBy: intent.groupBy, display: intent.display, filters: intent.filters, time: intent.time ?? null, ordering: intent.ordering ?? null, limit: intent.limit ?? null }))}\n` : ''}${contextLines.length ? `CONTEXT:\n${contextLines.join('\n')}\n` : ''}${note ? `NOTE: ${note}\n` : ''}${previous ? `PREVIOUS SQL (the warehouse rejected it; fix it):\n${shownToModel(previous.sql)}\nWAREHOUSE ERROR: ${shownToModel(previous.error.slice(0, 600))}\n` : ''}RELATIONS AND COLUMNS:\n${cards.join('\n')}` },
+          { role: 'user', content: `QUESTION: ${question}\n${reason ? `WHY NO GOVERNED ANSWER: ${reason.slice(0, 600)}\n` : ''}${intent && !(warehouseKeys && readEnv('ZLENS_ASK_DRAFT_WITHOUT_READING') === '1') ? `READING: ${shownToModel(intent.reading)}\nINTENT: ${shownToModel(JSON.stringify({ measures: intent.measures, groupBy: intent.groupBy, display: intent.display, filters: intent.filters, time: intent.time ?? null, ordering: intent.ordering ?? null, limit: intent.limit ?? null }))}\n` : ''}${contextLines.length ? `CONTEXT:\n${contextLines.join('\n')}\n` : ''}${warehouseKeys && DIALECT_NOTES[dialect.toLowerCase()] ? `DIALECT NOTES (${dialect}): ${DIALECT_NOTES[dialect.toLowerCase()]}\n` : ''}${note ? `NOTE: ${note}\n` : ''}${previous ? `PREVIOUS SQL (the warehouse rejected it; fix it):\n${shownToModel(previous.sql)}\nWAREHOUSE ERROR: ${shownToModel(previous.error.slice(0, 600))}\n` : ''}RELATIONS AND COLUMNS:\n${cards.join('\n')}` },
         ];
         const draftStarted = Date.now();
         const trace = deps.dispatchOptions?.('draft', request);
         // What this call was for and what it returned, kept for the run views.
         const dispatch: AskRunState['draftDispatches'][number] = {
           purpose: 'intent:draft', ms: 0, attempt: state.draftDispatches.length + 1,
+          ...(draftBlocks.length ? { blocks: draftBlocks.map((entry) => entry.ref) } : {}),
           label: label ?? (note ? 'fix' : undefined) ?? (previous ?(/^the statement ran and returned no rows/.test(previous.error) ? 'retry_empty' : 'redraft') : 'draft'),
         };
         let raw: string;
@@ -2247,9 +2313,9 @@ export function createAskPipelineHost(deps: AskPipelineHostDeps): AskPipelineHos
           // statement is proven before execution. Read-only-ness is proven by
           // the tier itself.
           if (!/could not be parsed/i.test(validation.error)) return { error: `the drafted SQL was not accepted: ${validation.error}` };
-          const inspected = new Set(runtimeSchema.map((table) => executionRelationIdentityFor(table.relation, dialect)));
+          // One matcher with the validator: on DuckDB `main.claim` is the inspected `acme.main.claim`.
           const read = relationsInSql(sql).filter((relation) => parsePhysicalIdentifier(relation).length >= 2);
-          const foreign = read.find((relation) => !inspected.has(executionRelationIdentityFor(relation, dialect)));
+          const foreign = read.find((relation) => !inspectedRelationMatches(relation, runtimeSchema, dialect));
           if (foreign) return { error: `the drafted SQL reads ${foreign}, which this request did not inspect` };
           if (read.length === 0) return { error: 'the drafted SQL names no inspected relation' };
           return { sql, relations: read, proof: [`reads only the inspected physical bindings: ${read.join(', ')} (the SQL parser could not read this dialect; relations proven by name)`], engine: dialect };
@@ -2553,6 +2619,10 @@ export function createAskPipelineHost(deps: AskPipelineHostDeps): AskPipelineHos
       provider: ledgered,
       describeRelations,
       explorationAuto: deps.autoExploration !== false,
+      // Nothing governed at all (a warehouse-first project with no certified
+      // block, metric or measure in scope): draft from the question itself.
+      // ZLENS_ASK_DRAFT_FIRST=0 keeps the reading step first, for comparison.
+      ...(readEnv('ZLENS_ASK_DRAFT_FIRST') !== '0' && warehouseFirstCatalog(deps.getManifest().manifest, deps.projectRoot) && !currentVocabulary().entries.some((entry) => entry.kind === 'block' || entry.kind === 'metric' || entry.kind === 'measure') ? { draftFirst: true } : {}),
       prepareDeps: { ...prepareDeps(connection ?? { driver: 'duckdb' } as ConnectionConfig, currentVocabulary, engine, request.signal), draftSql: makeDraftSql(state) },
       executeDeps: {
         maxRows: deps.maxRows ?? 500,
@@ -2575,10 +2645,12 @@ export function createAskPipelineHost(deps: AskPipelineHostDeps): AskPipelineHos
           // the warehouse's identifier rule. That proof needs no SQL parser; a
           // third-party parser that cannot read a dialect (three-part names on
           // SQLite, a window clause) must never veto a governed statement.
-          const inspected = new Set(runtimeSchema.map((table) => executionRelationIdentityFor(table.relation, connection.driver)));
+          // A DuckDB statement may leave the default database out
+          // (`main.claim` for the inspected `acme_insurance.main.claim`),
+          // exactly as the drafted-SQL check accepts it: one matcher for both.
           const foreign = relationsInSql(candidate.sql)
             .filter((relation) => parsePhysicalIdentifier(relation).length >= 2)
-            .find((relation) => !inspected.has(executionRelationIdentityFor(relation, connection.driver)));
+            .find((relation) => !inspectedRelationMatches(relation, runtimeSchema, connection.driver));
           if (foreign) throw new Error(`the frozen SQL reads ${foreign}, which this request did not inspect (it inspected ${runtimeSchema.map((table) => table.relation).join(', ')}). Use the exact bound physical relation.`);
           if (candidate.tier !== 'exploratory') return;
           // Drafted SQL was parsed and validated when it was drafted; the same
@@ -3106,6 +3178,26 @@ export function connectionKey(connection: ConnectionConfig): string {
     .join('|');
 }
 
+/** The schema a warehouse-first draft may read whole: about ten thousand tokens. */
+const WHOLE_SCHEMA_CHARS = 40_000;
+
+/**
+ * What a draft for an engine must know that the model gets wrong by default.
+ * Facts about the engine, not about any question. Shown on warehouse-first
+ * projects, where they were measured; a dbt project's prompts are recorded
+ * provider evidence (the golden replays) and change only with a re-record.
+ * Engines without an entry get no line.
+ */
+const DIALECT_NOTES: Record<string, string> = {
+  sqlite: [
+    'there is no MEDIAN, PERCENTILE_CONT or STDDEV function: compute a median by ordering the values and averaging the middle one or two (ROW_NUMBER() and COUNT(*) OVER ()), and a standard deviation from AVG(x*x) - AVG(x)*AVG(x)',
+    'integer divided by integer truncates: multiply by 1.0 first for a ratio or average of counts',
+    'dates and timestamps are stored as TEXT: use date(), strftime(\'%Y\', col), strftime(\'%Y-%m\', col) and julianday(); check the stored format before comparing',
+    'concatenate with ||; there is no LEFT() or RIGHT(): use substr()',
+    'window functions (ROW_NUMBER, RANK, LAG, SUM() OVER) and WITH RECURSIVE are supported',
+  ].join('; '),
+};
+
 /** Relation names as SQL writes them, lowercased and unquoted. */
 function relationsInSql(sql: string): string[] {
   const found = new Set<string>();
@@ -3114,16 +3206,6 @@ function relationsInSql(sql: string): string[] {
     if (name) found.add(name);
   }
   return [...found];
-}
-
-/**
- * The identity a warehouse gives a relation written in SQL: one rule with the
- * validator (`executionRelationIdentity`). Snowflake keeps quote state;
- * DuckDB, SQLite and the other engines whose table names ignore quoting and
- * case compare quoted and unquoted names alike, case-insensitively.
- */
-function executionRelationIdentityFor(relation: string, driver: string | undefined): string {
-  return executionRelationIdentity(relation, driver);
 }
 
 /** Exact Snowflake-aware identity for a relation already written in SQL. */

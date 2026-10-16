@@ -26,6 +26,7 @@ export interface PipelineReceipt {
     /** The size of what was sent, so a prompt budget is a measured number. */ promptChars?: number;
     /** When the call finished (epoch ms), so AI calls sit in order beside the story. */ at?: number;
     /** 1-based attempt within its reading or drafting. */ attempt?: number;
+    /** The certified blocks a drafting call was given as the team's approved computations (their refs). */ blocks?: string[];
     /** What the call was for, in the words the run views use. */ label?: 'read' | 'correct' | 'reread' | 'draft' | 'redraft' | 'fix' | 'retry_empty' | 'widen';
     /** What a drafting call returned. */ outcome?: 'sql' | 'declined' | 'rejected' | 'error';
   }>;

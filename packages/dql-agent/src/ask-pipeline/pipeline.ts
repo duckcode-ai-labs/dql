@@ -58,6 +58,17 @@ export interface RunAskPipelineInput {
   /** Run the review-required SQL tier on its own when nothing governed prepares; false keeps it opt-in. */
   explorationAuto?: boolean;
   /**
+   * Where nothing is governed, the SQL is drafted from the question itself,
+   * before (and usually instead of) the reading step. The reading turns a
+   * question into governed refs; with none to choose from it only restates
+   * the question for the drafter, and a restatement can change the question's
+   * shape ("the median of per-country totals" read as "the median per
+   * country"). A follow-up, an answer to a clarification, a forecast or a
+   * question about causes still goes through the reading, and a question the
+   * drafter declines falls back to it. Supplied by the host where it applies.
+   */
+  draftFirst?: boolean;
+  /**
    * Host-owned on-demand description of relations the probe had not described
    * (their columns and types), used once when a reading leaves a clause
    * unresolved while naming a relation whose columns it could not see.
@@ -980,6 +991,19 @@ export async function runAskPipeline(input: RunAskPipelineInput): Promise<Pipeli
   // 1. Resolve. Only certified blocks and authored semantics are governed; a
   // reading over anything else goes to AI-written SQL when it is available.
   const aiSqlAvailable = Boolean(input.prepareDeps.draftSql && (input.explorationOptIn || input.explorationAuto));
+  // 0. DRAFT FIRST where nothing is governed: the question goes to the SQL
+  // drafter as asked, the checks and the result review stay, and only what
+  // the drafter declines is read into a reading as before. Anything the
+  // reading owns (an edit of the last analysis, an answer to a clarification,
+  // a picked meaning, a forecast, a question about causes) is read first.
+  if (!settled && input.draftFirst && aiSqlAvailable && !input.prior && !memberGuidance(input) && !input.selection && !input.memberSelection && !input.conversation?.pendingClarification
+    && predictiveOperatorsIn(input.question).length === 0 && causalOperatorsIn(input.question).length === 0) {
+    // No reading was made, so nothing has checked the question's terms yet: a
+    // term no listed column holds or defines is declined, not invented, and
+    // the decline goes to the reading, which asks or names the gap.
+    const drafted = await schemaLane('nothing governed covers this project, so the SQL is written from the question itself. No reading was made: when the question uses a business term or grouping that no listed column holds and nothing in CONTEXT defines (a churn rate, a region the tables do not have), do not invent a definition or substitute another field; reply NO_SQL naming it', undefined, { onDecline: 'fallthrough' });
+    if (drafted) return drafted;
+  }
   const resolveStarted = now();
   // A question that is only a governed metric and dimensions, by their own words, is read here: no mode or model phrasing can move its route.
   // The model keeps any question that reads as an edit of the thread's last analysis (the host passes `prior` only then) and any host guidance.

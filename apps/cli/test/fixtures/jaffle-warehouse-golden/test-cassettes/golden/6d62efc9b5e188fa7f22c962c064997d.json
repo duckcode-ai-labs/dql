@@ -1,0 +1,23 @@
+{
+  "key": "6d62efc9b5e188fa7f22c962c064997d",
+  "operation": "generate",
+  "text": "NO_SQL: No listed column or CONTEXT definition specifies what makes an order \"large\" (a threshold on order_total or item count), so the restriction cannot be applied without inventing one.",
+  "providerName": "claude",
+  "recordedAt": "2026-10-16T16:40:02.981Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 2,
+    "messageRoles": [
+      "system",
+      "user"
+    ],
+    "preCanonicalHash": "6d62efc9b5e188fa7f22c962c064997d9cdcd5e413d2c0676879ac9e0fb150d8",
+    "postCanonicalHash": "6d62efc9b5e188fa7f22c962c064997d9cdcd5e413d2c0676879ac9e0fb150d8",
+    "appliedRuleClasses": []
+  }
+}

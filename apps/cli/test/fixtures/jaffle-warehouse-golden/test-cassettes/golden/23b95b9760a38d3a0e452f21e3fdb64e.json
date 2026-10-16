@@ -1,0 +1,23 @@
+{
+  "key": "23b95b9760a38d3a0e452f21e3fdb64e",
+  "operation": "generate",
+  "text": "Average order value = average of order_total across all orders placed by customers whose first_ordered_at is in 2024.\n\n```sql\nSELECT AVG(o.order_total) AS average_order_value\nFROM jaffle_shop.dev.orders o\nJOIN jaffle_shop.dev.customers c ON c.customer_id = o.customer_id\nWHERE strftime('%Y', c.first_ordered_at) = '2024'\n```",
+  "providerName": "claude",
+  "recordedAt": "2026-10-16T16:42:03.703Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 2,
+    "messageRoles": [
+      "system",
+      "user"
+    ],
+    "preCanonicalHash": "23b95b9760a38d3a0e452f21e3fdb64ef3d78a1f41cdef7ebaea219e5e6ea438",
+    "postCanonicalHash": "23b95b9760a38d3a0e452f21e3fdb64ef3d78a1f41cdef7ebaea219e5e6ea438",
+    "appliedRuleClasses": []
+  }
+}
