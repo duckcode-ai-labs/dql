@@ -318,8 +318,8 @@ export function previewModelingChange(projectRoot: string, change: ModelingAutho
     switch (change.operation) {
       case 'upsert_domain': return previewDomain(root, change.value);
       case 'upsert_area': return [previewArea(root, change.value)];
-      case 'upsert_entity': return [previewEntity(root, change.value)];
-      case 'upsert_relationship': return [previewRelationship(root, change.value)];
+      case 'upsert_entity': return previewEntity(root, change.value);
+      case 'upsert_relationship': return previewRelationship(root, change.value);
       case 'upsert_contract': return [previewContract(root, change.value)];
       case 'upsert_export': return [previewExport(root, change.value)];
       case 'upsert_import': return [previewImport(root, change.value)];
@@ -576,7 +576,7 @@ function previewArea(projectRoot: string, value: ModelAreaAuthoringInput): Model
   return { path, before, after, changed: before !== after };
 }
 
-function previewEntity(projectRoot: string, value: EntityBindingAuthoringInput): ModelingSourcePatch {
+function previewEntity(projectRoot: string, value: EntityBindingAuthoringInput): ModelingSourcePatch[] {
   const id = requiredId(value.id, 'entity');
   const domain = requiredId(value.domain, 'domain');
   const dbtModel = requiredId(value.dbtModel, 'dbt model');
@@ -598,10 +598,10 @@ function previewEntity(projectRoot: string, value: EntityBindingAuthoringInput):
     ...(value.grain ? { grain: value.grain } : {}),
     ...(cleanStrings(value.keys).length > 0 ? { keys: cleanStrings(value.keys) } : {}),
   };
-  return upsertListPatch(projectRoot, path, 'entities', 'id', entity);
+  return upsertMovingListPatches(projectRoot, domain, path, 'entities', entity);
 }
 
-function previewRelationship(projectRoot: string, value: RelationshipAuthoringInput): ModelingSourcePatch {
+function previewRelationship(projectRoot: string, value: RelationshipAuthoringInput): ModelingSourcePatch[] {
   const id = requiredId(value.id, 'relationship');
   const domain = requiredId(value.domain, 'domain');
   if (!value.from || !value.to || !Array.isArray(value.keys) || value.keys.length === 0) {
@@ -641,7 +641,7 @@ function previewRelationship(projectRoot: string, value: RelationshipAuthoringIn
     ...(value.certifiedAgainst ? { certifiedAgainst: value.certifiedAgainst } : {}),
     ...(value.validation ? { validation: validationSource(value.validation) } : {}),
   };
-  return upsertListPatch(projectRoot, modelingSourceFile(projectRoot, domain, 'relationships.dql.yaml', 'relationships', 'id', id, value.areaId), 'relationships', 'id', relationship);
+  return upsertMovingListPatches(projectRoot, domain, modelingSourceFile(projectRoot, domain, 'relationships.dql.yaml', 'relationships', 'id', id, value.areaId), 'relationships', relationship);
 }
 
 function previewConcept(projectRoot: string, value: ConceptAuthoringInput): ModelingSourcePatch {
@@ -752,12 +752,54 @@ function validationSource(value: ManifestRelationshipValidationEvidence): Unknow
   };
 }
 
+/**
+ * Upsert an entity or relationship into `path`, MOVING it there when another
+ * modeling file of the same domain already declares the same id.
+ *
+ * An id is unique within a Domain Package. Certifying a join that discovery
+ * drafted into `modeling/model.dql.yaml` writes it to the subject area the
+ * editor names (`modeling/areas/core.dql.yaml`); upserting there alone left the
+ * draft behind, and `zlens model validate` then failed with a duplicate
+ * relationship. The other declaration is removed in the same change, and its
+ * fields the editor does not set are carried over, as an in-place edit keeps
+ * them.
+ */
+function upsertMovingListPatches(
+  projectRoot: string,
+  domain: string,
+  path: string,
+  listKey: 'entities' | 'relationships',
+  value: UnknownRecord,
+): ModelingSourcePatch[] {
+  const id = value.id;
+  const root = findPackageRoot(projectRoot, domain);
+  const target = path.replace(/\\/g, '/');
+  const removals: ModelingSourcePatch[] = [];
+  let carried: UnknownRecord | undefined;
+  for (const candidate of root ? modelingYamlFiles(join(root, 'modeling')) : []) {
+    const relativePath = relative(projectRoot, candidate).replace(/\\/g, '/');
+    if (relativePath === target) continue;
+    const before = readFileSync(candidate, 'utf8');
+    const document = asRecord(yaml.load(before));
+    const list = Array.isArray(document[listKey]) ? document[listKey] as unknown[] : [];
+    const kept = list.filter((entry) => asRecord(entry).id !== id);
+    if (kept.length === list.length) continue;
+    carried ??= asRecord(list.find((entry) => asRecord(entry).id === id));
+    document[listKey] = kept;
+    const after = dumpYaml(document);
+    removals.push({ path: relativePath, before, after, changed: before !== after });
+  }
+  return [...removals, upsertListPatch(projectRoot, path, listKey, 'id', value, carried)];
+}
+
 function upsertListPatch(
   projectRoot: string,
   path: string,
   listKey: string,
   identityKey: string,
   value: UnknownRecord,
+  /** The same object as declared in another file it is moving from: its fields the value does not set are kept. */
+  carried?: UnknownRecord,
 ): ModelingSourcePatch {
   const absolute = safeProjectPath(projectRoot, path);
   const before = existsSync(absolute) ? readFileSync(absolute, 'utf8') : '';
@@ -768,6 +810,7 @@ function upsertListPatch(
   // entity or relationship authored in a small Model Area from losing its
   // advanced DQL policy when a user updates its business context or keys.
   if (index >= 0) list[index] = { ...asRecord(list[index]), ...value };
+  else if (carried) list.push({ ...carried, ...value });
   // Append rather than re-sorting the whole list. Sorting by id on every upsert
   // turned a one-field edit into a whole-file diff and discarded the grouping
   // the author chose, which matters for a Git-backed file people hand-edit.

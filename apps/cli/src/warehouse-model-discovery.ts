@@ -145,6 +145,12 @@ function columnNamed(relation: WarehouseCatalogRelationV1, name: string): string
   return relation.columns.find((column) => column.name.toLowerCase() === name.toLowerCase())?.name;
 }
 
+/** A table's columns named as its row identity, after `<table>_id` and `id`: `<table>_uuid`, `uuid`, `<table>_key`. */
+function identityColumns(relation: WarehouseCatalogRelationV1): string[] {
+  const base = baseName(relation);
+  return [`${base}_uuid`, 'uuid', `${base}_key`].flatMap((name) => columnNamed(relation, name) ?? []);
+}
+
 /** Draft domains, entities and relationships from the catalog snapshot. Pure: reads nothing else. */
 export function discoverWarehouseModel(input: {
   snapshot: WarehouseCatalogSnapshotV1;
@@ -471,9 +477,15 @@ export async function inferSharedKeyJoins(
     }
   }
 
-  // 3. A table's grain is the unique column other tables point at (the most-referenced one).
+  // 3. A table's grain is its own key when the data shows it unique (`<table>_id`),
+  // otherwise the unique column other tables point at (the most-referenced
+  // one). Counting only the joins found here made a label the grain: products
+  // got `product_name`, because the `product_id` joins were already drafted by
+  // name and so were never counted.
   const entities = report.entities.map((entity) => {
     if (entity.grain) return entity;
+    const ownKey = entity.grainCandidate;
+    if (ownKey && unique.has(`${entity.relationId}|${ownKey.toLowerCase()}`)) return { ...entity, grain: ownKey, keys: [ownKey], grainSource: 'unique_column' as const };
     const referenced = [...referencedBy.entries()].filter(([key]) => key.startsWith(`${entity.relationId}|`)).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
     if (referenced.length === 0) return entity;
     const column = tables.find((relation) => relation.id === entity.relationId)?.columns.find((item) => `${entity.relationId}|${item.name.toLowerCase()}` === referenced[0]![0])?.name;
@@ -509,16 +521,23 @@ export async function validateWarehouseDiscovery(
   const cheap = (relation: string) => { const found = relationById.get(relation); return found ? cheapToRead(found) : false; };
   const entities: DiscoveredEntity[] = [];
   for (const entity of report.entities) {
-    if (entity.grain || !entity.grainCandidate || !cheap(entity.relation)) {
+    // The naming-convention key first, then the table's other identity
+    // columns (`<table>_uuid`, `uuid`, `<table>_key`): supplies repeat
+    // `supply_id` once per product, and `supply_uuid` is the row's identity.
+    const catalogRelation = relationById.get(entity.relation);
+    const candidates = [...(entity.grainCandidate ? [entity.grainCandidate] : []), ...(catalogRelation ? identityColumns(catalogRelation) : [])]
+      .filter((column, index, all) => all.findIndex((other) => other.toLowerCase() === column.toLowerCase()) === index);
+    if (entity.grain || candidates.length === 0 || !cheap(entity.relation)) {
       entities.push(entity);
       continue;
     }
     try {
-      const column = quote(entity.grainCandidate);
-      const row = (await execute(`SELECT COUNT(*) AS row_count, COUNT(${column}) AS non_null_count, COUNT(DISTINCT ${column}) AS distinct_count FROM ${quoteRelation(entity.relation)}`)).rows[0] ?? {};
-      const rows = Number(row.row_count ?? row.ROW_COUNT);
-      const unique = rows > 0 && Number(row.non_null_count ?? row.NON_NULL_COUNT) === rows && Number(row.distinct_count ?? row.DISTINCT_COUNT) === rows;
-      entities.push(unique ? { ...entity, grain: entity.grainCandidate, keys: [entity.grainCandidate], grainSource: 'unique_column' } : entity);
+      const parts = candidates.map((candidate, index) => `COUNT(${quote(candidate)}) AS nn_${index}, COUNT(DISTINCT ${quote(candidate)}) AS nd_${index}`);
+      const row = (await execute(`SELECT COUNT(*) AS row_count, ${parts.join(', ')} FROM ${quoteRelation(entity.relation)}`)).rows[0] ?? {};
+      const read = (name: string) => Number(row[name] ?? row[name.toUpperCase()]);
+      const rows = read('row_count');
+      const grain = candidates.find((_, index) => rows > 0 && read(`nn_${index}`) === rows && read(`nd_${index}`) === rows);
+      entities.push(grain ? { ...entity, grain, keys: [grain], grainSource: 'unique_column' } : entity);
     } catch {
       entities.push(entity);
     }

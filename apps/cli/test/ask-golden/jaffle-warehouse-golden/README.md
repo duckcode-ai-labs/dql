@@ -24,9 +24,11 @@ With the product's own steps, on a DuckDB holding jaffle-golden's seed rows
 `zlens model discover --validate`, `zlens model apply-discovery --apply --validate`.
 Review in Modeling: `product` grain `product_id` and `supply` grain
 `supply_uuid` (both unique on the data); the five joins between the tables
-certified with owner `analytics@jaffle.shop`. The Modeling page saves a
-certified join into `modeling/areas/core.dql.yaml` and leaves its draft in
-`model.dql.yaml` (duplicate id); those drafts were removed. The connection is
+certified with owner `analytics@jaffle.shop`. (When the fixture was made,
+discovery chose `product_name` and no grain for those two, and the Modeling
+page left each certified join's draft behind in `model.dql.yaml`, so the
+drafts were removed by hand; both are fixed: discovery now picks those grains
+and certifying moves the draft into `modeling/areas/core.dql.yaml`.) The connection is
 then set to `sqlite :memory:` like jaffle-golden's, because the harness serves
 the seed through its SQLite executor.
 
