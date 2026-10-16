@@ -9,7 +9,7 @@
   },
   "scripts": {
     "build": "turbo run build",
-    "test": "node --test scripts/license-files.test.mjs scripts/release-workspace-ranges.test.mjs scripts/docs-clips.test.mjs && turbo run test",
+    "test": "node --test scripts/license-files.test.mjs scripts/release-workspace-ranges.test.mjs scripts/release-packages.test.mjs scripts/release-publish-guards.test.mjs scripts/docs-clips.test.mjs && turbo run test",
     "clean": "turbo run clean",
     "release:dry-run": "pnpm build && pnpm test && node ./scripts/release-packages.mjs --dry-run",
     "release:publish": "node ./scripts/release-packages.mjs --publish",
