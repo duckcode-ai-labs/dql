@@ -87,7 +87,7 @@ describe('nativeBindingHelp', () => {
     expect(text).toContain('Fix it in /work/app:');
     expect(text).toContain('  npm install-scripts approve better-sqlite3\n  npm rebuild better-sqlite3');
     expect(text).toContain('"allowScripts": { "better-sqlite3": true }');
-    expect(text).toContain('Underlying error: Could not locate the bindings file. Tried:');
+    expect(text).toMatch(/Underlying error: Could not locate the bindings file\.$/);
     expect(text).not.toContain(' → ');
   });
 

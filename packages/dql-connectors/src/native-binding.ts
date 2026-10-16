@@ -78,7 +78,8 @@ export interface NativeBindingHelpOptions {
 }
 
 function firstLine(text: string): string {
-  return text.split('\n').map((line) => line.trim()).find(Boolean) ?? '';
+  // "Could not locate the bindings file. Tried:" is followed by a list of paths; keep the sentence.
+  return (text.split('\n').map((line) => line.trim()).find(Boolean) ?? '').replace(/\s*Tried:$/, '');
 }
 
 /**
