@@ -1061,6 +1061,21 @@ describe('the units contract of a result', () => {
     const certified = composeAnsweredText(intent, { columns: ['revenue'], rows: [{ revenue: 1 }], rowCount: 1, executionTimeMs: 1 }, local, 'certified', { caveats: ['the block groups by customer_name (a label) with no identity key, so two entities sharing a name would merge; recertify it with the entity key to keep them apart'] });
     expect(certified).toMatch(/Source: a certified block\. the block groups by customer_name .* recertify it with the entity key to keep them apart\.$/);
   });
+
+  it('never reads raw UUIDs out: an id beside its name is left to the table, and rows keyed only by UUIDs are said to be', () => {
+    const intent = make({ measures: [{ ref: 'metric:order_item.revenue' }], groupBy: [{ ref: 'entity:customers.customer', role: 'key' }], display: [] });
+    const brooklyn = '40e6ddd6-b8f6-4e17-8bd6-5e53966809d2';
+    const philly = '4b6c2304-2b9e-41e4-942a-cf11a1819378';
+    const named = composeAnsweredText(intent, { columns: ['location_id', 'location_name', 'average_order_value'], rows: [{ location_id: brooklyn, location_name: 'Brooklyn', average_order_value: 10.01 }, { location_id: philly, location_name: 'Philadelphia', average_order_value: 11.29 }], rowCount: 2, executionTimeMs: 1 }, local, 'review_required');
+    expect(named).toContain('Leading rows: Brooklyn · 10.01 | Philadelphia · 11.29.');
+    expect(named).not.toContain(brooklyn);
+    const keyed = composeAnsweredText(intent, { columns: ['location_id', 'average_order_value'], rows: [{ location_id: philly, average_order_value: 11.29 }, { location_id: brooklyn, average_order_value: 10.01 }], rowCount: 2, executionTimeMs: 1 }, local, 'review_required');
+    expect(keyed).not.toMatch(/[0-9a-f]{8}-[0-9a-f]{4}/);
+    expect(keyed).toContain('Leading rows: 11.29 | 10.01. The rows are identified by location_id, internal key with no name beside it in this result.');
+    // A readable key with no name beside it is still read out (a store number is not a UUID).
+    const readable = composeAnsweredText(intent, { columns: ['store_code', 'orders'], rows: [{ store_code: 'BK-1', orders: 3 }, { store_code: 'PH-2', orders: 4 }], rowCount: 2, executionTimeMs: 1 }, local, 'review_required');
+    expect(readable).toContain('Leading rows: BK-1 · 3 | PH-2 · 4.');
+  });
 });
 
 describe('the name wins: a question word that exactly names a metric binds to it', () => {

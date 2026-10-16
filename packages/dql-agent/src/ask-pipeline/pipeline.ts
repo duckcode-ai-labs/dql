@@ -782,7 +782,10 @@ export async function runAskPipeline(input: RunAskPipelineInput): Promise<Pipeli
       const caveat = rebuilt.length
         ? `the semantic engine did not run ${rebuilt.join(', ')}${engineRefusal ? ` (${engineRefusal.message.replace(/[.\s]+$/, '').slice(0, 180)})` : ''}, so ${source}, rebuilding ${rebuilt.length === 1 ? 'that metric' : 'those metrics'} from ${rebuilt.length === 1 ? 'its' : 'their'} authored definition; review the SQL before relying on the numbers`
         : `${why}, so ${source}; review the SQL before relying on the numbers`;
-      return { kind: 'answered', intent: reading, candidate, result, text: composeAnsweredText(reading, result, input.vocabulary, candidate.trust, { caveats: [...(options.caveats ?? []), caveat] }), receipt };
+      // What the drafting host could not fix and the reader must know (a
+      // grouping by keys whose names it could not join) is said in the answer.
+      const drafted = candidate.proof.filter((line) => line.startsWith('caveat: ')).map((line) => line.slice('caveat: '.length));
+      return { kind: 'answered', intent: reading, candidate, result, text: composeAnsweredText(reading, result, input.vocabulary, candidate.trust, { caveats: [...(options.caveats ?? []), caveat, ...drafted] }), receipt };
     };
     // The first statement ran and returned nothing: kept, so a redraft that
     // fails or declines still ends in the honest empty answer.

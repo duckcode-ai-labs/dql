@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { aggregatesRows, appliedConditions, joinKeyPairs, missingRequiredFilters, missingStatedValues, requiredFilterFromText, statedValues, withRowGuard, aggregatesColumnOf } from './sql-checks.js';
+import { aggregatesRows, appliedConditions, groupedColumns, joinKeyPairs, mentionsColumn, missingRequiredFilters, missingStatedValues, requiredFilterFromText, statedValues, withRowGuard, aggregatesColumnOf } from './sql-checks.js';
 
 describe('the checks an AI-drafted statement passes before it runs', () => {
   const office = 'Lost opportunities count ,Lost Amount by month for fiscal year FY26 and competitor involved is Splunk';
@@ -61,5 +61,23 @@ describe('the checks an AI-drafted statement passes before it runs', () => {
     expect(aggregatesColumnOf(sql, 'o')).toBe(true);
     expect(aggregatesColumnOf('SELECT COUNT(DISTINCT o.order_id) FROM dev.order_items oi JOIN dev.orders o ON oi.order_id = o.order_id', 'o')).toBe(false);
     expect(aggregatesColumnOf('SELECT SUM(oi.product_price) FROM dev.order_items oi JOIN dev.orders o ON oi.order_id = o.order_id', 'o')).toBe(false);
+  });
+
+  it('reads what a statement groups by: aliases resolved, positions read from the select list, expressions skipped', () => {
+    const bare = 'SELECT location_id, SUM(order_total) / COUNT(DISTINCT order_id) AS aov\nFROM "jaffle_shop"."dev"."orders"\nGROUP BY location_id\nORDER BY location_id';
+    expect(groupedColumns(bare)).toEqual([{ column: 'location_id', relation: '"jaffle_shop"."dev"."orders"' }]);
+    const joined = 'SELECT l.location_name, o.location_id AS store, AVG(o.order_total) FROM dev.orders AS o JOIN dev.locations l ON o.location_id = l.location_id GROUP BY 1, 2';
+    expect(groupedColumns(joined)).toEqual([
+      { column: 'location_name', relation: 'dev.locations', qualifier: 'l' },
+      { column: 'location_id', relation: 'dev.orders', qualifier: 'o' },
+    ]);
+    // A bare column over several tables names no relation; a CTE is not a relation; an expression is not a column.
+    expect(groupedColumns('WITH t AS (SELECT o.customer_id, SUM(o.order_total) AS s FROM dev.orders o GROUP BY o.customer_id) SELECT c.customer_name, t.s FROM t JOIN dev.customers c ON c.customer_id = t.customer_id'))
+      .toEqual([{ column: 'customer_id', relation: 'dev.orders', qualifier: 'o' }]);
+    expect(groupedColumns("SELECT DATE_TRUNC('month', ordered_at), COUNT(*) FROM dev.orders GROUP BY DATE_TRUNC('month', ordered_at)")).toEqual([]);
+    expect(groupedColumns('SELECT location_id, COUNT(*) FROM dev.orders o JOIN dev.locations l ON o.location_id = l.location_id GROUP BY location_id')).toEqual([{ column: 'location_id' }]);
+    expect(mentionsColumn(joined, 'location_name')).toBe(true);
+    expect(mentionsColumn(bare, 'location_name')).toBe(false);
+    expect(mentionsColumn('SELECT "location_name" FROM t', 'location_name')).toBe(true);
   });
 });

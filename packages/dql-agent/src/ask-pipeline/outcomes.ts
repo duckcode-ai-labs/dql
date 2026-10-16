@@ -31,7 +31,7 @@ export interface PipelineReceipt {
   }>;
   candidates: Array<{ tier: string; trust: string; proof: string[]; sqlFingerprint?: string; engine?: string }>;
   /** The checks an AI-written statement was held to before it ran: one entry per check per draft. */
-  checks?: Array<{ id: 'stated_values' | 'required_filters' | 'join_fanout' | 'certified_joins' | 'catalog_columns' | 'read_only'; label: string; passed: boolean; message: string; attempt: number }>;
+  checks?: Array<{ id: 'stated_values' | 'required_filters' | 'join_fanout' | 'certified_joins' | 'catalog_columns' | 'read_only' | 'key_labels'; label: string; passed: boolean; message: string; attempt: number }>;
   refusals: PreparedRefusal[];
   /** Tier attempts per preparation round, in order. */
   tiers: Array<{ round: number; tier: string; outcome: string; detail?: string }>;
@@ -274,6 +274,29 @@ export function describeResultColumns(intent: AnalyticalIntentV1, result: Pick<E
   });
 }
 
+const TECHNICAL_IDENTIFIER = /(?:^|_)(?:id|uuid|key|code)$/i;
+// A column that reads as a name beside an id (the result table hides the id beside it).
+const BUSINESS_LABEL = /(?:name|title|label|display|description|customer|account|product|region|segment|category|channel)$/i;
+/** A value no reader can read: a UUID, or a long run of hex digits. */
+const OPAQUE_VALUE = /^(?:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|(?=[0-9a-f]*\d)(?=[0-9a-f]*[a-f])[0-9a-f]{16,})$/i;
+
+/**
+ * THE COLUMNS THE PROSE READS OUT. A column of opaque values (UUIDs, hashes)
+ * is never read out: "4b6c2304-2b9e-… · 11.29" tells a reader nothing, and
+ * the result table already hides such an id beside its name. When nothing in
+ * the result names those rows, the answer says what identifies them instead.
+ * A readable key (a player number, a store code) is still read out.
+ */
+export function proseColumns(columns: string[], rows: Array<Record<string, unknown>>): { shown: string[]; opaque: string[]; unnamed: string[] } {
+  const sample = rows.slice(0, 50);
+  const opaque = columns.filter((column) => {
+    const values = sample.map((row) => row[column]).filter((value) => value !== null && value !== undefined && value !== '');
+    return values.length > 0 && values.every((value) => typeof value === 'string' && OPAQUE_VALUE.test(value.trim()));
+  });
+  const named = columns.some((column) => !opaque.includes(column) && BUSINESS_LABEL.test(column) && !TECHNICAL_IDENTIFIER.test(column));
+  return { shown: columns.filter((column) => !opaque.includes(column)), opaque, unnamed: named ? [] : opaque };
+}
+
 /** Deterministic answer prose from the rows themselves: no claim without a cell behind it. */
 export function composeAnsweredText(intent: AnalyticalIntentV1, result: ExecutedRows, vocabulary: VocabularyIndex, trust: string, extras: { notes?: string[]; caveats?: string[] } = {}): string {
   const reading = intent.reading || describeIntent(intent, labelFor(vocabulary));
@@ -284,13 +307,19 @@ export function composeAnsweredText(intent: AnalyticalIntentV1, result: Executed
     lines.push('The query ran and returned no rows for that reading.');
     return lines.join(' ');
   }
+  const prose = proseColumns(columns, result.rows);
+  // Rows told apart only by opaque keys are said to be, never read out.
+  const keyedOnly = prose.unnamed;
+  const keyedNote = keyedOnly.length ? `The rows are identified by ${keyedOnly.join(', ')}, internal key${keyedOnly.length === 1 ? '' : 's'} with no name beside ${keyedOnly.length === 1 ? 'it' : 'them'} in this result.` : undefined;
   if (result.rowCount === 1 && columns.length <= 4) {
     const row = result.rows[0] ?? {};
-    lines.push(columns.map((column) => `${column.replace(/_/g, ' ')}: ${formatValue(row[column], metaOf(column))}`).join(', ') + '.');
+    if (prose.shown.length) lines.push(prose.shown.map((column) => `${column.replace(/_/g, ' ')}: ${formatValue(row[column], metaOf(column))}`).join(', ') + '.');
+    if (keyedNote) lines.push(keyedNote);
   } else {
     lines.push(`${result.rowCount} row${result.rowCount === 1 ? '' : 's'} across ${columns.length} column${columns.length === 1 ? '' : 's'}${result.truncated ? ' (bounded)' : ''}.`);
-    const first = result.rows.slice(0, 3).map((row) => columns.map((column) => formatValue(row[column], metaOf(column))).join(' · '));
+    const first = prose.shown.length ? result.rows.slice(0, 3).map((row) => prose.shown.map((column) => formatValue(row[column], metaOf(column))).join(' · ')) : [];
     if (first.length) lines.push(`Leading rows: ${first.join(' | ')}.`);
+    if (keyedNote) lines.push(keyedNote);
   }
   // CONCENTRATION IS A TOTAL, NOT A LIST. "How concentrated is scoring among
   // the top five" asks what the five together are, and five rows of "1.0%"
