@@ -49,7 +49,7 @@ For Claude Code, the output looks like this:
 
 ```text
   ZLens agent connection setup
-    Project: /path/to/jaffle-shop-duckdb/dql
+    Project: /path/to/jaffle-shop-duckdb
 
   ✓ Claude Code
     Project .mcp.json and CLAUDE.md now point Claude Code at ZLens.

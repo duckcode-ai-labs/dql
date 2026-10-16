@@ -79,15 +79,12 @@ python3 -m venv .venv
 .venv/bin/dbt build --profiles-dir . --exclude resource_type:seed
 ```
 
-> [!NOTE]
-> The sample also has a `setup.sh` script. It installs an old pre-ZLens CLI,
-> so use the commands above instead.
+**2. Install ZLens, import the dbt project and open the workbench**
 
-**2. Add ZLens, import the dbt project and open the workbench**
+The sample is already a ZLens workspace, so install ZLens into the same
+folder:
 
 ```bash
-npx create-zlens-app@latest dql
-cd dql
 npm install
 npm install --prefix .dql/connectors duckdb
 npm run sync
@@ -97,11 +94,16 @@ npm run notebook
 The terminal prints `Notebook ready: http://127.0.0.1:3474` and your browser
 opens it.
 
+> [!NOTE]
+> The sample also has `./setup.sh`, which runs steps 1 and 2 (except
+> `npm run notebook`) in one go. Do not run `create-zlens-app` inside the
+> sample: it creates a second, empty workspace in `dql/`.
+
 **3. Finish Guided Setup and run a query**
 
 Guided Setup walks you through four steps: **Preview** and **Apply project**
-for the dbt project, **Import & test** for the `jaffle_shop` profile, an optional AI
-provider, then **Finish setup**. Then open **Notebooks → New Notebook**, click
+for the dbt project, the sample's DuckDB connection (already configured and
+tested), an optional AI provider, then **Finish setup**. Then open **Notebooks → New Notebook**, click
 **Create DQL query → Switch to SQL cell**, and run this with **Shift+Enter**:
 
 ```sql
@@ -121,7 +123,8 @@ The full walkthrough is the [Quickstart guide](https://duckcode-ai-labs.github.i
 
 <br>
 
-`create-zlens-app` installs the CLI into your project, so `npm run …` and
+`npm install` in a ZLens project (the sample, or one made with
+`create-zlens-app`) installs the CLI into that project, so `npm run …` and
 `npx zlens …` use the version that project was tested with. To have a `zlens`
 command everywhere:
 
@@ -243,7 +246,7 @@ as a draft for review.
 $ npm exec -- zlens connect claude-code
 
   ZLens agent connection setup
-    Project: /path/to/jaffle-shop-duckdb/dql
+    Project: /path/to/jaffle-shop-duckdb
 
   ✓ Claude Code
     Project .mcp.json and CLAUDE.md now point Claude Code at ZLens.

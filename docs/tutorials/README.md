@@ -30,11 +30,12 @@ repo.
 
 Use
 [duckcode-ai/jaffle-shop-duckdb](https://github.com/duckcode-ai/jaffle-shop-duckdb)
-when you want the full DataLex + ZLens flow with concrete files, screenshots, and
-video planning:
-
-- [Jaffle Shop tutorial](https://github.com/duckcode-ai/jaffle-shop-duckdb/blob/main/docs/tutorials/jaffle/README.md)
-- [ZLens half of the tutorial](https://github.com/duckcode-ai/jaffle-shop-duckdb/blob/main/dql/TUTORIAL.md)
+when you want a complete dbt + ZLens project to explore. It is already a ZLens
+workspace, so you do not run `create-zlens-app` in it. Follow
+[its README](https://github.com/duckcode-ai/jaffle-shop-duckdb#readme) (or the
+[Quickstart](../get-started/index.md)): build the dbt project, install ZLens
+into the sample's own workspace, and take the tour of its domain, certified
+blocks, App, lineage and Ask.
 
 Stuck? See the [troubleshooting guide](../guides/troubleshooting.md).
 
