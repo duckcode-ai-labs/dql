@@ -205,8 +205,9 @@ async function runSyncWarehouse(rest: string[], flags: CLIFlags): Promise<void> 
   const schemas = (valueOf('--schemas') ?? '').split(',').map((schema) => schema.trim()).filter(Boolean);
   const connectionId = valueOf('--connection') ?? (flags.connection || undefined);
   const { syncProjectWarehouse } = await import('../local-runtime.js');
-  const { QueryExecutor } = await import('@zlens/connectors');
-  const executor = new QueryExecutor();
+  // A running workbench holds a DuckDB file open; the schema is then read through it.
+  const { WorkbenchRoutedQueryExecutor } = await import('../workbench-query-route.js');
+  const executor = new WorkbenchRoutedQueryExecutor(projectRoot, { onRoute: (via) => { if (flags.format !== 'json') console.error(`  Reading the schema through ${via}, which has the DuckDB file open.`); } });
   try {
     const result = await syncProjectWarehouse(projectRoot, {
       ...(connectionId ? { connectionId } : {}),

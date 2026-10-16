@@ -3,6 +3,7 @@ import { execFileSync } from 'node:child_process';
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { QueryExecutor } from '@zlens/connectors';
+import { WorkbenchRoutedQueryExecutor, type WorkbenchQueryRouteOptions } from '../workbench-query-route.js';
 import { buildManifest, collectInputFiles, resolveDbtManifestPath, resolveSemanticLayerWithDiagnostics } from '@zlens/core';
 import { buildLocalContextPack, defaultKgPath, defaultMetadataPath, openMetadataCatalog } from '@zlens/agent';
 import type { CLIFlags } from '../args.js';
@@ -923,13 +924,35 @@ function checkNotebookAssets(): Check {
   };
 }
 
-async function checkLocalQueryRuntime(projectRoot: string, connection: NonNullable<ReturnType<typeof loadProjectConfig>['defaultConnection']>): Promise<Check> {
+/**
+ * The project's query runtime. While `zlens notebook` runs on a DuckDB project
+ * it holds the database file, and DuckDB lets only one process open it: the
+ * check then runs a `SELECT 1` through the workbench (the read-only route the
+ * other CLI commands use) and passes with where it ran. Anything else holding
+ * the file still fails, with the driver's message naming the process.
+ */
+export async function checkLocalQueryRuntime(
+  projectRoot: string,
+  connection: NonNullable<ReturnType<typeof loadProjectConfig>['defaultConnection']>,
+  options: Pick<WorkbenchQueryRouteOptions, 'find' | 'fetchImpl' | 'env'> = {},
+): Promise<Check> {
+  const normalized = normalizeProjectConnection(connection, projectRoot);
+  let via: string | undefined;
+  const routed = new WorkbenchRoutedQueryExecutor(projectRoot, { ...options, onRoute: (route) => { via = route; } });
+  if (await routed.routesTo(normalized)) {
+    try {
+      await routed.executePositional('SELECT 1 AS ok', [], normalized);
+      return { name: 'Local query runtime', ok: true, detail: `workbench running on ${via ?? 'this project'}: driver=${connection.driver} answered through it (it holds the DuckDB file)` };
+    } catch (error) {
+      return { name: 'Local query runtime', ok: false, detail: error instanceof Error ? error.message : String(error) };
+    }
+  }
   const previousCwd = process.cwd();
   const executor = new QueryExecutor();
 
   try {
     process.chdir(projectRoot);
-    await assertLocalQueryRuntimeReady(executor, normalizeProjectConnection(connection, projectRoot));
+    await assertLocalQueryRuntimeReady(executor, normalized);
     return {
       name: 'Local query runtime',
       ok: true,

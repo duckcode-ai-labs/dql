@@ -19,6 +19,8 @@ import { promoteFromDraft } from '../promote-from-draft.js';
 import { passedCheckNames } from '../certification-receipt.js';
 import { resolveLocalOwner } from '@zlens/agent';
 import { startProjectRuntime } from './notebook.js';
+import { WorkbenchRoutedQueryExecutor } from '../workbench-query-route.js';
+import { findRunningNotebook, serverTokenFor } from '../schedule/notebook-runtime.js';
 
 /**
  * Run the same certification rules Block Studio's Certify runs (owner, a
@@ -33,14 +35,22 @@ async function runtimeCertificationGate(
 ): Promise<{ ok: boolean; blockers: string[]; checks: string[]; warnings: string[]; enterprise: boolean }> {
   const enterprise = flags.enterprise === true;
   const projectConfig = loadProjectConfig(projectRoot);
-  const handle = await startProjectRuntime(projectRoot, {
-    preferredPort: 0,
-    ...(flags.connection ? { connection: resolveConnection(flags, projectConfig) } : {}),
-  });
+  // The workbench serving this project runs the check when it is up: it holds
+  // the DuckDB file open, so a second runtime could not open it (Block
+  // Studio's Certify runs this same check there). Otherwise an ephemeral one.
+  const running = flags.connection ? null : await findRunningNotebook(projectRoot).catch(() => null);
+  const token = running ? serverTokenFor(running.loopback) : undefined;
+  if (running && flags.format !== 'json') console.error(`  Running the certification check through zlens notebook (pid ${running.descriptor.pid}) at ${running.url}.`);
+  const handle = running
+    ? { url: running.url, close: async () => undefined }
+    : await startProjectRuntime(projectRoot, {
+      preferredPort: 0,
+      ...(flags.connection ? { connection: resolveConnection(flags, projectConfig) } : {}),
+    });
   try {
     const response = await fetch(`${handle.url}/api/block-studio/certification-check`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
       body: JSON.stringify({ source, enterprise }),
     });
     const body = await response.json().catch(() => ({})) as {
@@ -148,7 +158,8 @@ async function runBlockTests(
 
   const projectRoot = process.cwd();
   const connection = resolveConnection(flags, projectConfig);
-  const executor = new QueryExecutor();
+  // A running workbench holds a DuckDB file open; the block and its tests then run through it.
+  const executor = new WorkbenchRoutedQueryExecutor(projectRoot, { onRoute: (via) => { if (flags.format !== 'json') console.error(`  Running the block and its tests through ${via}, which has the DuckDB file open.`); } });
   const start = Date.now();
   const assertions: TestAssertionResult[] = [];
   let invariantResults: InvariantResult[] = [];
@@ -268,6 +279,8 @@ async function registerDataViews(
 ): Promise<void> {
   const normalized = normalizeProjectConnection(connection, projectRoot);
   if (normalized.driver !== 'file' && normalized.driver !== 'duckdb') return;
+  // The workbench that holds the file registered these views when it started.
+  if (executor instanceof WorkbenchRoutedQueryExecutor && await executor.routesTo(normalized)) return;
 
   const dataDir = projectConfig.dataDir
     ? resolve(projectRoot, projectConfig.dataDir)

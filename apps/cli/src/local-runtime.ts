@@ -5909,6 +5909,17 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
   /** The request's own connection object, only where the request may choose one (no host, the server's owner). */
   const requestConnection = (body: Record<string, unknown>): ConnectionConfig | undefined =>
     !hostedRequest() && isConnectionConfig(body.connection) ? body.connection : undefined;
+  /** The project's connection to this DuckDB file (the active one first), or undefined. */
+  const projectDuckDBFileConnection = (file: string): ConnectionConfig | undefined => {
+    const candidates: Array<ConnectionConfig | null | undefined> = [
+      connection,
+      projectConfig.defaultConnection ? normalizeProjectConnection(projectConfig.defaultConnection, projectRoot) : undefined,
+      ...Object.keys((projectConfig as { connections?: Record<string, unknown> }).connections ?? {}).map((id) => projectConnectionById(projectRoot, projectConfig, id)),
+    ];
+    return candidates.find((candidate): candidate is ConnectionConfig => candidate?.driver === 'duckdb'
+      && typeof candidate.filepath === 'string' && candidate.filepath !== ':memory:'
+      && resolve(projectRoot, candidate.filepath) === file);
+  };
   const resolveExecutionConnection = async (
     body: Record<string, unknown>,
   ): Promise<ConnectionConfig> => {
@@ -28920,6 +28931,46 @@ async function startLocalServerInScope(opts: LocalServerOptions, scope: DqlServe
           error: personErrorText(error, 'An export failed'),
           ...(refused ? { code: 'EXPORT_REFUSED' } : notConfigured ? { code: 'CONNECTION_NOT_CONFIGURED' } : {}),
         }));
+      }
+      return;
+    }
+
+    // CLI queries on a DuckDB file this workbench holds open (see
+    // workbench-query-route.ts): DuckDB lets one process open the file, so
+    // `zlens certify`, `zlens model discover --validate` and `zlens sync
+    // warehouse` send their read-only statements here instead of failing on
+    // the file lock. Only a DuckDB file of this project, only SELECT/WITH,
+    // never for a hosted request; the result is the executor's, unbounded
+    // and unrewritten, exactly what the command would have read itself.
+    if (req.method === 'POST' && path === '/api/runtime/cli-query') {
+      try {
+        if (hostedRequest()) {
+          res.writeHead(403, { 'Content-Type': 'application/json; charset=utf-8' });
+          res.end(serializeJSON({ error: 'CLI queries run through the workbench only on a local, unhosted project.' }));
+          return;
+        }
+        const body = await readJSON(req) as { sql?: unknown; params?: unknown; connection?: unknown; options?: Record<string, unknown> };
+        const requested = isConnectionConfig(body.connection) ? body.connection : undefined;
+        const file = requested?.driver === 'duckdb' && typeof requested.filepath === 'string' ? resolve(projectRoot, requested.filepath) : undefined;
+        const held = file ? projectDuckDBFileConnection(file) : undefined;
+        if (!held || typeof body.sql !== 'string') {
+          res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+          res.end(serializeJSON({ error: 'The workbench runs CLI queries only on a DuckDB file this project connects to.' }));
+          return;
+        }
+        const readOnlyError = readOnlySqlValidationError(body.sql, 'A CLI query run through the workbench', 'duckdb');
+        if (readOnlyError) {
+          res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+          res.end(serializeJSON({ error: readOnlyError }));
+          return;
+        }
+        const limits = Object.fromEntries(Object.entries(body.options ?? {}).filter(([key, value]) => ['maxRows', 'maxBytes', 'batchSize', 'deadlineMs'].includes(key) && typeof value === 'number' && Number.isFinite(value) && value > 0));
+        const result = await executor.executePositional(body.sql, Array.isArray(body.params) ? body.params : [], held, limits);
+        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(serializeJSON(result));
+      } catch (error) {
+        res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(serializeJSON({ error: error instanceof Error ? error.message : String(error) }));
       }
       return;
     }
