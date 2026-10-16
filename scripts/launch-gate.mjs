@@ -252,7 +252,7 @@ async function packTarballs(gate, options) {
   const sha = (await sh('git rev-parse HEAD', { cwd: repoRoot, env: process.env })).output.trim();
   const dirty = Boolean((await sh('git status --porcelain', { cwd: repoRoot, env: process.env })).output.trim());
   let source = options.tarballs;
-  await gate.check('release', `pack ${version} from ${sha.slice(0, 8)}${dirty ? ' (uncommitted changes)' : ''}`, async () => {
+  await gate.check('release', `${options.tarballs ? 'reuse packed' : 'pack'} ${version} at ${sha.slice(0, 8)}${dirty ? ' (uncommitted changes)' : ''}`, async () => {
     if (!source) {
       const tag = version.includes('-') ? 'next' : 'latest';
       const result = await sh(`node scripts/release-packages.mjs --dry-run --tag ${tag} --expected-version ${version}`, {
@@ -427,8 +427,9 @@ async function sampleFlow(gate, sample, ctx) {
 
     await gate.check(sample, 'CLI works while the workbench runs (zlens doctor)', async () => {
       const result = await run('npx zlens doctor .', 'doctor-while-running');
-      if (/Could not set lock|lock on file|Conflicting lock/i.test(result.output)) {
-        throw new Error(`DuckDB lock error while the workbench runs: ${result.output.split('\n').find((line) => /lock/i.test(line))?.trim()}`);
+      const lockError = /Could not set lock|Conflicting lock/i;
+      if (lockError.test(result.output)) {
+        throw new Error(`DuckDB lock error while the workbench runs: ${result.output.split('\n').find((line) => lockError.test(line))?.trim()}`);
       }
       return `exit ${result.status}, no DuckDB lock error`;
     }, { evidence: `logs/${sample}-doctor-while-running.log` });

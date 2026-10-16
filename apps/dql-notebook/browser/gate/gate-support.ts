@@ -93,7 +93,9 @@ export function trustKindsIn(text: string): string[] {
   return TRUST_LABELS.filter(({ pattern }) => pattern.test(text)).map(({ kind }) => kind);
 }
 
-const ANSWER_HEADER = /Certified answer|Governed answer|AI-drafted answer|Couldn.t run this query|Needs input|Refused/;
+// Every heading an answer can open with; a missing one makes the wait time out
+// instead of failing on the label itself.
+const ANSWER_HEADER = /Certified (block )?answer|Governed answer|AI-drafted answer|AI-generated answer|Semantic answer|Answer to review|Couldn.t run this query|Needs input|Refused/;
 
 /**
  * Ask `question` in `box` (Enter, or click `submit`) and wait until the answer
