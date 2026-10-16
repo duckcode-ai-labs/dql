@@ -4,7 +4,7 @@ import type { AgentMessage, AgentProvider, AgentRunRequest } from '@zlens/agent'
 import type { ConnectionConfig } from '@zlens/connectors';
 import { buildVocabularyIndex, classifyWarehouseError, createAgentRunBudget, parseIntent, physicalRelationBinding, type AnalyticalIntentV1 } from '@zlens/agent';
 import { SemanticLayer } from '@zlens/core';
-import { preferredJoinHints, preferredJoinLine, skillsForDraft, mentionsName, joinHintUsed, hintsForQuestion, joinsAnyRelation, sharedKeyPair, relationsFromCatalogHits, missingFieldWords, relationsWithColumnWords, columnProbeBudgetMs, columnsForPhysicalEntry, connectionKey, physicalRelationName, relationColumnsProbeSql, relationDatabases, relationsFromProbeRows, relevantRelationsForQuestion, snowflakeShowColumnsRows, underAskedNames, coverageEvaluations, governedCoverageDoubt, effectiveAnsweredTrust, createAskPipelineRouteExecutor, explainOutOfScope, explainOutOfScopeWords, gapPresentation, groundIntentLiterals, knownMissingRelation, memberCandidatesSql, normalizeExecutedRow, prepareBlockForAsk, recordRelationEvidence, resetRelationEvidence, runtimeSchemaForVocabulary, toExecutorResult, tracedProbes, vocabularyViewKey } from './host.js';
+import { preferredJoinHints, resultShapeForReview, preferredJoinLine, skillsForDraft, mentionsName, joinHintUsed, hintsForQuestion, joinsAnyRelation, sharedKeyPair, relationsFromCatalogHits, missingFieldWords, relationsWithColumnWords, columnProbeBudgetMs, columnsForPhysicalEntry, connectionKey, physicalRelationName, relationColumnsProbeSql, relationDatabases, relationsFromProbeRows, relevantRelationsForQuestion, snowflakeShowColumnsRows, underAskedNames, coverageEvaluations, governedCoverageDoubt, effectiveAnsweredTrust, createAskPipelineRouteExecutor, explainOutOfScope, explainOutOfScopeWords, gapPresentation, groundIntentLiterals, knownMissingRelation, memberCandidatesSql, normalizeExecutedRow, prepareBlockForAsk, recordRelationEvidence, resetRelationEvidence, runtimeSchemaForVocabulary, toExecutorResult, tracedProbes, vocabularyViewKey } from './host.js';
 
 function scripted(replies: string[]): AgentProvider & { calls: AgentMessage[][] } {
   const calls: AgentMessage[][] = [];
@@ -1737,5 +1737,24 @@ describe('a follow-up\'s earlier answer and the thread\'s memory reach the model
     const inside = scripted([conversation]);
     await ask(inside, () => true);
     expect(JSON.stringify(inside.calls)).toContain(MEMBER);
+  });
+});
+
+describe('the result review sees what a result looks like, never what it says', () => {
+  it('row count, distinct and NULL counts per column, repeated rows; no value', () => {
+    const result = { columns: ['day', 'driver_id', 'deliveries'], rowCount: 3, rows: [{ day: null, driver_id: 7, deliveries: 10 }, { day: null, driver_id: 7, deliveries: 10 }, { day: null, driver_id: 9, deliveries: 4 }] };
+    const shape = resultShapeForReview(result);
+    expect(shape).toContain('rows: 3');
+    expect(shape).toContain('- day: every value NULL');
+    expect(shape).toContain('- driver_id: 2 distinct');
+    expect(shape).toContain('repeated rows: 1');
+    expect(shape).not.toMatch(/\b(7|9|10|4)\b(?! distinct)/);
+    expect(shape).not.toContain('first rows');
+  });
+
+  it('a result larger than the rows held says the shape was read from those', () => {
+    const shape = resultShapeForReview({ columns: [{ name: 'n' }], rowCount: 900, rows: [{ n: 1n }, { n: 2n }] });
+    expect(shape).toContain('rows: 900 (shape read from the first 2)');
+    expect(shape).toContain('- n: 2 distinct');
   });
 });

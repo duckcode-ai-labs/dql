@@ -120,7 +120,7 @@ const EXPECTED_TEST_FILES = 189;
 // and a ref the reading puts where a value goes kept out of the stated values (sql-checks.test.ts, +1) (port of bb54520b).
 // 2514 with a DuckDB table named without its default database, one matcher for the drafted- and the
 // frozen-SQL check (sql-context-validation.test.ts, +4) (port of ebd04d34 and 627009a1).
-const EXPECTED_TESTS = 2514;
+const EXPECTED_TESTS = 2519;
 // The heavy lane's share of EXPECTED_TESTS (catalog.test.ts 72 + project-state.test.ts 4), pinned so
 // a lane run on its own (CI runs the two lanes as separate steps) is audited as exactly as both together.
 // The ordinary lane's share is the difference: 2428.

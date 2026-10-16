@@ -35,6 +35,8 @@ interface Setup {
   blocks?: Array<{ name: string; description: string; sql: string; certified: boolean }>;
   /** A value profile in the project's cache (what a sync with agent.valueProfile writes), and whether the project allows it now. */
   valueProfile?: { written: boolean; allowed?: boolean; fingerprint?: string };
+  /** What the result review answers (default: it answers). */
+  review?: (prompt: string) => string;
 }
 
 function project(setup: Setup) {
@@ -74,10 +76,12 @@ function project(setup: Setup) {
 
 const READING = JSON.stringify({ version: 1, kind: 'analytics', reading: 'Invoice totals by country.', measures: [{ ref: 'metric:shop.invoice_total' }], groupBy: [], display: [], filters: [], unresolved: [], provenance: {}, expectedShape: 'grouped' });
 const isDraft = (messages: AgentMessage[]) => messages[0]!.content.startsWith('You write exactly ONE read-only SQL statement');
+const isReview = (messages: AgentMessage[]) => messages[0]!.content.startsWith('You check one query result');
 
 async function ask(setup: Setup, question: string, draft: (prompt: string) => string, rows: Array<Record<string, unknown>> = []) {
   const { projectRoot, manifest } = project(setup);
   const prompts: string[] = [];
+  const reviews: string[] = [];
   let readings = 0;
   const executed: string[] = [];
   const route = createAskPipelineRouteExecutor({
@@ -95,6 +99,7 @@ async function ask(setup: Setup, question: string, draft: (prompt: string) => st
     selectProvider: async () => ({
       name: 'ollama', available: async () => true,
       generate: async (messages: AgentMessage[]) => {
+        if (isReview(messages)) { reviews.push(messages[1]!.content); return setup.review?.(messages[1]!.content) ?? '{"answers": true}'; }
         if (!isDraft(messages)) { readings += 1; return READING; }
         const prompt = messages.map((message) => message.content).join('\n');
         prompts.push(prompt);
@@ -106,7 +111,7 @@ async function ask(setup: Setup, question: string, draft: (prompt: string) => st
   });
   try {
     const result = await route({ runId: `run:${question}`, request: { question, requestedMode: 'ask' } as AgentRunRequest, route: 'generated_answer', maxRepairAttempts: 0, attempt: 0, emit: () => {} });
-    return { result, prompts, readings, executed };
+    return { result, prompts, readings, executed, reviews };
   } finally {
     rmSync(projectRoot, { recursive: true, force: true });
   }
@@ -257,5 +262,67 @@ describe('the value profile reaches the drafter only when the project allows it'
       const prompt = (await ask({ project: kind, valueProfile: { written: true, allowed: true } }, question, declined)).prompts[0] ?? '';
       expect(prompt).not.toContain(" holds 'Brazil'");
     }
+  });
+});
+
+describe('an AI-drafted answer on a warehouse-first project gets a review of its result, which sees its shape and never its values', () => {
+  const question = 'The median of the invoice totals per customer country';
+  const perCountry = 'SELECT c.country, SUM(i.total) AS total FROM main.invoices i JOIN main.customers c ON c.customer_id = i.customer_id GROUP BY c.country';
+  const median = 'WITH t AS (SELECT c.country, SUM(i.total) AS total FROM main.invoices i JOIN main.customers c ON c.customer_id = i.customer_id GROUP BY c.country) SELECT AVG(total) AS median_total FROM t';
+  const rows = [{ country: 'Brazil', total: 10 }, { country: 'Canada', total: 14 }];
+
+  it('a named defect is revised once with the reason in words, and the revision is the answer', async () => {
+    let drafts = 0;
+    const { result, prompts, reviews } = await ask(
+      { valueProfile: { written: true, allowed: true }, review: () => JSON.stringify({ answers: false, problem: 'it returns one row per country; the question asks for the median of those totals' }) },
+      question, () => (drafts++ === 0 ? perCountry : median), rows,
+    );
+    expect(reviews).toHaveLength(1);
+    expect(reviews[0]).toContain('rows: 2');
+    expect(reviews[0]).toContain('- country: 2 distinct');
+    // The value profile is allowed here, and still no value from the result reaches the review.
+    expect(reviews[0]).not.toContain('Brazil');
+    expect(reviews[0]).not.toContain('first rows');
+    expect(prompts).toHaveLength(2);
+    expect(prompts[1]).toContain('PREVIOUS SQL (it ran; this is why it needs another look)');
+    expect(prompts[1]).toContain('WHAT TO CHANGE: the statement ran and returned 2 rows, but the result does not answer the question as asked: it returns one row per country');
+    expect(result.status).toBe('completed');
+    const dispatches = (result as { askPipelineReceipt?: { dispatches: Array<{ label?: string; outcome?: string }> } }).askPipelineReceipt?.dispatches ?? [];
+    expect(dispatches.filter((dispatch) => dispatch.label === 'review').map((dispatch) => dispatch.outcome)).toEqual(['revise']);
+    expect(dispatches.filter((dispatch) => dispatch.label === 'revise').map((dispatch) => dispatch.outcome)).toEqual(['sql']);
+  });
+
+  it('an empty result is redrafted as a statement that ran, not one the warehouse rejected; a dbt project keeps its recorded wording', async () => {
+    const warehouse = await ask({}, question, () => perCountry, []);
+    expect(warehouse.prompts[1]).toContain('PREVIOUS SQL (it ran; this is why it needs another look)');
+    expect(warehouse.prompts[1]).toContain('WHAT TO CHANGE: the statement ran and returned no rows');
+    // Nothing came back, so there was nothing to review.
+    expect(warehouse.reviews).toHaveLength(0);
+    const dbt = await ask({ project: 'dbt' }, question, () => perCountry, []);
+    expect(dbt.prompts[1]).toContain('PREVIOUS SQL (the warehouse rejected it; fix it)');
+  });
+
+  it('a review that accepts, or cannot be read, leaves the first answer; ZLENS_ASK_RESULT_REVIEW=0 turns it off', async () => {
+    for (const reply of ['{"answers": true}', 'not json at all']) {
+      const { result, prompts, reviews } = await ask({ review: () => reply }, question, () => perCountry, rows);
+      expect(reviews).toHaveLength(1);
+      expect(prompts).toHaveLength(1);
+      expect(result.status).toBe('completed');
+    }
+    vi.stubEnv('ZLENS_ASK_RESULT_REVIEW', '0');
+    try {
+      const { reviews, result } = await ask({}, question, () => perCountry, rows);
+      expect(reviews).toHaveLength(0);
+      expect(result.status).toBe('completed');
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it('a dbt project keeps its recorded prompts: no review', async () => {
+    const { reviews, readings, result } = await ask({ project: 'dbt' }, question, () => perCountry, rows);
+    expect(readings).toBeGreaterThan(0);
+    expect(reviews).toHaveLength(0);
+    expect(result.status).toBe('completed');
   });
 });
