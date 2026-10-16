@@ -116,10 +116,12 @@ const EXPECTED_TEST_FILES = 189;
 // CTE, a pasted definitions document (sql-checks.test.ts, +3) and names a statement defines itself,
 // JOIN … USING and CAST AS REAL on SQLite (sql-context-validation.test.ts, +4) (port of efc62b64).
 // 2504 with "generate a report of …" kept an analytical question (intent-controller.test.ts, +1) (port of 7bad6cde).
-const EXPECTED_TESTS = 2504;
+// 2510 with relationship verdicts that count the keyed rows a join loses and judge cardinality over the keys
+// a join reaches (relationship-validation.test.ts, +6) (port of 71d5c333).
+const EXPECTED_TESTS = 2510;
 // The heavy lane's share of EXPECTED_TESTS (catalog.test.ts 72 + project-state.test.ts 4), pinned so
 // a lane run on its own (CI runs the two lanes as separate steps) is audited as exactly as both together.
-// The ordinary lane's share is the difference: 2428.
+// The ordinary lane's share is the difference: 2434.
 const EXPECTED_HEAVY_TESTS = 76;
 
 const LANES = ['all', 'ordinary', 'heavy'];
