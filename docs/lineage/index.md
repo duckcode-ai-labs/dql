@@ -25,6 +25,9 @@ Each card names the item and its type, such as **dbt Model**, **DQL Block**,
 
 The status bar reads, for example, `End-to-end lineage of Top customers by
 lifetime spend · 18 nodes · 18 edges` and **Compiled from the dbt manifest**.
+The status bar names what the lineage was built from: on a project without
+dbt (warehouse-first) it reads **Compiled from the synced warehouse catalog**,
+and on a hybrid project it names both.
 
 ## Focus on one path
 
