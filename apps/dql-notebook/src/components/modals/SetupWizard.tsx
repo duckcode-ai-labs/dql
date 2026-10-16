@@ -201,6 +201,11 @@ export function SetupWizard({ detectedProvider, onClose, onImported }: SetupWiza
           onBack={() => setStep('provider')}
           onClose={onClose}
           onComplete={onImported}
+          onChooseModelSource={(modelSource) => {
+            // Database only, Both and an existing project continue in Guided Setup.
+            onClose();
+            dispatch({ type: 'OPEN_SETUP', modelSource });
+          }}
           onOpen={(target) => {
             onClose();
             if (target === 'block') {
