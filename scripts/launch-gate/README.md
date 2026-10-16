@@ -27,8 +27,9 @@ answered by a live model.
    - npm points at that registry, with a fresh npm cache and an empty user
      config;
    - no npm/pnpm/`ZLENS_*` variables from the harness;
-   - no `dbt`, `mf` or `zlens` from your `PATH`; the quickstart uses the
-     sample's own `.venv/bin/dbt`;
+   - no `dbt`, `mf`, `zlens` or `dql` from your `PATH` (other commands in
+     those folders stay); the quickstart uses the sample's own
+     `.venv/bin/dbt`;
    - `ZLENS_EMBEDDINGS_AUTODETECT=off`, so a local Ollama does not change
      Ask.
 

@@ -12,7 +12,7 @@
 // Exit code 0 only when every row passed.
 
 import { spawn } from 'node:child_process';
-import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync, statSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, symlinkSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -208,13 +208,24 @@ function cleanEnv({ out, registryUrl, shims }) {
     if (/^(npm_|pnpm_|PNPM_|INIT_CWD$|PLAYWRIGHT_|TEST_|ZLENS_|DQL_|VIRTUAL_ENV$|CONDA_)/i.test(key)) continue;
     env[key] = value;
   }
+  // A PATH directory that holds one of these keeps everything else: it is
+  // replaced by a folder of links to its other entries. (Dropping the whole
+  // directory also dropped /opt/homebrew/bin, and with it the claude CLI.)
+  const hidden = new Set(['dbt', 'mf', 'zlens', 'dql']);
   const removed = [];
-  const keep = (process.env.PATH ?? '').split(path.delimiter).filter((dir) => {
-    const hit = ['dbt', 'mf', 'zlens', 'dql'].find((bin) => {
-      try { return statSync(path.join(dir, bin)).isFile(); } catch { return false; }
-    });
-    if (hit) removed.push(`${dir} (${hit})`);
-    return !hit;
+  const keep = (process.env.PATH ?? '').split(path.delimiter).filter(Boolean).map((dir, index) => {
+    let entries = [];
+    try { entries = readdirSync(dir); } catch { return dir; }
+    const hits = entries.filter((entry) => hidden.has(entry));
+    if (hits.length === 0) return dir;
+    removed.push(`${dir}/{${hits.join(',')}}`);
+    const filtered = path.join(out, 'path', String(index));
+    mkdirSync(filtered, { recursive: true });
+    for (const entry of entries) {
+      if (hidden.has(entry)) continue;
+      try { symlinkSync(path.join(dir, entry), path.join(filtered, entry)); } catch { /* exists */ }
+    }
+    return filtered;
   });
   const npmrc = path.join(out, 'npmrc');
   writeFileSync(npmrc, '');
@@ -474,7 +485,7 @@ function writeSummary(gate, meta) {
     `- commit: ${meta.sha}${meta.dirty ? ' (with uncommitted changes)' : ''}`,
     `- version: ${meta.version} (packed tarballs served from a local registry)`,
     `- started: ${meta.started}, finished: ${new Date().toISOString()}`,
-    `- node ${process.version}; PATH entries hidden from the clean shell: ${meta.removed.length ? meta.removed.join(', ') : 'none'}`,
+    `- node ${process.version}; commands hidden from the clean shell: ${meta.removed.length ? meta.removed.join(', ') : 'none'}`,
     '',
     '| # | Area | Check | Result | Detail | Evidence |',
     '|---|---|---|---|---|---|',
