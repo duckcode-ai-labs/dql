@@ -125,10 +125,11 @@ const EXPECTED_TEST_FILES = 189;
 // one-to-many step (agentic/toolset.test.ts, +1) (port of 2bd5ecdf).
 // 2528 with page stories whose clearest signals do not depend on row order (dashboard-story.test.ts, +7)
 // (port of c0e24814).
-const EXPECTED_TESTS = 2528;
+// 2533 with the second look at an AI-drafted result (ask-pipeline.test.ts, +5) (port of 1f08af7e / 59683be5).
+const EXPECTED_TESTS = 2533;
 // The heavy lane's share of EXPECTED_TESTS (catalog.test.ts 72 + project-state.test.ts 4), pinned so
 // a lane run on its own (CI runs the two lanes as separate steps) is audited as exactly as both together.
-// The ordinary lane's share is the difference: 2452.
+// The ordinary lane's share is the difference: 2457.
 const EXPECTED_HEAVY_TESTS = 76;
 
 const LANES = ['all', 'ordinary', 'heavy'];
