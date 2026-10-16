@@ -247,7 +247,7 @@ async function askRuntime(question: string, userName: string, scope: { domain?: 
   } catch (error) {
     return {
       kind: 'no_answer',
-      text: `The ZLens runtime at ${base} is not reachable (${(error as Error).message}). Start it with \`zlens serve\` or set ZLENS_RUNTIME_URL.`,
+      text: `The ZLens runtime at ${base} is not reachable (${(error as Error).message}). Start the workbench with \`zlens notebook\` (\`npm run notebook\`) or set ZLENS_RUNTIME_URL.`,
       citations: [],
       considered: [],
     };

@@ -147,7 +147,7 @@ zlens lineage --dashboard daily_ops      # consumption lineage
 | `zlens agent trace list\|show\|export\|validate\|replay\|compare` | Inspect and export local redacted Ask trace receipts without starting a provider, tool, SQL, or network path |
 | `zlens mcp [path]` | Run the ZLens MCP server over stdio |
 | `zlens mcp --http [path]` | Run loopback HTTP MCP with a bearer token |
-| `zlens mcp test [path]` | Verify manifest, metadata catalog, agent index, and MCP tool readiness |
+| `zlens mcp test [path]` | Verify manifest, metadata catalog, agent index, MCP tools, and the running workbench (`zlens notebook`); exits 1 if any check fails |
 | `zlens connect codex [path]` | Write project `.codex/config.toml` plus `AGENTS.md` |
 | `zlens connect claude-code [path]` | Write project `.mcp.json` plus `CLAUDE.md` |
 | `zlens connect claude-desktop [path]` | Update Claude Desktop MCP config |

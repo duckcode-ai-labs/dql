@@ -96,7 +96,7 @@ describe('answerQuestion (governed answer via runtime proxy)', () => {
     expect(out.ok).toBe(false);
     if (out.ok) return;
     expect((out as { runtimeUnavailable?: boolean }).runtimeUnavailable).toBe(true);
-    expect(out.error).toMatch(/zlens serve/);
+    expect(out.error).toMatch(/zlens notebook/);
   });
 
   it('rejects an empty question without calling the runtime', async () => {

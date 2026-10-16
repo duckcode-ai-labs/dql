@@ -1119,7 +1119,7 @@ async function runEval(rest: string[], flags: CLIFlags): Promise<void> {
     const probe = await fetch(`${runtimeBase.replace(/\/$/, '')}/api/health`).catch(() => null);
     if (!probe?.ok) {
       throw new Error(
-        `--via runtime needs a running server at ${runtimeBase}. Start one with \`zlens serve\`, or use --via loop to score the answer loop in-process.`,
+        `--via runtime needs a running ZLens workbench at ${runtimeBase}. Start one with \`zlens notebook ${projectRoot}\` (\`npm run notebook\`), or point --runtime-url / ZLENS_RUNTIME_URL at a running one.`,
       );
     }
   }
@@ -1164,7 +1164,7 @@ async function runEval(rest: string[], flags: CLIFlags): Promise<void> {
             }
           : undefined,
       }).catch(() => undefined);
-      // `--via runtime` posts to a running `zlens serve` so the case exercises the
+      // `--via runtime` posts to a running `zlens notebook` so the case exercises the
       // router, engine, plan boundary, and gates. The in-process driver below
       // calls the answer loop directly and cannot observe any of them, which is
       // why a refusal metric taken from it reads cleaner than users experience.

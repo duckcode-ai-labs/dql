@@ -237,7 +237,7 @@ export async function queryViaMetadata(
       }),
     });
   } catch (err) {
-    const error = `Could not reach ZLens runtime at ${base}. Start it with \`zlens serve\` in ${ctx.projectRoot}. (${err instanceof Error ? err.message : String(err)})`;
+    const error = `Could not reach ZLens runtime at ${base}. Start the workbench with \`zlens notebook\` in ${ctx.projectRoot} (\`npm run notebook\` in a create-zlens-app project). (${err instanceof Error ? err.message : String(err)})`;
     recordTier2QueryRun(ctx.projectRoot, { slug, question: args.question, status: 'runtime_unavailable', errorCode: 'runtime_unavailable', contextPack });
     return {
       uncertified: true,

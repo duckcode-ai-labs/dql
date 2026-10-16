@@ -106,7 +106,7 @@ export async function queryViaBlock(
     });
   } catch (err) {
     return {
-      error: `Could not reach ZLens runtime at ${base}. Start it with \`zlens serve\` in ${ctx.projectRoot}. (${err instanceof Error ? err.message : String(err)})`,
+      error: `Could not reach ZLens runtime at ${base}. Start the workbench with \`zlens notebook\` in ${ctx.projectRoot} (\`npm run notebook\` in a create-zlens-app project). (${err instanceof Error ? err.message : String(err)})`,
     };
   }
 

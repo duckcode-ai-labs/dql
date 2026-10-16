@@ -193,7 +193,7 @@ export interface RuntimeDriverOptions {
 }
 
 /**
- * Post one question to a running `zlens serve` and return the persisted run.
+ * Post one question to a running `zlens notebook` and return the persisted run.
  *
  * Failures are surfaced rather than swallowed: a harness that silently scores a
  * transport error as a refusal would report a false-refusal spike that no code

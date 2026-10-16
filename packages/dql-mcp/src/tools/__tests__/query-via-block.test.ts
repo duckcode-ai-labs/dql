@@ -154,7 +154,7 @@ describe('queryViaBlock — certified-only enforcement (the wedge)', () => {
 
     const result = await queryViaBlock(ctx, { name: 'My Block' });
     expect((result as { error: string }).error).toMatch(/Could not reach ZLens runtime/);
-    expect((result as { error: string }).error).toMatch(/zlens serve/);
+    expect((result as { error: string }).error).toMatch(/zlens notebook/);
   });
 
   it('surfaces the runtime error response unchanged', async () => {

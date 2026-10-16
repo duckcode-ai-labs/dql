@@ -24,7 +24,7 @@
 # the grain-safe and the naive (fan-out) query against a real SQL engine and
 # asserts the grain-safe result equals these rows while the naive query inflates.
 # To run the credentialed execution-match gate, seed a warehouse from seed.json
-# (scripts/seed-eval-warehouse.mjs) and point `zlens serve` at it. Column aliases
+# (scripts/seed-eval-warehouse.mjs) and run `zlens notebook` on it. Column aliases
 # and row order must match the seed-backed rows, so the fixture steers the shape
 # via sqlContains hints; treat rowsEqual as exact.
 #

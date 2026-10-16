@@ -106,6 +106,6 @@ describe('Dataset MCP runtime adapter', () => {
       query: revenueQuery,
     });
     expect(result).toMatchObject({ ok: false, runtimeUnavailable: true });
-    expect(result.error).toContain('zlens serve');
+    expect(result.error).toContain('zlens notebook');
   });
 });
