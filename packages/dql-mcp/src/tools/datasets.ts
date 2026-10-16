@@ -29,7 +29,7 @@ function runtimeUnavailable(base: string, projectRoot: string, error: unknown) {
     runtimeUnavailable: true as const,
     error:
       `Could not reach the ZLens runtime at ${base}. Dataset execution needs it running — ` +
-      `start it with \`zlens serve\` in ${projectRoot} (or pass serverUrl), then retry. ` +
+      `start the workbench with \`zlens notebook\` in ${projectRoot} (\`npm run notebook\` in a create-zlens-app project), or pass serverUrl, then retry. ` +
       `(${error instanceof Error ? error.message : String(error)})`,
   };
 }

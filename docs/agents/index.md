@@ -16,11 +16,22 @@ npm exec -- zlens mcp test
 ```
 
 It checks the project, the manifest, the metadata catalog, the search index,
-the MCP tools and the ZLens runtime. The last line is either
-`Ready: point Claude Code, Codex, Cursor, or Claude Desktop at this project with zlens connect.`
-or `Not ready: fix the failed checks above, then rerun zlens mcp test.`
+the MCP tools and the ZLens runtime, which is the workbench that
+`npm run notebook` starts (see [step 4](#4-keep-the-workbench-running)).
+Every check must pass:
 
-If the index is missing, run `npm run sync` first.
+- When they all pass, the last line is
+  `Ready: point Claude Code, Codex, Cursor, or Claude Desktop at this project with zlens connect.`
+  and the command exits 0.
+- When any check fails, it is marked `✗` and followed by a `Fix:` line that
+  says what to do. The last line is
+  `Not ready: 2 checks failed (…). Fix them as shown above, then rerun zlens mcp test.`
+  and the command exits 1, so a script can gate on it.
+
+If the index is missing, run `npm run sync` first. If the runtime checks fail,
+start the workbench in another terminal with `npm run notebook` (or
+`zlens notebook <project>` outside a create-zlens-app project), leave it
+running, and run `zlens mcp test` again.
 
 ## 2. Connect your agent
 

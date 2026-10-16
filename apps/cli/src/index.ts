@@ -102,7 +102,7 @@ const HELP = `
     zlens lineage [block] [path]    Answer-layer lineage analysis
     zlens lineage cross-domain      Show cross-domain lineage flows (--domain filters)
     zlens mcp [--http]              Run the ZLens MCP server (stdio by default; --http = loopback)
-    zlens mcp test [path]           Check whether ZLens MCP can load this project
+    zlens mcp test [path]           Check MCP readiness, incl. the running workbench (exits 1 if not)
     zlens connect <target> [path]   Configure Codex, Claude Code, Claude Desktop, or Cursor MCP
     zlens app new|generate|ls|show|build|reindex <name-or-path>
                                     Manage App artifacts (metadata, policies, dashboards, schedules)

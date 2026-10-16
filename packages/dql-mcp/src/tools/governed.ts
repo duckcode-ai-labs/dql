@@ -12,7 +12,8 @@ import { readEnv } from '@zlens/core';
  * endpoints (`/api/agent-runs`, `/api/ai/build`), which already own the LLM
  * provider + warehouse executors, so there is no second provider to configure.
  *
- * Both require the ZLens runtime to be running (`zlens serve`) because governed
+ * Both require the ZLens runtime to be running (the workbench `zlens notebook`
+ * starts) because governed
  * answering/building executes SQL against the warehouse.
  */
 
@@ -28,7 +29,7 @@ function runtimeUnavailable(base: string, projectRoot: string, err: unknown) {
     runtimeUnavailable: true as const,
     error:
       `Could not reach the ZLens runtime at ${base}. Governed answering/building needs it running — ` +
-      `start it with \`zlens serve\` in ${projectRoot} (or pass serverUrl), then retry. ` +
+      `start the workbench with \`zlens notebook\` in ${projectRoot} (\`npm run notebook\` in a create-zlens-app project), or pass serverUrl, then retry. ` +
       `(${err instanceof Error ? err.message : String(err)})`,
   };
 }

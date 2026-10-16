@@ -34,17 +34,60 @@ export async function runMcp(arg: string | null, rest: string[], flags: McpFlags
   await runStdio({ projectRoot });
 }
 
-async function runMcpTest(targetPath: string | null, flags: CLIFlags): Promise<void> {
-  const projectRoot = findProjectRoot(resolve(targetPath ?? process.cwd()));
-  // `optional` checks are informational and do not fail overall readiness — the
-  // runtime is only needed for governed generation (answer_question /
-  // build_block_from_prompt) and bounded execution, not for routing/BYOSQL planning.
-  const checks: Array<{ name: string; ok: boolean; detail: string; optional?: boolean }> = [];
+/** One readiness check. Every check is required: "Ready" means an agent can actually answer. */
+export interface McpTestCheck {
+  name: string;
+  ok: boolean;
+  detail: string;
+  /** What to do when the check fails. */
+  fix?: string;
+}
 
+/** The command that starts the runtime the MCP tools call (the workbench), for this project. */
+export function workbenchStartHint(projectRoot: string): string {
+  return `start the ZLens workbench and keep it running: \`zlens notebook ${quoteShellArg(projectRoot)}\` (\`npm run notebook\` in a create-zlens-app project). If it runs on another address, set ZLENS_RUNTIME_URL`;
+}
+
+function quoteShellArg(value: string): string {
+  return /^[A-Za-z0-9_./:@-]+$/.test(value) ? value : `"${value.replace(/(["\\$`])/g, '\\$1')}"`;
+}
+
+export interface McpTestReport {
+  ok: boolean;
+  projectRoot: string;
+  checks: McpTestCheck[];
+  failed: string[];
+}
+
+export function summarizeMcpTest(projectRoot: string, checks: McpTestCheck[]): McpTestReport {
+  const failed = checks.filter((check) => !check.ok).map((check) => check.name);
+  return { ok: failed.length === 0, projectRoot, checks, failed };
+}
+
+export function formatMcpTestReport(report: McpTestReport): string {
+  const lines = ['', '  ZLens MCP Test', `    Project: ${report.projectRoot}`, ''];
+  for (const check of report.checks) {
+    lines.push(`  ${check.ok ? '✓' : '✗'} ${check.name}`);
+    lines.push(`    ${check.detail}`);
+    if (!check.ok && check.fix) lines.push(`    Fix: ${check.fix}`);
+  }
+  lines.push('');
+  lines.push(report.ok
+    ? '  Ready: point Claude Code, Codex, Cursor, or Claude Desktop at this project with `zlens connect`.'
+    : `  Not ready: ${report.failed.length} check${report.failed.length === 1 ? '' : 's'} failed (${report.failed.join(', ')}). Fix ${report.failed.length === 1 ? 'it' : 'them'} as shown above, then rerun \`zlens mcp test\`.`);
+  lines.push('');
+  return lines.join('\n');
+}
+
+export async function collectMcpTestChecks(projectRoot: string, options: { runtimeBase?: string; fetchImpl?: typeof fetch } = {}): Promise<McpTestCheck[]> {
+  const fetchImpl = options.fetchImpl ?? fetch;
+  const checks: McpTestCheck[] = [];
+  const hasConfig = existsSync(join(projectRoot, 'dql.config.json'));
   checks.push({
     name: 'ZLens project',
-    ok: existsSync(join(projectRoot, 'dql.config.json')),
-    detail: existsSync(join(projectRoot, 'dql.config.json')) ? projectRoot : 'dql.config.json not found',
+    ok: hasConfig,
+    detail: hasConfig ? projectRoot : `dql.config.json not found in ${projectRoot}`,
+    fix: 'run this from your ZLens project folder, or pass its path: `zlens mcp test <path>`. To start one, run `npx create-zlens-app`',
   });
 
   try {
@@ -60,6 +103,7 @@ async function runMcpTest(targetPath: string | null, flags: CLIFlags): Promise<v
       name: 'Manifest context',
       ok: false,
       detail: error instanceof Error ? error.message : String(error),
+      fix: 'run `zlens compile` (`npm run compile`) in the project and fix the errors it reports',
     });
   }
 
@@ -75,6 +119,7 @@ async function runMcpTest(targetPath: string | null, flags: CLIFlags): Promise<v
       name: 'Metadata catalog',
       ok: false,
       detail: error instanceof Error ? error.message : String(error),
+      fix: 'run `zlens sync dbt` (`npm run sync`) for a dbt project, or `zlens compile`, then rerun',
     });
   }
 
@@ -90,6 +135,7 @@ async function runMcpTest(targetPath: string | null, flags: CLIFlags): Promise<v
       name: 'Agent index',
       ok: false,
       detail: error instanceof Error ? error.message : String(error),
+      fix: 'run `zlens sync dbt` (`npm run sync`) for a dbt project, or `zlens compile`, then rerun',
     });
   }
 
@@ -99,62 +145,68 @@ async function runMcpTest(targetPath: string | null, flags: CLIFlags): Promise<v
     detail: 'ask_dql, answer_question, typed App Dataset tools, query_via_metadata, build_block_from_prompt, build_dql_app, inspect_dql_project, certify, lineage, and metadata tools are available',
   });
 
-  // Advisory: is the ZLens runtime up? Governed answer/build + bounded execution
-  // proxy to it. stdio routing/BYOSQL planning works without it.
-  const runtimeBase = (readEnv('ZLENS_RUNTIME_URL') ?? 'http://127.0.0.1:3474').replace(/\/$/, '');
+  // answer_question, build_block_from_prompt, the query tools and the typed
+  // Dataset tools all call the ZLens runtime: the workbench `zlens notebook`
+  // starts. An agent connected without it gets "could not reach" on every
+  // question, so the project is not ready for one until it is up.
+  const runtimeBase = (options.runtimeBase ?? readEnv('ZLENS_RUNTIME_URL') ?? 'http://127.0.0.1:3474').replace(/\/$/, '');
+  const startHint = workbenchStartHint(projectRoot);
   let runtimeOk = false;
-  let runtimeDetail = `not reachable at ${runtimeBase} — start it with \`zlens serve\` for answer_question / build_block_from_prompt / query execution`;
+  let runtimeDetail = `not reachable at ${runtimeBase}; answer_question, build_block_from_prompt and the query tools need it`;
   try {
-    const resp = await fetch(`${runtimeBase}/api/schema`, { signal: AbortSignal.timeout(1500) });
-    // Any HTTP response (even 404) means the runtime is up.
+    const resp = await fetchImpl(`${runtimeBase}/api/schema`, { signal: AbortSignal.timeout(1500) });
+    // Any HTTP response (even 404) means something is listening there.
     runtimeOk = resp.status < 500;
-    if (runtimeOk) runtimeDetail = `reachable at ${runtimeBase}`;
+    runtimeDetail = runtimeOk ? `reachable at ${runtimeBase}` : `${runtimeBase} answered ${resp.status}`;
   } catch {
-    // not reachable — leave runtimeOk false with the actionable detail
+    // not reachable — keep the detail above
   }
   checks.push({
     name: 'ZLens runtime (governed generation + execution)',
     ok: runtimeOk,
     detail: runtimeDetail,
-    optional: true,
+    fix: startHint,
   });
 
   // Dataset MCP calls must reach the dedicated typed Dataset endpoint, not
   // merely any process speaking HTTP on the configured runtime port. The
   // endpoint itself owns current catalog, source, proof and target validation.
   let datasetRuntimeOk = false;
-  let datasetRuntimeDetail = `not reachable at ${runtimeBase}/api/app-datasets — start \`zlens serve\` for typed Dataset MCP execution`;
-  try {
-    const response = await fetch(`${runtimeBase}/api/app-datasets`, { signal: AbortSignal.timeout(1500) });
-    datasetRuntimeOk = response.status >= 200 && response.status < 300;
-    if (datasetRuntimeOk) datasetRuntimeDetail = `typed Dataset runtime available at ${runtimeBase}/api/app-datasets`;
-    else datasetRuntimeDetail = `typed Dataset runtime returned ${response.status} at ${runtimeBase}/api/app-datasets`;
-  } catch {
-    // Retain the actionable unavailable detail above.
+  let datasetRuntimeDetail = runtimeOk
+    ? `not reachable at ${runtimeBase}/api/app-datasets`
+    : `not checked: no runtime at ${runtimeBase}; typed Dataset tools need it`;
+  let datasetFix = startHint;
+  if (runtimeOk) {
+    try {
+      const response = await fetchImpl(`${runtimeBase}/api/app-datasets`, { signal: AbortSignal.timeout(1500) });
+      datasetRuntimeOk = response.status >= 200 && response.status < 300;
+      datasetRuntimeDetail = datasetRuntimeOk
+        ? `typed Dataset runtime available at ${runtimeBase}/api/app-datasets`
+        : `typed Dataset runtime returned ${response.status} at ${runtimeBase}/api/app-datasets`;
+    } catch {
+      // Retain the unavailable detail above.
+    }
+    if (!datasetRuntimeOk) {
+      datasetFix = `the server at ${runtimeBase} is not this project's ZLens workbench; ${startHint}`;
+    }
   }
   checks.push({
     name: 'Dataset MCP runtime capability',
     ok: datasetRuntimeOk,
     detail: datasetRuntimeDetail,
-    optional: true,
+    fix: datasetFix,
   });
+  return checks;
+}
 
-  const ok = checks.filter((check) => !check.optional).every((check) => check.ok);
+async function runMcpTest(targetPath: string | null, flags: CLIFlags): Promise<void> {
+  const projectRoot = findProjectRoot(resolve(targetPath ?? process.cwd()));
+  const report = summarizeMcpTest(projectRoot, await collectMcpTestChecks(projectRoot));
   if (flags.format === 'json') {
-    console.log(JSON.stringify({ ok, projectRoot, checks }, null, 2));
-    return;
+    console.log(JSON.stringify(report, null, 2));
+  } else {
+    console.log(formatMcpTestReport(report));
   }
-
-  console.log('\n  ZLens MCP Test');
-  console.log(`    Project: ${projectRoot}`);
-  console.log('');
-  for (const check of checks) {
-    console.log(`  ${check.ok ? '✓' : '✗'} ${check.name}`);
-    console.log(`    ${check.detail}`);
-  }
-  console.log('');
-  console.log(ok
-    ? '  Ready: point Claude Code, Codex, Cursor, or Claude Desktop at this project with `zlens connect`.'
-    : '  Not ready: fix the failed checks above, then rerun `zlens mcp test`.');
-  console.log('');
+  // Scripts and CI read the exit code: a failed check is never "ready".
+  if (!report.ok) process.exitCode = 1;
 }
