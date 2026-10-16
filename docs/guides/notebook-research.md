@@ -1,5 +1,9 @@
 # Notebook research engine
 
+!!! warning "Archived page"
+    This page was written for an earlier version of ZLens and may not match the
+    current product. See [About the archive](../archive.md) for the current page.
+
 > ~7 minutes - use notebooks as the research workspace before promoting SQL into DQL blocks
 
 Notebook research is the investigation layer between raw SQL and governed DQL.

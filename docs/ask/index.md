@@ -1,0 +1,106 @@
+# Ask a question
+
+**Ask** answers business questions in plain English. Every answer says what
+it is built on, so you know how far to trust it.
+
+ZLens tries the most trusted source first:
+
+1. a **certified block** that answers the question,
+2. then **semantic metrics** from your semantic layer,
+3. then **SQL written by AI** from your tables, marked as needing review.
+
+If none of these can answer safely, Ask refuses and says why.
+
+!!! note "Before you start"
+    Ask needs an AI provider, even for certified answers. See
+    [Set up an AI provider](../get-started/ai-provider.md).
+
+{{ clip("ask-certified") }}
+
+## Ask
+
+1. In the left rail, click **Ask**.
+2. Type your question in **Ask anything about your data…**, for example
+   `Who are the top customers by lifetime spend?`
+3. Press **Enter**. (**Shift+Enter** adds a new line.)
+
+While Ask works, you see each step, such as `Searched the project: 1
+certified block, 24 metrics…` and `Asking the AI to read the question`.
+Click **Stop** to cancel.
+
+## Read the answer
+
+The answer starts with a trust line, then a short summary and the result
+table. For a question that a certified block answers:
+
+- The trust line reads **Certified answer**, followed by **from** and the
+  block's name, and the block's **Owner**.
+- The result card says `certified block`.
+- **Results** shows the rows; **Visualization** shows a chart.
+
+Other trust lines:
+
+| Trust line | Means |
+|---|---|
+| **Certified answer** | Ran a certified block exactly as reviewed. |
+| **Governed answer** | Built from semantic metrics and dimensions. |
+| **AI-generated answer** | AI wrote the SQL from your tables. Check it before relying on it. ZLens saves it as a draft block for review; see [Answers that need review](needs-review.md). |
+| **Needs clarification** | Ask needs one more detail. Answer the question it asks. |
+| **Couldn't run this query** or **No matching data** | Ask refused or found nothing, and says why. See [When Ask refuses](refusals.md). |
+
+## See how it answered
+
+Under each answer, click **How it was answered**. A panel opens with tabs:
+
+- **How it answered**: the steps it took, such as **Certified blocks**,
+  **Semantic layer**, **Checked before running** and **Ran on the warehouse**,
+  each marked done or skipped.
+- **DQL** and **SQL**: exactly what ran.
+- **Data used**: the certified block, metrics, tables, joins and filters.
+- **Checks**: the checks run before the query.
+
+See [How Ask answered](how-it-answered.md) for the full trace.
+
+## Keep the answer
+
+In the answer's panel:
+
+- **Save as block** saves the query as a draft block. See
+  [Save and certify](../blocks/certify.md).
+- **Add to app** adds the result to an App.
+
+## Narrow the question to one domain
+
+Click **Scope: All domains** above the question box. Pick a **Domain**, and
+optionally a **Subject area** and a **Purpose**, then click **Apply**. Ask then
+searches only that domain's models, terms and skills.
+
+## Choose how hard Ask thinks
+
+Click **Answer settings** (the sliders icon under the question box):
+
+- **Thinking**: **Auto** (default), **Low**, **Medium** or **High**. **High**
+  cross-checks the number, so it is slower.
+- **Research mode**: for "why" questions that need several queries.
+- **Model**: shows the AI provider in use. Change it in
+  **Settings → AI provider**.
+
+## Conversations
+
+- Each conversation is kept, so you can continue it later. They are listed
+  under **Recent**; pin the ones you use often to **Favourites**.
+- **New chat** starts a fresh conversation.
+- Conversations are private to your machine and are not committed to git.
+
+## Ask from the terminal
+
+```bash
+zlens agent ask "Who are the top customers by lifetime spend?"
+```
+
+It prints the trust label (`✓ Certified`, `! AI-generated · review required`
+or `✕ Blocked`), the answer, and the thread id. Continue the conversation
+with `--thread <id>`. List conversations with `zlens agent threads`.
+
+Your AI agent (Claude Code, Codex, Cursor) can use the same Ask through MCP.
+See [Connect your AI agent](../agents/index.md).

@@ -7,6 +7,16 @@ on:
       - "docs/**"
       - "mkdocs.yml"
       - "requirements-docs.txt"
+      - "scripts/mkdocs/**"
+      - ".github/workflows/docs.yml"
+  # Pull requests build the site with --strict (no deploy), so a broken page
+  # or link fails the PR instead of the publish.
+  pull_request:
+    paths:
+      - "docs/**"
+      - "mkdocs.yml"
+      - "requirements-docs.txt"
+      - "scripts/mkdocs/**"
       - ".github/workflows/docs.yml"
   workflow_dispatch:
 
@@ -31,11 +41,13 @@ jobs:
           python-version: "3.12"
       - run: pip install -r requirements-docs.txt
       - run: mkdocs build --strict --site-dir _site
-      - uses: actions/upload-pages-artifact@v3
+      - if: github.event_name != 'pull_request'
+        uses: actions/upload-pages-artifact@v3
         with:
           path: _site
 
   deploy:
+    if: github.event_name != 'pull_request'
     needs: build
     runs-on: ubuntu-latest
     environment:

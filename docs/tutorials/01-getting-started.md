@@ -1,5 +1,9 @@
 # 01 — Getting started
 
+!!! warning "Archived page"
+    This page was written for an earlier version of ZLens and may not match the
+    current product. See [About the archive](../archive.md) for the current page.
+
 **Who this is for:** anyone adding ZLens to a dbt project for the first time.
 
 **What you'll do:** add a ZLens workspace to a dbt repo, sync the dbt DAG,
@@ -63,7 +67,7 @@ edit `dql.config.json`:
 
 (Use your warehouse driver instead. Databricks is built in; DuckDB/local files
 and Snowflake use project-local drivers. See
-[connect-warehouse](../guides/connect-warehouse.md).)
+[connect-warehouse](../get-started/connect-database.md).)
 
 Install only the driver your project uses:
 

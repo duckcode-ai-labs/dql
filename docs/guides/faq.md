@@ -4,7 +4,7 @@
 
 An open-source analytics language, CLI, and notebook. Every analytics answer
 — SQL, chart config, owner, tests, parameters — lives in a single `.dql`
-file in git. See [Concepts](../02-concepts.md).
+file in git. See [Concepts](../get-started/concepts.md).
 
 ## Do I need a cloud warehouse to try it?
 
@@ -24,7 +24,7 @@ No. ZLens works standalone. But if you already use dbt, `create-zlens-app`
 auto-detects a sibling dbt project. Run `dbt build`, then `zlens compile .`,
 `zlens sync dbt .`, and `zlens agent reindex` to refresh manifest metadata,
 semantic metrics, lineage, and the agent index. See
-[Import a dbt project](./import-dbt.md).
+[Add ZLens to your dbt project](../get-started/your-dbt-project.md).
 
 ## How is this different from a Jupyter notebook?
 
@@ -40,7 +40,7 @@ semantic metrics, lineage, and the agent index. See
 
 Those are BI tools — queries live in a database or cloud service. ZLens keeps
 every artifact in git. You get code review, diff, branching, and blame on
-your analytics. See [Migrate from Metabase / Looker / Hex](./migrate.md).
+your analytics. See [Migrate from other tools](./migrate.md).
 
 ## What's the difference between `custom` and `semantic` blocks?
 
@@ -60,9 +60,10 @@ Yes. The useful entry points:
 
 ## Does certification hit a real database?
 
-Yes. `zlens certify <file.dql> --connection <driver>` runs block assertions
-against the configured connection. In generated OSS projects, prefer
-`zlens validate` for structural checks and `zlens certify` for the local trust gate.
+Yes. **Certify** in Block Studio runs the block and its tests on your
+connection before it marks the block certified. From the terminal,
+`zlens certify <file.dql>` runs the same rules and writes nothing. See
+[Save and certify](../blocks/certify.md).
 
 ## What's **not** in the open-source repo?
 

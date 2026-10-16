@@ -71,7 +71,7 @@ root.
 ### Optional connector package errors
 
 DuckDB and Snowflake drivers are installed project-locally when needed. If the
-connection panel says a driver package is missing, install it from the panel or
+**Settings → Database** says a driver package is missing, click **Install connector** or
 run the printed project-local install command. If a native package fails to
 build on a fresh OS install, check Node `20`, `22`, or `24` LTS and local build tools.
 
