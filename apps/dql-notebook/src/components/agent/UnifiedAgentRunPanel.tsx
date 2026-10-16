@@ -73,6 +73,7 @@ import {
 import { themes, type Theme, type ThemeMode } from '../../themes/notebook-theme';
 import { controlStyle } from '../../themes/control-tokens';
 import { AskComposerOptions } from './AskComposerOptions';
+import { answerSourceOf, answerSourceOfPayload, answerTrustBadge, answerTrustHeading } from './answer-trust';
 import { StructuredAnswerText } from './AgentAnswerCard';
 import { AppBuildProposalPanel, defaultProposalSelection, type AppBuildBriefEdits } from '../apps/AppBuildProposalPanel';
 import { ResultView } from '../output/ResultView';
@@ -2730,7 +2731,11 @@ export function askArtifactMeta(artifact: AgentRunArtifact, payload: Record<stri
           ? 'review required'
           : isAppViewPayload(payload)
             ? 'from this App · needs review'
-            : 'AI-generated';
+            : answerSourceOfPayload(payload, artifact.trustState) === 'block_as_evidence'
+              ? 'certified block · needs review'
+              : answerSourceOfPayload(payload, artifact.trustState) === 'governed_definitions'
+                ? 'governed definitions · needs review'
+                : 'AI-generated';
   parts.push(provenance);
   return parts.join(' · ');
 }
@@ -3132,16 +3137,10 @@ function AskRunCard(props: AskRunCardProps) {
     ? (askFailureOrigin(run) === 'no_data' ? 'No matching data' : 'Couldn’t run this query')
     : needsClarification
       ? 'Needs clarification'
-      : certified
-        ? 'Certified answer'
-        : readFromAppView(run)
-          ? (run.trustState === 'governed' ? 'Governed answer from this App' : 'Answer from this App · needs review')
-        : run.artifacts.some((artifact) => artifact.kind === 'research_run' && investigationReportOf(payloadOf(artifact)))
-          ? 'Research report'
-          // A governed answer comes from approved semantic definitions, not AI-written SQL.
-          : run.trustState === 'governed' || run.trustState === 'grounded'
-            ? 'Governed answer'
-            : 'AI-generated answer';
+      : !certified && !readFromAppView(run) && run.artifacts.some((artifact) => artifact.kind === 'research_run' && investigationReportOf(payloadOf(artifact)))
+        ? 'Research report'
+        // One trust decision: the heading, the badge and the card read the same trust and source.
+        : answerTrustHeading(run);
   // The card supplies its own headline, so the body wants the most SPECIFIC text
   // available: the producer's own message beats the canned per-code headline,
   // which is the same sentence for everything unclassified.
@@ -5690,6 +5689,7 @@ export function trustExplainer(run: AgentRun): string | null {
   }
   if (run.trustState === 'certified') return 'Answered from a certified block.';
   if (run.route === 'dql_block_draft') return 'Prepared an ownerless review draft. Add it to Block Studio when you are ready to save it.';
+  if (run.trustState === 'governed' && answerSourceOf(run) === 'block_as_evidence') return 'Served from a certified block as published; the block is not certified for this exact question.';
   if (run.trustState === 'governed') return 'Built from semantic metrics and dimensions.';
   if (run.trustState === 'grounded') return 'Ran cleanly against your data. Save it as a block when it is reusable.';
   if (isExploratoryDbtRun(run)) {
@@ -5714,6 +5714,8 @@ export function trustExplainer(run: AgentRun): string | null {
   // read as Ask AI: a modeling/skill draft is saved to its YAML after review.
   if (run.route === 'modeling_draft') return 'AI-drafted modeling proposal. Review the exact source diff, then save it as a draft — nothing is written or joinable yet.';
   if (run.route === 'skill_draft') return 'AI-drafted Skill proposal. Review it, then save it as a draft — it will not guide any agent until you activate it.';
+  if (run.trustState === 'review_required' && answerSourceOf(run) === 'block_as_evidence') return 'Computed by a certified block that is not certified for this question, and the reading does not cover all of it: review it before relying on it.';
+  if (run.trustState === 'review_required' && answerSourceOf(run) === 'governed_definitions') return 'Computed from governed definitions, but the reading does not cover all of the question: review it before relying on it.';
   if (run.trustState === 'review_required') return 'AI-generated answer. Save it as a block when you want to keep it.';
   if (run.trustState === 'blocked') return null;
   return null;
@@ -5727,14 +5729,14 @@ function isExploratoryDbtRun(run: AgentRun): boolean {
   });
 }
 
-function simpleRunTitle(run: AgentRun): string {
+export function simpleRunTitle(run: AgentRun): string {
   if (run.status === 'cancelled' || run.stopReason === 'cancelled' || run.route === 'cancelled') return 'Stopped by user';
-  if (run.trustState === 'certified') return 'Certified answer';
-  if (readFromAppView(run)) return 'Answer from this App';
+  if (run.trustState === 'certified' || readFromAppView(run)) return answerTrustHeading(run);
   if (run.route === 'dql_block_draft') return 'Draft block';
   if (isExploratoryDbtRun(run)) return 'Exploratory DBT-grounded answer';
-  if (run.route === 'semantic_answer') return 'Semantic answer';
-  if (run.route === 'generated_answer') return 'AI-generated answer';
+  // The route is not the source: a certified block served as evidence runs on
+  // the generated_answer route without any SQL the AI wrote.
+  if (run.route === 'semantic_answer' || run.route === 'generated_answer' || run.route === 'certified_answer') return answerTrustHeading(run);
   return ROUTE_LABEL[run.route];
 }
 
@@ -6455,9 +6457,7 @@ function TrustBadge({ run, t }: { run: AgentRun; t: Theme }) {
         ? 'Needs input'
       : run.trustState === 'blocked'
         ? 'Refused'
-        : readFromAppView(run) && run.trustState === 'review_required'
-          ? 'Needs review'
-          : 'AI-generated';
+        : answerTrustBadge(run);
   return (
     <span style={{ border: `1px solid ${color}55`, color, background: `${color}12`, borderRadius: 999, padding: '3px 7px', fontSize: 10, fontWeight: 850 }}>
       {label}

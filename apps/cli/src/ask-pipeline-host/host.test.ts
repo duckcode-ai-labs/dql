@@ -1,3 +1,4 @@
+import { answeredArtifactTitle } from './host.js';
 import { describe, expect, it, vi } from 'vitest';
 import type { QueryExecutor } from '@zlens/connectors';
 import type { AgentMessage, AgentProvider, AgentRunRequest } from '@zlens/agent';
@@ -127,6 +128,39 @@ describe('a ref outside the envelope is explained as out of scope, never as none
     const governed = toExecutorResult('run:governed', outcome([]), Date.now());
     expect(governed).toMatchObject({ trustState: 'governed', stopReason: 'governed_semantic_answer' });
     expect(governed.artifacts![0]!.payload).toMatchObject({ trustState: 'governed', certification: 'governed', reviewStatus: 'governed' });
+  });
+
+  // Launch blocker: an App Ask ("What is beverage revenue by product?" on the
+  // jaffle Growth Review App) served the certified beverage block as evidence.
+  // The run said governed, the card said "Certified block answer" and the
+  // heading said "AI-generated answer".
+  it('a certified block served as evidence is titled by the same trust decision as the run, never "certified" unless the run is', () => {
+    const intent = { version: 1, kind: 'analytics', reading: 'Beverage revenue by product.', measures: [{ ref: 'metric:commerce.revenue' }], groupBy: [], display: [], filters: [], expectedShape: 'table', unresolved: [], provenance: {} } as unknown as AnalyticalIntentV1;
+    const outcome = (uncovered: string[]) => ({
+      kind: 'answered', intent, text: 'Beverage revenue by product.',
+      result: { columns: ['product_name', 'beverage_revenue'], rows: [{ product_name: 'vanilla ice', beverage_revenue: 84474 }], rowCount: 1, executionTimeMs: 1 },
+      candidate: { tier: 'certified', trust: 'governed', sql: 'SELECT 1', sourceRef: 'block:commerce.beverage_revenue_by_product', proof: [] },
+      receipt: { version: 1, vocabularyFingerprint: 'test', dispatches: [], candidates: [], refusals: [], tiers: [], timings: {}, uncovered, coverage: uncovered.map((word) => ({ word, state: 'unsatisfied' })) },
+    }) as unknown as Parameters<typeof toExecutorResult>[1];
+    const governed = toExecutorResult('run:evidence', outcome([]), Date.now());
+    const governedCard = governed.artifacts![0]!;
+    expect(governed.trustState).toBe('governed');
+    expect(governedCard).toMatchObject({ title: 'Governed answer from a certified block', trustState: 'governed' });
+    expect(governedCard.payload).toMatchObject({ route: { tier: 'certified_block' }, sourceTier: 'certified_artifact', certification: 'governed' });
+    const doubted = toExecutorResult('run:evidence-doubt', outcome(['beverage']), Date.now());
+    const doubtedCard = doubted.artifacts![0]!;
+    expect(doubted.trustState).toBe('review_required');
+    expect(doubtedCard).toMatchObject({ title: 'Answer to review, from a certified block', trustState: 'review_required' });
+    for (const card of [governedCard, doubtedCard]) expect(card.title).not.toMatch(/^Certified|AI-/);
+  });
+
+  it('every answer title follows the trust decision', () => {
+    expect(answeredArtifactTitle('certified', 'certified_block')).toBe('Certified answer');
+    expect(answeredArtifactTitle('review_required', 'ai_sql')).toBe('AI-drafted answer');
+    expect(answeredArtifactTitle('governed', 'governed_definitions')).toBe('Semantic answer');
+    expect(answeredArtifactTitle('review_required', 'governed_definitions')).toBe('Answer to review, from governed definitions');
+    expect(answeredArtifactTitle('governed', 'block_as_evidence')).toBe('Governed answer from a certified block');
+    expect(answeredArtifactTitle('review_required', 'block_as_evidence')).toBe('Answer to review, from a certified block');
   });
 });
 
