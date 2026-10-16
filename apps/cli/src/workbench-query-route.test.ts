@@ -6,6 +6,7 @@ import type { Server } from 'node:http';
 import type { QueryExecutor } from '@zlens/connectors';
 import { startLocalServer } from './local-runtime.js';
 import { WorkbenchRoutedQueryExecutor, isDuckDBFileConnection } from './workbench-query-route.js';
+import { checkLocalQueryRuntime } from './commands/doctor.js';
 import type { RunningNotebook } from './schedule/notebook-runtime.js';
 
 // Launch blocker: with `zlens notebook` running, `zlens certify`,
@@ -71,6 +72,16 @@ describe('CLI queries on a DuckDB file the workbench holds', () => {
     expect(find).not.toHaveBeenCalled();
     expect(await executor.routesTo({ driver: 'duckdb', filepath: '/project/w.duckdb' })).toBe(false);
     expect(find).toHaveBeenCalledTimes(1);
+  });
+
+  // The launch gate runs `zlens doctor` with the workbench up: its query-runtime
+  // check failed on the lock. It now asks the workbench and passes.
+  it('zlens doctor checks the query runtime through a running workbench and says where it ran', async () => {
+    const { root, notebook, executePositional } = await workbench();
+    const check = await checkLocalQueryRuntime(root, { driver: 'duckdb', filepath: 'warehouse.duckdb' }, { find: async () => notebook });
+    expect(check).toMatchObject({ name: 'Local query runtime', ok: true });
+    expect(check.detail).toBe(`workbench running on zlens notebook (pid 4242) at ${notebook.url}: driver=duckdb answered through it (it holds the DuckDB file)`);
+    expect(executePositional).toHaveBeenCalledWith('SELECT 1 AS ok', [], expect.objectContaining({ driver: 'duckdb', filepath: join(root, 'warehouse.duckdb') }), {});
   });
 
   it('says plainly what to do when the workbench holding the file is an older ZLens', async () => {
