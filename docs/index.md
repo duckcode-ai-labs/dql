@@ -5,7 +5,7 @@ hide:
 
 # ZLens
 
-**Governed analytics on your warehouse — with or without dbt.**
+**Certified answers on your warehouse.**
 
 ZLens is an open-source analytics workbench. It works on top of your dbt
 project, or straight on your database's own tables. You build
@@ -13,6 +13,8 @@ project, or straight on your database's own tables. You build
 questions in plain English. Every answer and every tile says how far to trust
 it: **Certified**, **Governed**, **Needs review**, or a refusal with the
 reason.
+
+Using dbt? ZLens reads your models, tests and lineage. Not using dbt? Start straight from your database.
 
 Everything is a file in your project, so it is reviewed in git like code. ZLens runs on your machine; no hosted account is needed.
 

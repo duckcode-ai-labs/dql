@@ -8,7 +8,7 @@
 <h3 align="center">Certified, or it says so.</h3>
 
 <p align="center">
-  Governed analytics on your warehouse — with or without dbt.<br>
+  Certified answers on your warehouse.<br>
   Every answer says what it is built on:<br>
   a certified block, your semantic metrics, or SQL that AI wrote and someone still needs to review.
 </p>
@@ -229,12 +229,13 @@ takes the trust of the weakest tile it read.
 [Read an App](https://duckcode-ai-labs.github.io/zlens/apps/) ·
 [Ask about an App](https://duckcode-ai-labs.github.io/zlens/apps/ask-about-an-app/)
 
-### Lineage, from dbt to the App
+### Lineage, from your tables to the App
 
-Trace any block, App or notebook end to end: dbt sources and models, business
-terms, the block, its chart, the dashboard page and the App. Lineage is built
-from your dbt manifest and ZLens files, in the workbench or with
-`zlens lineage`.
+Trace any block, App or notebook end to end: your warehouse tables (and, if you
+use dbt, the sources and models behind them), business terms, the block, its
+chart, the dashboard page and the App. Lineage is built from your synced
+warehouse catalog or dbt manifest plus your ZLens files, in the workbench or
+with `zlens lineage`.
 
 <p align="center">
   <img src="docs/assets/readme/lineage.png" alt="End-to-end lineage of the monthly_revenue block: four dbt sources, staging models, order_items and orders, the Revenue and Order business terms, the block, its chart, the jaffle-growth overview dashboard and the Jaffle Growth Review App" width="100%">
