@@ -8,16 +8,17 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
-## v0.2.0 - Unreleased
+## v0.2.0 - 2026-10-16
 
 Certified answers on your warehouse. This release adds a database-only path,
 from install to a certified join, and fixes what testing 0.1.0 found in Ask,
-Apps and `zlens mcp test`.
+Apps, Modeling, lineage and the CLI.
 
 To upgrade, run `npm i -D @zlens/cli@^0.2.0` in each project, or
 `npm i -g @zlens/cli` for a global install. A project that declares
 `"@zlens/cli": "^0.1.0"` stays on 0.1.x, because a caret range below 1.0 does
-not cross minor versions. No project files need to change.
+not cross minor versions. No project files need to change, unless a model
+or join declares a `status:` ZLens does not know (see Modeling).
 
 ### New: start from your database, no dbt needed
 
@@ -49,8 +50,36 @@ not cross minor versions. No project files need to change.
   the variable, instead of testing the placeholder text (DuckDB used to
   create a file named after it).
 
+### Modeling
+
+- **Certifying a drafted join moves it.** Certifying a join that discovery
+  drafted used to save the certified copy in the area file and leave the
+  draft behind, so `zlens model validate` failed with a duplicate
+  relationship. The same reviewed change now removes the draft, keeps its
+  description, and the review shows both files. Editing an entity into an
+  area works the same way.
+- **Discovery picks the right grain.** A table's own unique `<table>_id` is
+  its grain before any name column; when it repeats, `<table>_uuid`, `uuid`
+  and `<table>_key` are checked. On the Jaffle Shop warehouse, `products` and
+  `supplies` now get `product_id` and `supply_uuid`.
+- **A join needs data behind it.** A many-to-one or one-to-one join fails its
+  check when more than 5% of keyed rows find no match (`max_unmatched_share`
+  changes the limit per relationship). `zlens model discover --validate`
+  holds back a join that only a column name suggests when the data does not
+  back it.
+- New commands: `zlens model validate-relationship <id>|--all [--certify]
+  [--dry-run]` checks joins on the warehouse, and
+  `zlens model reject-discovery <id>` turns a drafted join down.
+- An unknown `status:` on a model or join (for example `approved`) is now an
+  error, not a silent draft.
+
 ### Ask
 
+- **Answer labels agree.** An answer's heading, badge, note and result card
+  now come from one trust decision. On an App, *What is beverage revenue by
+  product?* was headed **AI-generated answer**, noted "Built from semantic
+  metrics" and carded **Certified block answer**; it now reads **Governed**
+  throughout, and only SQL the AI wrote is called AI-generated.
 - **Drafted SQL joins names, not keys.** "What is the average order value at
   each store?" used to answer with store UUIDs. Ask now adds the table that
   holds the name, with the join spelled out, and sends back once a draft that
@@ -71,6 +100,27 @@ not cross minor versions. No project files need to change.
 - An entity named like a built-in JavaScript property (for example
   `constructor`, from a Formula 1 `constructors` table) no longer blocks every
   question on the project.
+- **Optional: show the SQL drafter what the columns hold** (database-only
+  projects). With `"agent": { "valueProfile": { "mode": "sampled" } }` in
+  `dql.config.json`, `zlens sync warehouse` also reads the three most frequent
+  values of each text column and the range of each number, and Ask's SQL
+  drafter sees them. Off by default. These values reach your AI provider.
+  Contact details, credentials, personal names and pay are never read, and
+  values that look like emails, phone numbers, URLs or keys are dropped.
+  Set `"mode": "off"` to stop; the next sync deletes the file. See
+  [No dbt? Start from your database](docs/get-started/no-dbt.md#optional-show-the-drafter-what-the-columns-hold).
+- **Optional: a second look at AI-drafted results.** With
+  `"agent": { "resultReview": { "mode": "on" } }` in `dql.config.json`, or
+  `ZLENS_ASK_RESULT_REVIEW=1`, every AI-drafted answer gets one more AI call
+  that sees the question, the SQL and the result's shape (row count, distinct
+  and empty values per column, never a value) and can ask for one revision.
+  Off by default: it adds a few seconds per drafted answer.
+  `ZLENS_ASK_RESULT_REVIEW=0` forces it off. See
+  [Needs review](docs/ask/needs-review.md).
+- Semantic layer: ratio metrics run in the native engine, and a metric is
+  never offered a dimension it can only reach one-to-many (which would
+  double-count). When a dimension is out of reach, the message names the join
+  that blocks it.
 - Every Ask on the Jaffle Shop sample failed with
   `(sql ?? '').trim is not a function` when MetricFlow was not installed (a
   dbt `count` measure with `expr: 1`). Fixed.
@@ -81,8 +131,30 @@ not cross minor versions. No project files need to change.
   it, shows a chip naming the tiles it narrowed (a tile it cannot reach says
   "Not filtered by …"), and reaches the page's story, **Ask about this App**
   and exports. Before, no value reached the run.
+- The page story picks its clearest signals by value (the largest, ties
+  settled by name), not by row order; a tile ordered on purpose, such as a
+  bottom-N, is still read in its own order.
 - The line under the App's Ask box is readable in every theme (it was below
   WCAG AA contrast).
+
+### Lineage
+
+- The status bar says what lineage was built from: **the dbt manifest**,
+  **the synced warehouse catalog**, or both. A project without dbt was told
+  its lineage was "Compiled from the dbt manifest".
+- `FROM "main"."orders"` is read as the table `main.orders`, not the schema
+  `main`.
+
+### CLI while the workbench runs
+
+- With `zlens notebook` running on a DuckDB project, `zlens certify`,
+  `zlens sync warehouse`, `zlens model discover --validate`,
+  `zlens model validate-relationship` and `zlens doctor` run their queries
+  through the workbench instead of failing with DuckDB's "Could not set lock
+  on file". They say so in one line. Only read queries go through it.
+- When another program holds the DuckDB file, the error now says which
+  process, and what to do: stop the workbench with Ctrl+C, or close dbt or
+  the SQL client. See [Troubleshooting](docs/guides/troubleshooting.md).
 
 ### AI agents (MCP)
 
@@ -94,8 +166,10 @@ not cross minor versions. No project files need to change.
   `zlens notebook` (or `npm run notebook`); they named `zlens serve`, which
   serves a built bundle and does not start in a project folder.
 
-### DuckDB
+### DuckDB and other databases
 
+- SQLite: Ask reads a table's columns (it asked for `information_schema`,
+  which SQLite does not have).
 - `ZLENS_DUCKDB_AUTOINSTALL=off` (`DQL_DUCKDB_AUTOINSTALL` is still read) now
   stops DuckDB from downloading any extension, on every connection ZLens
   opens. An `INSTALL` that would download, or a setting that turns automatic
@@ -118,6 +192,15 @@ not cross minor versions. No project files need to change.
   `create-zlens-app` inside it.
 - New page: [No dbt? Start from your database](https://duckcode-ai-labs.github.io/zlens/get-started/no-dbt/).
 - CI checks that every `zlens` command and flag in the docs exists.
+
+### Releasing
+
+- The release workflow waits for npm to list the published packages before
+  its install check. The 0.1.0 run published everything, then failed that
+  check because npm was still processing the packages.
+- `scripts/launch-gate.mjs` installs the packed release on a clean folder and
+  follows the README quickstart for both samples, in a browser, before a tag
+  is pushed.
 
 ## v0.1.0 - 2026-10-13
 
