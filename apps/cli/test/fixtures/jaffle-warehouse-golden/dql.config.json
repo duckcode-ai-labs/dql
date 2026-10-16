@@ -1,0 +1,14 @@
+{
+  "project": "jaffle-warehouse-golden",
+  "manifestVersion": 3,
+  "layout": { "version": 2, "mode": "oss-dbt-workspace", "skillsPath": "skills" },
+  "apps": { "datasets": true },
+  "identity": { "owner": "analytics@jaffle.shop" },
+  "modeling": { "mode": "warehouse-first" },
+  "semanticLayer": { "provider": "dql" },
+  "defaultConnectionName": "default",
+  "connections": { "default": { "driver": "sqlite", "filepath": ":memory:" } },
+  "metadataScopes": {
+    "default": { "mode": "selected_scopes", "scopes": [{ "catalogOrDatabase": "jaffle_shop", "schemas": ["dev"] }] }
+  }
+}

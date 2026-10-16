@@ -1,0 +1,206 @@
+domain: dev
+area:
+  id: core
+  name: Core models
+  description: Subject area created automatically when modeling started. Rename or split it at any time.
+relationships:
+  - id: order_item_to_order
+    from: dev::entity::order_item
+    to: dev::entity::order
+    keys:
+      - from: order_id
+        to: order_id
+    cardinality: many_to_one
+    fanout: safe
+    status: certified
+    owner: analytics@jaffle.shop
+    owner_domain: dev
+    description: 'Every order line belongs to exactly one order (checked on the warehouse: no unmatched or null keys).'
+    optionality:
+      from: unknown
+      to: unknown
+    join_types:
+      - left
+    certifiedAgainst:
+      from:
+        grain: order_item_id
+        keys:
+          - order_item_id
+      to:
+        grain: order_id
+        keys:
+          - order_id
+    validation:
+      status: passed
+      checked_at: '2026-10-16T02:36:26.743Z'
+      query_fingerprint: b53cd6437ce9a2d95524d9d105a1f21e5d86c6ab5e2c756a9c4eb00e90b60891
+      proof_fingerprint: 5a543d3c3a100741e01ac10a09ae8898e1e6a75edfc47356dc6fa93a693757da
+      from_rows: 2926
+      to_rows: 2088
+      joined_rows: 2926
+      from_null_keys: 0
+      to_null_keys: 0
+      unmatched_from: 0
+      max_from_per_key: 10
+      max_to_per_key: 1
+      message: Warehouse evidence matches the declared cardinality and safe fanout policy.
+  - id: order_to_customer
+    from: dev::entity::order
+    to: dev::entity::customer
+    keys:
+      - from: customer_id
+        to: customer_id
+    cardinality: many_to_one
+    fanout: safe
+    status: certified
+    owner: analytics@jaffle.shop
+    owner_domain: dev
+    description: 'Every order is placed by exactly one customer (checked on the warehouse: no unmatched or null keys).'
+    optionality:
+      from: unknown
+      to: unknown
+    join_types:
+      - left
+    certifiedAgainst:
+      from:
+        grain: order_id
+        keys:
+          - order_id
+      to:
+        grain: customer_id
+        keys:
+          - customer_id
+    validation:
+      status: passed
+      checked_at: '2026-10-16T02:36:26.747Z'
+      query_fingerprint: 409f91b29cbf92e0cade8df7bca7faed8fc87f30a40714365c2cf4fbc75b0e7b
+      proof_fingerprint: b400cc0363414186d4544c46cbee11ffe605f6fd4782a2be3c250e8beeef7153
+      from_rows: 2088
+      to_rows: 14
+      joined_rows: 2088
+      from_null_keys: 0
+      to_null_keys: 0
+      unmatched_from: 0
+      max_from_per_key: 231
+      max_to_per_key: 1
+      message: Warehouse evidence matches the declared cardinality and safe fanout policy.
+  - id: order_to_location
+    from: dev::entity::order
+    to: dev::entity::location
+    keys:
+      - from: location_id
+        to: location_id
+    cardinality: many_to_one
+    fanout: safe
+    status: certified
+    owner: analytics@jaffle.shop
+    owner_domain: dev
+    description: 'Every order is placed at exactly one store location (checked on the warehouse: no unmatched or null keys).'
+    optionality:
+      from: unknown
+      to: unknown
+    join_types:
+      - left
+    certifiedAgainst:
+      from:
+        grain: order_id
+        keys:
+          - order_id
+      to:
+        grain: location_id
+        keys:
+          - location_id
+    validation:
+      status: passed
+      checked_at: '2026-10-16T02:36:26.749Z'
+      query_fingerprint: bb2bacc261c2b6dfffd0228c070b28ba4c9f7e25349d9e329292373f5bfad7a6
+      proof_fingerprint: 89fb83d2c874395632f72ecb0a936b6b910a59c1c7a9a30606f406968af1feae
+      from_rows: 2088
+      to_rows: 6
+      joined_rows: 2088
+      from_null_keys: 0
+      to_null_keys: 0
+      unmatched_from: 0
+      max_from_per_key: 2088
+      max_to_per_key: 1
+      message: Warehouse evidence matches the declared cardinality and safe fanout policy.
+  - id: order_item_to_product
+    from: dev::entity::order_item
+    to: dev::entity::product
+    keys:
+      - from: product_id
+        to: product_id
+    cardinality: many_to_one
+    fanout: safe
+    status: certified
+    owner: analytics@jaffle.shop
+    owner_domain: dev
+    description: 'Every order line is for exactly one product (checked on the warehouse: no unmatched or null keys).'
+    optionality:
+      from: unknown
+      to: unknown
+    join_types:
+      - left
+    certifiedAgainst:
+      from:
+        grain: order_item_id
+        keys:
+          - order_item_id
+      to:
+        grain: product_id
+        keys:
+          - product_id
+    validation:
+      status: passed
+      checked_at: '2026-10-16T02:36:26.746Z'
+      query_fingerprint: b2901875ab253c126976ec2734a925524a2b309318b6da635c3d6dea2dfd4371
+      proof_fingerprint: 4cd1d284ac82562b3536b518735b73ec8e2b819276000ec40a8a7c55074f5d8b
+      from_rows: 2926
+      to_rows: 10
+      joined_rows: 2926
+      from_null_keys: 0
+      to_null_keys: 0
+      unmatched_from: 0
+      max_from_per_key: 537
+      max_to_per_key: 1
+      message: Warehouse evidence matches the declared cardinality and safe fanout policy.
+  - id: supply_to_product
+    from: dev::entity::supply
+    to: dev::entity::product
+    keys:
+      - from: product_id
+        to: product_id
+    cardinality: many_to_one
+    fanout: safe
+    status: certified
+    owner: analytics@jaffle.shop
+    owner_domain: dev
+    description: 'Every supply row is for exactly one product (checked on the warehouse: no unmatched or null keys).'
+    optionality:
+      from: unknown
+      to: unknown
+    join_types:
+      - left
+    certifiedAgainst:
+      from:
+        grain: supply_uuid
+        keys:
+          - supply_uuid
+      to:
+        grain: product_id
+        keys:
+          - product_id
+    validation:
+      status: passed
+      checked_at: '2026-10-16T02:36:26.751Z'
+      query_fingerprint: 26b62de108959eb4cb35c888dfb8eda9f2a1d19927b0a14d5b6aa16f23425e5b
+      proof_fingerprint: cd30111d8f770beb3d962eea160a09b2b6bcee170ea57f09072da4434b38489a
+      from_rows: 65
+      to_rows: 10
+      joined_rows: 65
+      from_null_keys: 0
+      to_null_keys: 0
+      unmatched_from: 0
+      max_from_per_key: 9
+      max_to_per_key: 1
+      message: Warehouse evidence matches the declared cardinality and safe fanout policy.
