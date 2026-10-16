@@ -40,7 +40,7 @@ function sentSize(chars: number | undefined): string {
   return chars >= 1_000 ? `${Math.round(chars / 1_000)}k characters sent` : `${chars} characters sent`;
 }
 
-const CALL_OUTCOME_WORDS: Record<NonNullable<RunAiCall['outcome']>, string> = { sql: 'Wrote SQL', declined: 'Declined', rejected: 'Rejected', error: 'Error' };
+const CALL_OUTCOME_WORDS: Record<NonNullable<RunAiCall['outcome']>, string> = { sql: 'Wrote SQL', declined: 'Declined', rejected: 'Rejected', error: 'Error', accepted: 'Answers it', revise: 'Asked for a revision' };
 
 /** AI calls with what each was for, how long it took, how much was sent and what came back. */
 export function AiCallList({ calls, t, openReplies = false }: { calls: RunAiCall[]; t: Theme; openReplies?: boolean }): JSX.Element {
@@ -50,7 +50,7 @@ export function AiCallList({ calls, t, openReplies = false }: { calls: RunAiCall
         <div key={`${call.label}-${index}`} style={{ border: '1px solid var(--border-subtle)', borderRadius: 7, padding: '6px 8px', background: 'var(--bg-1)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', fontSize: 11.5, color: t.textPrimary }}>
             <span style={{ fontWeight: 650 }}>{call.label}</span>
-            {call.outcome ? chip(CALL_OUTCOME_WORDS[call.outcome], call.outcome === 'sql' ? t.success : call.outcome === 'declined' ? t.textMuted : t.error, t) : null}
+            {call.outcome ? chip(CALL_OUTCOME_WORDS[call.outcome], call.outcome === 'sql' || call.outcome === 'accepted' ? t.success : call.outcome === 'declined' ? t.textMuted : call.outcome === 'revise' ? t.warning : t.error, t) : null}
             <span style={{ flex: 1 }} />
             <span style={{ fontSize: 10.5, color: t.textMuted, fontVariantNumeric: 'tabular-nums' }}>{[formatRunMs(call.ms), sentSize(call.promptChars)].filter(Boolean).join(' · ')}</span>
           </div>

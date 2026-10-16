@@ -37,6 +37,35 @@ When it passes, the block is **Certified**. Ask uses it from then on: the
 same question now gets a **Certified answer**. See
 [Save and certify](../blocks/certify.md).
 
+## Optional: a second look at the result
+
+AI-written SQL can run cleanly and still compute something else: one row per
+country where the question asked for one number, or a date column that came
+back empty because the text did not parse. With the result review on, Ask
+checks each AI-drafted result before it answers:
+
+1. One more AI call sees the question, the SQL and the result's **shape**:
+   how many rows, how many distinct and empty values each column has, and
+   whether rows repeat. It never sees a value from the result.
+2. If it names a concrete defect, Ask revises the SQL once, with that reason.
+   The revision is the answer only if it runs and returns rows; otherwise the
+   first answer stands.
+3. The run's details list the check as **Checked the result against the
+   question**, with **Answers it** or **Asked for a revision**.
+
+It applies to every AI-drafted answer, including one drafted straight from
+the question; certified and governed answers are not checked. It costs about
+one AI call per AI-drafted answer (median 3.6 seconds on Claude), so it is
+**off by default**. Turn it on in `dql.config.json`; Ask reads it at every
+question:
+
+```json
+{ "agent": { "resultReview": { "mode": "on" } } }
+```
+
+`ZLENS_ASK_RESULT_REVIEW=1` turns it on and `=0` off for one server or
+command, whatever the project says.
+
 ## When no draft is saved
 
 ZLens saves a review draft only when the answer actually ran and produced

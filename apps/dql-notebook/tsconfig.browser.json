@@ -9,5 +9,5 @@
     "noEmit": true,
     "strict": true
   },
-  "include": ["browser", "playwright.config.ts", "playwright.clips.config.ts"]
+  "include": ["browser", "playwright.config.ts", "playwright.clips.config.ts", "playwright.gate.config.ts"]
 }

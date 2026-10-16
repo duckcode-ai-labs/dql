@@ -194,6 +194,53 @@ describe('warehouse-first modeling in the local runtime', () => {
     await executor.disconnect();
   }, 60_000);
 
+  it('a sync reads column values only when the project opts in to a value profile, and removes them when it opts out', async () => {
+    const projectRoot = mkdtempSync(join(tmpdir(), 'dql-warehouse-first-profile-'));
+    roots.push(projectRoot);
+    const db = new Database(join(projectRoot, 'shop.sqlite'));
+    db.exec(`
+      CREATE TABLE customers (customer_id INTEGER PRIMARY KEY, name TEXT NOT NULL, email TEXT, status TEXT);
+      INSERT INTO customers VALUES (1, 'Ann', 'ann@example.com', 'active'), (2, 'Bo', 'bo@example.com', 'active'), (3, 'Cy', NULL, 'lapsed');
+    `);
+    db.close();
+    const config = (agent?: Record<string, unknown>) => writeFileSync(join(projectRoot, 'dql.config.json'), JSON.stringify({
+      project: 'shop', manifestVersion: 3, modeling: { mode: 'warehouse-first' },
+      connections: { default: { driver: 'sqlite', filepath: './shop.sqlite' } },
+      ...(agent ? { agent } : {}),
+    }));
+    config();
+    const port = await startLocalServer({ rootDir: projectRoot, projectRoot, executor: new QueryExecutor(), preferredPort: 0, captureServer: (created) => { server = created; } });
+    const sync = async () => {
+      const response = await fetch(`http://127.0.0.1:${port}/api/connections/default/metadata-scope`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode: 'selected_scopes', scopes: [{ catalogOrDatabase: 'main', schemas: ['main'] }] }),
+      });
+      return await response.json() as { warehouseCatalog?: { relations?: number; valueProfile?: unknown } };
+    };
+    const profilePath = join(projectRoot, '.dql', 'cache', 'value-profile.json');
+
+    // The default: metadata only, no value read.
+    const plain = await sync();
+    expect(plain.warehouseCatalog?.relations).toBe(1);
+    expect(plain.warehouseCatalog?.valueProfile).toBeUndefined();
+    expect(existsSync(profilePath)).toBe(false);
+
+    // Opted in: the values of non-sensitive columns, never the email.
+    config({ valueProfile: { mode: 'sampled' } });
+    const profiled = await sync();
+    expect(profiled.warehouseCatalog?.valueProfile).toMatchObject({ relations: 1, skippedSensitive: 2 });
+    const profile = JSON.parse(readFileSync(profilePath, 'utf-8'));
+    expect(profile.relations['main.customers'].status).toEqual({ examples: ['active', 'lapsed'] });
+    // Neither the email nor the customers' names.
+    expect(JSON.stringify(profile)).not.toContain('example.com');
+    expect(JSON.stringify(profile)).not.toContain('Ann');
+
+    // Opted out again: the next sync removes it.
+    config({ valueProfile: { mode: 'off' } });
+    await sync();
+    expect(existsSync(profilePath)).toBe(false);
+  });
+
   it('drafts the map from the warehouse for review, and adds only the drafts a person keeps', async () => {
     const projectRoot = mkdtempSync(join(tmpdir(), 'dql-warehouse-discover-runtime-'));
     roots.push(projectRoot);

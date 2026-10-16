@@ -204,6 +204,10 @@ Lives at the project root. Written by `zlens init` and `create-zlens-app`.
   },
   "governance": {
     "required_fields": ["domain", "owner", "description"]
+  },
+  "agent": {
+    "valueProfile": { "mode": "off" },
+    "resultReview": { "mode": "off" }
   }
 }
 ```
@@ -225,6 +229,20 @@ Fields:
 - **`dbt`** — `{ projectDir, manifestPath }` for in-place or sibling dbt projects. `zlens compile` and `zlens sync dbt` read from here
 - **`datalex`** — optional `{ manifestPath }` for validating `datalex_contract` references. ZLens works without DataLex; this only enables interop checks when a DataLex manifest exists
 - **`governance`** — required fields every block must declare to pass `zlens certify`
+- **`agent.valueProfile`** — `{ mode: "off" | "sampled", exclude: [patterns] }`,
+  off by default. `sampled`: each warehouse-first schema sync also reads a few
+  example values and the range of each column for Ask's SQL drafter; those
+  values reach your AI provider with the drafting prompt. Sensitive columns
+  and values are never read, and never under a hosted server. See
+  [value profile](../get-started/no-dbt.md#optional-show-the-drafter-what-the-columns-hold).
+- **`agent.resultReview`** — `{ mode: "off" | "on" }`, off by default. `on`:
+  before an AI-drafted answer is shown, one more AI call checks its result
+  against the question and may revise the SQL once. It sends the question,
+  the SQL and the result's shape (row count, distinct and empty values per
+  column, repeated rows), never a value from the result. Costs about one AI
+  call per AI-drafted answer (median 3.6 s on Claude). See
+  [a second look at the result](../ask/needs-review.md#optional-a-second-look-at-the-result).
+  Both settings are read at every question, so a change applies to the next one.
 
 ### Environment variables
 
@@ -232,6 +250,9 @@ Environment variables that configure ZLens use the `ZLENS_` prefix, for example
 `ZLENS_SERVER_TOKEN` and `ZLENS_ALLOWED_ORIGINS`. The older `DQL_` names (for
 example `DQL_SERVER_TOKEN`) are still read as a fallback when the `ZLENS_`
 variable is not set, so existing setups keep working.
+
+`ZLENS_ASK_RESULT_REVIEW=1` turns the result review on and `=0` turns it off,
+whatever `agent.resultReview` says.
 
 ## `dql-manifest.json` — build output
 

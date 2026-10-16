@@ -126,6 +126,7 @@ Warehouse sync and discovery flags (see
 | `zlens sync warehouse` | `--schemas a,b` | Schemas to read; saved as the connection's metadata scope. With no flags, the saved selection is synced again |
 | `zlens sync warehouse` | `--database <name>` | Database or catalog the schemas are in (default: the connection's own) |
 | `zlens sync warehouse` | `--connection <name>` | Connection to read (default: the project's default connection) |
+| `zlens sync warehouse` | `agent.valueProfile.mode: "sampled"` in `dql.config.json` | Also read a few example values and the range of each column for Ask's SQL drafter (off by default; the values reach your AI provider). See [value profile](../get-started/no-dbt.md#optional-show-the-drafter-what-the-columns-hold) |
 | `zlens model discover`, `apply-discovery` | `--validate` | Check each drafted join and candidate key on the warehouse (aggregate queries only) and propose the cardinality seen |
 | `zlens model discover`, `apply-discovery` | `--query-history` | Also count joins in recent warehouse queries (Snowflake, PostgreSQL, Databricks, BigQuery); only join pairs and counts are kept |
 | `zlens model discover`, `apply-discovery` | `--domain <id>` | From the warehouse: put every drafted entity into this domain (default: one domain per schema). From dbt: the discovered domain to apply |

@@ -234,6 +234,10 @@ async function runSyncWarehouse(rest: string[], flags: CLIFlags): Promise<void> 
       } else {
         console.log(`  ✓ Warehouse catalog: ${catalog.relations} relation(s) → ${relative(projectRoot, catalog.path)}`);
         for (const warning of catalog.warnings ?? []) console.log(`    ! ${warning}`);
+        const profile = catalog.valueProfile;
+        if (profile && 'error' in profile) console.log(`    ! Value profile not read: ${profile.error}`);
+        else if (profile && 'skipped' in profile) console.log(`    Value profile not read: ${profile.skipped}.`);
+        else if (profile) console.log(`  ✓ Value profile (agent.valueProfile): example values of ${profile.columns} column(s) in ${profile.relations} relation(s), ${profile.skippedSensitive} sensitive column(s) left out → .dql/cache/value-profile.json. These values reach your AI provider with drafting prompts.`);
         if (catalog.drift) {
           const drift = catalog.drift;
           console.log('  Changed since the last sync:');
