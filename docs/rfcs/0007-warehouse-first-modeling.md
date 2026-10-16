@@ -93,6 +93,49 @@ Where it differs from the sections below, this list is authoritative:
      YAML with a serializer and refuses to replace an existing metric when
      asked.
 
+10. **Review fixes (2026-09-23)**, from two authoring agents modeling the
+    Spider 2.0-Lite f1 and IPL SQLite databases:
+    - *A name is where to look, not evidence.* With `--validate`, a join only
+      a column name suggests (`same_name`, `named_for_table`, `shared_key`)
+      is proposed only when the data backs it. It is held back, with the
+      reason in the report's `withheld` list, when its validation fails; when
+      the rows that miss all hold one key value (a placeholder such as 0); or,
+      for a one-to-one join, when the joined rows disagree on the other
+      reference columns both tables carry (`race_id`, `driver_id`…), which
+      is what two tables that number their rows separately look like. Joins
+      from declared keys, view SQL and query history are proposed as before.
+    - *Reviewer decisions stick.* `apply-discovery` records the joins it
+      wrote in `.dql/modeling-discovery.json` (shared in git). A join that was
+      written and is no longer modeled was removed by a reviewer, and
+      `dql model reject-discovery <id> [--reason …]` rejects one outright;
+      discovery lists either under `dismissed` and does not propose it again.
+    - *Coverage is part of the verdict.* Validation fails a many-to-one or
+      one-to-one join when more than 5% of the "from" rows that have a key
+      find no "to" row (rows with a null key reference nothing and are not
+      counted). A smaller gap passes and is reported in the message. A
+      relationship whose gap is expected declares `max_unmatched_share`
+      (a share from 0 to 1). The compiler warns when older passed evidence
+      shows a gap above the threshold.
+    - *Scoped cardinality.* The statement also measures the most "to" rows
+      for one key the "from" side actually references. A join that is
+      unique for the keys it reaches, but not across the whole table (an f1
+      sprint result joining its race result on race + driver, where 1950s
+      races hold several results per driver), fails on the whole table with
+      a message saying so. The relationship can then declare
+      `validation_scope: referenced_keys` to be certified on that scope.
+      `max_unmatched_share` and `validation_scope` are part of the
+      validation proof when declared.
+    - *Validate from the CLI.* `dql model validate-relationship <id>|--all
+      [path] [--certify] [--dry-run] [--connection <name>]` runs the Modeling
+      page's Validate check on relationships as authored (any keys,
+      composite or role joins) and records the evidence in their YAML,
+      changing nothing else. `--certify` is the person's decision: each
+      relationship whose check passed becomes certified against its
+      entities' current grains.
+    - *Unknown status values.* A status DQL does not recognise (for example
+      `status: approved`) is an error from `dql model validate`, not a silent
+      draft. `reviewed` (and `review`) are accepted.
+
 Compatibility was checked the way *Backward compatibility* requires, after
 each phase:
 - every CLI fixture's compiled manifest and compile output are byte-identical

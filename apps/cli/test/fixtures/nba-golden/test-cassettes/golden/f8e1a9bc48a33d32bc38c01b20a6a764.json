@@ -1,0 +1,23 @@
+{
+  "key": "f8e1a9bc48a33d32bc38c01b20a6a764",
+  "operation": "generate",
+  "text": "{\"version\":1,\"kind\":\"analytics\",\"reading\":\"Total points scored (and games played) in calendar 2017 by the player named \\\"Totally Imaginary Person\\\", one row per player id matching that name.\",\"measures\":[{\"ref\":\"column:dev.player_game_stats.pts\",\"aggregation\":\"sum\",\"alias\":\"total_points\",\"scope\":[{\"ref\":\"column:dev.player_game_stats.played\",\"op\":\"eq\",\"values\":[1],\"source\":\"question\"}]},{\"ref\":\"column:dev.player_game_stats.game_id\",\"aggregation\":\"count_distinct\",\"alias\":\"games_played\",\"scope\":[{\"ref\":\"column:dev.player_game_stats.played\",\"op\":\"eq\",\"values\":[1],\"source\":\"question\"}]}],\"groupBy\":[{\"ref\":\"dimension:player_game_stats.player_id\",\"role\":\"key\"}],\"display\":[\"dimension:player_game_stats.player_name\"],\"filters\":[{\"ref\":\"dimension:player_game_stats.player_name\",\"op\":\"eq\",\"values\":[\"Totally Imaginary Person\"],\"source\":\"question\"}],\"time\":{\"ref\":\"dimension:player_game_stats.game_date\",\"window\":{\"start\":\"2017-01-01\",\"end\":\"2018-01-01\",\"expression\":\"in 2017\"}},\"expectedShape\":\"lookup\",\"unresolved\":[],\"provenance\":{\"column:dev.player_game_stats.pts\":\"q:scoring\",\"column:dev.player_game_stats.game_id\":\"q:scoring\",\"column:dev.player_game_stats.played\":\"q:scoring\",\"dimension:player_game_stats.player_id\":\"q:the player\",\"dimension:player_game_stats.player_name\":\"q:Totally Imaginary Person\",\"dimension:player_game_stats.game_date\":\"q:in 2017\"}}",
+  "providerName": "claude",
+  "recordedAt": "2026-10-16T18:04:48.262Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 2,
+    "messageRoles": [
+      "system",
+      "user"
+    ],
+    "preCanonicalHash": "f8e1a9bc48a33d32bc38c01b20a6a764d2d49705acb9ab8b474e10f3c9e4d7d5",
+    "postCanonicalHash": "f8e1a9bc48a33d32bc38c01b20a6a764d2d49705acb9ab8b474e10f3c9e4d7d5",
+    "appliedRuleClasses": []
+  }
+}

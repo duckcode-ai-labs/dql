@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { applyTableProfile, proposeTableDataset, renderTableDatasetBlock } from '../datasets/table-draft.js';
 import { buildManifest, collectInputFiles, resolveDataLexManifestPath } from './builder.js';
 
 describe('collectInputFiles', () => {
@@ -784,6 +785,39 @@ block "Notebook Revenue" {
     expect(feeds('Bound')).toEqual(['block:Bound Assists']);
     // The rebounders block feeds no notebook, so its impact names none.
     expect(manifest.lineage.edges.filter((edge) => edge.source === 'block:Top Rebounders' && edge.target.startsWith('dashboard:'))).toEqual([]);
+  });
+
+  it('records a quoted schema.table from "Start from a table" as the table, not the schema', () => {
+    const proposal = applyTableProfile(
+      proposeTableDataset({
+        table: 'order_lines',
+        relation: '"main"."order_lines"',
+        columns: [
+          { name: 'order_line_id', type: 'VARCHAR' },
+          { name: 'net_amount', type: 'DECIMAL(12,2)' },
+        ],
+      }),
+      { rows: 5, columns: { order_line_id: { distinct: 5, nonNull: 5 } } },
+      'order_lines',
+    );
+    mkdirSync(join(tmpDir, 'blocks'), { recursive: true });
+    writeFileSync(join(tmpDir, 'blocks', 'order_lines.dql'), renderTableDatasetBlock({
+      proposal,
+      blockName: 'Order lines',
+      domain: 'sales',
+      owner: 'ana@example.com',
+      columnSql: (name) => `"${name}"`,
+    }));
+
+    const manifest = buildManifest({ projectRoot: tmpDir, dqlVersion: 'test' });
+    const block = manifest.blocks['Order lines'];
+
+    expect(block.sql).toContain('FROM "main"."order_lines"');
+    expect(block.rawTableRefs).toEqual(['main.order_lines']);
+    expect(block.tableDependencies).toEqual(['main.order_lines']);
+    expect(Object.keys(manifest.sources)).toEqual(['main.order_lines']);
+    expect(manifest.lineage.nodes.map((node) => node.id)).toContain('table:main.order_lines');
+    expect(manifest.lineage.nodes.map((node) => node.id)).not.toContain('table:main');
   });
 
   it('recovers from legacy nested proposal metadata in draft blocks', () => {

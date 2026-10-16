@@ -1,0 +1,23 @@
+{
+  "key": "108ebecbca626061123edceb9b52d749",
+  "operation": "generate",
+  "text": "NO_SQL: No listed column holds ticket sales or revenue; the data contains only game statistics (points, rebounds, assists, shooting, results).",
+  "providerName": "claude",
+  "recordedAt": "2026-10-16T18:05:20.079Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 2,
+    "messageRoles": [
+      "system",
+      "user"
+    ],
+    "preCanonicalHash": "108ebecbca626061123edceb9b52d749faeff521bb079de216e34c14972222c6",
+    "postCanonicalHash": "108ebecbca626061123edceb9b52d749faeff521bb079de216e34c14972222c6",
+    "appliedRuleClasses": []
+  }
+}

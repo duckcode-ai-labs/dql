@@ -1,0 +1,23 @@
+{
+  "key": "b68325b8f97986f6a0f6187ee6336fbe",
+  "operation": "generate",
+  "text": "{\"version\":1,\"kind\":\"analytics\",\"reading\":\"Rank customers by total revenue (product revenue, excluding tax) and return the top 5.\",\"measures\":[{\"ref\":\"metric:order_item.revenue\"}],\"groupBy\":[{\"ref\":\"entity:customers.customer\",\"role\":\"key\"}],\"display\":[\"dimension:customers.customer_name\"],\"filters\":[],\"ordering\":{\"ref\":\"metric:order_item.revenue\",\"direction\":\"desc\"},\"limit\":5,\"expectedShape\":\"ranking\",\"population\":\"matching\",\"unresolved\":[],\"provenance\":{\"metric:order_item.revenue\":\"q:revenue\",\"entity:customers.customer\":\"q:customers\",\"dimension:customers.customer_name\":\"q:customers\"}}",
+  "providerName": "claude",
+  "recordedAt": "2026-10-16T18:03:38.844Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 2,
+    "messageRoles": [
+      "system",
+      "user"
+    ],
+    "preCanonicalHash": "b68325b8f97986f6a0f6187ee6336fbe2424ed9e9bb15bab9cd232f5224b20ff",
+    "postCanonicalHash": "b68325b8f97986f6a0f6187ee6336fbe2424ed9e9bb15bab9cd232f5224b20ff",
+    "appliedRuleClasses": []
+  }
+}

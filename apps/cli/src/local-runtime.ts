@@ -192,6 +192,7 @@ import {
   loadDomainPackageRegistry,
   loadDbtNodeAuthoringDetail,
   type ModelingAuthoringChange,
+  type ManifestModelRelationship,
   type DbtNodeAuthoringDetail,
   type DbtSourceAuthoringInput,
   type DbtMetricAuthoringInput,
@@ -712,6 +713,7 @@ import {
   resolveSemanticManifestPath,
   hasMetricFlowCli,
   setMetricFlowChildEnvironment,
+  projectHasDbtProject,
 } from "./metricflow.js";
 import {
   ManagedMetricFlowInstaller,
@@ -777,8 +779,11 @@ import {
   discoverWarehouseModel,
   observedJoinsFromQueries,
   queryHistorySql,
+  readDiscoveryLedger,
+  recordDiscoveryDecisions,
   validateWarehouseDiscovery,
   warehouseDiscoveryChanges,
+  type DiscoveryDecision,
   type WarehouseDiscoveryReport,
 } from './warehouse-model-discovery.js';
 import {
@@ -30421,9 +30426,20 @@ async function validateModelingRelationship(
 ): Promise<ManifestRelationshipValidationEvidence> {
   const { fromRelation, toRelation } = relationshipRelations(manifest, relationship.from, relationship.to);
   if (!relationship.keys.length) throw new Error('At least one join key pair is required.');
+  // The relationship's declared unmatched-row threshold and scope are part of
+  // its proof; a caller that does not edit them (the builder) keeps the
+  // authored ones, so the evidence it writes matches what the compiler checks.
+  const authored = Object.values(manifest.modeling?.relationships ?? {})
+    .find((item) => (item.localId ?? item.id) === relationship.id && (!relationship.domain || item.ownerDomain === relationship.domain || item.id.startsWith(`${relationship.domain}::`)));
+  const maxUnmatchedShare = relationship.maxUnmatchedShare ?? authored?.maxUnmatchedShare;
+  const scope = relationship.validationScope ?? authored?.validationScope;
   // ONE PROOF (REL-005): the builder's profile and this validation run the same
   // statement and write the same evidence.
-  const spec = { fromRelation, toRelation, keys: relationship.keys, cardinality: relationship.cardinality, fanout: relationship.fanout };
+  const spec = {
+    fromRelation, toRelation, keys: relationship.keys, cardinality: relationship.cardinality, fanout: relationship.fanout,
+    ...(maxUnmatchedShare !== undefined ? { maxUnmatchedShare } : {}),
+    ...(scope ? { scope } : {}),
+  };
   return validateRelationshipOnWarehouse({ ...spec, keyTypes: catalogKeyTypes(manifest, spec, undefined, projectRoot) }, execute, quoteIdentifier, new Date(), dialect);
 }
 
@@ -36054,6 +36070,8 @@ export async function discoverProjectWarehouseModel(projectRoot: string, options
     ...(cfg.project ? { projectName: cfg.project } : {}),
     existingDomains: loadDomainPackageRegistry(projectRoot).values().map((pkg) => pkg.id),
     ...(observedJoins ? { observedJoins } : {}),
+    // A join a reviewer removed or rejected is not proposed again.
+    decisions: readDiscoveryLedger(projectRoot).relationships,
   });
   const report = queryHistory ? { ...drafted, queryHistory } : drafted;
   if (!options.validate || !connection || !options.executor) return report;
@@ -36086,7 +36104,146 @@ export function applyProjectWarehouseDiscovery(projectRoot: string, report: Ware
   if (changes.length === 0) return { changes: 0, paths: [] };
   const preview = previewModelingChanges(projectRoot, changes);
   const applied = applyModelingChanges(projectRoot, changes, preview.fingerprint);
+  // Remember what discovery wrote, so a draft a reviewer later removes is not proposed again.
+  const relationIdOf = new Map(report.entities.map((entity) => [`${entity.domain}::${entity.id}`, entity.relationId]));
+  const at = new Date().toISOString();
+  recordDiscoveryDecisions(projectRoot, relationships.flatMap((relationship): DiscoveryDecision[] => {
+    const from = relationIdOf.get(`${relationship.fromDomain}::${relationship.from}`);
+    const to = relationIdOf.get(`${relationship.toDomain}::${relationship.to}`);
+    return from && to ? [{ from, to, keys: relationship.keys, decision: 'applied', at }] : [];
+  }));
   return { changes: changes.length, paths: [...new Set(applied.patches.map((patch) => patch.path))].sort() };
+}
+
+/**
+ * `zlens model reject-discovery`: a reviewer turns down a join discovery drafts
+ * (by the id discovery gives it, or the id of a modeled relationship), so it
+ * is not proposed again. Nothing in the model changes.
+ */
+export function rejectDiscoveredRelationship(projectRoot: string, id: string, options: { reason?: string; manifest?: DQLManifest } = {}): DiscoveryDecision {
+  const cfg = loadProjectConfig(projectRoot);
+  const manifest = options.manifest ?? buildManifest({ projectRoot, dbtManifestPath: resolveDbtManifestPath(projectRoot, cfg) ?? undefined });
+  const at = new Date().toISOString();
+  const modeled = findModeledRelationship(manifest, id);
+  let decision: DiscoveryDecision | undefined;
+  if (modeled) {
+    const from = manifest.modeling?.entities[modeled.from]?.dbtUniqueId;
+    const to = manifest.modeling?.entities[modeled.to]?.dbtUniqueId;
+    if (from && to) decision = { from, to, keys: modeled.keys, decision: 'rejected', at, ...(options.reason ? { reason: options.reason } : {}) };
+  } else {
+    const { snapshot } = readWarehouseCatalog(projectRoot);
+    if (snapshot) {
+      const report = discoverWarehouseModel({ snapshot, manifest, ...(cfg.project ? { projectName: cfg.project } : {}), decisions: readDiscoveryLedger(projectRoot).relationships });
+      const found = report.relationships.find((item) => item.id === id || `${item.domain}::${item.id}` === id);
+      const relationIdOf = new Map(report.entities.map((entity) => [`${entity.domain}::${entity.id}`, entity.relationId]));
+      const from = found ? relationIdOf.get(`${found.fromDomain}::${found.from}`) : undefined;
+      const to = found ? relationIdOf.get(`${found.toDomain}::${found.to}`) : undefined;
+      if (found && from && to) decision = { from, to, keys: found.keys, decision: 'rejected', at, ...(options.reason ? { reason: options.reason } : {}) };
+    }
+  }
+  if (!decision) {
+    throw Object.assign(new Error(`No relationship "${id}" in the model or among the joins discovery drafts. Run \`zlens model discover\` to see their ids.`), { code: 'RELATIONSHIP_NOT_FOUND' });
+  }
+  recordDiscoveryDecisions(projectRoot, [decision]);
+  return decision;
+}
+
+/** A modeled relationship by qualified id, or by local id when exactly one relationship has it. */
+function findModeledRelationship(manifest: DQLManifest, id: string): ManifestModelRelationship | undefined {
+  const relationships = manifest.modeling?.relationships ?? {};
+  if (relationships[id]) return relationships[id];
+  const matches = Object.values(relationships).filter((relationship) => (relationship.localId ?? relationship.id) === id);
+  if (matches.length > 1) {
+    throw Object.assign(new Error(`"${id}" names ${matches.length} relationships (${matches.map((item) => item.id).join(', ')}); use the qualified id.`), { code: 'RELATIONSHIP_AMBIGUOUS' });
+  }
+  return matches[0];
+}
+
+export interface RelationshipValidationRun {
+  id: string;
+  sourcePath: string;
+  evidence?: ManifestRelationshipValidationEvidence;
+  error?: string;
+  written: boolean;
+  certified: boolean;
+}
+
+/**
+ * `zlens model validate-relationship`: run the Modeling page's Validate check
+ * (the one statement, the one evidence) on relationships as authored, and
+ * record the evidence in their YAML. `certify` is a person's explicit
+ * decision: a relationship whose check passed becomes certified against the
+ * current grains of the two entities.
+ */
+export async function validateProjectRelationships(projectRoot: string, options: {
+  ids?: string[];
+  all?: boolean;
+  write?: boolean;
+  certify?: boolean;
+  connection?: string;
+  executor: QueryExecutor;
+}): Promise<{ connectionId: string; results: RelationshipValidationRun[]; paths: string[] }> {
+  const cfg = loadProjectConfig(projectRoot);
+  const manifest = buildManifest({ projectRoot, dbtManifestPath: resolveDbtManifestPath(projectRoot, cfg) ?? undefined });
+  if (manifest.manifestVersion !== 3 || !manifest.modeling) {
+    throw Object.assign(new Error('Modeling is not enabled. Set manifestVersion: 3 and a modeling mode in dql.config.json.'), { code: 'MODELING_NOT_ENABLED' });
+  }
+  const relationships = options.all
+    ? Object.values(manifest.modeling.relationships)
+    : (options.ids ?? []).map((id) => {
+      const found = findModeledRelationship(manifest, id);
+      if (!found) throw Object.assign(new Error(`No relationship named "${id}". \`zlens model list\` shows their ids.`), { code: 'RELATIONSHIP_NOT_FOUND' });
+      return found;
+    });
+  if (relationships.length === 0) throw Object.assign(new Error('Name a relationship to validate, or pass --all.'), { code: 'INVALID_REQUEST' });
+  const snapshotConnection = warehouseCatalogModeling(cfg) ? readWarehouseCatalog(projectRoot).snapshot?.connectionId : undefined;
+  const connectionId = options.connection ?? (snapshotConnection || warehouseCatalogConnectionId(cfg));
+  const connection = projectConnectionById(projectRoot, cfg, connectionId);
+  if (!connection) throw Object.assign(new Error(`No connection "${connectionId}" in dql.config.json.`), { code: 'CONNECTION_NOT_FOUND' });
+  const quote = (identifier: string) => getDialect(connection.driver).quoteIdentifier(identifier);
+  const execute = (sql: string) => options.executor.executeQuery(sql, [], {}, connection);
+  const results: RelationshipValidationRun[] = [];
+  const changes: ModelingAuthoringChange[] = [];
+  for (const relationship of relationships) {
+    const run: RelationshipValidationRun = { id: relationship.id, sourcePath: relationship.sourcePath, written: false, certified: false };
+    results.push(run);
+    try {
+      run.evidence = await validateModelingRelationship({
+        id: relationship.localId ?? relationship.id,
+        domain: relationship.ownerDomain ?? '',
+        from: relationship.from,
+        to: relationship.to,
+        keys: relationship.keys,
+        cardinality: relationship.cardinality,
+        fanout: relationship.fanout,
+        ...(relationship.maxUnmatchedShare !== undefined ? { maxUnmatchedShare: relationship.maxUnmatchedShare } : {}),
+        ...(relationship.validationScope ? { validationScope: relationship.validationScope } : {}),
+      }, manifest, execute, quote, projectRoot, connection.driver);
+    } catch (error) {
+      run.error = error instanceof Error ? error.message.split('\n')[0]!.slice(0, 300) : String(error);
+      continue;
+    }
+    if (options.write === false) continue;
+    const fromEntity = manifest.modeling.entities[relationship.from];
+    const toEntity = manifest.modeling.entities[relationship.to];
+    const certify = options.certify === true && run.evidence.status === 'passed' && Boolean(fromEntity?.grain && toEntity?.grain);
+    changes.push({
+      operation: 'record_relationship_validation',
+      value: {
+        id: relationship.localId ?? relationship.id,
+        domain: relationship.ownerDomain ?? relationship.id.split('::')[0]!,
+        sourcePath: relationship.sourcePath,
+        validation: run.evidence,
+        ...(certify ? { certifiedAgainst: { from: { grain: fromEntity!.grain!, keys: fromEntity!.keys }, to: { grain: toEntity!.grain!, keys: toEntity!.keys } } } : {}),
+      },
+    });
+    run.written = true;
+    run.certified = certify;
+  }
+  if (changes.length === 0) return { connectionId, results, paths: [] };
+  const preview = previewModelingChanges(projectRoot, changes);
+  const applied = applyModelingChanges(projectRoot, changes, preview.fingerprint);
+  return { connectionId, results, paths: [...new Set(applied.patches.filter((patch) => patch.changed).map((patch) => patch.path))].sort() };
 }
 
 /** The one database/catalog that holds every named schema, found by asking the warehouse. */
@@ -39579,7 +39736,29 @@ interface ParsedSemanticBlockConfig {
   filters: Array<{ dimension: string; operator: string; values: string[] }>;
   timeDimension?: string;
   granularity?: string;
+  orderBy?: Array<{ name: string; direction: 'asc' | 'desc' }>;
   limit?: number;
+}
+
+/**
+ * A semantic block's `order_by` entries, as the canonical writer emits them
+ * (`"name desc"`), plus the MetricFlow `-name` spelling for descending.
+ */
+export function parseSemanticOrderBy(entries: string[]): Array<{ name: string; direction: 'asc' | 'desc' }> {
+  const orderBy: Array<{ name: string; direction: 'asc' | 'desc' }> = [];
+  for (const entry of entries) {
+    const trimmed = entry.trim();
+    if (!trimmed) continue;
+    const spelled = trimmed.match(/^(.+?)\s+(asc|desc)$/i);
+    if (spelled) {
+      orderBy.push({ name: spelled[1]!.trim(), direction: spelled[2]!.toLowerCase() as 'asc' | 'desc' });
+    } else if (trimmed.startsWith('-')) {
+      orderBy.push({ name: trimmed.slice(1).trim(), direction: 'desc' });
+    } else {
+      orderBy.push({ name: trimmed, direction: 'asc' });
+    }
+  }
+  return orderBy.filter((order) => order.name);
 }
 
 /**
@@ -39668,6 +39847,7 @@ function parseSemanticBlockConfig(source: string): ParsedSemanticBlockConfig {
   const filters = parseSemanticRequestedFilters(source);
   const timeDimension = parseBlockStudioStringField(source, 'time_dimension');
   const granularity = parseBlockStudioStringField(source, 'granularity');
+  const orderBy = parseSemanticOrderBy(parseBlockStudioArrayField(source, 'order_by'));
   const limitMatch = source.match(/\blimit\s*=\s*(\d+)/i);
   return {
     blockType,
@@ -39677,6 +39857,7 @@ function parseSemanticBlockConfig(source: string): ParsedSemanticBlockConfig {
     filters,
     timeDimension,
     granularity,
+    ...(orderBy.length > 0 ? { orderBy } : {}),
     limit: limitMatch ? Number.parseInt(limitMatch[1], 10) : undefined,
   };
 }
@@ -39844,15 +40025,6 @@ export function buildSemanticTableMapping(
     if (matches.size === 1) tableMapping[semTable] = [...matches.values()][0]!;
   }
   return Object.keys(tableMapping).length > 0 ? tableMapping : undefined;
-}
-
-function isDbtSemanticRuntime(
-  projectConfig: ProjectConfig,
-  detectedProvider: string | null | undefined,
-  semanticLayer?: SemanticLayer | null,
-): boolean {
-  if (projectConfig.semanticLayer?.provider === 'dbt' || projectConfig.dbt?.projectDir || detectedProvider === 'dbt') return true;
-  return Boolean(semanticLayer?.listMetrics().some((metric) => metric.source?.provider === 'dbt'));
 }
 
 /**
@@ -40087,6 +40259,7 @@ function composeSemanticBlockSql(
           timeDimension: config.timeDimension && config.granularity
             ? { name: config.timeDimension, granularity: config.granularity }
             : undefined,
+          orderBy: config.orderBy,
           limit: runtimeBindings.limit ?? config.limit,
         }, semanticLayer, {
           driver: options.driver,
@@ -40099,6 +40272,7 @@ function composeSemanticBlockSql(
           timeDimension: config.timeDimension && config.granularity
             ? { name: config.timeDimension, granularity: config.granularity }
             : undefined,
+          orderBy: config.orderBy,
           limit: runtimeBindings.limit ?? config.limit,
           driver: options?.driver,
           tableMapping: options?.tableMapping,
@@ -40112,25 +40286,36 @@ function composeSemanticBlockSql(
     return { sql: null, diagnostics, semanticRefs };
   }
   if (!composed) {
-    const provider = options?.projectConfig && isDbtSemanticRuntime(
-      options.projectConfig,
-      options.detectedProvider,
-      semanticLayer,
-    ) ? 'dbt' : (options?.detectedProvider ?? 'dql');
+    // Name the real gap. Imported dbt metrics keep `source.provider: dbt`, so
+    // "requires a dbt runtime" used to reach warehouse-first projects that have
+    // no dbt project to run MetricFlow against. Only a project that has one is
+    // pointed at a runtime; every other project is told what the native engine
+    // does and does not run.
+    const dbtProject = Boolean(options?.projectRoot && options.projectConfig
+      && projectHasDbtProject(options.projectRoot, options.projectConfig));
     const reasons = metrics.map((metricName) => {
-      if (semanticLayer.canComposeMetric(metricName)) return null;
-      const metric = semanticLayer.getMetric(metricName);
-      const kind = metric?.metricType || metric?.aggregation || metric?.type || 'metric';
-      return provider === 'dbt'
-        ? `${metricName}: ${kind} metric requires a configured dbt Cloud or local MetricFlow runtime.`
-        : `${metricName}: the metric does not have enough composable measure and relation metadata.`;
+      const gap = semanticLayer.explainNativeMetricGap(metricName);
+      if (!gap) return null;
+      return dbtProject
+        ? `${gap} Configure a dbt Cloud or local MetricFlow runtime to run it.`
+        : gap;
     }).filter((reason): reason is string => Boolean(reason));
+    // Every metric runs natively, so a selected dimension is what failed:
+    // say which, and why (a bridge reached one-to-many reads differently from
+    // a model with no join at all).
+    const dimensionGaps = reasons.length > 0 ? [] : [
+      ...config.dimensions,
+      ...(config.timeDimension ? [config.timeDimension] : []),
+    ].map((dimension) => semanticLayer.explainDimensionGap(metrics, parseSemanticDimensionSelection(dimension).reference))
+      .filter((gap): gap is string => Boolean(gap));
     diagnostics.push({
       severity: 'error',
       code: 'semantic_compose_failed',
       message: reasons.length > 0
         ? `Could not compose SQL for semantic block metrics. ${reasons.join(' ')}`
-        : `Could not compose SQL for semantic block metrics: [${metrics.join(', ')}]. Check that the selected dimensions share a governed join path.`,
+        : dimensionGaps.length > 0
+          ? `Could not compose SQL for semantic block metrics: [${metrics.join(', ')}]. ${dimensionGaps.join(' ')}`
+          : `Could not compose SQL for semantic block metrics: [${metrics.join(', ')}]. Check that the selected dimensions share a governed join path.`,
     });
     return { sql: null, diagnostics, semanticRefs };
   }
@@ -40180,6 +40365,7 @@ async function composeSemanticBlockSqlForRuntime(
       timeDimension: config.timeDimension && config.granularity
         ? { name: config.timeDimension, granularity: config.granularity }
         : undefined,
+      orderBy: config.orderBy,
       limit: runtimeBindings.limit ?? config.limit,
     }, semanticLayer, {
       projectRoot: options.projectRoot,
@@ -40966,7 +41152,7 @@ export function ownerlessReviewDqlArtifactFromAnswer(
         filter.values.length > 0
           ? filter.values.map((value) => `${filter.dimension}=${value}`)
           : [filter.dimension]),
-      orderBy: artifact.orderBy,
+      orderBy: artifact.orderBy ?? parsed.orderBy,
       limit: artifact.limit ?? parsed.limit,
       parameters: artifact.parameters?.map((parameter) => ({
         name: parameter.name,
@@ -44205,6 +44391,21 @@ function extractBlockStudioChartConfig(source: string): {
   };
 }
 
+/**
+ * The source with its leading comments removed, for "what does this file
+ * declare" checks. Every writer puts `// dql-format: 1` first (see
+ * `canonicalize`), so a `^\s*block\s+"` test on the raw text misses every
+ * saved block and falls through to the loose raw-SQL path.
+ */
+export function stripLeadingDqlComments(source: string): string {
+  return source.replace(/^(?:\s*(?:\/\/[^\n]*|\/\*[\s\S]*?\*\/))*\s*/, '');
+}
+
+/** True when the source declares a DQL `block "name"`, header comments or not. */
+export function isDqlBlockSource(source: string): boolean {
+  return /^block\s+"/i.test(stripLeadingDqlComments(source));
+}
+
 export function extractBlockStudioSql(source: string): string | null {
   // Masked lookup for the same reason the field parsers use one: a `description`
   // is free text and must never be able to present itself as the query.
@@ -44217,7 +44418,8 @@ export function extractBlockStudioSql(source: string): string | null {
   }
   const bareTripleMatch = source.match(/"""([\s\S]*?)"""/);
   if (bareTripleMatch) return bareTripleMatch[1].trim() || null;
-  if (/^\s*(dashboard|workbook)\s+"/i.test(source)) return null;
+  const declaration = stripLeadingDqlComments(source);
+  if (/^(dashboard|workbook)\s+"/i.test(declaration)) return null;
   const singleLineQuery = source.match(/\bquery\s*=\s*"((?:[^"\\]|\\.)*)"/i);
   if (singleLineQuery) return singleLineQuery[1].trim() || null;
   // A DQL BLOCK declares its SQL in `query` and nowhere else. The keyword scan
@@ -44227,8 +44429,10 @@ export function extractBlockStudioSql(source: string): string | null {
   // if it were SQL, which both skipped the semantic/MetricFlow compile (callers
   // read a non-null result as "already precompiled") and sent the fragment to
   // the warehouse — surfacing as `syntax error ... unexpected '%'`. A block with
-  // no `query` field has no inline SQL; say so.
-  if (/^\s*block\s+"/i.test(source)) return null;
+  // no `query` field has no inline SQL; say so. The canonical
+  // `// dql-format: 1` header comes first in every saved file, so the check
+  // reads past leading comments.
+  if (/^block\s+"/i.test(declaration)) return null;
   const sqlKeywordMatch = source.match(/\b(SELECT|WITH|INSERT|UPDATE|DELETE|CREATE|DROP|ALTER|SHOW|DESCRIBE|EXPLAIN)\b([\s\S]*)/i);
   if (!sqlKeywordMatch) return null;
   let raw = sqlKeywordMatch[0];
@@ -44749,7 +44953,7 @@ function normalizeBlockStudioContent(options: {
   content?: string;
 }): string {
   const content = options.content?.trim();
-  if (content && /^\s*block\s+"/i.test(content)) {
+  if (content && isDqlBlockSource(content)) {
     return `${applySavedBlockMetadata(content, options).trimEnd()}\n`;
   }
 

@@ -99,6 +99,10 @@ const HELP = `
     zlens model import <file-or-directory> --domain <id> --area <id> --dry-run|--apply
                                     Import DQL/dbt YAML through the guarded proposal service
     zlens model explain <id> [path] Explain whether a relationship is automatic join proof
+    zlens model validate-relationship <id>|--all [path] [--certify] [--dry-run]
+                                    Check an authored relationship on the warehouse and record the evidence
+    zlens model reject-discovery <id> [path] [--reason <text>]
+                                    Stop discovery proposing a join a reviewer turned down
     zlens lineage [block] [path]    Answer-layer lineage analysis
     zlens lineage cross-domain      Show cross-domain lineage flows (--domain filters)
     zlens mcp [--http]              Run the ZLens MCP server (stdio by default; --http = loopback)

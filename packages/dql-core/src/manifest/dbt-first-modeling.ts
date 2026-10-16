@@ -32,6 +32,7 @@ import type {
   ManifestModelRule,
   ManifestRelationshipCardinality,
   ManifestRelationshipValidationEvidence,
+  ManifestRelationshipValidationScope,
 } from './types.js';
 import { loadDomainPackageRegistry } from './domain-package-registry.js';
 import { resolveWarehouseRelation, type WarehouseCatalogRelationV1, type WarehouseCatalogSnapshotV1 } from './warehouse-catalog.js';
@@ -125,7 +126,22 @@ interface RawRelationship {
   imports?: unknown;
   evidence_expires_at?: unknown;
   evidenceExpiresAt?: unknown;
+  max_unmatched_share?: unknown;
+  maxUnmatchedShare?: unknown;
+  validation_scope?: unknown;
+  validationScope?: unknown;
 }
+
+/**
+ * The share of "from" rows with a key that may find no "to" row before a
+ * relationship's warehouse validation fails. A many-to-one join that loses
+ * more rows than this is not the reference its name suggests, or needs a
+ * person to say the gap is expected (`max_unmatched_share` on the relationship).
+ */
+export const DEFAULT_MAX_UNMATCHED_SHARE = 0.05;
+
+/** The lifecycle values modeling objects accept (`review` is read as `reviewed`). */
+const LIFECYCLE_VALUES = ['draft', 'evaluated', 'reviewed', 'certified', 'deprecated'] as const;
 
 /** Result of compiling the v3 overlay. The raw dbt facts never leave this module. */
 export interface DbtFirstModelingLoadResult {
@@ -430,6 +446,7 @@ function compileModeling(
         diagnostics.push(modelingError(relPath, `entity "${id}" in model area "${areaLocalId}" must belong to domain "${domain}"`));
         continue;
       }
+      lifecycleDiagnostic(rawEntity.status, `entity "${id}"`, relPath, diagnostics);
       const qualifiedId = qualifiedObjectId(entityDomain, 'entity', id);
       const entity: ManifestModelEntity = {
         id: qualifiedId,
@@ -473,6 +490,7 @@ function compileModeling(
       }
       const contractDomain = stringValue(rawContract.domain) ?? domain;
       const qualifiedId = qualifiedObjectId(contractDomain, 'contract', id);
+      lifecycleDiagnostic(rawContract.status, `contract "${id}"`, relPath, diagnostics);
       const contract: ManifestModelContract = {
         id: qualifiedId,
         localId: id,
@@ -554,6 +572,7 @@ function compileModeling(
       }
       const exportDomain = stringValue(rawExport.domain) ?? domain;
       const qualifiedId = qualifiedObjectId(exportDomain, 'export', localId);
+      lifecycleDiagnostic(rawExport.status, `domain export "${localId}"`, relPath, diagnostics);
       const value: ManifestDomainExport = {
         id: qualifiedId,
         localId,
@@ -592,6 +611,7 @@ function compileModeling(
         diagnostics.push(modelingError(relPath, `duplicate domain import "${localId}"`));
         continue;
       }
+      lifecycleDiagnostic(rawImport.status, `domain import "${localId}"`, relPath, diagnostics);
       domainImports[qualifiedId] = {
         id: qualifiedId,
         localId,
@@ -724,8 +744,19 @@ function buildRelationships(
       : packages.get(fromEntity.domain)?.exports.includes(from) === true);
     const contractsGranted = !crossDomain || (structuredInterfaces
       && crossDomainContractsGranted(ownerDomain, importRefs, domainExports, domainImports, contracts, sourcePath, id, diagnostics));
+    lifecycleDiagnostic(value.status, `relationship "${id}"`, sourcePath, diagnostics);
     const certificationFingerprint = certificationProof(value.certifiedAgainst, keys, cardinality, fanout);
     const validation = validationEvidence(value.validation);
+    const rawMaxUnmatchedShare = value.max_unmatched_share ?? value.maxUnmatchedShare;
+    const maxUnmatchedShare = unmatchedShareValue(rawMaxUnmatchedShare);
+    if (rawMaxUnmatchedShare !== undefined && maxUnmatchedShare === undefined) {
+      diagnostics.push(modelingError(sourcePath, `relationship "${id}" max_unmatched_share must be a number from 0 to 1 (a share, e.g. 0.02 for 2%)`));
+    }
+    const rawValidationScope = value.validation_scope ?? value.validationScope;
+    const validationScope = rawValidationScope === 'referenced_keys' ? 'referenced_keys' as const : undefined;
+    if (rawValidationScope !== undefined && !validationScope) {
+      diagnostics.push(modelingError(sourcePath, `relationship "${id}" validation_scope must be "referenced_keys" (judge uniqueness over the keys the join reaches) or be left out (the whole table)`));
+    }
     const keyTypes = relationshipKeyTypes(keys, fromFacts?.columnTypes, toFacts?.columnTypes);
     const keyTypesKnown = keyTypes.some((pair) => pair.from || pair.to);
     const validationProof = relationshipValidationProofFingerprint({
@@ -736,6 +767,8 @@ function buildRelationships(
       fanout,
       queryFingerprint: validation?.queryFingerprint ?? '',
       keyTypes,
+      ...(maxUnmatchedShare !== undefined ? { maxUnmatchedShare } : {}),
+      ...(validationScope ? { scope: validationScope } : {}),
     });
     const validationMatches = Boolean(validation?.proofFingerprint && validation.proofFingerprint === validationProof);
     const evidenceExpiresAt = stringValue(value.evidence_expires_at ?? value.evidenceExpiresAt);
@@ -792,7 +825,19 @@ function buildRelationships(
       diagnostics.push({ kind: 'modeling', filePath: sourcePath, severity: 'warning', message: `relationship "${id}" validation evidence expired at ${evidenceExpiresAt}` });
     }
     if (status === 'certified' && !validationMatches) {
-      diagnostics.push({ kind: 'modeling', filePath: sourcePath, severity: 'warning', message: `relationship "${id}" validation proof no longer matches its relations, keys, cardinality, or fanout policy` });
+      diagnostics.push({ kind: 'modeling', filePath: sourcePath, severity: 'warning', message: `relationship "${id}" validation proof no longer matches its relations, keys, cardinality, fanout policy, max_unmatched_share or validation_scope` });
+    }
+    // Evidence written before the validator judged coverage could pass a join
+    // that loses most of its rows; say so rather than let it pass silently.
+    const coverage = validation ? unmatchedCoverage(validation) : undefined;
+    const allowedShare = maxUnmatchedShare ?? DEFAULT_MAX_UNMATCHED_SHARE;
+    if (validation?.status === 'passed' && coverage && (cardinality === 'many_to_one' || cardinality === 'one_to_one') && coverage.share > allowedShare) {
+      diagnostics.push({
+        kind: 'modeling',
+        filePath: sourcePath,
+        severity: 'warning',
+        message: `relationship "${id}" validation passed, but ${coverage.unmatched} of ${coverage.keyed} "from" rows with a key (${formatShare(coverage.share)}) find no "to" row, more than the ${formatShare(allowedShare)} allowed; validate it again (zlens model validate-relationship ${id}) or declare max_unmatched_share if the gap is expected`,
+      });
     }
     const qualifiedId = qualifiedObjectId(ownerDomain, 'relationship', id);
     const relationship: ManifestModelRelationship = {
@@ -820,6 +865,8 @@ function buildRelationships(
       attributionBlock: stringValue(value.attribution_block ?? value.attributionBlock),
       importRefs,
       evidenceExpiresAt,
+      ...(maxUnmatchedShare !== undefined ? { maxUnmatchedShare } : {}),
+      ...(validationScope ? { validationScope } : {}),
       sourcePath,
       fingerprint: currentProof,
       certificationFingerprint,
@@ -856,8 +903,42 @@ function validationEvidence(value: unknown): ManifestRelationshipValidationEvide
     unmatchedFrom: numberValue(raw.unmatched_from ?? raw.unmatchedFrom),
     maxFromPerKey: numberValue(raw.max_from_per_key ?? raw.maxFromPerKey),
     maxToPerKey: numberValue(raw.max_to_per_key ?? raw.maxToPerKey),
+    ...optionalCount('unmatchedKeyedFrom', raw.unmatched_keyed_from ?? raw.unmatchedKeyedFrom),
+    ...optionalCount('unmatchedKeyValues', raw.unmatched_key_values ?? raw.unmatchedKeyValues),
+    ...optionalCount('unmatchedShare', raw.unmatched_share ?? raw.unmatchedShare),
+    ...optionalCount('maxUnmatchedShare', raw.max_unmatched_share ?? raw.maxUnmatchedShare),
+    ...optionalCount('maxToPerReferencedKey', raw.max_to_per_referenced_key ?? raw.maxToPerReferencedKey),
+    ...optionalCount('maxFromPerReferencedKey', raw.max_from_per_referenced_key ?? raw.maxFromPerReferencedKey),
+    ...(raw.scope === 'referenced_keys' ? { scope: 'referenced_keys' as const } : {}),
     message: stringValue(raw.message),
   };
+}
+
+function optionalCount<K extends string>(key: K, input: unknown): Partial<Record<K, number>> {
+  if (input === undefined || input === null || input === '') return {};
+  const parsed = typeof input === 'number' ? input : Number(input);
+  return Number.isFinite(parsed) ? { [key]: parsed } as Record<K, number> : {};
+}
+
+/**
+ * "From" rows with a key that find no "to" row, and their share of the rows
+ * with a key. Rows whose key is null reference nothing and are not counted.
+ * Older evidence has no keyed count, so it is derived from the totals.
+ */
+export function unmatchedCoverage(evidence: Pick<ManifestRelationshipValidationEvidence, 'fromRows' | 'fromNullKeys' | 'unmatchedFrom' | 'unmatchedKeyedFrom'>): { unmatched: number; keyed: number; share: number } {
+  const keyed = Math.max(0, evidence.fromRows - evidence.fromNullKeys);
+  const unmatched = Math.max(0, evidence.unmatchedKeyedFrom ?? evidence.unmatchedFrom - evidence.fromNullKeys);
+  return { unmatched, keyed, share: keyed > 0 ? unmatched / keyed : 0 };
+}
+
+function unmatchedShareValue(value: unknown): number | undefined {
+  const parsed = typeof value === 'number' ? value : typeof value === 'string' && value.trim() ? Number(value) : NaN;
+  return Number.isFinite(parsed) && parsed >= 0 && parsed <= 1 ? parsed : undefined;
+}
+
+function formatShare(share: number): string {
+  const percent = share * 100;
+  return `${percent >= 10 || Number.isInteger(percent) ? percent.toFixed(0) : percent.toFixed(percent >= 1 ? 1 : 2)}%`;
 }
 
 function qualifiedObjectId(domain: string, kind: string, localId: string): string {
@@ -884,6 +965,10 @@ export function relationshipValidationProofFingerprint(input: {
    * catalog keeps its proofs.
    */
   keyTypes?: Array<{ from?: string; to?: string }>;
+  /** Declared on the relationship only; omitted, a proof written before it existed stays valid. */
+  maxUnmatchedShare?: number;
+  /** Declared on the relationship only, like maxUnmatchedShare. */
+  scope?: ManifestRelationshipValidationScope;
 }): string {
   const keyTypes = (input.keyTypes ?? []).map((pair) => ({ from: pair.from?.toLowerCase(), to: pair.to?.toLowerCase() }));
   const typed = keyTypes.some((pair) => pair.from || pair.to);
@@ -895,6 +980,8 @@ export function relationshipValidationProofFingerprint(input: {
     fanout: input.fanout,
     queryFingerprint: input.queryFingerprint,
     ...(typed ? { keyTypes } : {}),
+    ...(input.maxUnmatchedShare !== undefined ? { maxUnmatchedShare: input.maxUnmatchedShare } : {}),
+    ...(input.scope ? { scope: input.scope } : {}),
   });
 }
 
@@ -1195,6 +1282,9 @@ function compileConcepts(
       if (missing.length) { diagnostics.push(modelingError(sourcePath, `concept "${localId}" equivalence key ${missing.map((pair) => `${pair.from} = ${pair.to}`).join(', ')} is not a column of both entities`)); continue; }
       const cardinality = stringValue(rawEquivalence.cardinality) ?? 'one_to_one';
       if (cardinality !== 'one_to_one') { diagnostics.push(modelingError(sourcePath, `concept "${localId}" equivalence must be one_to_one (got ${cardinality})`)); continue; }
+      if (rawEquivalence.status !== undefined && rawEquivalence.status !== 'draft' && rawEquivalence.status !== 'certified') {
+        diagnostics.push(modelingError(sourcePath, `concept "${localId}" equivalence ${fromKey} → ${toKey} has status "${String(rawEquivalence.status)}", which ZLens does not recognise (it would be read as draft); use draft or certified`));
+      }
       equivalences.push({
         from: fromKey, to: toKey, keys, cardinality: 'one_to_one',
         ...(stringValue(rawEquivalence.valid_from ?? rawEquivalence.validFrom) ? { validFrom: stringValue(rawEquivalence.valid_from ?? rawEquivalence.validFrom) } : {}),
@@ -1203,6 +1293,7 @@ function compileConcepts(
       });
     }
     const rule = stringValue(value.rule);
+    lifecycleDiagnostic(value.status, `concept "${localId}"`, sourcePath, diagnostics);
     const status = lifecycle(value.status);
     const concept: ManifestBusinessConcept = {
       id: qualifiedId, localId, qualifiedId, domain,
@@ -1390,6 +1481,15 @@ function fanoutPolicy(value: unknown): ManifestFanoutPolicy {
 function lifecycle(value: unknown): 'draft' | 'evaluated' | 'reviewed' | 'certified' | 'deprecated' {
   if (value === 'review' || value === 'reviewed') return 'reviewed';
   return value === 'evaluated' || value === 'certified' || value === 'deprecated' ? value : 'draft';
+}
+
+/**
+ * A status ZLens does not know was read as draft without a word, so an author
+ * who wrote `status: approved` believed it meant something. Say so.
+ */
+function lifecycleDiagnostic(value: unknown, subject: string, filePath: string, diagnostics: ManifestDiagnostic[]): void {
+  if (value === undefined || value === null || value === 'review' || (LIFECYCLE_VALUES as readonly unknown[]).includes(value)) return;
+  diagnostics.push(modelingError(filePath, `${subject} has status "${String(value)}", which ZLens does not recognise (it would be read as draft); use one of ${LIFECYCLE_VALUES.join(', ')}`));
 }
 
 function ruleKind(value: unknown): 'fanout' | 'export' | 'contract' | 'custom' {

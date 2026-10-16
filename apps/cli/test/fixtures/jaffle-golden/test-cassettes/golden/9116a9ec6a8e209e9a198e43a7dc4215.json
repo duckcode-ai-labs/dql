@@ -1,0 +1,23 @@
+{
+  "key": "9116a9ec6a8e209e9a198e43a7dc4215",
+  "operation": "generate",
+  "text": "{\"version\":1,\"kind\":\"analytics\",\"reading\":\"Total count of orders across all time, with no breakdown.\",\"measures\":[{\"ref\":\"metric:orders.orders\"}],\"groupBy\":[],\"display\":[],\"filters\":[],\"expectedShape\":\"scalar\",\"unresolved\":[],\"provenance\":{\"metric:orders.orders\":\"q:how many orders\"}}",
+  "providerName": "claude",
+  "recordedAt": "2026-10-16T18:08:52.644Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 2,
+    "messageRoles": [
+      "system",
+      "user"
+    ],
+    "preCanonicalHash": "9116a9ec6a8e209e9a198e43a7dc421531f25e2462149be846a0a4ac73ec104a",
+    "postCanonicalHash": "9116a9ec6a8e209e9a198e43a7dc421531f25e2462149be846a0a4ac73ec104a",
+    "appliedRuleClasses": []
+  }
+}

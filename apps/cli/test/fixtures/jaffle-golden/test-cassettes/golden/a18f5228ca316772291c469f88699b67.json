@@ -1,9 +1,9 @@
 {
   "key": "a18f5228ca316772291c469f88699b67",
   "operation": "generate",
-  "text": "{\"dimensions\": [\"dimension:locations.location_name\", \"dimension:products.product_name\", \"dimension:products.product_type\", \"dimension:customers.customer_type\", \"dimension:orders.order_total_dim\", \"dimension:orders.is_drink_order\"]}",
+  "text": "{\"dimensions\": [\"dimension:locations.location_name\", \"dimension:products.product_type\", \"dimension:products.product_name\", \"dimension:customers.customer_type\", \"dimension:order_item.is_food_item\", \"dimension:orders.is_drink_order\"]}",
   "providerName": "claude",
-  "recordedAt": "2026-09-17T18:12:18.690Z",
+  "recordedAt": "2026-10-16T18:12:16.784Z",
   "provenance": {
     "kind": "recorded_provider",
     "replayClassification": "recorded_provider",

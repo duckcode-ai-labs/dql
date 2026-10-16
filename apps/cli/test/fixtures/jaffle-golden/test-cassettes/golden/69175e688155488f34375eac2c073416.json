@@ -1,0 +1,24 @@
+{
+  "key": "69175e688155488f34375eac2c073416",
+  "operation": "generate",
+  "text": "{\"version\":1,\"kind\":\"analytics\",\"reading\":\"Same ranking as before — top 10 customers by beverage revenue with beverage order count and product variety — restricted to the beverage category, which the certified block already applies (is_drink_item is true), so the analysis is unchanged.\",\"measures\":[{\"ref\":\"block:commerce.top_beverage_customers\"}],\"groupBy\":[],\"display\":[],\"filters\":[],\"expectedShape\":\"ranking\",\"unresolved\":[{\"clause\":\"bevereage catogery\",\"options\":[\"term:Beverage\",\"dimension:products.product_type\"],\"material\":false,\"question\":\"The ranking is already limited to beverage products; did you instead want a breakdown of beverage revenue by product type?\"}],\"provenance\":{\"block:commerce.top_beverage_customers\":\"inherited\",\"term:Beverage\":\"q:bevereage catogery\",\"dimension:products.product_type\":\"q:catogery\"}}",
+  "providerName": "claude",
+  "recordedAt": "2026-10-16T18:13:25.700Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 3,
+    "messageRoles": [
+      "system",
+      "user",
+      "user"
+    ],
+    "preCanonicalHash": "69175e688155488f34375eac2c07341648b40ab1ddbea0be92eda592b3cd733c",
+    "postCanonicalHash": "69175e688155488f34375eac2c07341648b40ab1ddbea0be92eda592b3cd733c",
+    "appliedRuleClasses": []
+  }
+}

@@ -1,7 +1,7 @@
 import Database from 'better-sqlite3';
 import { describe, expect, it } from 'vitest';
 import type { DQLManifest } from '@zlens/core';
-import { catalogKeyTypes, relationshipEvidenceFromRow, relationshipValidationSql, validateRelationshipOnWarehouse } from './relationship-validation.js';
+import { catalogKeyTypes, looksLikePlaceholder, relationshipEvidenceFromRow, relationshipValidationSql, validateRelationshipOnWarehouse } from './relationship-validation.js';
 
 const quote = (identifier: string) => `"${identifier}"`;
 const spec = { fromRelation: 'analytics.marts.fct_orders', toRelation: 'analytics.marts.dim_customers', keys: [{ from: 'customer_id', to: 'customer_id' }], cardinality: 'many_to_one' as const, fanout: 'safe' as const };
@@ -66,6 +66,97 @@ describe('the one relationship proof', () => {
     expect(integer).not.toBe(untyped);
     expect(varchar).not.toBe(integer);
     expect(relationshipEvidenceFromRow(passingRow, { ...spec, keyTypes: [{ from: 'INTEGER', to: 'Integer' }] }, sql).proofFingerprint).toBe(integer);
+  });
+});
+
+describe('what the verdict says about rows the join loses', () => {
+  const checkedAt = new Date('2026-09-23T00:00:00.000Z');
+  it('fails a many-to-one join that loses more keyed rows than allowed, and says how many', () => {
+    const sql = relationshipValidationSql(spec, quote);
+    // 12 of 100 order rows point at a customer that does not exist.
+    const row = { ...passingRow, from_rows: 100, joined_rows: 88, unmatched_from: 12, unmatched_keyed_from: 12, unmatched_key_values: 1 };
+    const evidence = relationshipEvidenceFromRow(row, spec, sql, checkedAt);
+    expect(evidence).toMatchObject({ status: 'failed', unmatchedKeyedFrom: 12, unmatchedShare: 0.12, maxUnmatchedShare: 0.05, unmatchedKeyValues: 1 });
+    expect(evidence.message).toMatch(/12 of 100 fct_orders rows with a key \(12%\) find no dim_customers row/);
+    expect(evidence.message).toMatch(/same key value.*placeholder/);
+    expect(evidence.message).toMatch(/more than the 5% allowed/);
+    // A person who expects the gap says so on the relationship; the proof records it.
+    const allowed = relationshipEvidenceFromRow(row, { ...spec, maxUnmatchedShare: 0.15 }, sql, checkedAt);
+    expect(allowed).toMatchObject({ status: 'passed', maxUnmatchedShare: 0.15 });
+    expect(allowed.proofFingerprint).not.toBe(evidence.proofFingerprint);
+  });
+
+  it('passes a small gap but reports it, and never counts null keys as lost', () => {
+    const sql = relationshipValidationSql(spec, quote);
+    const small = relationshipEvidenceFromRow({ ...passingRow, from_rows: 100, joined_rows: 98, unmatched_from: 2, unmatched_keyed_from: 2, unmatched_key_values: 2 }, spec, sql, checkedAt);
+    expect(small.status).toBe('passed');
+    expect(small.message).toMatch(/2 of 100 fct_orders rows with a key \(2%\) find no dim_customers row \(within the 5% allowed\)/);
+    // A deleted customer's two orders share one missing key: too few rows to read as a placeholder.
+    const deleted = relationshipEvidenceFromRow({ ...passingRow, from_rows: 1000, joined_rows: 998, unmatched_from: 2, unmatched_keyed_from: 2, unmatched_key_values: 1 }, spec, sql, checkedAt);
+    expect(deleted.message).not.toMatch(/placeholder/);
+    expect(looksLikePlaceholder({ unmatchedKeyedFrom: 417, unmatchedKeyValues: 1, keyedFrom: 34_000 })).toBe(true);
+    // 40 orders have no customer at all: they reference nothing and lose nothing.
+    const nulls = relationshipEvidenceFromRow({ ...passingRow, from_rows: 100, joined_rows: 60, from_null_keys: 40, unmatched_from: 40, unmatched_keyed_from: 0 }, spec, sql, checkedAt);
+    expect(nulls).toMatchObject({ status: 'passed', unmatchedShare: 0 });
+    // A parent without children is normal: one-to-many is not judged on coverage.
+    const parent = relationshipEvidenceFromRow({ ...passingRow, max_from_per_key: 1, max_to_per_key: 4, unmatched_from: 50, unmatched_keyed_from: 50, from_rows: 100 }, { ...spec, cardinality: 'one_to_many' }, sql, checkedAt);
+    expect(parent.status).toBe('passed');
+  });
+
+  it('a row from the older statement is judged on the same terms', () => {
+    const sql = relationshipValidationSql(spec, quote);
+    const legacy = relationshipEvidenceFromRow({ ...passingRow, from_rows: 100, joined_rows: 80, from_null_keys: 5, unmatched_from: 25 }, spec, sql, checkedAt);
+    // 25 unmatched less 5 without a key: 20 of 95.
+    expect(legacy).toMatchObject({ status: 'failed', unmatchedKeyedFrom: 20, maxToPerReferencedKey: 1 });
+  });
+});
+
+describe('cardinality over the keys a join reaches', () => {
+  // A sprint result joins its race result on race + driver. In the early
+  // years a driver could hold several results in one race, so the key is not
+  // unique over the whole results table; it is for every key a sprint reaches.
+  const db = new Database(':memory:');
+  db.exec(`
+    CREATE TABLE results (result_id INTEGER, race_id INTEGER, driver_id INTEGER);
+    CREATE TABLE sprint_results (result_id INTEGER, race_id INTEGER, driver_id INTEGER);
+    INSERT INTO results VALUES (1, 10, 1), (2, 10, 1), (3, 10, 2), (4, 900, 1), (5, 900, 2), (6, 901, 1);
+    INSERT INTO sprint_results VALUES (1, 900, 1), (2, 900, 2), (3, 901, 1);
+  `);
+  const execute = async (sql: string) => ({ rows: db.prepare(sql).all() as Array<Record<string, unknown>> });
+  const sprint = { fromRelation: 'sprint_results', toRelation: 'results', keys: [{ from: 'race_id', to: 'race_id' }, { from: 'driver_id', to: 'driver_id' }], cardinality: 'many_to_one' as const, fanout: 'safe' as const };
+
+  it('fails on the whole table and says the join holds over the keys it reaches', async () => {
+    const evidence = await validateRelationshipOnWarehouse(sprint, execute, quote);
+    expect(evidence).toMatchObject({ status: 'failed', maxToPerKey: 2, maxToPerReferencedKey: 1, unmatchedKeyedFrom: 0 });
+    expect(evidence.scope).toBeUndefined();
+    expect(evidence.message).toMatch(/results holds up to 2 rows for one key/);
+    expect(evidence.message).toMatch(/declare validation_scope: referenced_keys/);
+  });
+
+  it('passes when the relationship declares that scope, and the proof records it', async () => {
+    const whole = await validateRelationshipOnWarehouse(sprint, execute, quote);
+    const scoped = await validateRelationshipOnWarehouse({ ...sprint, scope: 'referenced_keys' }, execute, quote);
+    expect(scoped).toMatchObject({ status: 'passed', scope: 'referenced_keys', maxToPerKey: 2, maxToPerReferencedKey: 1 });
+    expect(scoped.message).toMatch(/holds over the keys this join reaches/);
+    expect(scoped.proofFingerprint).not.toBe(whole.proofFingerprint);
+    // The scope proves only the keys reached: a key reached twice still fails.
+    db.exec('INSERT INTO sprint_results VALUES (4, 10, 1)');
+    const reached = await validateRelationshipOnWarehouse({ ...sprint, scope: 'referenced_keys' }, execute, quote);
+    expect(reached).toMatchObject({ status: 'failed', maxToPerReferencedKey: 2 });
+    db.exec('DELETE FROM sprint_results WHERE result_id = 4');
+  });
+
+  it('measures lost rows and their distinct keys on a real warehouse', async () => {
+    db.exec(`
+      CREATE TABLE standings (standing_id INTEGER, race_id INTEGER);
+      CREATE TABLE standings_ext (standing_id INTEGER, race_id INTEGER);
+      INSERT INTO standings VALUES (1, 900), (2, 900), (3, 901);
+      INSERT INTO standings_ext VALUES (1, 900), (2, 900), (3, 901), (0, 902), (0, 902), (NULL, 903);
+    `);
+    const evidence = await validateRelationshipOnWarehouse({ fromRelation: 'standings_ext', toRelation: 'standings', keys: [{ from: 'standing_id', to: 'standing_id' }], cardinality: 'many_to_one', fanout: 'safe' }, execute, quote);
+    // Five rows have a key; two hold 0, which is nowhere in standings.
+    expect(evidence).toMatchObject({ status: 'failed', fromRows: 6, fromNullKeys: 1, unmatchedFrom: 3, unmatchedKeyedFrom: 2, unmatchedKeyValues: 1, unmatchedShare: 0.4 });
+    expect(evidence.message).toMatch(/placeholder/);
   });
 });
 

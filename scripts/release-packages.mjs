@@ -246,13 +246,92 @@ async function run(command, args, cwd) {
 
 async function packageVersionExists(root, packageName, version) {
   return await new Promise((resolve) => {
-    const child = spawn('npm', ['view', exactPackageSpec(packageName, version), 'version', '--silent'], {
+    // --prefer-online: npm otherwise answers from a cached packument for up to
+    // five minutes, which can predate a publish from this same run.
+    const child = spawn('npm', ['view', exactPackageSpec(packageName, version), 'version', '--silent', '--prefer-online'], {
       cwd: root,
       env: process.env,
       stdio: ['ignore', 'ignore', 'ignore'],
       shell: false,
     });
     child.on('exit', (code) => resolve(code === 0));
+    child.on('error', () => resolve(false));
+  });
+}
+
+/**
+ * How long the publish waits for npm to make the new versions installable
+ * before the post-publish smoke. `npm publish` returns while npm is still
+ * processing the package ("Your package is being processed and may take a few
+ * minutes to become available"). In the 0.1.0 tag run the smoke started eight
+ * seconds after `@zlens/cli` was published and got a 404; the registry listed
+ * `@zlens/cli@0.1.0` about five minutes later. ZLENS_RELEASE_REGISTRY_WAIT_MS
+ * overrides the limit.
+ */
+export const DEFAULT_REGISTRY_WAIT_MS = 30 * 60 * 1000;
+export const DEFAULT_REGISTRY_POLL_MS = 20 * 1000;
+
+export function registryWaitLimit(env = process.env) {
+  const raw = env.ZLENS_RELEASE_REGISTRY_WAIT_MS;
+  if (raw === undefined || raw === '') return DEFAULT_REGISTRY_WAIT_MS;
+  const value = Number(raw);
+  if (!Number.isFinite(value) || value < 0) {
+    throw new Error(`ZLENS_RELEASE_REGISTRY_WAIT_MS must be a number of milliseconds, received ${raw}.`);
+  }
+  return value;
+}
+
+/**
+ * Poll until every package spec is visible on the registry, or throw after
+ * `timeoutMs` naming the specs that never appeared. `isVisible`, `sleep` and
+ * `now` are injectable so the loop is tested without a registry or a clock.
+ */
+export async function waitForRegistryVersions(specs, {
+  isVisible,
+  sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+  now = () => Date.now(),
+  timeoutMs = DEFAULT_REGISTRY_WAIT_MS,
+  intervalMs = DEFAULT_REGISTRY_POLL_MS,
+  log = (line) => console.log(line),
+} = {}) {
+  if (typeof isVisible !== 'function') throw new Error('waitForRegistryVersions needs an isVisible(spec) check.');
+  const startedAt = now();
+  let pending = [...specs];
+  for (;;) {
+    const stillPending = [];
+    for (const spec of pending) {
+      if (!(await isVisible(spec))) stillPending.push(spec);
+    }
+    pending = stillPending;
+    const elapsed = now() - startedAt;
+    if (pending.length === 0) {
+      log(`    all ${specs.length} package(s) are installable from the registry (${Math.round(elapsed / 1000)}s)`);
+      return { elapsedMs: elapsed };
+    }
+    if (elapsed >= timeoutMs) {
+      throw new Error(
+        `npm did not list ${pending.join(', ')} within ${Math.round(timeoutMs / 60000)} minute(s) of publishing. ` +
+          'The versions may still be processing: re-run the release workflow (published versions are skipped) ' +
+          'or run `node scripts/smoke-cli-install.mjs <spec>` once npm lists them.',
+      );
+    }
+    log(`    waiting for npm to list ${pending.length} package(s): ${pending.slice(0, 4).join(', ')}${pending.length > 4 ? ', …' : ''}`);
+    await sleep(Math.min(intervalMs, Math.max(0, timeoutMs - elapsed)));
+  }
+}
+
+export async function registryListsVersion(root, spec) {
+  const version = spec.slice(spec.lastIndexOf('@') + 1);
+  return await new Promise((resolve) => {
+    const child = spawn('npm', ['view', spec, 'version', '--prefer-online'], {
+      cwd: root,
+      env: process.env,
+      stdio: ['ignore', 'pipe', 'ignore'],
+      shell: false,
+    });
+    let stdout = '';
+    child.stdout.on('data', (chunk) => { stdout += chunk; });
+    child.on('exit', (code) => resolve(code === 0 && stdout.trim() === version));
     child.on('error', () => resolve(false));
   });
 }
@@ -443,13 +522,31 @@ export async function main({ argv = process.argv.slice(2), cwd = process.cwd(), 
         await run('pnpm', publishCommandArgs({ ...release, provenance }), packageDir);
       }
     }
+    const cli = packageManifests.find(({ relPath }) => relPath === 'apps/cli')?.manifest;
+    if (!cli) throw new Error('Release package list must include apps/cli for the install smoke.');
+    const cliSpec = exactPackageSpec(cli.name, cli.version);
     if (release.publish) {
-      const cli = packageManifests.find(({ relPath }) => relPath === 'apps/cli')?.manifest;
-      if (!cli) throw new Error('Release package list must include apps/cli for the post-publish smoke.');
-      const cliSpec = exactPackageSpec(cli.name, cli.version);
+      // The CLI install pulls every sibling at this exact version, so wait for
+      // all of them, not only the CLI.
+      const specs = packageManifests.map(({ manifest }) => exactPackageSpec(manifest.name, manifest.version));
+      console.log(`\n==> Waiting for npm to list the ${specs.length} published package(s)`);
+      await waitForRegistryVersions(specs, {
+        isVisible: (spec) => registryListsVersion(cwd, spec),
+        timeoutMs: registryWaitLimit(env),
+      });
       console.log(`\n==> Verifying clean local/global install for exact ${cliSpec}`);
       await run(process.execPath, [
         path.join(cwd, 'scripts/smoke-cli-install.mjs'),
+        cliSpec,
+      ], cwd);
+    } else {
+      // The dry run installs what it just packed, the way npm would install the
+      // published packages, so an install bug shows up before a tag is pushed.
+      console.log(`\n==> Verifying a clean install of the packed ${cliSpec} tarballs`);
+      await run(process.execPath, [
+        path.join(cwd, 'scripts/smoke-cli-install.mjs'),
+        '--tarballs',
+        artifactsDir,
         cliSpec,
       ], cwd);
     }

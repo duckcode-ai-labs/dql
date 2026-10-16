@@ -1,0 +1,23 @@
+{
+  "key": "20097a5f82f8a93cc65ab8831471a4e9",
+  "operation": "generate",
+  "text": "{\"version\":1,\"kind\":\"analytics\",\"reading\":\"Rank players by total points scored in the current NBA season, top 10.\",\"measures\":[{\"ref\":\"column:dev.player_game_stats.pts\",\"aggregation\":\"sum\",\"alias\":\"total_points\",\"scope\":[{\"ref\":\"dimension:player_game_stats.played\",\"op\":\"eq\",\"values\":[1],\"source\":\"question\"}]}],\"groupBy\":[{\"ref\":\"dimension:player_game_stats.player_id\",\"role\":\"key\"}],\"display\":[\"dimension:player_game_stats.player_name\"],\"filters\":[],\"ordering\":{\"ref\":\"total_points\",\"direction\":\"desc\"},\"limit\":10,\"expectedShape\":\"ranking\",\"unresolved\":[{\"clause\":\"this season\",\"options\":[\"dimension:player_game_stats.season = 2017\",\"dimension:player_game_stats.season = 2016\"],\"material\":true,\"question\":\"The project only holds games from calendar 2016–2017 (season codes 2016 = 2016-17, 2017 = 2017-18); which season code should 'this season' mean — the latest (2017) or 2016?\"}],\"provenance\":{\"column:dev.player_game_stats.pts\":\"q:top scorers\",\"dimension:player_game_stats.played\":\"q:scorers\",\"dimension:player_game_stats.player_id\":\"q:who\",\"dimension:player_game_stats.player_name\":\"q:who\",\"dimension:player_game_stats.season\":\"q:this season\"}}",
+  "providerName": "claude",
+  "recordedAt": "2026-10-16T18:30:00.579Z",
+  "provenance": {
+    "kind": "recorded_provider",
+    "replayClassification": "recorded_provider",
+    "providerQuality": "eligible"
+  },
+  "fingerprintDiagnostics": {
+    "version": 2,
+    "messageCount": 2,
+    "messageRoles": [
+      "system",
+      "user"
+    ],
+    "preCanonicalHash": "20097a5f82f8a93cc65ab8831471a4e9cad6bde882f958e7b561b2948c04d6af",
+    "postCanonicalHash": "20097a5f82f8a93cc65ab8831471a4e9cad6bde882f958e7b561b2948c04d6af",
+    "appliedRuleClasses": []
+  }
+}
