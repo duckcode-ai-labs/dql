@@ -115,10 +115,11 @@ const EXPECTED_TEST_FILES = 189;
 // 2503 with drafted-SQL checks that stop blocking correct statements: composite-key joins, a recursive
 // CTE, a pasted definitions document (sql-checks.test.ts, +3) and names a statement defines itself,
 // JOIN … USING and CAST AS REAL on SQLite (sql-context-validation.test.ts, +4) (port of efc62b64).
-const EXPECTED_TESTS = 2503;
+// 2504 with "generate a report of …" kept an analytical question (intent-controller.test.ts, +1) (port of 7bad6cde).
+const EXPECTED_TESTS = 2504;
 // The heavy lane's share of EXPECTED_TESTS (catalog.test.ts 72 + project-state.test.ts 4), pinned so
 // a lane run on its own (CI runs the two lanes as separate steps) is audited as exactly as both together.
-// The ordinary lane's share is the difference: 2427.
+// The ordinary lane's share is the difference: 2428.
 const EXPECTED_HEAVY_TESTS = 76;
 
 const LANES = ['all', 'ordinary', 'heavy'];

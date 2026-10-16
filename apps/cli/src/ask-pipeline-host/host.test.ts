@@ -4,7 +4,7 @@ import type { AgentMessage, AgentProvider, AgentRunRequest } from '@zlens/agent'
 import type { ConnectionConfig } from '@zlens/connectors';
 import { buildVocabularyIndex, classifyWarehouseError, createAgentRunBudget, parseIntent, physicalRelationBinding, type AnalyticalIntentV1 } from '@zlens/agent';
 import { SemanticLayer } from '@zlens/core';
-import { preferredJoinHints, preferredJoinLine, skillsForDraft, mentionsName, joinHintUsed, hintsForQuestion, joinsAnyRelation, sharedKeyPair, relationsFromCatalogHits, missingFieldWords, relationsWithColumnWords, columnProbeBudgetMs, columnsForPhysicalEntry, connectionKey, physicalRelationName, relationColumnsProbeSql, relationDatabases, relationsFromProbeRows, relevantRelationsForQuestion, snowflakeShowColumnsRows, underAskedNames, coverageEvaluations, governedCoverageDoubt, createAskPipelineRouteExecutor, explainOutOfScope, explainOutOfScopeWords, gapPresentation, groundIntentLiterals, knownMissingRelation, memberCandidatesSql, normalizeExecutedRow, prepareBlockForAsk, recordRelationEvidence, resetRelationEvidence, runtimeSchemaForVocabulary, tracedProbes, vocabularyViewKey } from './host.js';
+import { preferredJoinHints, preferredJoinLine, skillsForDraft, mentionsName, joinHintUsed, hintsForQuestion, joinsAnyRelation, sharedKeyPair, relationsFromCatalogHits, missingFieldWords, relationsWithColumnWords, columnProbeBudgetMs, columnsForPhysicalEntry, connectionKey, physicalRelationName, relationColumnsProbeSql, relationDatabases, relationsFromProbeRows, relevantRelationsForQuestion, snowflakeShowColumnsRows, underAskedNames, coverageEvaluations, governedCoverageDoubt, effectiveAnsweredTrust, createAskPipelineRouteExecutor, explainOutOfScope, explainOutOfScopeWords, gapPresentation, groundIntentLiterals, knownMissingRelation, memberCandidatesSql, normalizeExecutedRow, prepareBlockForAsk, recordRelationEvidence, resetRelationEvidence, runtimeSchemaForVocabulary, toExecutorResult, tracedProbes, vocabularyViewKey } from './host.js';
 
 function scripted(replies: string[]): AgentProvider & { calls: AgentMessage[][] } {
   const calls: AgentMessage[][] = [];
@@ -97,6 +97,36 @@ describe('a ref outside the envelope is explained as out of scope, never as none
     expect(governedCoverageDoubt({ coverage: [{ word: 'revenue', state: 'uncertain', names: ['metric'] }], unmet: [{ obligation: 'coverage', message: 'this answer carries nothing for "tax"' }] }).reasons).toEqual([]);
     // A requested identity the answer could not carry: the label goes.
     expect(governedCoverageDoubt({ unmet: [{ obligation: 'display_label', message: 'the rows carry no team name' }] }).reasons).toEqual(['the rows carry no team name']);
+  });
+
+  it('downgrades every answer trust field when governed coverage is incomplete', () => {
+    expect(effectiveAnsweredTrust({ certified: false, reviewRequired: false, coverageDoubt: true })).toEqual({
+      trustState: 'review_required',
+      certification: 'review_required',
+      reviewStatus: 'review_required',
+      stopReason: 'generated_review_required',
+    });
+    expect(effectiveAnsweredTrust({ certified: false, reviewRequired: false, coverageDoubt: false }).certification).toBe('governed');
+    expect(effectiveAnsweredTrust({ certified: true, reviewRequired: false, coverageDoubt: true }).trustState).toBe('certified');
+  });
+
+  it('a governed answer downgraded for coverage says review required in the payload, the run and the result alike', () => {
+    const intent = { version: 1, kind: 'analytics', reading: 'Total amount.', measures: [{ ref: 'metric:ins.amount' }], groupBy: [], display: [], filters: [], expectedShape: 'scalar', unresolved: [], provenance: {} } as unknown as AnalyticalIntentV1;
+    const outcome = (uncovered: string[]) => ({
+      kind: 'answered', intent, text: 'Total amount is 10.',
+      result: { columns: ['amount'], rows: [{ amount: 10 }], rowCount: 1, executionTimeMs: 1 },
+      candidate: { tier: 'semantic', trust: 'governed', sql: 'SELECT SUM(amount) AS amount FROM ins.claims', proof: [] },
+      receipt: { version: 1, vocabularyFingerprint: 'test', dispatches: [], candidates: [], refusals: [], tiers: [], timings: {}, uncovered, coverage: uncovered.map((word) => ({ word, state: 'unsatisfied' })) },
+    }) as unknown as Parameters<typeof toExecutorResult>[1];
+    const downgraded = toExecutorResult('run:coverage', outcome(['premium']), Date.now());
+    const payload = downgraded.artifacts[0]!.payload as Record<string, unknown> & { result: { trustState: string } };
+    expect(downgraded).toMatchObject({ trustState: 'review_required', stopReason: 'generated_review_required', resolvedRoute: 'semantic_answer' });
+    // No field may go on calling it governed; the route still says where it came from.
+    expect(payload).toMatchObject({ trustState: 'review_required', certification: 'review_required', reviewStatus: 'review_required', sourceTier: 'semantic_layer' });
+    expect(payload.result.trustState).toBe('review_required');
+    const governed = toExecutorResult('run:governed', outcome([]), Date.now());
+    expect(governed).toMatchObject({ trustState: 'governed', stopReason: 'governed_semantic_answer' });
+    expect(governed.artifacts[0]!.payload).toMatchObject({ trustState: 'governed', certification: 'governed', reviewStatus: 'governed' });
   });
 });
 
