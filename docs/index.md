@@ -5,21 +5,24 @@ hide:
 
 # ZLens
 
-ZLens is an open-source analytics workbench on top of dbt. You build
+**Governed analytics on your warehouse — with or without dbt.**
+
+ZLens is an open-source analytics workbench. It works on top of your dbt
+project, or straight on your database's own tables. You build
 **blocks** (reviewed, reusable queries), turn them into **Apps**, and **Ask**
 questions in plain English. Every answer and every tile says how far to trust
 it: **Certified**, **Governed**, **Needs review**, or a refusal with the
 reason.
 
-Everything is a file in your project, so it is reviewed in git like your dbt
-code. ZLens runs on your machine; no hosted account is needed.
+Everything is a file in your project, so it is reviewed in git like code. ZLens runs on your machine; no hosted account is needed.
 
 {{ clip("overview") }}
 
 ## Start here
 
 1. [Quickstart](get-started/index.md): run ZLens on a sample dbt project and
-   get your first result in about ten minutes.
+   get your first result in about ten minutes. No dbt?
+   [Start from your database](get-started/no-dbt.md).
 2. [Ask a question](ask/index.md) and read its trust label.
 3. [Certify a block](blocks/certify.md) so Ask and Apps can trust it.
 
@@ -27,7 +30,7 @@ code. ZLens runs on your machine; no hosted account is needed.
 
 | | |
 |---|---|
-| **[Get started](get-started/index.md)** | Install, open the workbench, connect a database and an AI provider, add ZLens to your dbt project. |
+| **[Get started](get-started/index.md)** | Install, open the workbench, connect a database and an AI provider, add ZLens to your dbt project or start from your database alone. |
 | **[Ask and trust](ask/index.md)** | Certified answers, answers that need review and their saved drafts, refusals with a reason, and how each answer was made. |
 | **[Build blocks](blocks/index.md)** | Import SQL, work in Block Studio, save drafts and certify them. |
 | **[Notebooks](notebooks/index.md)** | SQL and DQL cells, results, saving a cell as a block, and sharing through git. |
@@ -51,7 +54,7 @@ code. ZLens runs on your machine; no hosted account is needed.
 | Package | What it is |
 |---|---|
 | [`@zlens/cli`](https://www.npmjs.com/package/@zlens/cli) | The `zlens` command and the workbench |
-| [`create-zlens-app`](https://www.npmjs.com/package/create-zlens-app) | Creates a new ZLens project |
+| [`create-zlens-app`](https://www.npmjs.com/package/create-zlens-app) | Creates a new ZLens project, on a dbt project or a database alone |
 | [`@zlens/mcp`](https://www.npmjs.com/package/@zlens/mcp) | The MCP server for AI agents |
 
 [GitHub](https://github.com/duckcode-ai-labs/zlens) ·

@@ -8,7 +8,8 @@
 <h3 align="center">Certified, or it says so.</h3>
 
 <p align="center">
-  Governed analytics for dbt teams. Every answer says what it is built on:<br>
+  Governed analytics on your warehouse — with or without dbt.<br>
+  Every answer says what it is built on:<br>
   a certified block, your semantic metrics, or SQL that AI wrote and someone still needs to review.
 </p>
 
@@ -34,10 +35,10 @@
 
 ## What is ZLens?
 
-ZLens is a local, open-source workbench that sits on top of your dbt project.
-It turns the analytics people build on dbt (queries, notebooks, dashboards and
-AI answers) into files you review in git, and it tells you how far to trust
-each answer.
+ZLens is a local, open-source workbench for governed analytics. It works on
+top of your dbt project, or straight on your database's own tables. It turns
+the analytics people build (queries, notebooks, dashboards and AI answers)
+into files you review in git, and it tells you how far to trust each answer.
 
 When someone asks a question, ZLens tries the most trusted source first and
 labels what it used:
@@ -52,7 +53,9 @@ If none of these can answer safely, Ask refuses and says why. It never dresses
 an unreviewed number up as a trusted one.
 
 - **dbt stays the source of truth.** ZLens reads your manifest, semantic
-  models and profiles; it does not replace dbt.
+  models and profiles; it does not replace dbt. No dbt? ZLens reads your
+  database's tables, keys and comments and drafts the joins for you to
+  certify.
 - **Everything is a file.** Blocks (`.dql`), notebooks (`.dqlnb`) and Apps live
   in your repo, so they are diffed, reviewed and versioned like code.
 - **Works with your coding agent.** A built-in MCP server gives Claude Code,
@@ -117,6 +120,9 @@ Next: [ask a question in plain English](https://duckcode-ai-labs.github.io/zlens
 [save the query as a block and certify it](https://duckcode-ai-labs.github.io/zlens/blocks/),
 or [add ZLens to your own dbt project](https://duckcode-ai-labs.github.io/zlens/get-started/your-dbt-project/).
 The full walkthrough is the [Quickstart guide](https://duckcode-ai-labs.github.io/zlens/get-started/).
+
+**No dbt?** [Start from your database](https://duckcode-ai-labs.github.io/zlens/get-started/no-dbt/):
+connect it, choose schemas, and ZLens drafts the models for you to certify.
 
 <details>
 <summary><b>Install the CLI globally, upgrade, or connect another database</b></summary>
@@ -270,7 +276,8 @@ Keep `npm run notebook` running while the agent works: it runs the queries.
 </p>
 
 1. **Sync.** `zlens sync dbt` reads your dbt manifest, semantic models and
-   warehouse shape into a local index.
+   warehouse shape into a local index. Without dbt, `zlens sync warehouse`
+   reads the schemas you choose: tables, columns, keys and comments.
 2. **Certify.** Blocks are reviewed queries with an owner and tests.
    Certifying records who vouched for them.
 3. **Compile.** `zlens compile` writes `dql-manifest.json`: every block,
@@ -296,7 +303,7 @@ ZLens ships as 18 npm packages. Most people only need `create-zlens-app` or
 | Package | What it is |
 |---|---|
 | [`@zlens/cli`](./apps/cli) | The `zlens` command: workbench, sync, compile, certify, lineage, Ask and the MCP server |
-| [`create-zlens-app`](./packages/create-dql-app) | Scaffolds a ZLens project next to your dbt project |
+| [`create-zlens-app`](./packages/create-dql-app) | Scaffolds a ZLens project, next to your dbt project or for a database alone |
 | [`@zlens/core`](./packages/dql-core) | DQL language core: lexer, parser, AST and semantic analysis |
 | [`@zlens/dql-compiler`](./packages/dql-compiler) | DQL compiler: IR lowering, Vega-Lite generation, HTML and CSS output |
 | [`@zlens/runtime`](./packages/dql-runtime) | Browser runtime: data fetching, Vega rendering, hot reload |

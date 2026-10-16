@@ -44,6 +44,7 @@ installation.
 | Command | What it does |
 | --- | --- |
 | `zlens init [dir]` | Initialize ZLens in a project (auto-detects dbt) |
+| `zlens init [dir] --warehouse-first` | Initialize a project that models the database's own tables, no dbt needed (`manifestVersion: 3`, `modeling.mode: "warehouse-first"`) |
 | `zlens doctor [path]` | Run local setup checks |
 | `zlens doctor scale` | Report enterprise-scale manifest/cache/index health |
 | `zlens doctor git-hygiene` | Flag tracked local/generated files before commit |
@@ -107,12 +108,33 @@ Exits **1** on changes — scriptable like `git diff`.
 | `zlens semantic list\|validate\|query\|pull` | Semantic layer operations |
 | `zlens sync dbt [path]` | Diff, compile, and reindex dbt-backed ZLens state |
 | `zlens sync dbt --check [path]` | Report dbt/DQL drift without writing |
-| `zlens model list [path]` | List dbt-first Domain Packages |
+| `zlens sync warehouse [path]` | Read the selected schemas' tables, columns, comments, declared keys and view SQL (metadata only, never rows). No dbt needed |
+| `zlens model list [path]` | List Domain Packages: entities and relationships |
 | `zlens model validate [path]` | Validate Domain Packages and relationship proofs |
-| `zlens model discover [path]` | Preview deterministic dbt domain proposals |
-| `zlens model apply-discovery [path] --apply` | Write reviewed sparse Domain Package proposals |
+| `zlens model discover [path]` | Preview draft domains, entities and joins: from dbt in a dbt-first project, from the warehouse catalog in a warehouse-first one |
+| `zlens model apply-discovery [path] --apply` | Write the previewed drafts as Domain Package proposals (without `--apply`, preview only) |
 | `zlens model explain <id> [path]` | Explain whether a relationship has automatic-join proof |
 | `zlens lineage [block] [path]` | Answer-layer lineage analysis |
+
+Warehouse sync and discovery flags (see
+[No dbt? Start from your database](../get-started/no-dbt.md)):
+
+| Command | Flag | Meaning |
+| --- | --- | --- |
+| `zlens sync warehouse` | `--schemas a,b` | Schemas to read; saved as the connection's metadata scope. With no flags, the saved selection is synced again |
+| `zlens sync warehouse` | `--database <name>` | Database or catalog the schemas are in (default: the connection's own) |
+| `zlens sync warehouse` | `--connection <name>` | Connection to read (default: the project's default connection) |
+| `zlens model discover`, `apply-discovery` | `--validate` | Check each drafted join and candidate key on the warehouse (aggregate queries only) and propose the cardinality seen |
+| `zlens model discover`, `apply-discovery` | `--query-history` | Also count joins in recent warehouse queries (Snowflake, PostgreSQL, Databricks, BigQuery); only join pairs and counts are kept |
+| `zlens model discover`, `apply-discovery` | `--domain <id>` | From the warehouse: put every drafted entity into this domain (default: one domain per schema). From dbt: the discovered domain to apply |
+| `zlens model discover`, `apply-discovery` | `--source warehouse\|dbt` | In a hybrid project, choose what to draft from (default: dbt when a dbt manifest exists) |
+
+```bash
+zlens init --warehouse-first
+zlens sync warehouse --schemas dev
+zlens model discover --validate
+zlens model apply-discovery --apply --validate
+```
 
 Useful lineage flags:
 
@@ -198,6 +220,7 @@ zlens lineage --dashboard daily_ops      # consumption lineage
 | `--to domain-first` | Target for `zlens migrate layout` |
 | `--dry-run` | Preview layout moves without writing |
 | `--apply` | Apply an otherwise preview-only migration or discovery plan |
+| `--warehouse-first` | For `init`: model the database's own tables, no dbt needed |
 | `--plan` | Print a deterministic proposal plan without writing |
 | `--force` / `-f` | Apply supported overwrites or file moves |
 | `--to shared` | Target for `zlens promote` |

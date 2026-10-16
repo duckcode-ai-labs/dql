@@ -1,5 +1,5 @@
 site_name: ZLens
-site_description: Governed analytics for the agentic era — certified blocks, Apps, end-to-end lineage, and AI answers that cite their sources, on top of dbt.
+site_description: Governed analytics on your warehouse — with or without dbt. Certified blocks, Apps, end-to-end lineage, and AI answers that cite their sources.
 site_url: https://duckcode-ai-labs.github.io/zlens/
 repo_url: https://github.com/duckcode-ai-labs/zlens
 repo_name: duckcode-ai-labs/zlens
@@ -124,6 +124,7 @@ nav:
   - Home: index.md
   - Get started:
       - Quickstart: get-started/index.md
+      - "No dbt? Start from your database": get-started/no-dbt.md
       - Install: get-started/install.md
       - Find your way around: get-started/workbench.md
       - Connect a database: get-started/connect-database.md

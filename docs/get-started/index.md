@@ -87,10 +87,13 @@ opens it. Leave the terminal running.
 
 The first time, ZLens opens **Guided Setup** in four steps.
 
-1. **Connect your dbt project.** You see **dbt project ready**, and the path
-   field shows `.` (this folder). Click **Preview**. ZLens shows the models, sources and
-   metrics it found and says **Nothing has changed yet**. Click
-   **Apply project**, then **Continue to database**.
+1. **Where does your data model live?** The sample is already a ZLens
+   project on a dbt project, so **dbt project** is selected, and below it,
+   under **Connect your dbt project**, you see **dbt project ready** with
+   the path field showing `.` (this folder). Click **Preview**. ZLens shows
+   the models, sources and metrics it found and says **Nothing has changed
+   yet**. Click **Apply project**, then **Continue to database**. (No dbt
+   project of your own? See [No dbt? Start from your database](no-dbt.md).)
 2. **Connect your database.** The sample's DuckDB connection is already set
    up: you see **DuckDB · configured** and **Test passed**. Click
    **Continue to optional AI**.
@@ -127,9 +130,16 @@ The sample ships with its ZLens workspace. For your own dbt project, create
 one with `npx create-zlens-app@latest dql` from the dbt repo; see
 [Add ZLens to your dbt project](your-dbt-project.md).
 
+## No dbt?
+
+ZLens also works straight on your database: connect it, choose the schemas
+to model, and ZLens drafts the entities and joins for you to certify. See
+[No dbt? Start from your database](no-dbt.md).
+
 ## Next
 
 - [Find your way around](workbench.md) the workbench.
 - [Ask a question](../ask/index.md) in plain English.
 - [Save the query as a block](../blocks/index.md) and certify it.
-- [Add ZLens to your own dbt project](your-dbt-project.md).
+- [Add ZLens to your own dbt project](your-dbt-project.md), or
+  [start from your database](no-dbt.md) without dbt.

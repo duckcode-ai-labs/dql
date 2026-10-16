@@ -77,23 +77,57 @@ Shop sample's, for example, points at the DuckDB file in the same folder:
 
 Every driver's fields are listed in the [Connectors reference](../reference/connectors.md).
 
-## Limit what ZLens indexes (optional)
+## Choose what ZLens reads: Metadata scope
 
-After a passing test, **Metadata scope** appears under the form. ZLens copies
-table and column names (never rows) into a local index so searches stay fast.
+After a passing test, **Metadata scope** appears under the form. It decides
+which schemas ZLens reads. ZLens copies their table and column names, never
+their rows, into a local index so Ask, notebook and Block Studio searches
+stay fast. What else the scope does depends on how the project models data:
+
+- **With dbt** (`dbt-first`), the dbt project already says which tables
+  matter. The scope is optional; use it only to add schemas dbt does not
+  cover.
+- **Without dbt** (`warehouse-first`), the schemas you choose here *are* the
+  model. The section says **Choose the schemas to model**, and syncing also
+  reads their comments, declared keys and view SQL into
+  `.dql/warehouse-catalog.json`, which Modeling works from. See
+  [No dbt? Start from your database](no-dbt.md).
+- **Both** (`hybrid`): dbt models plus schemas dbt does not cover. The
+  extra schemas are read for Modeling the same way.
+
+To set it:
 
 1. Pick an **Index mode**:
     - **Use exact dbt project relations (recommended)**: only the dbt project's
       tables.
     - **dbt relations plus selected schemas**: the dbt tables plus schemas you
-      name.
+      name. Use this for a hybrid project.
     - **Selected databases/catalogs and schemas**: only what you name. Use this
       without dbt.
 2. To see what you can pick, click **Find available databases & schemas**.
+   Name the schemas one line per database: `DATABASE: SCHEMA, SCHEMA`.
 3. Click **Apply and synchronize**.
 
-A failed or empty refresh keeps the previous index. **Refresh metadata**
-rebuilds it later.
+The status lines show what was read, for example **Warehouse metadata index
+ready · 13 indexed warehouse relations** and, without dbt, **Modeling
+catalog · 13 tables and views with their keys and comments**. A failed or
+empty refresh keeps the previous index. **Refresh metadata** rebuilds it
+later.
+
+The scope is saved in `dql.config.json` under `metadataScopes`. The terminal
+equivalent is:
+
+```bash
+zlens sync warehouse --schemas sales,finance
+```
+
+`--schemas` saves the selection as **Selected databases/catalogs and
+schemas**; `zlens sync warehouse` with no flags syncs the saved selection
+again and lists what changed since the last sync.
+
+Next, without dbt: **Modeling → Draft from warehouse** drafts entities and
+joins from what you synced, for you to review and certify. See
+[Modeling and Domain Packages](../datalex-and-dql.md#warehouse-first-model-your-database-without-dbt).
 
 ## Check from the terminal
 
