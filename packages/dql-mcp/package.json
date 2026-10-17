@@ -15,6 +15,7 @@
   "scripts": {
     "build": "rm -rf dist tsconfig.tsbuildinfo && tsc -b",
     "test": "vitest run --passWithNoTests",
+    "test:stdio": "node scripts/stdio-e2e.mjs",
     "clean": "rm -rf dist tsconfig.tsbuildinfo",
     "prepublishOnly": "pnpm run build",
     "prepack": "node ../../scripts/package-license-files.mjs"

@@ -1,13 +1,14 @@
 import { DQLContext, runStdio, runLoopbackHTTP } from '@zlens/mcp';
 import {
   defaultKgPath,
+  dqlToolNamesForSurface,
   ensureMetadataCatalogFresh,
   reindexProject,
 } from '@zlens/agent';
 import { existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import type { CLIFlags } from '../args.js';
-import { findProjectRoot } from '../local-runtime.js';
+import { findProjectRoot, readDqlRuntimeVersion } from '../local-runtime.js';
 import { readEnv } from '@zlens/core';
 
 interface McpFlags extends CLIFlags {
@@ -22,7 +23,7 @@ export async function runMcp(arg: string | null, rest: string[], flags: McpFlags
   const projectRoot = findProjectRoot(arg ?? process.cwd());
 
   if (flags.http) {
-    const handle = await runLoopbackHTTP({ projectRoot, port: flags.port ?? 0 });
+    const handle = await runLoopbackHTTP({ projectRoot, port: flags.port ?? 0, version: readDqlRuntimeVersion() });
     process.stderr.write(`dql-mcp listening on ${handle.url}\n`);
     process.stderr.write(`  Authorization: Bearer ${handle.token}\n`);
     for (const sig of ['SIGINT', 'SIGTERM'] as const) {
@@ -31,7 +32,7 @@ export async function runMcp(arg: string | null, rest: string[], flags: McpFlags
     return;
   }
 
-  await runStdio({ projectRoot });
+  await runStdio({ projectRoot, version: readDqlRuntimeVersion() });
 }
 
 /** One readiness check. Every check is required: "Ready" means an agent can actually answer. */
@@ -139,10 +140,12 @@ export async function collectMcpTestChecks(projectRoot: string, options: { runti
     });
   }
 
+  const fullProfile = ['full', 'expert', 'admin'].includes(readEnv('ZLENS_MCP_TOOL_PROFILE')?.trim().toLowerCase() ?? '');
+  const servedTools = dqlToolNamesForSurface(fullProfile ? 'mcp' : 'mcp_agentic');
   checks.push({
     name: 'MCP tool surface',
     ok: true,
-    detail: 'ask_dql, answer_question, typed App Dataset tools, query_via_metadata, build_block_from_prompt, build_dql_app, inspect_dql_project, certify, lineage, and metadata tools are available',
+    detail: `${servedTools.length} tools (${fullProfile ? 'full' : 'default'} profile): ${servedTools.join(', ')}`,
   });
 
   // answer_question, build_block_from_prompt, the query tools and the typed

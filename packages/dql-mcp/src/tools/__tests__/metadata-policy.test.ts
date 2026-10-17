@@ -37,6 +37,46 @@ describe('manifest v3 relationship policy tools', () => {
   });
 });
 
+describe('agents name entities and relationships the way people do', () => {
+  it('resolves bare entity names to their qualified ids when one domain has them', () => {
+    const ctx = makeCtx({}, { manifest: qualifiedManifest() });
+    expect(resolveAnalyticalPath(ctx, { entities: ['order', 'customer'] })).toMatchObject({
+      safe: true,
+      relationshipIds: ['commerce::relationship::order_to_customer'],
+    });
+  });
+
+  it('lists the available entity ids when a name is unknown, so the agent can retry', () => {
+    const ctx = makeCtx({}, { manifest: qualifiedManifest() });
+    const plan = resolveAnalyticalPath(ctx, { entities: ['orders', 'customers'] }) as { code?: string; availableEntities?: Array<{ id: string; name: string }> };
+    expect(plan.code).toBe('unbound_relation');
+    expect(plan.availableEntities).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'commerce::entity::order', name: 'order' }),
+      expect.objectContaining({ id: 'commerce::entity::customer', name: 'customer' }),
+    ]));
+  });
+
+  it('finds a relationship by its local id and lists the known ones when it cannot', () => {
+    const ctx = makeCtx({}, { manifest: qualifiedManifest() });
+    expect(explainRelationshipProof(ctx, { relationshipId: 'order_to_customer' })).toMatchObject({ found: true });
+    expect(explainRelationshipProof(ctx, { relationshipId: 'nope' })).toEqual({
+      found: false,
+      error: 'Relationship "nope" was not found in manifest v3. Known relationships: commerce::relationship::order_to_customer.',
+    });
+  });
+});
+
+/** The same model with qualified ids, as a real manifest v3 carries them. */
+function qualifiedManifest(): DQLManifest {
+  const value = { ...relationship(), id: 'commerce::relationship::order_to_customer', qualifiedId: 'commerce::relationship::order_to_customer', localId: 'order_to_customer', from: 'commerce::entity::order', to: 'commerce::entity::customer' } as ManifestModelRelationship;
+  const base = manifest(value);
+  base.modeling!.entities = {
+    'commerce::entity::order': { id: 'commerce::entity::order', localId: 'order', qualifiedId: 'commerce::entity::order', domain: 'commerce', dbtUniqueId: 'model.commerce.orders', keys: ['customer_id'], sourcePath: 'model.dql.yaml', identityFingerprint: 'order' },
+    'commerce::entity::customer': { id: 'commerce::entity::customer', localId: 'customer', qualifiedId: 'commerce::entity::customer', domain: 'commerce', dbtUniqueId: 'model.commerce.customers', keys: ['customer_id'], sourcePath: 'model.dql.yaml', identityFingerprint: 'customer' },
+  } as never;
+  return base;
+}
+
 function relationship(): ManifestModelRelationship {
   return {
     id: 'order_to_customer',

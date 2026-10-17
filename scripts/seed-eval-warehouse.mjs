@@ -69,8 +69,18 @@ function quoteIdentifier(value) {
 function buildStatements(seed, dialect, schema = null) {
   const statements = [];
   if (schema) statements.push(`CREATE SCHEMA IF NOT EXISTS ${quoteIdentifier(schema)}`);
+  const createdSchemas = new Set(schema ? [schema] : []);
   for (const [table, def] of Object.entries(seed.tables)) {
-    const relation = schema ? `${quoteIdentifier(schema)}.${quoteIdentifier(table)}` : quoteIdentifier(table);
+    // A seed may name its tables schema-qualified (`dev.orders`, as the
+    // jaffle-golden seed does); that schema wins over --schema.
+    const dot = table.lastIndexOf('.');
+    const tableSchema = dot > 0 ? table.slice(0, dot) : schema;
+    const tableName = dot > 0 ? table.slice(dot + 1) : table;
+    if (tableSchema && !createdSchemas.has(tableSchema)) {
+      statements.push(`CREATE SCHEMA IF NOT EXISTS ${quoteIdentifier(tableSchema)}`);
+      createdSchemas.add(tableSchema);
+    }
+    const relation = tableSchema ? `${quoteIdentifier(tableSchema)}.${quoteIdentifier(tableName)}` : quoteIdentifier(tableName);
     const cols = def.columns.map((c) => `${quoteIdentifier(c.name)} ${sqlType(dialect, c.type)}`).join(', ');
     statements.push(`DROP TABLE IF EXISTS ${relation}`);
     statements.push(`CREATE TABLE ${relation} (${cols})`);

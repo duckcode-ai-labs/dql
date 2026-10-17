@@ -121,6 +121,8 @@ export async function buildDqlApp(
   ctx: DQLContext,
   args: {
     prompt: string;
+    name?: string;
+    blocks?: string[];
     domain?: string;
     owner?: string;
     aiLayout?: boolean;
@@ -128,17 +130,54 @@ export async function buildDqlApp(
     overwrite?: boolean;
   },
 ) {
+  try {
+    return await buildDqlAppOnce(ctx, args);
+  } catch (error) {
+    // The workbench and this server share the index; a rebuild in the other
+    // process can leave this connection read-only or locked for a moment.
+    if (!isTransientIndexError(error)) throw error;
+    await new Promise((resolve) => setTimeout(resolve, 750));
+    try {
+      return await buildDqlAppOnce(ctx, args);
+    } catch (retryError) {
+      if (!isTransientIndexError(retryError)) throw retryError;
+      return {
+        ok: false as const,
+        error: 'The ZLens index was being rebuilt by another process (usually the workbench), so the App could not be planned. Retry in a moment.',
+      };
+    }
+  }
+}
+
+function isTransientIndexError(error: unknown): boolean {
+  return /readonly database|database is locked|SQLITE_BUSY|SQLITE_READONLY/i.test(error instanceof Error ? error.message : String(error));
+}
+
+async function buildDqlAppOnce(
+  ctx: DQLContext,
+  args: Parameters<typeof buildDqlApp>[1],
+) {
   const kgPath = defaultKgPath(ctx.projectRoot);
   await reindexProject(ctx.projectRoot, { kgPath });
   const kg = new KGStore(kgPath);
   try {
-    const plan = planAppFromPrompt({
+    const unknownBlocks = (args.blocks ?? []).filter((name) => ctx.manifest.blocks[name]?.status !== 'certified');
+    if (unknownBlocks.length > 0) {
+      return {
+        ok: false as const,
+        error: `Only certified blocks can be App tiles; not certified or not found: ${unknownBlocks.join(', ')}. Use search_blocks with status "certified".`,
+      };
+    }
+    const planned = planAppFromPrompt({
       prompt: args.prompt,
       kg,
       domain: cleanOptional(args.domain),
       owner: cleanOptional(args.owner),
       plannerMode: args.aiLayout ? 'ai_assisted' : 'deterministic',
+      ...(args.blocks?.length ? { preferredBlockIds: args.blocks.map((name) => `block:${name}`), maxCertifiedTiles: args.blocks.length } : {}),
     });
+    const name = cleanOptional(args.name);
+    const plan = name ? { ...planned, name, appId: appIdFor(name) } : planned;
     const validation = validateAppPlan(plan, kg);
     const generated = args.saveDraft === false
       ? undefined
@@ -284,6 +323,10 @@ function summarizeObject(object: MetadataObject) {
 
 function isCertified(object: MetadataObject): boolean {
   return object.status === 'certified' || object.payload?.certification === 'certified';
+}
+
+function appIdFor(name: string): string {
+  return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60) || 'app';
 }
 
 function cleanOptional(value: string | undefined): string | undefined {

@@ -99,6 +99,30 @@ describe('answerQuestion (governed answer via runtime proxy)', () => {
     expect(out.error).toMatch(/zlens notebook/);
   });
 
+  it('turns a run blocked for lack of an AI model into a clear error that points at the bring-your-own-SQL path', async () => {
+    mockFetchOnce(201, {
+      run: {
+        question: 'How has revenue changed by month?',
+        route: 'generated_answer',
+        status: 'blocked',
+        trustState: 'blocked',
+        answer: 'No AI model is configured for this project, so the question could not be interpreted.',
+        artifacts: [{
+          kind: 'answer',
+          trustState: 'blocked',
+          payload: { kind: 'no_answer', diagnosticReceipt: { failure: { code: 'EXECUTION_BLOCKED', safeActions: ['retry-after-provider'] } } },
+        }],
+      },
+    });
+    const out = await answerQuestion(ctxStub(), { question: 'How has revenue changed by month?' });
+    expect(out.ok).toBe(false);
+    if (out.ok) return;
+    expect((out as { modelUnavailable?: boolean }).modelUnavailable).toBe(true);
+    expect(out.error).toMatch(/no AI model/);
+    expect(out.error).toMatch(/ask_dql/);
+    expect(out.error).toMatch(/query_via_metadata/);
+  });
+
   it('rejects an empty question without calling the runtime', async () => {
     const spy = vi.fn();
     vi.stubGlobal('fetch', spy as unknown as typeof fetch);
@@ -124,6 +148,48 @@ describe('buildBlockFromPrompt (governed NL→block via runtime proxy)', () => {
     expect(out.draftBlockPath).toBe('blocks/_drafts/weekly_revenue_by_region.dql');
     expect(out.promote).toContain('zlens certify --from-draft');
     expect(out.trustNote).toMatch(/never present it as certified/i);
+  });
+
+  it('maps the runtime\'s real BuildBlockResult (path, sqlPreview, certifierVerdict) instead of dropping it', async () => {
+    mockFetchOnce(200, {
+      target: 'block',
+      path: 'blocks/_drafts/weekly_order_count.dql',
+      name: 'weekly_order_count',
+      sqlPreview: 'SELECT date_trunc(\'week\', ordered_at) AS week, count(*) AS orders FROM dev.orders GROUP BY 1',
+      description: 'Weekly order count.',
+      grain: 'one row per week',
+      outputs: ['week', 'orders'],
+      certifierVerdict: { blocking: ['No test results available'], warnings: [], ready: false },
+      reflection: { ready: false, remainingBlocking: ['All tests pass: No test results available'], remainingWarnings: [] },
+      route: { tier: 'generated_sql', label: 'Drafted new block weekly_order_count' },
+      generation: 'model',
+    });
+    const out = await buildBlockFromPrompt(ctxStub(), { prompt: 'weekly order count' });
+    expect(out.ok).toBe(true);
+    if (!out.ok) return;
+    expect(out.draftBlockPath).toBe('blocks/_drafts/weekly_order_count.dql');
+    expect(out.sql).toContain('dev.orders');
+    expect(out.verdict).toMatchObject({ ready: false });
+    expect(out.trustLabel).toBe('AI-Generated');
+    expect(out.promote).toBe('zlens certify --from-draft blocks/_drafts/weekly_order_count.dql');
+  });
+
+  it('says so when no AI model built it (the offline starter template is not built from the prompt)', async () => {
+    mockFetchOnce(200, {
+      target: 'block',
+      path: 'blocks/_drafts/revenue_by_store.dql',
+      name: 'revenue_by_store',
+      sqlPreview: 'SELECT 1 AS placeholder',
+      certifierVerdict: { blocking: [], warnings: [], ready: false },
+      generation: 'offline_template',
+    });
+    const out = await buildBlockFromPrompt(ctxStub(), { prompt: 'revenue by store' });
+    expect(out.ok).toBe(false);
+    if (out.ok) return;
+    expect((out as { modelUnavailable?: boolean }).modelUnavailable).toBe(true);
+    expect(out.error).toMatch(/could not build this block from your description/);
+    expect(out.error).toMatch(/suggest_block/);
+    expect(out.error).toContain('blocks/_drafts/revenue_by_store.dql');
   });
 
   it('rejects edit mode without a blockPath', async () => {

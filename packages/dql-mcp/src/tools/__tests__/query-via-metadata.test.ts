@@ -586,7 +586,7 @@ describe('queryViaMetadata — Tier-2 promotion loop entry point', () => {
       question: 'how many active customers?',
       proposedSql: 'SELECT month, revenue FROM fct_orders',
     });
-    expect((out as { error: string }).error).toMatch(/Could not reach ZLens runtime/);
+    expect((out as { error: string }).error).toMatch(/Could not reach the ZLens runtime/);
     expect(out.draftBlock).toBeDefined();
     expect((out as { dqlArtifact: { source: string } }).dqlArtifact.source).toContain('SELECT month, revenue FROM fct_orders');
   });

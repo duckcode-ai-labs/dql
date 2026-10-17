@@ -2,6 +2,7 @@ import type { TileQuery } from '@zlens/core';
 import type { DQLContext } from '../context.js';
 import { zodInputShapeForTool } from '../tool-schema.js';
 import { readEnv } from '@zlens/core';
+import { fetchRuntime, runtimeUnreachableMessage } from '../runtime-fetch.js';
 
 const DEFAULT_RUNTIME_URL = 'http://127.0.0.1:3474';
 
@@ -27,10 +28,7 @@ function runtimeUnavailable(base: string, projectRoot: string, error: unknown) {
   return {
     ok: false as const,
     runtimeUnavailable: true as const,
-    error:
-      `Could not reach the ZLens runtime at ${base}. Dataset execution needs it running — ` +
-      `start the workbench with \`zlens notebook\` in ${projectRoot} (\`npm run notebook\` in a create-zlens-app project), or pass serverUrl, then retry. ` +
-      `(${error instanceof Error ? error.message : String(error)})`,
+    error: runtimeUnreachableMessage(base, projectRoot, error, 'App Dataset tools need it'),
   };
 }
 
@@ -43,7 +41,7 @@ async function requestRuntime(
   const base = runtimeBase(serverUrl);
   let response: Response;
   try {
-    response = await fetch(`${base}${path}`, init);
+    response = await fetchRuntime(`${base}${path}`, init);
   } catch (error) {
     return runtimeUnavailable(base, ctx.projectRoot, error);
   }

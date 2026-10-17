@@ -38,7 +38,9 @@ describe('Dataset MCP runtime adapter', () => {
     });
     const listed = await listDatasets(ctxStub(), { query: 'orders', serverUrl: 'http://runtime/' });
     expect(listed).toMatchObject({ ok: true, snapshotId: 'snapshot-a', total: 1 });
-    expect(fetchMock).toHaveBeenCalledWith('http://runtime/api/app-datasets?query=orders', { method: 'GET' });
+    expect(fetchMock).toHaveBeenCalledWith('http://runtime/api/app-datasets?query=orders', expect.objectContaining({ method: 'GET' }));
+    // Every runtime call carries a deadline so a stuck workbench cannot hang the agent.
+    expect((fetchMock.mock.calls[0]?.[1] as RequestInit).signal).toBeInstanceOf(AbortSignal);
 
     fetchMock.mockResolvedValueOnce({
       ok: true,

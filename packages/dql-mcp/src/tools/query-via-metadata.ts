@@ -22,6 +22,7 @@ import type {
 } from '@zlens/core';
 import { zodInputShapeForTool } from '../tool-schema.js';
 import { readEnv } from '@zlens/core';
+import { fetchRuntime, runtimeUnreachableMessage } from '../runtime-fetch.js';
 
 const DEFAULT_QUERY_VIA_METADATA_ROW_LIMIT = 200;
 
@@ -224,7 +225,7 @@ export async function queryViaMetadata(
 
   let response: Response;
   try {
-    response = await fetch(url, {
+    response = await fetchRuntime(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -237,7 +238,7 @@ export async function queryViaMetadata(
       }),
     });
   } catch (err) {
-    const error = `Could not reach ZLens runtime at ${base}. Start the workbench with \`zlens notebook\` in ${ctx.projectRoot} (\`npm run notebook\` in a create-zlens-app project). (${err instanceof Error ? err.message : String(err)})`;
+    const error = runtimeUnreachableMessage(base, ctx.projectRoot, err, 'Running the SQL needs it (the draft was still prepared; dryRun=true skips execution)');
     recordTier2QueryRun(ctx.projectRoot, { slug, question: args.question, status: 'runtime_unavailable', errorCode: 'runtime_unavailable', contextPack });
     return {
       uncertified: true,

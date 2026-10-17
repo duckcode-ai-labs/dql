@@ -29,7 +29,7 @@ import { existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { createRequire } from 'node:module';
 import { Certifier } from '@zlens/governance';
-import { buildManifest, type ManifestModelArea, type ManifestModelEntity } from '@zlens/core';
+import { buildManifest, readWarehouseCatalog, type ManifestModelArea, type ManifestModelEntity } from '@zlens/core';
 import type { BlockRecord, BlockStatus } from '@zlens/project';
 import {
   reflectAndReviseBlock,
@@ -60,7 +60,7 @@ import type { LocalContextPack, LocalContextSkill } from '../metadata/catalog.js
 import { domainContextSearchDomains, type DomainContextEnvelope } from '../domain-context.js';
 import { pickProvider } from '../providers/index.js';
 import type { AgentProvider } from '../providers/types.js';
-import { loadDbtArtifacts, type DbtArtifacts } from './dbt-artifacts.js';
+import { artifactsFromWarehouseCatalog, loadDbtArtifacts, type DbtArtifacts } from './dbt-artifacts.js';
 import { blockSlug, upsertProposedDraft, type ProposedDraftRecord } from './write-draft.js';
 import {
   loadBlockForEdit,
@@ -184,8 +184,16 @@ export interface BuildTrustDiagnostics {
   warnings: string[];
 }
 
+/**
+ * How a build produced its SQL: an AI model, a governed semantic metric (no
+ * model needed), or the offline starter template used when neither was
+ * available (not built from the request).
+ */
+export type BuildGeneration = 'model' | 'governed_metric' | 'offline_template';
+
 export interface BuildCellResult {
   target: 'cell';
+  generation?: BuildGeneration;
   sql: string;
   explanation?: string;
   /** Skills that shaped the answer, for UI transparency. */
@@ -195,6 +203,7 @@ export interface BuildCellResult {
 
 export interface BuildBlockResult {
   target: 'block';
+  generation?: BuildGeneration;
   path: string;
   name: string;
   sqlPreview: string;
@@ -261,6 +270,14 @@ function tryLoadArtifacts(projectRoot: string, manifestPath?: string): DbtArtifa
     } catch {
       // Try the next candidate.
     }
+  }
+  // A database-only project has no dbt manifest: ground on the warehouse
+  // catalog `zlens sync warehouse` wrote, or the model sees no tables at all.
+  try {
+    const { snapshot } = readWarehouseCatalog(projectRoot);
+    if (snapshot && snapshot.relations.length > 0) return artifactsFromWarehouseCatalog(snapshot);
+  } catch {
+    // No catalog either.
   }
   return undefined;
 }
@@ -884,6 +901,9 @@ async function buildBlock(
       options.context?.cellSql?.trim() ||
       resolveRelationsInSql(fallbackCellSql(grounding, options.context), grounding, { prefer: 'ref' }).sql;
   }
+  // Neither the model nor a governed metric produced SQL: the draft holds the
+  // starter template, not something built from the request.
+  const templated = !initialSql && !options.context?.cellSql?.trim();
 
   const baseDescription =
     content.description || `Draft block built from prompt: "${options.prompt.slice(0, 160)}".`;
@@ -1001,6 +1021,7 @@ async function buildBlock(
     route: matchedMetric
       ? { tier: 'semantic_metric', label: `Based on governed metric ${matchedMetric.name}`, ref: matchedMetric.name }
       : { tier: 'generated_sql', label: `Drafted new block ${name}`, ref: name },
+    ...(templated ? { generation: 'offline_template' as const } : {}),
   };
 }
 
@@ -1297,13 +1318,20 @@ export async function buildFromPrompt(options: BuildFromPromptOptions): Promise<
     );
   const diagnostics = buildTrustDiagnostics({ options, scope, skills: appliedSkills, grounding, matchedMetric });
 
+  // How the SQL was produced, so a caller can tell a draft built from the
+  // request from the starter template the offline path falls back to.
+  const generation: BuildGeneration = provider
+    ? 'model'
+    : matchedMetric && options.mode !== 'edit' ? 'governed_metric' : 'offline_template';
   if (options.target === 'cell') {
-    return buildCell(scopedOptions, grounding, provider, skillsPrompt, appliedSkills, diagnostics, matchedMetric);
+    return { generation, ...(await buildCell(scopedOptions, grounding, provider, skillsPrompt, appliedSkills, diagnostics, matchedMetric)) };
   }
   // target: 'block' — edit an existing block in place, or create a new draft.
-  return options.mode === 'edit'
-    ? editBlock(scopedOptions, grounding, provider, skillsPrompt, appliedSkills, diagnostics)
-    : buildBlock(scopedOptions, grounding, provider, skillsPrompt, appliedSkills, diagnostics, matchedMetric);
+  // buildBlock reports 'offline_template' itself when the model returned no SQL.
+  const built = options.mode === 'edit'
+    ? await editBlock(scopedOptions, grounding, provider, skillsPrompt, appliedSkills, diagnostics)
+    : await buildBlock(scopedOptions, grounding, provider, skillsPrompt, appliedSkills, diagnostics, matchedMetric);
+  return { generation, ...built };
 }
 
 /**

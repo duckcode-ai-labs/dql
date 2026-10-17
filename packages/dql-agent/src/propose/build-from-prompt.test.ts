@@ -557,3 +557,37 @@ block "certified_block" {
     ).rejects.toThrow(/not found/i);
   });
 });
+
+describe('buildFromPrompt in a database-only project (warehouse catalog, no dbt)', () => {
+  let root: string;
+
+  beforeEach(() => {
+    root = mkdtempSync(join(tmpdir(), 'dql-build-warehouse-'));
+    writeFileSync(join(root, 'dql.config.json'), JSON.stringify({ project: 'w', manifestVersion: 3, modeling: { mode: 'warehouse-first' } }));
+    mkdirSync(join(root, '.dql'), { recursive: true });
+    writeFileSync(join(root, '.dql', 'warehouse-catalog.json'), JSON.stringify({
+      version: 1, driver: 'duckdb', connectionId: 'default', scopes: [], capturedAt: '2026-10-01T00:00:00.000Z', fingerprint: 'x',
+      relations: [{ id: 'warehouse.jaffle_shop.dev.order_items', database: 'jaffle_shop', schema: 'dev', name: 'order_items', relation: 'dev.order_items', kind: 'table', columns: [{ name: 'product_id', type: 'VARCHAR' }, { name: 'product_price', type: 'DECIMAL' }] }],
+    }));
+  });
+
+  afterEach(() => rmSync(root, { recursive: true, force: true }));
+
+  it('grounds on the warehouse catalog (the model used to see no tables) and says when the SQL is only the starter template', async () => {
+    const seen: string[] = [];
+    const provider: AgentProvider = {
+      name: 'claude',
+      available: async () => true,
+      generate: async (messages: AgentMessage[]) => {
+        seen.push(messages.map((message) => message.content).join('\n'));
+        return '{}';
+      },
+    } as unknown as AgentProvider;
+    const result = await buildFromPrompt({ projectRoot: root, prompt: 'total revenue by product', target: 'block', provider }) as BuildBlockResult;
+    expect(seen.join('\n')).toContain('dev.order_items');
+    // The model answered with no SQL, so the draft is the template, and the result says so.
+    expect(result.generation).toBe('offline_template');
+    expect(result.sqlPreview).toContain('dev.order_items');
+    expect(result.sqlPreview).not.toContain('placeholder');
+  });
+});

@@ -15,6 +15,7 @@ import {
 import type { DQLContext } from '../context.js';
 import { zodInputShapeForTool } from '../tool-schema.js';
 import { readEnv } from '@zlens/core';
+import { fetchRuntime, runtimeUnreachableMessage } from '../runtime-fetch.js';
 
 const DEFAULT_QUERY_VIA_BLOCK_ROW_LIMIT = 200;
 
@@ -90,7 +91,7 @@ export async function queryViaBlock(
 
   let response: Response;
   try {
-    response = await fetch(url, {
+    response = await fetchRuntime(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -106,7 +107,7 @@ export async function queryViaBlock(
     });
   } catch (err) {
     return {
-      error: `Could not reach ZLens runtime at ${base}. Start the workbench with \`zlens notebook\` in ${ctx.projectRoot} (\`npm run notebook\` in a create-zlens-app project). (${err instanceof Error ? err.message : String(err)})`,
+      error: runtimeUnreachableMessage(base, ctx.projectRoot, err, 'Running a certified block needs it'),
     };
   }
 

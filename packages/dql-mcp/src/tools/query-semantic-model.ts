@@ -15,6 +15,7 @@ import {
 import type { DQLContext } from '../context.js';
 import { zodInputShapeForTool } from '../tool-schema.js';
 import { readEnv } from '@zlens/core';
+import { fetchRuntime, runtimeUnreachableMessage } from '../runtime-fetch.js';
 
 export const querySemanticModelInput = zodInputShapeForTool('query_semantic_model');
 
@@ -259,7 +260,7 @@ async function previewSemanticQuery(
   const url = `${base.replace(/\/$/, '')}/api/notebook/execute`;
   let response: Response;
   try {
-    response = await fetch(url, {
+    response = await fetchRuntime(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -274,7 +275,7 @@ async function previewSemanticQuery(
   } catch (err) {
     return {
       executionStatus: 'runtime_unavailable',
-      error: `Could not reach ZLens runtime at ${base}. Start the workbench with \`zlens notebook\` in ${ctx.projectRoot} (\`npm run notebook\` in a create-zlens-app project). (${err instanceof Error ? err.message : String(err)})`,
+      error: runtimeUnreachableMessage(base, ctx.projectRoot, err, 'The preview needs it (dryRun=true returns the compiled SQL without it)'),
       maxRowsReturned: rowLimit,
     };
   }

@@ -29,14 +29,29 @@ export function lineageImpact(
   },
 ) {
   const graph = ctx.lineageGraph;
-  const result = queryLineage(graph, {
+  let result = queryLineage(graph, {
     focus: args.focus,
     upstreamDepth: args.upstreamDepth,
     downstreamDepth: args.downstreamDepth,
   });
 
   if (!result.focalNode) {
-    return { error: `No node matches "${args.focus}".` };
+    // People name a table without its schema or node prefix ("orders" for
+    // `table:dev.orders`, `dbt_model:orders`). Use the one node it names.
+    const candidates = nodesNamed(graph.getAllNodes(), args.focus);
+    if (candidates.length === 1) {
+      result = queryLineage(graph, { focus: candidates[0]!.id, upstreamDepth: args.upstreamDepth, downstreamDepth: args.downstreamDepth });
+    } else {
+      const suggestions = candidates.length > 1
+        ? candidates
+        : graph.getAllNodes().filter((node) => `${node.id} ${node.name}`.toLowerCase().includes(args.focus.trim().toLowerCase()));
+      return {
+        error: `No node matches "${args.focus}".${suggestions.length
+          ? ` ${candidates.length > 1 ? 'It could be' : 'Close matches'}: ${suggestions.slice(0, 12).map((node) => node.id).join(', ')}. Pass one of these ids as focus.`
+          : ' Use an id such as block:<name>, dbt_model:<name>, table:<schema.table> or app:<id>.'}`,
+      };
+    }
+    if (!result.focalNode) return { error: `No node matches "${args.focus}".` };
   }
   const nodeLimit = boundedLimit(args.nodeLimit, DEFAULT_LINEAGE_NODE_LIMIT, 1, 500);
   const edgeLimit = boundedLimit(args.edgeLimit, DEFAULT_LINEAGE_EDGE_LIMIT, 1, 1000);
@@ -160,4 +175,14 @@ function summarizeLineageGraph(nodes: Array<{ type: string; domain?: string }>) 
     if (node.domain) byDomain[node.domain] = (byDomain[node.domain] ?? 0) + 1;
   }
   return { byType, byDomain };
+}
+
+/** Nodes a bare name refers to: the id after its type prefix, or the last part of a dotted name. */
+function nodesNamed<T extends { id: string; name: string }>(nodes: T[], focus: string): T[] {
+  const wanted = focus.trim().toLowerCase();
+  if (!wanted) return [];
+  const tail = (value: string) => value.toLowerCase().split(':').pop()!.split('.').pop()!;
+  const exact = nodes.filter((node) => node.name.toLowerCase() === wanted || node.id.toLowerCase().split(':').slice(1).join(':') === wanted);
+  if (exact.length > 0) return exact;
+  return nodes.filter((node) => tail(node.id) === wanted || tail(node.name) === wanted);
 }

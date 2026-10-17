@@ -98,6 +98,7 @@ export async function inspectMetadataContext(
     objectTypes?: string[];
     limit?: number;
     strictness?: 'balanced' | 'exploratory';
+    includeDiagnostics?: boolean;
   },
 ) {
   const refresh = await ensureMetadataCatalogFresh(ctx.projectRoot)
@@ -128,8 +129,52 @@ export async function inspectMetadataContext(
       edgeCount: refresh.edgeCount,
       diagnostics: refresh.diagnostics,
     },
-    contextPack,
+    contextPack: args.includeDiagnostics ? contextPack : compactContextPack(contextPack),
   };
+}
+
+/** Objects returned with their full payload; the rest keep key, type, name and snippet. */
+const FULL_PAYLOAD_OBJECTS = 3;
+const MAX_OBJECTS = 30;
+const MAX_EDGES = 20;
+const MAX_LIST = 25;
+
+/**
+ * The full pack runs to hundreds of KB on a real project (the retrieval
+ * diagnostics alone are most of it), which is more than Claude Code accepts
+ * from one tool call (it refuses results over ~25k tokens) and crowds every
+ * other client's context. Keep everything an agent needs to write and check
+ * SQL — the pack id, question plan, route, trust label, allowed SQL context,
+ * evidence, citations, governed join paths, missing context and conflicts —
+ * and summarize the rest. `includeDiagnostics: true` returns it all.
+ */
+export function compactContextPack<T extends object>(input: T): T {
+  const pack = input as unknown as Record<string, unknown>;
+  const objects = Array.isArray(pack.objects) ? pack.objects as Array<Record<string, unknown>> : [];
+  const edges = Array.isArray(pack.edges) ? pack.edges as unknown[] : [];
+  const diagnostics = (pack.retrievalDiagnostics ?? {}) as Record<string, unknown>;
+  const countOf = (value: unknown) => (Array.isArray(value) ? value.length : value && typeof value === 'object' ? Object.keys(value).length : 0);
+  return {
+    ...pack,
+    objects: objects.slice(0, MAX_OBJECTS).map((object, index) => (index < FULL_PAYLOAD_OBJECTS
+      ? object
+      : { objectKey: object.objectKey, objectType: object.objectType, name: object.name, ...(object.status ? { status: object.status } : {}), ...(object.snippet ? { snippet: object.snippet } : {}) })),
+    ...(objects.length > MAX_OBJECTS ? { objectsOmitted: objects.length - MAX_OBJECTS } : {}),
+    edges: edges.slice(0, MAX_EDGES),
+    ...(Array.isArray(pack.evidenceRoles) ? { evidenceRoles: (pack.evidenceRoles as unknown[]).slice(0, MAX_LIST) } : {}),
+    ...(Array.isArray(pack.citations) ? { citations: (pack.citations as unknown[]).slice(0, MAX_LIST) } : {}),
+    ...(edges.length > MAX_EDGES ? { edgesOmitted: edges.length - MAX_EDGES } : {}),
+    retrievalDiagnostics: {
+      ...(diagnostics.strategy !== undefined ? { strategy: diagnostics.strategy } : {}),
+      ...(diagnostics.selectedJoinPaths !== undefined ? { selectedJoinPaths: diagnostics.selectedJoinPaths } : {}),
+      ...(diagnostics.candidateConflicts !== undefined ? { candidateConflicts: diagnostics.candidateConflicts } : {}),
+      ...(diagnostics.certifiedCandidateFits !== undefined ? { certifiedCandidateFits: diagnostics.certifiedCandidateFits } : {}),
+      counts: Object.fromEntries(Object.entries(diagnostics)
+        .filter(([key]) => !['strategy', 'selectedJoinPaths', 'candidateConflicts', 'certifiedCandidateFits'].includes(key))
+        .map(([key, value]) => [key, countOf(value)])),
+      note: 'Summarized. Call inspect_metadata_context with includeDiagnostics: true for the full retrieval diagnostics.',
+    },
+  } as unknown as T;
 }
 
 export const feedbackRecordInput = zodInputShapeForTool('feedback_record');

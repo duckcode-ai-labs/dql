@@ -49,6 +49,8 @@ import {
   searchMetadata,
   validateSql,
 } from './tools/metadata.js';
+import { listApps, listNotebooks } from './tools/apps-notebooks.js';
+import { mcpToolAnnotations } from './tool-annotations.js';
 import { readEnv } from '@zlens/core';
 
 export interface CreateServerOptions {
@@ -77,7 +79,8 @@ const DQL_MCP_AGENTIC_INSTRUCTIONS =
   'Two ways to answer: `answer_question` runs ZLens\'s FULL governed cascade and ' +
   'returns the executed answer + rows + canonical trust label + a reviewable ' +
   'draft — use it when you want ZLens to generate for you (same engine + trust ' +
-  'guards as the ZLens UI). The BYOSQL path (`ask_dql` → inspect → ' +
+  'guards as the ZLens UI). It needs an AI model set up in ZLens; when it returns ' +
+  '`modelUnavailable`, answer through the BYOSQL path instead. The BYOSQL path (`ask_dql` → inspect → ' +
   '`query_via_metadata` with your own SELECT) is for when you want to author the ' +
   'SQL yourself. To create a reusable block from a description, use ' +
   '`build_block_from_prompt` (governed, no SQL authoring); it returns a ' +
@@ -131,13 +134,18 @@ const DQL_MCP_AGENTIC_INSTRUCTIONS =
   'but disagree, `ask_dql` returns route `conflict` with BOTH definitions and ' +
   'owners. Present both sides and ask the user which is authoritative — never ' +
   'silently pick one.\n' +
-  'Use `suggest_block` for reusable draft blocks, `certify` for governance, ' +
-  '`lineage_impact` for dependencies, and `kg_search` for the knowledge graph. ' +
+  'Use `suggest_block` for reusable draft blocks, `certify` to check a block against ' +
+  'the certification rules (a check only; people certify), `lineage_impact` for ' +
+  'dependencies and impact, and `kg_search` for the knowledge graph.\n' +
+  'Apps and notebooks: `list_apps` lists the Apps with their dashboards, tiles, the ' +
+  'block behind each tile and its trust; `build_dql_app` drafts a new App (certified ' +
+  'tiles first, review-only placeholders otherwise; never certifies); `list_notebooks` ' +
+  'reads the notebooks.\n' +
   'Never present generated SQL or draft output as certified.';
 
 const DQL_MCP_FULL_PROFILE_INSTRUCTIONS =
   '\nFull expert profile only: `build_dql_block` (deprecated alias of ' +
-  '`suggest_block`), `build_dql_app`, `list_proposals`, `feedback_record`, ' +
+  '`suggest_block`), `list_proposals`, `feedback_record`, ' +
   '`record_correction`, `approve_hint`, `list_hints`, ' +
   '`list_metrics`, and `list_dimensions` are available for maintenance, legacy, ' +
   'and governance-admin workflows. Prefer the bounded governed cascade tools for normal analytics questions.\n' +
@@ -169,13 +177,16 @@ export function createDQLMCPServer(options: CreateServerOptions = {}): McpServer
   );
 
   for (const tool of buildMcpToolRegistrations(ctx, toolProfile)) {
+    const annotations = mcpToolAnnotations(tool.name);
     server.registerTool(
       tool.name,
       {
+        title: annotations.title,
         description: toolDescription(tool.name),
         inputSchema: tool.inputSchema,
+        annotations,
       },
-      async (args: any) => wrap(await tool.run(args)),
+      async (args: any) => wrap(await tool.run(args), tool.name),
     );
   }
 
@@ -303,6 +314,12 @@ function mcpToolHandlers(ctx: DQLContext): Partial<Record<DqlToolName, Pick<McpT
     list_hints: {
       run: (args) => listHints(ctx, args as Parameters<typeof listHints>[1]),
     },
+    list_apps: {
+      run: (args) => listApps(ctx, args as Parameters<typeof listApps>[1]),
+    },
+    list_notebooks: {
+      run: (args) => listNotebooks(ctx, args as Parameters<typeof listNotebooks>[1]),
+    },
   };
 }
 
@@ -310,17 +327,38 @@ function toolDescription(name: DqlToolName): string {
   return getDqlToolDefinition(name).description;
 }
 
-function wrap(result: unknown) {
+/**
+ * Tools whose `ok: false` is the answer itself (a verdict on the input), not a
+ * failure of the call: a SQL that fails validation was still validated.
+ */
+const VERDICT_TOOLS = new Set<string>(['validate_sql']);
+
+/**
+ * A result that carries an `error` message (and no `ok: true`) is a failed
+ * call: flag it with MCP `isError` so the client and the model treat it as
+ * one instead of reading the JSON as an answer. The JSON body is unchanged.
+ */
+export function isToolError(result: unknown, toolName?: string): boolean {
+  if (!result || typeof result !== 'object' || Array.isArray(result)) return false;
+  if (toolName && VERDICT_TOOLS.has(toolName)) return false;
+  const record = result as { ok?: unknown; error?: unknown };
+  if (record.ok === true) return false;
+  return typeof record.error === 'string' && record.error.trim().length > 0;
+}
+
+function wrap(result: unknown, toolName?: string) {
   const text = readEnv('ZLENS_MCP_PRETTY_JSON') === '1'
     ? JSON.stringify(result, null, 2)
     : JSON.stringify(result);
   return {
     content: [{ type: 'text' as const, text }],
+    ...(isToolError(result, toolName) ? { isError: true } : {}),
   };
 }
 
 export const __test__ = {
   buildMcpToolRegistrations,
+  isToolError,
   dqlMcpInstructionsForProfile,
   resolveMcpToolProfile,
   wrap,
