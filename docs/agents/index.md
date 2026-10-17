@@ -37,13 +37,13 @@ running, and run `zlens mcp test` again.
 
 From the project folder, run the command for your agent:
 
-| Agent | Command | Writes |
-|---|---|---|
-| Claude Code | `npm exec -- zlens connect claude-code` | `.mcp.json` and a ZLens section in `CLAUDE.md` |
-| Codex | `npm exec -- zlens connect codex` | `.codex/config.toml` and a ZLens section in `AGENTS.md` |
-| Cursor | `npm exec -- zlens connect cursor` | `.cursor/mcp.json` |
-| Claude Desktop | `npm exec -- zlens connect claude-desktop` | Claude Desktop's own config file, for your user |
-| All four | `npm exec -- zlens connect all` | all of the above |
+| Agent | Command | Writes | Guide |
+|---|---|---|---|
+| Claude Code | `npm exec -- zlens connect claude-code` | `.mcp.json` and a ZLens section in `CLAUDE.md` | [Claude Code](claude-code.md) |
+| Codex | `npm exec -- zlens connect codex` | `.codex/config.toml` and a ZLens section in `AGENTS.md` | [Codex](codex.md) |
+| Cursor | `npm exec -- zlens connect cursor` | `.cursor/mcp.json` | [Cursor](cursor.md) |
+| Claude Desktop | `npm exec -- zlens connect claude-desktop` | Claude Desktop's own config file, for your user | [Claude Desktop](claude-desktop.md) |
+| All four | `npm exec -- zlens connect all` | all of the above | |
 
 For Claude Code, the output looks like this:
 
@@ -58,7 +58,9 @@ For Claude Code, the output looks like this:
   Verify before asking an agent: zlens mcp test
 ```
 
-The server is registered under the name `dql`. Each config starts it with:
+The server is registered under the name `dql`. Each config starts it with
+(Claude Desktop gets the full path of `npx`; Codex also gets longer start
+and tool timeouts):
 
 ```json
 {
@@ -77,19 +79,15 @@ only rewrites the ZLens entry. `zlens connect` has one option,
     `CLAUDE.md` or `AGENTS.md` if you want to share the ZLens guidance with your
     team.
 
-!!! warning "Claude Desktop on Windows and Linux"
-    `zlens connect claude-desktop` writes to the macOS location of Claude
-    Desktop's config. On other systems, add the `dql` entry above to Claude
-    Desktop's config yourself (Settings → Developer → Edit Config).
-
 ## 3. Open your agent
 
-- **Claude Code**: start it in the project folder and run `/mcp`. The `dql`
-  server is listed.
+- **Claude Code**: start it in the project folder, approve the project's
+  `dql` server, and run `/mcp`. See [Claude Code](claude-code.md).
 - **Codex**: open the project and trust it, so Codex loads the project's MCP
-  config.
-- **Cursor**: enable MCP in Cursor's settings and reload the project.
-- **Claude Desktop**: restart it and enable the `dql` tool.
+  config. See [Codex](codex.md).
+- **Cursor**: turn on `dql` in Cursor's MCP settings. See [Cursor](cursor.md).
+- **Claude Desktop**: quit and reopen it; `dql` is in the tools menu. See
+  [Claude Desktop](claude-desktop.md).
 
 ## 4. Keep the workbench running
 
@@ -114,6 +112,12 @@ The server tells the agent to report trust labels exactly as given and never
 upgrade them. The agent cannot certify anything: the `certify` tool only
 checks the rules. A person certifies in Block Studio or with
 `zlens certify --from-draft`.
+
+Your agent is the model here: it writes the SQL itself through `ask_dql` and
+`query_via_metadata`, so ZLens does not need an AI provider for this. The one
+exception is `answer_question`, which asks ZLens to answer by itself like the
+Ask page and needs a provider set up in the workbench; without one it returns
+`modelUnavailable` and the agent takes the first path.
 
 See [MCP tools](tools.md) for what the agent can call.
 
