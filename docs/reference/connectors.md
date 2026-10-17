@@ -60,6 +60,20 @@ that uses a tunnel or IAM sign-in.
 This keeps the global CLI install small while still letting each project opt
 into the database packages it actually uses.
 
+**npm 12.** `duckdb` downloads its native binary in an install script, which
+npm 12 runs only when `.dql/connectors/package.json` lists it in
+`allowScripts`. ZLens writes that entry when it installs the driver, and
+rebuilds a copy installed without its binary the next time `zlens notebook`
+starts or `zlens sync warehouse` runs. By hand:
+
+```bash
+npm --prefix .dql/connectors install-scripts approve duckdb
+npm --prefix .dql/connectors rebuild duckdb
+```
+
+The other drivers have no install script. `ssh2`'s only builds an optional
+speed-up, so it works with the script blocked.
+
 ## Credentials
 
 Secrets typed in **Settings → Database** never go into `dql.config.json`. They

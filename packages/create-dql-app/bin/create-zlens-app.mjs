@@ -291,6 +291,26 @@ function warehouseConnection(target, driver, databasePath) {
   return connection;
 }
 
+// npm 12 blocks a dependency's install script unless package.json lists it
+// in "allowScripts" (the template's own package.json allows better-sqlite3).
+// duckdb downloads its native binary in that script, so the driver folder
+// gets a package.json that allows it before anyone installs there; ZLens
+// writes the same file when it installs a driver itself.
+const NATIVE_DRIVER_PACKAGES = ['duckdb'];
+
+function seedConnectorFolder(target) {
+  const dir = join(target, '.dql', 'connectors');
+  mkdirSync(dir, { recursive: true });
+  const pkgPath = join(dir, 'package.json');
+  if (existsSync(pkgPath)) return;
+  const pkg = {
+    private: true,
+    description: 'Project-local ZLens connector packages',
+    allowScripts: Object.fromEntries(NATIVE_DRIVER_PACKAGES.map((name) => [name, true])),
+  };
+  writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n', 'utf-8');
+}
+
 function connectorInstall(pkg) {
   // Drivers always install with npm (it ships with Node): pnpm 10 skips
   // duckdb's native build script and Yarn Berry has no --prefix equivalent,
@@ -430,6 +450,7 @@ async function main() {
   }
 
   copyDir(tplDir, target);
+  seedConnectorFolder(target);
 
   const dbtSibling = mode.kind === 'dbt' ? mode.dbtDir : null;
   // Store dbt path as relative-to-project — keeps dql.config.json portable.

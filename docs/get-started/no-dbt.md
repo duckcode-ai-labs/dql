@@ -37,9 +37,12 @@ No dbt, Python or hosted account is needed.
 ## 1. Install ZLens
 
 ```bash
-npm i -g @zlens/cli
+npm i -g @zlens/cli --allow-scripts=better-sqlite3
 zlens --version
 ```
+
+npm 12 needs `--allow-scripts=better-sqlite3`; see
+[npm 12 and install scripts](install.md#npm-12-and-install-scripts).
 
 To install the CLI into a project instead of globally, see
 [Install](install.md).

@@ -11,9 +11,17 @@
     "validate": "zlens validate"
   },
   "devDependencies": {
-    "@zlens/cli": "^0.2.0"
+    "@zlens/cli": "^0.2.1"
   },
   "engines": {
     "node": ">=20"
+  },
+  "allowScripts": {
+    "better-sqlite3": true
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "better-sqlite3"
+    ]
   }
 }

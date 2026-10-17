@@ -57,6 +57,21 @@ npm install --prefix .dql/connectors duckdb
 - The second command installs the DuckDB driver. Other databases need their
   own driver; see [Connect a database](connect-database.md).
 
+!!! note "npm 12"
+    npm 12 runs a dependency's install script only when `package.json` lists
+    it in `allowScripts`. ZLens needs two such scripts, which download native
+    binaries: `better-sqlite3`'s, which the sample already allows, and
+    `duckdb`'s, which ZLens allows in `.dql/connectors` and rebuilds when
+    `npm run notebook` starts.
+
+    If you ran `npm install` in a copy of the sample from before that, ZLens
+    stops with "ZLens could not load better-sqlite3". Fix that folder with:
+
+    ```bash
+    npm install-scripts approve better-sqlite3
+    npm rebuild better-sqlite3
+    ```
+
 !!! warning "Do not run `create-zlens-app` in the sample"
     `npx create-zlens-app` inside the sample creates a second, empty workspace
     in `dql/`, without the sample's domain, blocks, App and notebook. If you

@@ -5,7 +5,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import test from 'node:test';
 
-import { freePort, parseGateArguments, rangeAllows } from './launch-gate.mjs';
+import { freePort, nodeSatisfies, parseGateArguments, rangeAllows } from './launch-gate.mjs';
 import { buildPackument, startLocalRegistry } from './launch-gate/local-registry.mjs';
 
 test('a caret range below 1.0 never crosses a minor version (the samples pin ^0.1.0)', () => {
@@ -29,6 +29,30 @@ test('gate arguments', () => {
   assert.match(options.out, /gate-20261016-120000$/);
   assert.throws(() => parseGateArguments(['--only', 'docs']), /Unknown --only/);
   assert.throws(() => parseGateArguments(['--port', '80']), /port/);
+});
+
+test('the gate runs the system npm and npm 12 by default', () => {
+  const defaults = parseGateArguments([]);
+  assert.deepEqual(defaults.npm, ['system', '12']);
+  assert.equal(defaults.node, null);
+  const options = parseGateArguments(['--npm', '12,system,12', '--node', '/opt/node24/bin']);
+  assert.deepEqual(options.npm, ['12', 'system']);
+  assert.equal(options.node, '/opt/node24/bin');
+  assert.deepEqual(parseGateArguments(['--npm', 'system']).npm, ['system']);
+  assert.throws(() => parseGateArguments(['--npm', 'latest']), /Unknown --npm lane/);
+});
+
+test("npm 12's engines range: ^22.22.2 || ^24.15.0 || >=26", () => {
+  const engines = '^22.22.2 || ^24.15.0 || >=26';
+  assert.equal(nodeSatisfies(engines, 'v22.18.0'), false);
+  assert.equal(nodeSatisfies(engines, 'v22.22.2'), true);
+  assert.equal(nodeSatisfies(engines, 'v23.7.0'), false);
+  assert.equal(nodeSatisfies(engines, 'v24.14.9'), false);
+  assert.equal(nodeSatisfies(engines, 'v24.22.0'), true);
+  assert.equal(nodeSatisfies(engines, 'v26.12.0'), true);
+  assert.equal(nodeSatisfies('>=18.17.0 <19', 'v18.20.1'), true);
+  assert.equal(nodeSatisfies('>=18.17.0 <19', 'v20.0.0'), false);
+  assert.equal(nodeSatisfies('20', 'v20.18.1'), true);
 });
 
 test('the packed version is added to the public packument as latest; older versions stay', () => {
