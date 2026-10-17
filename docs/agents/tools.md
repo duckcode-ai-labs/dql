@@ -1,77 +1,129 @@
 # MCP tools
 
 The ZLens MCP server (`zlens mcp`) offers tools only: no resources and no
-prompts. Every result is JSON. The server's instructions tell the agent to use
-the trust labels it returns (Certified, Reviewed, AI-Generated,
+prompts. Every result is JSON. The server's instructions tell the agent to
+use the trust labels it returns (Certified, Reviewed, AI-Generated,
 Insufficient-Context, Conflict) as given, and never upgrade them.
+
+The default profile serves 27 tools. Set `ZLENS_MCP_TOOL_PROFILE=full` in the
+server's environment for 8 more, for maintenance and governance sessions.
+
+Every tool carries an MCP title and behaviour hints. A tool marked
+**read-only** changes nothing you review (it may refresh ZLens's own cache);
+the others save a draft block, a draft App, a hint or feedback. No tool
+certifies, deletes or overwrites a certified file. Clients use the hints to
+decide when to ask you first: Codex runs read-only tools without asking.
+
+A call that fails is marked as an error (MCP `isError`) and its message says
+what to do, for example which command starts the workbench.
+
+## Which tool serves which feature
+
+| Feature | Tools | Needs the workbench |
+|---|---|---|
+| Start a session | `inspect_dql_project` | no |
+| Ask (route a question) | `ask_dql` | no |
+| Ask (answer end to end, like the Ask page) | `answer_question` | yes, with an AI model set up in ZLens |
+| Certified blocks | `search_blocks`, `get_block`, `query_via_block` | `query_via_block` only |
+| AI-written SQL, review required | `inspect_metadata_context`, `expand_context`, `query_via_metadata` | `query_via_metadata` (to run the query) |
+| Schema and grounding | `search_metadata`, `get_table_schema`, `validate_sql` | no |
+| Semantic metrics | `query_semantic_model` (full profile adds `list_metrics`, `list_dimensions`) | for the preview rows |
+| Modeling: joins and relationships | `resolve_analytical_path`, `explain_relationship_proof` | no |
+| Lineage and impact | `lineage_impact` | no |
+| Certification | `certify` (a check; people certify) | for the full check |
+| Build a block (draft) | `build_block_from_prompt`, `suggest_block` | `build_block_from_prompt` only |
+| Apps and dashboards | `list_apps`, `build_dql_app` | no |
+| App Datasets | `list_datasets`, `describe_dataset`, `preview_tile_query`, `query_dataset` | yes |
+| Notebooks | `list_notebooks` | no |
+| Search everything | `kg_search` | no |
+| Corrections and feedback | full profile: `record_correction`, `list_hints`, `approve_hint`, `feedback_record`, `list_proposals` | no |
+
+The workbench is the ZLens runtime that `npm run notebook` (or
+`zlens notebook <project>`) starts. See [The ZLens runtime](#the-zlens-runtime).
 
 ## Default tools
 
-These are on by default.
-
 ### Start here
 
-| Tool | What it does |
-|---|---|
-| `inspect_dql_project` | Checks the project and refreshes its metadata and index. Call it first. |
-| `answer_question` | Answers a question end to end, like Ask: certified block, then semantic metric, then AI-written SQL. Returns the rows, the trust label and, when the answer needs review, the draft block it saved. Needs the ZLens runtime. |
-| `ask_dql` | Decides how a question should be answered (certified, generated SQL, conflict or missing context) and what to call next. For agents that write their own SQL. On a conflict, the agent must ask the user which source is authoritative. |
+| Tool | What it does | Read-only |
+|---|---|---|
+| `inspect_dql_project` | Checks the project and refreshes its metadata and index: blocks, Apps, semantic layer, catalog. Call it first. | yes |
+| `ask_dql` | Decides how a question should be answered (certified, generated SQL, conflict or missing context), returns the trust label and the next tool. On a conflict, the agent must ask the user which source is authoritative. | yes |
+| `answer_question` | Answers a question end to end, like Ask: certified block, then semantic metric, then AI-written SQL. Returns the rows, the trust label and, when the answer needs review, the draft block it saved. Needs the workbench with an AI model set up in ZLens; without one it returns `modelUnavailable` and says to use `ask_dql` instead. | no (saves a review draft) |
 
 ### Certified blocks
 
-| Tool | What it does |
-|---|---|
-| `search_blocks` | Finds blocks by keyword, domain or status. |
-| `get_block` | Returns a block's metadata and source. |
-| `query_via_block` | Runs a certified block. Refuses blocks that are not certified, and blocks whose grain does not fit the question. |
+| Tool | What it does | Read-only |
+|---|---|---|
+| `search_blocks` | Finds blocks by keyword, domain or status. Each result carries its status. | yes |
+| `get_block` | Returns a block's metadata, SQL and source. | yes |
+| `query_via_block` | Runs a certified block and returns its rows with the trust label (`Certified`, or `Certified · stale data` and similar when the data is not healthy). Refuses blocks that are not certified, and blocks whose grain does not fit the question. | yes |
 
 ### Writing SQL safely
 
-| Tool | What it does |
-|---|---|
-| `inspect_metadata_context` | Builds the context the agent may use: tables, columns, joins. |
-| `search_metadata` | Ranks dbt tables for a request. |
-| `get_table_schema` | Columns, types and suggested join keys for a table. |
-| `resolve_analytical_path` | The certified join plan for questions across entities or domains. |
-| `explain_relationship_proof` | Why two tables may (or may not) be joined. |
-| `validate_sql` | Checks that SQL only uses tables and columns that exist. |
-| `expand_context` | Adds missing tables to the context so a failed query can be retried. |
-| `query_via_metadata` | Runs one read-only `SELECT` or `WITH` query as a bounded preview. Marks the result `uncertified` and saves a draft block unless asked not to. |
-| `query_semantic_model` | Compiles and previews a semantic-layer query, and saves it as a draft. |
-| `kg_search` | Searches the project's knowledge graph. |
+| Tool | What it does | Read-only |
+|---|---|---|
+| `inspect_metadata_context` | Builds the context the agent may use for a question: tables, columns, governed joins, evidence. Returns a compact pack; `includeDiagnostics: true` returns everything. | yes |
+| `search_metadata` | Ranks tables for a request: dbt models, or the synced warehouse catalog in a project without dbt. | yes |
+| `get_table_schema` | Columns, types, suggested join keys and governed relationships for a table. | yes |
+| `validate_sql` | Checks that SQL only uses tables and columns that exist and only governed joins. | yes |
+| `resolve_analytical_path` | The certified join plan between entities. Takes entity ids such as `commerce::entity::order`, or bare names such as `order`; an unknown name returns the available ids. | yes |
+| `explain_relationship_proof` | Why two entities may (or may not) be joined: keys, cardinality, warehouse evidence. Takes a relationship id or its short name. | yes |
+| `expand_context` | Adds missing tables to the context so a failed query can be retried. | yes |
+| `query_via_metadata` | Runs one read-only `SELECT` or `WITH` query as a bounded preview. Marks the result `uncertified` (AI-Generated) and saves a draft block unless asked not to. | no (saves a draft) |
+| `query_semantic_model` | Compiles and previews a semantic-layer query, labels it AI-Generated, and saves it as a draft. | no (saves a draft) |
+| `kg_search` | Searches the project's knowledge graph: blocks, terms, metrics, Apps, notebooks, dbt models, entities, relationships, skills. | yes |
 
 ### Blocks, lineage and checks
 
-| Tool | What it does |
-|---|---|
-| `build_block_from_prompt` | Drafts a reusable block from a description. Never certifies. Needs the ZLens runtime. |
-| `suggest_block` | Saves a draft block under `_drafts/` with the rule check result. |
-| `certify` | Checks a block against the certification rules and reports pass or fail. It writes nothing and changes no status. |
-| `lineage_impact` | Upstream and downstream of a block, model or table. |
+| Tool | What it does | Read-only |
+|---|---|---|
+| `build_block_from_prompt` | Drafts a reusable block from a description and returns its path, SQL and the certification verdict. Never certifies. Needs the workbench; without an AI model in ZLens it returns `modelUnavailable` (unless a governed metric answers the request). | no (saves a draft) |
+| `suggest_block` | Saves a draft block you wrote under `_drafts/` with the rule check result. | no (saves a draft) |
+| `certify` | Checks a block against the certification rules. With the workbench running it runs the same check as Block Studio (owner, compile, run, tests); without it, the declared metadata only, and it says tests were not run. It changes no status. | yes |
+| `lineage_impact` | Upstream and downstream of a block, model, table or App, and the re-certification impact of a change. A bare table name works. | yes |
 
-### App datasets
+### Apps, App Datasets and notebooks
 
-| Tool | What it does |
-|---|---|
-| `list_datasets`, `describe_dataset` | The App datasets and their fields. |
-| `preview_tile_query`, `query_dataset` | Query a dataset by fields, without SQL. Creates no App or draft. |
+| Tool | What it does | Read-only |
+|---|---|---|
+| `list_apps` | The Apps with their dashboards and tiles: each tile's block, that block's status, and the trust label the tile carries (Certified only when its block is). Also each App's schedules. | yes |
+| `build_dql_app` | Drafts a new App from a description: certified blocks for tiles first, review-only placeholders where none fits. `name` sets the App name and `blocks` the exact certified blocks to use; `saveDraft: false` returns the plan only. Never certifies or publishes. | no (writes a draft App) |
+| `list_notebooks` | The notebooks and their cells (markdown and SQL). Pass `path` for one notebook in full. | yes |
+| `list_datasets`, `describe_dataset` | The approved App Datasets and their fields. | yes |
+| `preview_tile_query`, `query_dataset` | Query an App Dataset by fields, without SQL. Creates no App or draft. | yes |
 
 ## Extra tools
 
 Set `ZLENS_MCP_TOOL_PROFILE=full` in the server's environment to add:
 
-| Tool | What it does |
-|---|---|
-| `list_metrics`, `list_dimensions` | The semantic layer's metrics and dimensions. |
-| `build_dql_block` | Older name for `suggest_block`. |
-| `build_dql_app` | Drafts an App, certified tiles first. |
-| `list_proposals` | Draft blocks, most asked first. |
-| `feedback_record` | Records thumbs up or down on an answer. Never upgrades trust. |
-| `record_correction`, `list_hints`, `approve_hint` | Capture an analyst's correction as a hint, and approve or reject it with an evidence note. |
+| Tool | What it does | Read-only |
+|---|---|---|
+| `list_metrics`, `list_dimensions` | The semantic layer's metrics and dimensions. | yes |
+| `build_dql_block` | Older name for `suggest_block`. | no |
+| `list_proposals` | Draft blocks and semantic proposals, most asked first. | yes |
+| `feedback_record` | Records thumbs up or down on an answer. Never upgrades trust. | no |
+| `record_correction`, `list_hints`, `approve_hint` | Capture an analyst's correction as a candidate hint, and approve or reject it with an evidence note. | `list_hints` only |
+
+## Not served as tools
+
+These features are not MCP tools. Use the workbench or the CLI:
+
+- Running a notebook cell or an App tile: open it in the workbench.
+- Certifying or publishing: Block Studio, or `zlens certify --from-draft <path>`.
+- Scheduled blocks: `zlens schedule list`. (App schedules are listed by `list_apps`.)
+- Version history and diffs: `zlens diff <path>`.
+- Team documents and chat attachments: ZLens reads them for Ask through its
+  own outbound connectors; they are not exposed to your agent.
 
 ## The ZLens runtime
 
-`answer_question`, `build_block_from_prompt` and the query tools call the ZLens
-runtime: the server that `zlens notebook` (`npm run notebook`) starts. Keep
-it running. The tools look for it at `http://127.0.0.1:3474`, or at
-`ZLENS_RUNTIME_URL`, or at a `serverUrl` argument. `zlens mcp test` checks it.
+`answer_question`, `build_block_from_prompt`, the query tools, the App Dataset
+tools and the full `certify` check call the ZLens runtime: the server that
+`zlens notebook` (`npm run notebook`) starts. Keep it running. The tools look
+for it at `http://127.0.0.1:3474`, or at `ZLENS_RUNTIME_URL`, or at a
+`serverUrl` argument. `zlens mcp test` checks it.
+
+A runtime call that gets no answer ends after 120 seconds (600 for
+`answer_question` and `build_block_from_prompt`) with a message saying so.
+Set `ZLENS_MCP_RUNTIME_TIMEOUT_MS` in the server's environment to change it.
