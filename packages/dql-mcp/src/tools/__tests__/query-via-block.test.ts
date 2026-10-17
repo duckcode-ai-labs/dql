@@ -153,7 +153,7 @@ describe('queryViaBlock — certified-only enforcement (the wedge)', () => {
     }) as unknown as typeof fetch;
 
     const result = await queryViaBlock(ctx, { name: 'My Block' });
-    expect((result as { error: string }).error).toMatch(/Could not reach ZLens runtime/);
+    expect((result as { error: string }).error).toMatch(/Could not reach the ZLens runtime/);
     expect((result as { error: string }).error).toMatch(/zlens notebook/);
   });
 

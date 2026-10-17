@@ -1,0 +1,409 @@
+{
+  "about": "Realistic user tasks, one or more per ZLens feature, run through Claude Code and Codex by run.mjs. Prompts carry no tool hints: choosing the tool is what is measured. Expected values are for the jaffle-shop-duckdb (dbt) and jaffle-shop-warehouse (no dbt) samples as published.",
+  "tasks": [
+    {
+      "id": "d-ask-certified",
+      "sample": "duckdb",
+      "feature": "Ask (certified)",
+      "prompt": "How has revenue changed by month?",
+      "expect": {
+        "tools": {
+          "allOf": [
+            "query_via_block"
+          ]
+        },
+        "answer": {
+          "all": [
+            "94[,.]?(152|153|2\\s?K)",
+            "16[,.]?(130|1\\s?K)"
+          ]
+        },
+        "label": "certified"
+      }
+    },
+    {
+      "id": "d-ask-generated",
+      "sample": "duckdb",
+      "feature": "Ask (ranking over a certified block)",
+      "prompt": "Who are our top 5 customers by lifetime spend?",
+      "expect": {
+        "tools": {
+          "anyOf": [
+            "query_via_block",
+            "query_via_metadata",
+            "answer_question",
+            "query_semantic_model"
+          ]
+        },
+        "answer": {
+          "all": [
+            "Matthew Meyer",
+            "3,?089",
+            "Ronnie Knight"
+          ]
+        },
+        "label": "any"
+      },
+      "note": "ask_dql routes this ranking to the certified customer_profile block (one row per customer), so a Certified answer is correct; AI-written SQL labelled AI-Generated is also acceptable."
+    },
+    {
+      "id": "d-ask-refusal",
+      "sample": "duckdb",
+      "feature": "Ask (missing context)",
+      "prompt": "What was our Net Promoter Score last quarter?",
+      "expect": {
+        "tools": {
+          "anyOf": [
+            "ask_dql",
+            "answer_question",
+            "inspect_metadata_context",
+            "search_metadata",
+            "kg_search"
+          ],
+          "none": [
+            "query_via_block"
+          ]
+        },
+        "answer": {
+          "any": [
+            "(no|not|isn.t|doesn.t|cannot|can.t|unable)[^.]{0,80}(NPS|net promoter|survey|data|metric)",
+            "(NPS|net promoter)[^.]{0,120}(not|no) [^.]{0,40}(available|exist|found|tracked|modeled|in this project)"
+          ]
+        },
+        "label": "refusal"
+      }
+    },
+    {
+      "id": "d-blocks-search",
+      "sample": "duckdb",
+      "feature": "Certified blocks (search)",
+      "prompt": "Which certified blocks do we have about beverages, and who owns them?",
+      "expect": {
+        "tools": {
+          "anyOf": [
+            "search_blocks",
+            "kg_search"
+          ]
+        },
+        "answer": {
+          "all": [
+            "beverage_revenue_by_product",
+            "top_beverage_customers",
+            "analytics@jaffle\\.shop"
+          ]
+        }
+      }
+    },
+    {
+      "id": "d-block-detail",
+      "sample": "duckdb",
+      "feature": "Certified blocks (detail)",
+      "prompt": "Show me the SQL behind the monthly_revenue block and tell me what one row means.",
+      "expect": {
+        "tools": {
+          "anyOf": [
+            "get_block"
+          ]
+        },
+        "answer": {
+          "all": [
+            "order_total",
+            "date_trunc",
+            "(calendar )?month"
+          ]
+        }
+      }
+    },
+    {
+      "id": "d-lineage",
+      "sample": "duckdb",
+      "feature": "Lineage",
+      "prompt": "If the dbt model `orders` changes, what in ZLens is affected downstream?",
+      "expect": {
+        "tools": {
+          "anyOf": [
+            "lineage_impact"
+          ]
+        },
+        "answer": {
+          "all": [
+            "monthly_revenue",
+            "(Jaffle Growth Review|jaffle-growth|overview)"
+          ]
+        }
+      }
+    },
+    {
+      "id": "d-certify",
+      "sample": "duckdb",
+      "feature": "Certification",
+      "prompt": "Does the monthly_revenue block pass the certification rules right now?",
+      "expect": {
+        "tools": {
+          "anyOf": [
+            "certify"
+          ]
+        },
+        "answer": {
+          "any": [
+            "\\b(passes|passed|pass(es)? all|certifiable|meets)\\b"
+          ],
+          "none": [
+            "(does not|doesn.t|fails|failed) (pass|the certification)"
+          ]
+        }
+      }
+    },
+    {
+      "id": "d-semantic",
+      "sample": "duckdb",
+      "feature": "Semantic metrics",
+      "prompt": "Using our semantic layer metrics, what is total order revenue (order_total) per month?",
+      "expect": {
+        "tools": {
+          "anyOf": [
+            "query_semantic_model"
+          ]
+        },
+        "answer": {
+          "all": [
+            "94,?152"
+          ]
+        },
+        "label": "generated"
+      }
+    },
+    {
+      "id": "d-build-block",
+      "sample": "duckdb",
+      "feature": "Build a block (draft)",
+      "prompt": "Create a reusable draft block for weekly order count so the team can review it.",
+      "expect": {
+        "tools": {
+          "anyOf": [
+            "build_block_from_prompt",
+            "suggest_block"
+          ]
+        },
+        "answer": {
+          "all": [
+            "_drafts/"
+          ]
+        },
+        "label": "draft"
+      }
+    },
+    {
+      "id": "d-apps",
+      "sample": "duckdb",
+      "feature": "Apps and dashboards (read)",
+      "prompt": "What Apps are in this project, which blocks do their tiles use, and are those tiles certified?",
+      "expect": {
+        "tools": {
+          "anyOf": [
+            "get_app",
+            "list_apps",
+            "kg_search",
+            "inspect_dql_project"
+          ]
+        },
+        "answer": {
+          "all": [
+            "Jaffle Growth Review",
+            "monthly_revenue",
+            "beverage_revenue_by_product",
+            "top_beverage_customers",
+            "customer_profile"
+          ]
+        }
+      }
+    },
+    {
+      "id": "d-app-build",
+      "sample": "duckdb",
+      "feature": "Apps and dashboards (build)",
+      "prompt": "Draft a new App for beverage performance using our certified blocks.",
+      "expect": {
+        "tools": {
+          "anyOf": [
+            "build_dql_app"
+          ]
+        },
+        "answer": {
+          "all": [
+            "(apps/|draft)"
+          ]
+        },
+        "label": "draft"
+      }
+    },
+    {
+      "id": "d-notebooks",
+      "sample": "duckdb",
+      "feature": "Notebooks",
+      "prompt": "What notebooks are in this project and what does the welcome notebook do?",
+      "expect": {
+        "tools": {
+          "anyOf": [
+            "get_notebook",
+            "list_notebooks",
+            "kg_search"
+          ]
+        },
+        "answer": {
+          "all": [
+            "(Growth & Beverage|welcome)",
+            "(beverage|monthly)"
+          ]
+        }
+      }
+    },
+    {
+      "id": "d-modeling",
+      "sample": "duckdb",
+      "feature": "Modeling (relationships)",
+      "prompt": "Can I safely join orders to customers in this project's model? On which key, and is that join certified?",
+      "expect": {
+        "tools": {
+          "anyOf": [
+            "resolve_analytical_path",
+            "explain_relationship_proof"
+          ]
+        },
+        "answer": {
+          "all": [
+            "customer_id"
+          ]
+        }
+      }
+    },
+    {
+      "id": "d-datasets",
+      "sample": "duckdb",
+      "feature": "App Datasets",
+      "prompt": "Which governed App Datasets can I query here?",
+      "expect": {
+        "tools": {
+          "anyOf": [
+            "list_datasets"
+          ]
+        },
+        "answer": {
+          "any": [
+            "(no|none|zero|0|isn.t any|aren.t any)[^.]{0,60}(dataset|approved)"
+          ]
+        }
+      }
+    },
+    {
+      "id": "w-ask-generated",
+      "sample": "warehouse",
+      "feature": "Ask (AI-written SQL, no dbt)",
+      "prompt": "Which store locations had the most revenue in 2025?",
+      "expect": {
+        "tools": {
+          "anyOf": [
+            "query_via_metadata",
+            "answer_question"
+          ]
+        },
+        "answer": {
+          "all": [
+            "Philadelphia",
+            "354,?577",
+            "Brooklyn",
+            "220,?455"
+          ]
+        },
+        "label": "generated"
+      }
+    },
+    {
+      "id": "w-no-certified",
+      "sample": "warehouse",
+      "feature": "Certified blocks (none yet)",
+      "prompt": "Is there a certified answer for monthly revenue in this project?",
+      "expect": {
+        "tools": {
+          "anyOf": [
+            "search_blocks",
+            "ask_dql",
+            "kg_search"
+          ]
+        },
+        "answer": {
+          "any": [
+            "(no|not|isn.t|none)[^.]{0,60}certified"
+          ]
+        }
+      }
+    },
+    {
+      "id": "w-modeling",
+      "sample": "warehouse",
+      "feature": "Modeling (certified joins, no dbt)",
+      "prompt": "Which joins between tables are certified in this project's model?",
+      "expect": {
+        "tools": {
+          "anyOf": [
+            "explain_relationship_proof",
+            "resolve_analytical_path",
+            "kg_search",
+            "inspect_metadata_context"
+          ]
+        },
+        "answer": {
+          "all": [
+            "location",
+            "product",
+            "customer"
+          ]
+        }
+      }
+    },
+    {
+      "id": "w-build-block",
+      "sample": "warehouse",
+      "feature": "Build a block (draft, no dbt)",
+      "prompt": "Save a draft block for total revenue by product so we can certify it later.",
+      "expect": {
+        "tools": {
+          "anyOf": [
+            "build_block_from_prompt",
+            "suggest_block"
+          ]
+        },
+        "answer": {
+          "all": [
+            "_drafts/"
+          ]
+        },
+        "label": "draft"
+      }
+    },
+    {
+      "id": "w-refusal",
+      "sample": "warehouse",
+      "feature": "Ask (missing context, no dbt)",
+      "prompt": "What is our customer churn rate by marketing channel?",
+      "expect": {
+        "tools": {
+          "anyOf": [
+            "ask_dql",
+            "answer_question",
+            "inspect_metadata_context",
+            "search_metadata",
+            "get_table_schema"
+          ]
+        },
+        "answer": {
+          "any": [
+            "(no|not|isn.t|doesn.t|cannot|can.t|unable|lack)[^.]{0,120}(channel|marketing)",
+            "(channel|marketing)[^.]{0,120}(not|no) [^.]{0,40}(available|exist|found|tracked|modeled|column|field)"
+          ]
+        },
+        "label": "refusal"
+      }
+    }
+  ]
+}

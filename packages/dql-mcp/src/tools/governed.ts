@@ -1,6 +1,6 @@
 import { askScopeFromWorkspace, workspaceContextForScope } from '@zlens/agent';
 import type { DQLContext } from '../context.js';
-import { readEnv } from '@zlens/core';
+import { fetchRuntime, readRuntimeJson, runtimeBaseUrl, runtimeTimeoutMs, runtimeUnreachableMessage } from '../runtime-fetch.js';
 
 /**
  * Governed-generation MCP tools. Unlike the BYOSQL Tier-2 tool
@@ -17,21 +17,33 @@ import { readEnv } from '@zlens/core';
  * answering/building executes SQL against the warehouse.
  */
 
-const DEFAULT_RUNTIME_URL = 'http://127.0.0.1:3474';
-
-function runtimeBase(serverUrl?: string): string {
-  return (serverUrl ?? readEnv('ZLENS_RUNTIME_URL') ?? DEFAULT_RUNTIME_URL).replace(/\/$/, '');
-}
+const runtimeBase = runtimeBaseUrl;
 
 function runtimeUnavailable(base: string, projectRoot: string, err: unknown) {
   return {
     ok: false as const,
     runtimeUnavailable: true as const,
-    error:
-      `Could not reach the ZLens runtime at ${base}. Governed answering/building needs it running — ` +
-      `start the workbench with \`zlens notebook\` in ${projectRoot} (\`npm run notebook\` in a create-zlens-app project), or pass serverUrl, then retry. ` +
-      `(${err instanceof Error ? err.message : String(err)})`,
+    error: runtimeUnreachableMessage(base, projectRoot, err, 'Governed answering and building need it'),
   };
+}
+
+/**
+ * The workbench answers without an AI model only by refusing. An agent that
+ * is itself the model should then answer through the bring-your-own-SQL path,
+ * which needs no model inside ZLens; say so instead of returning a "blocked"
+ * run that reads like a finished answer.
+ */
+const MODEL_UNAVAILABLE_NEXT_STEP =
+  'Answer it yourself instead: call ask_dql; when it routes to a certified block, run it with query_via_block; ' +
+  'otherwise call inspect_metadata_context and run one read-only SELECT with query_via_metadata (label the result AI-Generated, review required). ' +
+  'Or set up an AI provider in the workbench (Settings → AI provider) so ZLens can answer itself.';
+
+function modelUnavailable(run: AgentRunLike): boolean {
+  const failure = (run.artifacts ?? [])
+    .map((artifact) => (artifact?.payload as { diagnosticReceipt?: { failure?: { safeActions?: unknown } } } | undefined)?.diagnosticReceipt?.failure)
+    .find(Boolean);
+  const safeActions = Array.isArray(failure?.safeActions) ? failure!.safeActions as unknown[] : [];
+  return run.status === 'blocked' && (safeActions.includes('retry-after-provider') || /no ai model is configured/i.test(run.answer ?? run.summary ?? ''));
 }
 
 interface AgentAnswerPayload {
@@ -105,6 +117,16 @@ function investigationSummary(run: AgentRunLike) {
 }
 
 function mapRun(run: AgentRunLike) {
+  if (modelUnavailable(run)) {
+    return {
+      ok: false as const,
+      modelUnavailable: true as const,
+      question: run.question,
+      status: run.status,
+      trustState: run.trustState,
+      error: `ZLens has no AI model set up, so answer_question could not answer. ${MODEL_UNAVAILABLE_NEXT_STEP}`,
+    };
+  }
   const primary = (run.artifacts ?? [])[0];
   const p = (primary?.kind === 'answer' ? primary.payload : undefined) as AgentAnswerPayload | undefined;
   const investigation = investigationSummary(run);
@@ -168,7 +190,7 @@ export async function answerQuestion(
   const workspaceContext = workspaceContextForScope(askScopeFromWorkspace(args));
   let response: Response;
   try {
-    response = await fetch(`${base}/api/agent-runs`, {
+    response = await fetchRuntime(`${base}/api/agent-runs`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -180,21 +202,40 @@ export async function answerQuestion(
         ...(args.threadId ? { threadId: args.threadId } : {}),
         ...(Object.keys(workspaceContext).length ? { workspaceContext } : {}),
       }),
-    });
+    }, 'generate');
   } catch (err) {
     return runtimeUnavailable(base, ctx.projectRoot, err);
   }
   if (!response.ok) {
     return { ok: false as const, error: `ZLens runtime returned ${response.status}: ${await response.text()}` };
   }
-  const payload = (await response.json().catch(() => ({}))) as { run?: AgentRunLike; error?: string };
+  const payload = await readRuntimeJson<{ run?: AgentRunLike; error?: string }>(response, runtimeTimeoutMs('generate')).catch((error: unknown) => ({ error: error instanceof Error ? error.message : String(error) }) as { run?: AgentRunLike; error?: string });
   if (payload.error || !payload.run) return { ok: false as const, error: payload.error ?? 'No run returned by the runtime.' };
   return mapRun(payload.run);
 }
 
+/**
+ * What POST /api/ai/build returns for a block (dql-agent `BuildBlockResult`):
+ * `path`, `name`, `sqlPreview`, `certifierVerdict`, `reflection`, `route`, and
+ * `generation` ('offline_template' when no AI model was available). The older
+ * `draftBlock` / `dqlArtifact` / `verdict` names are still read for runtimes
+ * that sent them.
+ */
 interface BuildFromPromptResultLike {
   status?: string;
   route?: unknown;
+  path?: string;
+  name?: string;
+  sqlPreview?: string;
+  description?: string;
+  grain?: string;
+  outputs?: string[];
+  certifierVerdict?: { blocking?: string[]; warnings?: string[]; ready?: boolean };
+  reflection?: { ready?: boolean; remainingBlocking?: string[]; remainingWarnings?: string[]; fixesApplied?: unknown[] };
+  edited?: boolean;
+  previousSql?: string;
+  generation?: 'model' | 'governed_metric' | 'offline_template';
+  diagnostics?: { sourceTrust?: string; reviewRequired?: boolean; warnings?: string[] };
   draftBlock?: { path?: string; slug?: string; name?: string; domain?: string; status?: string; askedTimes?: number };
   dqlArtifact?: unknown;
   verdict?: unknown;
@@ -224,7 +265,7 @@ export async function buildBlockFromPrompt(
   const base = runtimeBase(args.serverUrl);
   let response: Response;
   try {
-    response = await fetch(`${base}/api/ai/build`, {
+    response = await fetchRuntime(`${base}/api/ai/build`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -234,28 +275,54 @@ export async function buildBlockFromPrompt(
         ...(args.blockPath ? { blockPath: args.blockPath.trim() } : {}),
         ...(args.owner ? { owner: args.owner } : {}),
       }),
-    });
+    }, 'generate');
   } catch (err) {
     return runtimeUnavailable(base, ctx.projectRoot, err);
   }
   if (!response.ok) {
     return { ok: false as const, error: `ZLens runtime returned ${response.status}: ${await response.text()}` };
   }
-  const result = (await response.json().catch(() => ({}))) as BuildFromPromptResultLike;
+  const result = await readRuntimeJson<BuildFromPromptResultLike>(response, runtimeTimeoutMs('generate')).catch((error: unknown) => ({ error: error instanceof Error ? error.message : String(error) }) as BuildFromPromptResultLike);
   if (result.error) return { ok: false as const, error: result.error };
   // Refresh the in-process context so subsequent tool calls see the new draft.
   ctx.refresh();
+  const draftBlockPath = result.path ?? result.draftBlock?.path;
+  const verdict = result.certifierVerdict ?? result.verdict;
+  if (result.generation === 'offline_template') {
+    return {
+      ok: false as const,
+      modelUnavailable: true as const,
+      error:
+        'ZLens has no AI model set up, so build_block_from_prompt could not build from your description: the workbench saved only a starter template' +
+        (draftBlockPath ? ` at ${draftBlockPath} (delete it or replace its SQL)` : '') +
+        '. Write the SQL yourself (search_metadata / get_table_schema / validate_sql help), then save it with suggest_block. ' +
+        'Or set up an AI provider in the workbench (Settings → AI provider).',
+      templateDraftPath: draftBlockPath,
+      templateSql: result.sqlPreview,
+    };
+  }
   return {
     ok: true as const,
     status: result.status,
     route: result.route,
-    draftBlock: result.draftBlock,
-    draftBlockPath: result.draftBlock?.path,
-    dqlArtifact: result.dqlArtifact,
-    verdict: result.verdict,
+    name: result.name ?? result.draftBlock?.name,
+    draftBlockPath,
+    ...(result.draftBlock ? { draftBlock: result.draftBlock } : {}),
+    sql: result.sqlPreview ?? result.sql,
+    description: result.description,
+    grain: result.grain,
+    outputs: result.outputs,
+    ...(result.dqlArtifact ? { dqlArtifact: result.dqlArtifact } : {}),
+    verdict,
+    reviewRemaining: result.reflection
+      ? { blocking: result.reflection.remainingBlocking ?? [], warnings: result.reflection.remainingWarnings ?? [] }
+      : undefined,
+    ...(result.edited ? { edited: true, previousSql: result.previousSql } : {}),
     appliedSkills: result.appliedSkills,
     citations: result.citations,
-    promote: result.draftBlock?.path ? `zlens certify --from-draft ${result.draftBlock.path}` : undefined,
+    warnings: result.diagnostics?.warnings,
+    trustLabel: 'AI-Generated',
+    promote: draftBlockPath ? `zlens certify --from-draft ${draftBlockPath}` : undefined,
     trustNote:
       'AI drafts, humans certify. This is a review-required DRAFT — never present it as certified. Review the verdict, then certify explicitly.',
   };

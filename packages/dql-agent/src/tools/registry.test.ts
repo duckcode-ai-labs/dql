@@ -90,9 +90,14 @@ describe('DQL tool registry', () => {
       'describe_dataset',
       'preview_tile_query',
       'query_dataset',
+      // Apps and notebooks: draft an App, and read the Apps and notebooks a
+      // client without file access (Claude Desktop) cannot open itself.
+      'build_dql_app',
+      'list_apps',
+      'list_notebooks',
     ]);
-    expect(mcpAgenticTools).toHaveLength(24);
-    expect(mcpAgenticTools.length).toBeLessThanOrEqual(24);
+    expect(mcpAgenticTools).toHaveLength(27);
+    expect(mcpAgenticTools.length).toBeLessThanOrEqual(27);
   });
 
   it('keeps the full MCP surface available for explicit expert sessions', () => {

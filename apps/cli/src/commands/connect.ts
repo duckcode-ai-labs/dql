@@ -19,10 +19,13 @@ interface McpServerConfig {
   command: string;
   args: string[];
   cwd?: string;
+  env?: Record<string, string>;
   alwaysLoad?: boolean;
 }
 
 const DQL_SERVER_NAME = 'dql';
+const CODEX_STARTUP_TIMEOUT_SEC = 60;
+const CODEX_TOOL_TIMEOUT_SEC = 600;
 
 export async function runConnect(targetArg: string | null, rest: string[], flags: CLIFlags): Promise<void> {
   const target = normalizeTarget(targetArg);
@@ -76,11 +79,17 @@ function connectTarget(target: Exclude<ConnectTarget, 'all'>, projectRoot: strin
 function connectCodex(projectRoot: string): ConnectResult {
   const path = join(projectRoot, '.codex', 'config.toml');
   const guidePath = join(projectRoot, 'AGENTS.md');
+  // Codex waits 10 s for a server to start and 60 s for a tool by default.
+  // The first `npx` start downloads the CLI, and answer_question waits on a
+  // model, so both limits are raised. Every read-only tool is annotated, so
+  // Codex runs it without asking; a tool that saves a draft still asks.
   const block = [
     '# BEGIN DQL MCP',
     `[mcp_servers.${DQL_SERVER_NAME}]`,
     'command = "npx"',
     `args = ${tomlStringArray(mcpServerArgs(projectRoot))}`,
+    `startup_timeout_sec = ${CODEX_STARTUP_TIMEOUT_SEC}`,
+    `tool_timeout_sec = ${CODEX_TOOL_TIMEOUT_SEC}`,
     '# END DQL MCP',
     '',
   ].join('\n');
@@ -118,17 +127,50 @@ function connectClaudeCode(projectRoot: string): ConnectResult {
   };
 }
 
+/** Where Claude Desktop reads its config, per platform. */
+export function claudeDesktopConfigPath(platform: NodeJS.Platform = process.platform, env: NodeJS.ProcessEnv = process.env): string {
+  if (platform === 'win32') {
+    return join(env.APPDATA ?? join(homedir(), 'AppData', 'Roaming'), 'Claude', 'claude_desktop_config.json');
+  }
+  if (platform === 'darwin') {
+    return join(homedir(), 'Library', 'Application Support', 'Claude', 'claude_desktop_config.json');
+  }
+  return join(env.XDG_CONFIG_HOME ?? join(homedir(), '.config'), 'Claude', 'claude_desktop_config.json');
+}
+
+/**
+ * Claude Desktop is started from the Dock or Start menu, not a shell, so it
+ * does not see the PATH where Node is installed (Homebrew, nvm, Volta): a bare
+ * `npx` fails with "spawn npx ENOENT", and `npx` itself needs `node` on PATH.
+ * Point at the npx next to the Node running this command and put that folder
+ * first on the server's PATH.
+ */
+export function desktopServerConfig(projectRoot: string, nodePath: string = process.execPath, platform: NodeJS.Platform = process.platform): McpServerConfig {
+  const binDir = dirname(nodePath);
+  const npx = join(binDir, platform === 'win32' ? 'npx.cmd' : 'npx');
+  if (!existsSync(npx)) return mcpServerConfig(projectRoot);
+  const separator = platform === 'win32' ? ';' : ':';
+  const systemPath = platform === 'win32'
+    ? (process.env.PATH ?? '')
+    : '/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin';
+  return {
+    command: npx,
+    args: mcpServerArgs(projectRoot),
+    env: { PATH: [binDir, systemPath].filter(Boolean).join(separator) },
+  };
+}
+
 function connectClaudeDesktop(projectRoot: string): ConnectResult {
-  const path = join(homedir(), 'Library', 'Application Support', 'Claude', 'claude_desktop_config.json');
+  const path = claudeDesktopConfigPath();
   const before = readTextIfExists(path);
-  const after = upsertJsonMcpServer(before, mcpServerConfig(projectRoot));
+  const after = upsertJsonMcpServer(before, desktopServerConfig(projectRoot));
   writeTextIfChanged(path, after);
   return {
     target: 'claude-desktop',
     path,
     changed: before !== after,
     message: 'Claude Desktop config includes this ZLens MCP server.',
-    nextStep: 'Restart Claude Desktop and enable the dql tool.',
+    nextStep: 'Quit and reopen Claude Desktop, keep the workbench running, then ask a data question; the dql tools appear under the tools (search and tools) menu.',
   };
 }
 
@@ -222,19 +264,30 @@ function upsertAgentGuide(path: string, clientName: string): boolean {
   return before !== after;
 }
 
-function agentGuideBlock(clientName: string): string {
+/**
+ * The ZLens section `zlens connect` writes into CLAUDE.md / AGENTS.md. Every
+ * tool it names is served by the default MCP profile (a test enforces it), so
+ * an agent is never sent to a tool it cannot see.
+ */
+export function agentGuideBlock(clientName: string): string {
   return [
     '<!-- BEGIN DQL AGENT GUIDE -->',
     '## ZLens Agent Guide',
     '',
-    `When using ${clientName} with this project, use the ZLens MCP server for analytics work.`,
+    `When using ${clientName} with this project, answer data questions through the ZLens MCP server (\`dql\`), the way ZLens Ask does: certified blocks first, the trust label on every answer.`,
     '',
-    '- Start each session with `inspect_dql_project` so the agent sees the current manifest, metadata catalog, and agent index.',
-    '- Route every analytics question through `ask_dql` before writing SQL.',
-    '- If `ask_dql.route` is `certified`, use `query_via_block` only when the certified block grain exactly answers the question.',
-    '- If `ask_dql.route` is `generated_sql`, use the returned allowed SQL context and call `query_via_metadata` with one read-only `SELECT` or `WITH` query. Show the `uncertified` status and draft path.',
-    '- Use `build_dql_block` for reusable draft blocks and `build_dql_app` for governed app drafts.',
-    '- Do not label generated SQL, draft blocks, or app review placeholders as certified.',
+    '- Start with `inspect_dql_project` (blocks, Apps, semantic layer, catalog).',
+    '- Route every data question through `ask_dql` before writing SQL. It returns the route, the trust label and the next tool:',
+    '  - `certified`: run the block with `query_via_block` when its grain answers the question exactly. Label the answer **Certified**.',
+    '  - `generated_sql`: call `inspect_metadata_context`, then run one read-only `SELECT` or `WITH` with `query_via_metadata`. Label the answer **AI-Generated (review required)** and give the draft path it saved.',
+    '  - `conflict`: show both definitions and their owners and ask which one is authoritative.',
+    '  - missing context: say what is missing and ask; do not guess.',
+    '- `answer_question` answers end to end like Ask when an AI model is set up in ZLens. If it returns `modelUnavailable`, use the steps above.',
+    '- Semantic metrics: `query_semantic_model`. Lineage and impact: `lineage_impact`. Joins: `resolve_analytical_path` and `explain_relationship_proof`. Schema: `search_metadata`, `get_table_schema`, `validate_sql`.',
+    '- Blocks: `search_blocks` and `get_block`. Save a draft with `build_block_from_prompt` or `suggest_block`. `certify` checks the rules and changes nothing.',
+    '- Apps and notebooks: `list_apps`, `build_dql_app` (draft App), `list_notebooks`. App Datasets: `list_datasets`, `describe_dataset`, `query_dataset`.',
+    '- Report trust labels exactly as the tools return them. Never call AI-written SQL, a draft block or a draft App certified: only a person certifies, in Block Studio or with `zlens certify --from-draft`.',
+    '- Queries run through the ZLens workbench (`npm run notebook` or `zlens notebook`); keep it running.',
     '<!-- END DQL AGENT GUIDE -->',
     '',
   ].join('\n');

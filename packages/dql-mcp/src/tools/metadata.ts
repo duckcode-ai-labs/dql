@@ -14,7 +14,7 @@
  * gracefully (a clear hint) when no dbt manifest is present.
  */
 
-import { resolveDbtManifestPath } from '@zlens/core';
+import { readWarehouseCatalog, resolveDbtManifestPath, type WarehouseCatalogSnapshotV1 } from '@zlens/core';
 import {
   buildSchemaGrounding,
   loadDbtArtifacts,
@@ -30,19 +30,62 @@ import {
 import type { DQLContext } from '../context.js';
 import { zodInputShapeForTool } from '../tool-schema.js';
 
-/** Load dbt artifacts for the project, or undefined when no manifest exists. */
+/**
+ * The schema the grounding tools read: the dbt manifest when the project has
+ * one, otherwise the warehouse catalog `zlens sync warehouse` writes (a
+ * database-only project has no dbt files at all). Undefined when neither
+ * exists.
+ */
 function loadArtifacts(ctx: DQLContext): DbtArtifacts | undefined {
   const manifestPath = resolveDbtManifestPath(ctx.projectRoot);
-  if (!manifestPath) return undefined;
-  try {
-    return loadDbtArtifacts(manifestPath);
-  } catch {
-    return undefined;
+  if (manifestPath) {
+    try {
+      return loadDbtArtifacts(manifestPath);
+    } catch {
+      // Fall back to the warehouse catalog below.
+    }
   }
+  const { snapshot } = readWarehouseCatalog(ctx.projectRoot);
+  return snapshot && snapshot.relations.length > 0 ? artifactsFromWarehouseCatalog(snapshot) : undefined;
+}
+
+/**
+ * Present a warehouse catalog snapshot in the shape the shared grounding reads.
+ * A warehouse relation is queried by its own name, so its "ref form" is the
+ * relation itself; there is no dbt lineage, so join keys come only from shared
+ * key columns (still suggestions, never join authorization).
+ */
+export function artifactsFromWarehouseCatalog(snapshot: WarehouseCatalogSnapshotV1): DbtArtifacts {
+  return {
+    projectName: undefined,
+    models: snapshot.relations.map((relation) => ({
+      uniqueId: relation.id,
+      name: relation.name,
+      resourceType: 'model' as const,
+      schema: relation.schema,
+      database: relation.database,
+      qualifiedRelation: relation.relation,
+      refForm: relation.relation,
+      description: relation.comment,
+      materialized: relation.kind,
+      tags: [],
+      dependsOn: [],
+      columns: relation.columns.map((column) => ({ name: column.name, type: column.type, description: column.comment })),
+      meta: relation.primaryKey?.length ? { primary_key: relation.primaryKey } : {},
+      config: {},
+    })),
+    sources: [],
+    exposures: [],
+    catalogColumns: new Map(),
+    runCounts: new Map(),
+    hasSemantic: false,
+    semanticMetrics: [],
+    semanticModels: new Map(),
+  };
 }
 
 const NO_MANIFEST_HINT =
-  'No dbt manifest was found. Run `dbt compile`/`dbt build` (or `zlens sync dbt`) so target/manifest.json exists.';
+  'No schema was found: this project has no dbt manifest (target/manifest.json) and no warehouse catalog (.dql/warehouse-catalog.json). Run `zlens sync dbt` for a dbt project or `zlens sync warehouse` for a database-only one.';
 
 // ─── search_metadata ──────────────────────────────────────────────────────────
 
@@ -185,14 +228,42 @@ export function resolveAnalyticalPath(ctx: DQLContext, args: {
         source: 'explicit_api',
       })
     : undefined;
-  return planAnalyticalPath(ctx.manifest, {
-    entityIds: args.entities,
+  // Agents name entities the way people do ("order", "customer"). Map a bare
+  // name to its qualified id when exactly one domain has it; the policy below
+  // still decides everything about the join.
+  const resolveName = (name: string) => qualifyEntityName(ctx, name, args.ownerDomain);
+  const plan = planAnalyticalPath(ctx.manifest, {
+    entityIds: args.entities.map(resolveName),
     ownerDomain: args.ownerDomain,
     purpose: args.purpose,
     domainContext,
-    measureEntities: args.measureEntities,
-    dimensionEntities: args.dimensionEntities,
+    measureEntities: args.measureEntities?.map(resolveName),
+    dimensionEntities: args.dimensionEntities?.map(resolveName),
   });
+  if ((plan as { code?: string }).code === 'unbound_relation') {
+    return { ...plan, availableEntities: availableEntities(ctx) };
+  }
+  return plan;
+}
+
+function qualifyEntityName(ctx: DQLContext, name: string, ownerDomain?: string): string {
+  const entities = ctx.manifest.modeling?.entities ?? {};
+  if (entities[name]) return name;
+  const wanted = name.trim().toLowerCase();
+  const matches = Object.entries(entities).filter(([, entity]) =>
+    (entity.localId ?? '').toLowerCase() === wanted || (entity.qualifiedId ?? '').toLowerCase() === wanted);
+  const inDomain = ownerDomain ? matches.filter(([, entity]) => entity.domain === ownerDomain) : [];
+  if (inDomain.length === 1) return inDomain[0]![0];
+  return matches.length === 1 ? matches[0]![0] : name;
+}
+
+function availableEntities(ctx: DQLContext): Array<{ id: string; name: string; domain: string; relation?: string }> {
+  return Object.entries(ctx.manifest.modeling?.entities ?? {}).slice(0, 60).map(([id, entity]) => ({
+    id,
+    name: entity.localId ?? id,
+    domain: entity.domain,
+    ...(entity.relation ? { relation: entity.relation } : {}),
+  }));
 }
 
 export function explainRelationshipProof(ctx: DQLContext, args: { relationshipId: string }) {
@@ -202,7 +273,13 @@ export function explainRelationshipProof(ctx: DQLContext, args: { relationshipId
     value.qualifiedId === args.relationshipId || value.localId === args.relationshipId);
   const relationship = matches.length === 1 ? matches[0] : undefined;
   if (!relationship) {
-    return { found: false, error: `Relationship "${args.relationshipId}" was not found in manifest v3.` };
+    const known = Object.values(relationships).map((value) => value.qualifiedId ?? value.id);
+    return {
+      found: false,
+      error: matches.length > 1
+        ? `Relationship "${args.relationshipId}" is ambiguous: ${matches.map((value) => value.qualifiedId ?? value.id).join(', ')}. Pass the qualified id.`
+        : `Relationship "${args.relationshipId}" was not found in manifest v3.${known.length ? ` Known relationships: ${known.slice(0, 40).join(', ')}.` : ' This project models no relationships yet.'}`,
+    };
   }
   const entities = ctx.manifest.modeling?.entities ?? {};
   const from = entities[relationship.from];

@@ -35,7 +35,9 @@ export type DqlToolName =
   | 'feedback_record'
   | 'record_correction'
   | 'approve_hint'
-  | 'list_hints';
+  | 'list_hints'
+  | 'list_apps'
+  | 'list_notebooks';
 
 export interface DqlToolDefinition {
   name: DqlToolName;
@@ -422,7 +424,7 @@ const CORE_TOOL_DEFINITIONS = [
   },
   {
     name: 'search_blocks',
-    description: 'Find certified DQL blocks by keyword, domain, or status.',
+    description: 'Find blocks (certified and draft) by keyword, domain, or status. Each result carries its status; only a certified block is a certified answer.',
     inputSchema: {
       type: 'object',
       additionalProperties: false,
@@ -494,6 +496,10 @@ const CORE_TOOL_DEFINITIONS = [
           type: 'string',
           enum: ['balanced', 'exploratory'],
           description: 'Retrieval depth. Use exploratory for deep research; it widens context when limit is omitted.',
+        },
+        includeDiagnostics: {
+          type: 'boolean',
+          description: 'Return the full retrieval diagnostics and every object payload (large; for debugging retrieval). Default false: a compact pack with everything needed to write SQL.',
         },
       },
     },
@@ -584,7 +590,7 @@ const CORE_TOOL_DEFINITIONS = [
   {
     name: 'answer_question',
     description:
-      "Governed one-shot answer. Runs DQL's OWN governed cascade (certified block → semantic metric → generated SQL) end-to-end and returns the executed answer with rows, SQL preview, canonical trust label, citations, and a reviewable draft — the SAME engine and trust guards as the DQL UI. Use this when you want DQL to generate AND answer for you. Prefer query_via_metadata when you want to author the SQL yourself. Requires the ZLens runtime: the workbench `zlens notebook` starts (`npm run notebook`).",
+      "Governed one-shot answer. Runs DQL's OWN governed cascade (certified block → semantic metric → generated SQL) end-to-end and returns the executed answer with rows, SQL preview, canonical trust label, citations, and a reviewable draft — the SAME engine and trust guards as the DQL UI. Use this when you want DQL to generate AND answer for you. Prefer query_via_metadata when you want to author the SQL yourself. Requires the ZLens runtime (the workbench `zlens notebook` starts) with an AI model set up in ZLens; without one it returns modelUnavailable and you answer through ask_dql → query_via_block or query_via_metadata instead.",
     inputSchema: {
       type: 'object',
       additionalProperties: false,
@@ -608,7 +614,7 @@ const CORE_TOOL_DEFINITIONS = [
   {
     name: 'build_block_from_prompt',
     description:
-      "Governed block builder from a natural-language prompt. Runs DQL's buildFromPrompt (the same governed engine the UI uses) to draft a reusable, review-required DQL block — you do NOT author SQL. Symmetric with build_dql_app. Returns the draft path, dqlArtifact source, and the Certifier verdict; NEVER auto-certifies. Requires the ZLens runtime: the workbench `zlens notebook` starts (`npm run notebook`).",
+      "Governed block builder from a natural-language prompt. Runs DQL's buildFromPrompt (the same governed engine the UI uses) to draft a reusable, review-required DQL block — you do NOT author SQL. Symmetric with build_dql_app. Returns the draft path, generated SQL, and the Certifier verdict; NEVER auto-certifies. Requires the ZLens runtime (the workbench `zlens notebook` starts) with an AI model set up in ZLens; without one it returns modelUnavailable — then write the SQL yourself and save it with suggest_block.",
     inputSchema: {
       type: 'object',
       additionalProperties: false,
@@ -661,13 +667,15 @@ const CORE_TOOL_DEFINITIONS = [
   },
   {
     name: 'certify',
-    description: 'Run governance rules against a block and report pass/fail.',
+    description:
+      'Check a block against the certification rules and report pass/fail with the blocking rules. With the workbench running it runs the same check as Block Studio (owner, compile, run, tests); otherwise it checks the declared metadata only and says tests were not run. Changes nothing: a person certifies in Block Studio or with `zlens certify --from-draft`.',
     inputSchema: {
       type: 'object',
       additionalProperties: false,
       required: ['name'],
       properties: {
-        name: { type: 'string', description: 'Block name to evaluate.' },
+        name: { type: 'string', description: 'Block name to evaluate, as shown by search_blocks.' },
+        serverUrl: { type: 'string', description: 'Base URL of the local DQL runtime for the full check. Default http://127.0.0.1:3474.' },
       },
     },
     surfaces: ['mcp', 'mcp_agentic', 'native', 'claude_code'],
@@ -695,7 +703,7 @@ const CORE_TOOL_DEFINITIONS = [
   {
     name: 'search_metadata',
     description:
-      'Grounded-SQL retrieval: rank dbt tables relevant to a request and return each table qualified relation and ref form. Use before writing SQL so you reference the real relation, never a bare model name.',
+      'Grounded-SQL retrieval: rank tables relevant to a request (dbt models, or the synced warehouse catalog in a project without dbt) and return each table qualified relation and ref form. Use before writing SQL so you reference the real relation, never a bare model name.',
     inputSchema: {
       type: 'object',
       additionalProperties: false,
@@ -710,7 +718,7 @@ const CORE_TOOL_DEFINITIONS = [
   {
     name: 'get_table_schema',
     description:
-      'Return the qualified relation, ref form, real columns and types, and inferred join keys for a dbt table by model name, alias, or qualified relation.',
+      'Return the qualified relation, ref form, real columns and types, inferred join keys, and governed relationships for a table (a dbt model, or a warehouse relation in a project without dbt) by name, alias, or qualified relation.',
     inputSchema: {
       type: 'object',
       additionalProperties: false,
@@ -724,7 +732,7 @@ const CORE_TOOL_DEFINITIONS = [
   {
     name: 'validate_sql',
     description:
-      'Validate that a read-only SELECT/WITH query references only relations and columns that exist in the dbt schema. Returns the precise offending table or column on a miss.',
+      'Validate that a read-only SELECT/WITH query references only relations and columns that exist (in the dbt schema, or the synced warehouse catalog in a project without dbt) and only governed joins. Returns the precise offending table or column on a miss.',
     inputSchema: {
       type: 'object',
       additionalProperties: false,
@@ -745,7 +753,7 @@ const CORE_TOOL_DEFINITIONS = [
       additionalProperties: false,
       required: ['entities'],
       properties: {
-        entities: { type: 'array', minItems: 1, items: { type: 'string' }, description: 'DQL analytical entity ids to connect.' },
+        entities: { type: 'array', minItems: 1, items: { type: 'string' }, description: 'Analytical entities to connect: qualified ids such as commerce::entity::order, or bare entity names such as order when only one domain has that entity. An unknown name returns the available entity ids.' },
         ownerDomain: { type: 'string', description: 'Domain that owns the proposed analysis.' },
         purpose: { type: 'string', description: 'Declared cross-domain analytical purpose.' },
         measureEntities: { type: 'array', items: { type: 'string' }, description: 'Entities contributing additive measures.' },
@@ -875,7 +883,7 @@ const CORE_TOOL_DEFINITIONS = [
   {
     name: 'build_dql_app',
     description:
-      'High-level app builder. Creates or plans a governed DQL app draft from a prompt using certified tiles first and review-only placeholders for missing evidence.',
+      'Draft a new App (dashboard) from a description. Uses certified blocks for tiles first and review-only placeholders where no certified block fits; writes a draft App under apps/ (saveDraft=false returns the plan only). Never certifies or publishes. Use list_apps to see existing Apps.',
     inputSchema: {
       type: 'object',
       additionalProperties: false,
@@ -889,7 +897,7 @@ const CORE_TOOL_DEFINITIONS = [
         overwrite: { type: 'boolean', description: 'Overwrite an existing app folder. Default false.' },
       },
     },
-    surfaces: ['mcp'],
+    surfaces: ['mcp', 'mcp_agentic', 'claude_code'],
   },
   {
     name: 'list_proposals',
@@ -1000,6 +1008,33 @@ const CORE_TOOL_DEFINITIONS = [
       },
     },
     surfaces: ['mcp'],
+  },
+  {
+    name: 'list_apps',
+    description:
+      'List the Apps (dashboards) in this project with their dashboards and tiles: each tile\'s title, the block it runs, that block\'s certification status, and the trust label the tile carries. Read-only; runs no query.',
+    inputSchema: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        query: { type: 'string', description: 'Optional text matched against App id, name, description, domain, and tags.' },
+      },
+    },
+    surfaces: ['mcp', 'mcp_agentic', 'claude_code'],
+  },
+  {
+    name: 'list_notebooks',
+    description:
+      'List the notebooks in this project with their cells (markdown text and SQL/DQL source). Pass path to read one notebook in full. Read-only; runs no cell.',
+    inputSchema: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        path: { type: 'string', description: 'Optional notebook path relative to the project, e.g. notebooks/welcome.dqlnb, to return only that notebook with full cell text.' },
+        query: { type: 'string', description: 'Optional text matched against notebook path, title, and description.' },
+      },
+    },
+    surfaces: ['mcp', 'mcp_agentic', 'claude_code'],
   },
 ] as const satisfies readonly DqlToolDefinition[];
 

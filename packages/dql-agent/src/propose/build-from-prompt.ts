@@ -184,8 +184,16 @@ export interface BuildTrustDiagnostics {
   warnings: string[];
 }
 
+/**
+ * How a build produced its SQL: an AI model, a governed semantic metric (no
+ * model needed), or the offline starter template used when neither was
+ * available (not built from the request).
+ */
+export type BuildGeneration = 'model' | 'governed_metric' | 'offline_template';
+
 export interface BuildCellResult {
   target: 'cell';
+  generation?: BuildGeneration;
   sql: string;
   explanation?: string;
   /** Skills that shaped the answer, for UI transparency. */
@@ -195,6 +203,7 @@ export interface BuildCellResult {
 
 export interface BuildBlockResult {
   target: 'block';
+  generation?: BuildGeneration;
   path: string;
   name: string;
   sqlPreview: string;
@@ -1297,13 +1306,19 @@ export async function buildFromPrompt(options: BuildFromPromptOptions): Promise<
     );
   const diagnostics = buildTrustDiagnostics({ options, scope, skills: appliedSkills, grounding, matchedMetric });
 
+  // How the SQL was produced, so a caller can tell a draft built from the
+  // request from the starter template the offline path falls back to.
+  const generation: BuildGeneration = provider
+    ? 'model'
+    : matchedMetric && options.mode !== 'edit' ? 'governed_metric' : 'offline_template';
   if (options.target === 'cell') {
-    return buildCell(scopedOptions, grounding, provider, skillsPrompt, appliedSkills, diagnostics, matchedMetric);
+    return { ...(await buildCell(scopedOptions, grounding, provider, skillsPrompt, appliedSkills, diagnostics, matchedMetric)), generation };
   }
   // target: 'block' — edit an existing block in place, or create a new draft.
-  return options.mode === 'edit'
-    ? editBlock(scopedOptions, grounding, provider, skillsPrompt, appliedSkills, diagnostics)
-    : buildBlock(scopedOptions, grounding, provider, skillsPrompt, appliedSkills, diagnostics, matchedMetric);
+  const built = options.mode === 'edit'
+    ? await editBlock(scopedOptions, grounding, provider, skillsPrompt, appliedSkills, diagnostics)
+    : await buildBlock(scopedOptions, grounding, provider, skillsPrompt, appliedSkills, diagnostics, matchedMetric);
+  return { ...built, generation };
 }
 
 /**
