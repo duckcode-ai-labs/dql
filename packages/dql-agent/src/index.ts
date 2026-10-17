@@ -1216,6 +1216,7 @@ export {
   buildProposePreview,
   buildFromPrompt,
   loadDbtArtifacts,
+  artifactsFromWarehouseCatalog,
   upsertProposedDraft,
   renderProposedDraft,
   blockSlug,

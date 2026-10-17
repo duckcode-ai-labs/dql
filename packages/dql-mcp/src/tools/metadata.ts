@@ -14,8 +14,9 @@
  * gracefully (a clear hint) when no dbt manifest is present.
  */
 
-import { readWarehouseCatalog, resolveDbtManifestPath, type WarehouseCatalogSnapshotV1 } from '@zlens/core';
+import { readWarehouseCatalog, resolveDbtManifestPath } from '@zlens/core';
 import {
+  artifactsFromWarehouseCatalog,
   buildSchemaGrounding,
   loadDbtArtifacts,
   relationKeys,
@@ -47,41 +48,6 @@ function loadArtifacts(ctx: DQLContext): DbtArtifacts | undefined {
   }
   const { snapshot } = readWarehouseCatalog(ctx.projectRoot);
   return snapshot && snapshot.relations.length > 0 ? artifactsFromWarehouseCatalog(snapshot) : undefined;
-}
-
-/**
- * Present a warehouse catalog snapshot in the shape the shared grounding reads.
- * A warehouse relation is queried by its own name, so its "ref form" is the
- * relation itself; there is no dbt lineage, so join keys come only from shared
- * key columns (still suggestions, never join authorization).
- */
-export function artifactsFromWarehouseCatalog(snapshot: WarehouseCatalogSnapshotV1): DbtArtifacts {
-  return {
-    projectName: undefined,
-    models: snapshot.relations.map((relation) => ({
-      uniqueId: relation.id,
-      name: relation.name,
-      resourceType: 'model' as const,
-      schema: relation.schema,
-      database: relation.database,
-      qualifiedRelation: relation.relation,
-      refForm: relation.relation,
-      description: relation.comment,
-      materialized: relation.kind,
-      tags: [],
-      dependsOn: [],
-      columns: relation.columns.map((column) => ({ name: column.name, type: column.type, description: column.comment })),
-      meta: relation.primaryKey?.length ? { primary_key: relation.primaryKey } : {},
-      config: {},
-    })),
-    sources: [],
-    exposures: [],
-    catalogColumns: new Map(),
-    runCounts: new Map(),
-    hasSemantic: false,
-    semanticMetrics: [],
-    semanticModels: new Map(),
-  };
 }
 
 const NO_MANIFEST_HINT =

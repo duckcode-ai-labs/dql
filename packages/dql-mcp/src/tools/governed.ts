@@ -293,7 +293,7 @@ export async function buildBlockFromPrompt(
       ok: false as const,
       modelUnavailable: true as const,
       error:
-        'ZLens has no AI model set up, so build_block_from_prompt could not build from your description: the workbench saved only a starter template' +
+        'ZLens could not build this block from your description (no AI model is set up in ZLens, or the model returned no usable SQL): the workbench saved only a starter template' +
         (draftBlockPath ? ` at ${draftBlockPath} (delete it or replace its SQL)` : '') +
         '. Write the SQL yourself (search_metadata / get_table_schema / validate_sql help), then save it with suggest_block. ' +
         'Or set up an AI provider in the workbench (Settings → AI provider).',

@@ -889,7 +889,9 @@ const CORE_TOOL_DEFINITIONS = [
       additionalProperties: false,
       required: ['prompt'],
       properties: {
-        prompt: { type: 'string', description: 'App outcome request.' },
+        prompt: { type: 'string', description: 'App outcome request, e.g. "beverage performance for the growth team".' },
+        name: { type: 'string', description: 'App name. Default: derived from the prompt. The App folder id is derived from it.' },
+        blocks: { type: 'array', items: { type: 'string' }, description: 'Certified block names to use as the tiles, exactly (from search_blocks). Default: the planner picks matching certified blocks.' },
         domain: { type: 'string', description: 'Optional business domain to prioritize.' },
         owner: { type: 'string', description: 'Owner identity to store on the generated app.' },
         aiLayout: { type: 'boolean', description: 'Store richer dynamic GenUI layout metadata.' },

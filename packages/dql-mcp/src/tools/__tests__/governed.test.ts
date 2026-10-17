@@ -187,7 +187,7 @@ describe('buildBlockFromPrompt (governed NL→block via runtime proxy)', () => {
     expect(out.ok).toBe(false);
     if (out.ok) return;
     expect((out as { modelUnavailable?: boolean }).modelUnavailable).toBe(true);
-    expect(out.error).toMatch(/no AI model/);
+    expect(out.error).toMatch(/could not build this block from your description/);
     expect(out.error).toMatch(/suggest_block/);
     expect(out.error).toContain('blocks/_drafts/revenue_by_store.dql');
   });

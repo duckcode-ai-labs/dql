@@ -66,7 +66,7 @@
         },
         "answer": {
           "any": [
-            "(no|not|isn.t|doesn.t|cannot|can.t|unable)[^.]{0,80}(NPS|net promoter|survey|data|metric)",
+            "(no|not|isn.t|doesn.t|cannot|can.t|couldn.t|could not|unable)[^.]{0,80}(NPS|net promoter|survey|data|metric)",
             "(NPS|net promoter)[^.]{0,120}(not|no) [^.]{0,40}(available|exist|found|tracked|modeled|in this project)"
           ]
         },
@@ -234,8 +234,10 @@
             "(apps/|draft)"
           ]
         },
-        "label": "draft"
-      }
+        "label": "draft",
+        "allowCertifiedSources": true
+      },
+      "note": "A draft App built from certified blocks may say its tile sources are Certified; it must say the App itself is a draft."
     },
     {
       "id": "d-notebooks",
@@ -398,7 +400,7 @@
         },
         "answer": {
           "any": [
-            "(no|not|isn.t|doesn.t|cannot|can.t|unable|lack)[^.]{0,120}(channel|marketing)",
+            "(no|not|isn.t|doesn.t|cannot|can.t|couldn.t|could not|unable|lack)[^.]{0,120}(channel|marketing)",
             "(channel|marketing)[^.]{0,120}(not|no) [^.]{0,40}(available|exist|found|tracked|modeled|column|field)"
           ]
         },

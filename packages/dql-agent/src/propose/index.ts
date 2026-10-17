@@ -41,7 +41,7 @@ export {
 export type { ProposeConfig, ProposeConfigInput } from './config.js';
 export { classifyModel, resolveDomain } from './classify.js';
 export type { Classification, ClassificationResult } from './classify.js';
-export { loadDbtArtifacts, buildQualifiedRelation } from './dbt-artifacts.js';
+export { loadDbtArtifacts, buildQualifiedRelation, artifactsFromWarehouseCatalog } from './dbt-artifacts.js';
 export type {
   DbtArtifacts,
   DbtModelNode,

@@ -18,7 +18,7 @@
  *     --sample duckdb=/path/jaffle-shop-duckdb@http://127.0.0.1:3640 \
  *     --sample warehouse=/path/jaffle-shop-warehouse@http://127.0.0.1:3641 \
  *     --out /path/results [--clients claude,codex] [--tasks id,id] [--concurrency 3]
- *     [--codex-approval approve] [--codex-bin <path>] [--claude-model <model>] [--timeout-min 10]
+ *     [--codex-approval approve] [--codex-sandbox workspace-write] [--codex-bin <path>] [--claude-model <model>] [--timeout-min 10]
  *   node run.mjs --regrade --out /path/results   # re-grade saved runs with the current tasks.json
  *
  * Writes <out>/<client>/<task>.jsonl (raw transcript), <out>/<client>/<task>.json
@@ -49,6 +49,7 @@ function parseArgs(argv) {
     else if (a === '--timeout-min') args.timeoutMin = Number(next());
     else if (a === '--codex-approval') args.codexApproval = next();
     else if (a === '--codex-bin') args.codexBin = next();
+    else if (a === '--codex-sandbox') args.codexSandbox = next();
     else if (a === '--claude-bin') args.claudeBin = next();
     else if (a === '--claude-model') args.claudeModel = next();
     else if (a === '--codex-model') args.codexModel = next();
@@ -175,7 +176,9 @@ async function runCodex(args, task, sample, connected, outDir) {
     ...connected.codexExtras.filter((kv) => !kv.startsWith('mcp_servers.dql.env')),
   ];
   if (args.codexApproval) overrides.push(`mcp_servers.dql.default_tools_approval_mode=${JSON.stringify(args.codexApproval)}`);
-  const codexArgs = ['exec', '--json', '--skip-git-repo-check', '--ignore-user-config', '--ephemeral', '-s', 'read-only', '-C', sample.path];
+  // workspace-write, as in a normal project session: with read-only Codex told
+  // the user it could not save drafts, although the ZLens server saves them.
+  const codexArgs = ['exec', '--json', '--skip-git-repo-check', '--ignore-user-config', '--ephemeral', '-s', args.codexSandbox ?? 'workspace-write', '-C', sample.path];
   for (const kv of overrides) codexArgs.push('-c', kv);
   if (args.codexModel) codexArgs.push('-m', args.codexModel);
   codexArgs.push(task.prompt);
@@ -229,7 +232,7 @@ function grade(task, outcome) {
   if (exp.label === 'certified') labelOk = /\bcertified\b/i.test(answer);
   if (exp.label === 'generated' || exp.label === 'draft') {
     labelOk = GENERATED_LABEL.test(answer);
-    certifiedClaim = CERTIFIED_CLAIM.test(answer);
+    certifiedClaim = CERTIFIED_CLAIM.test(answer) && !(exp.allowCertifiedSources && /\bdraft\b/i.test(answer) && !/\b(app|dashboard)\b[^.]{0,40}\b(is|are)\s+(now\s+)?certified/i.test(answer));
     if (certifiedClaim) { labelOk = false; notes.push('generated output presented as Certified'); }
   }
   if (exp.label === 'refusal') labelOk = !CERTIFIED_CLAIM.test(answer);

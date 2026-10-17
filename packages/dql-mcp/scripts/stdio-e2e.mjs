@@ -369,6 +369,8 @@ async function dbtLane(project, runtimeUrl) {
 
     await call(lane, mcp, 'build_dql_app', { prompt: 'beverage performance', saveDraft: false }, ok((b) => expectThat(b.ok === true && b.plan && b.generated === undefined, 'plan-only app draft')));
     await call(lane, mcp, 'build_dql_app', {}, fails('prompt'));
+    await call(lane, mcp, 'build_dql_app', { prompt: 'beverage performance', name: 'Beverage Performance', blocks: ['beverage_revenue_by_product', 'top_beverage_customers'] }, ok((b) => expectThat(b.ok && b.appId === 'beverage-performance' && b.certifiedTiles === 2 && b.lifecycle === 'draft' && existsSync(join(project, 'apps', 'beverage-performance')), `app ${b.appId} tiles ${b.certifiedTiles} lifecycle ${b.lifecycle}`)), { label: 'named, exact blocks, saved' });
+    await call(lane, mcp, 'build_dql_app', { prompt: 'x', blocks: ['no_such_block'] }, fails('Only certified blocks'));
     await call(lane, mcp, 'list_apps', {}, ok((b) => {
       const app = b.apps?.find((a) => a.name === 'Jaffle Growth Review');
       const tiles = app?.dashboards?.[0]?.tiles ?? [];
@@ -425,7 +427,7 @@ async function warehouseLane(project, runtimeUrl) {
     await call(lane, mcp, 'lineage_impact', { focus: 'order' }, ok((b) => expectThat(b.focalNode?.id === 'dql_entity:dev::entity::order', `focal ${b.focalNode?.id}`)));
     await call(lane, mcp, 'list_apps', {}, ok((b) => expectThat(b.total === 0 && /no Apps/i.test(b.note ?? ''), 'expected no Apps')));
     // No semantic metrics and no AI model: nothing can build from a description, and the tool says so.
-    await call(lane, mcp, 'build_block_from_prompt', { prompt: 'total revenue by product' }, noModelOrDraft('no AI model', 'suggest_block'), { label: 'no model' });
+    await call(lane, mcp, 'build_block_from_prompt', { prompt: 'total revenue by product' }, noModelOrDraft('could not build this block', 'suggest_block'), { label: 'no model' });
     await call(lane, mcp, 'answer_question', { question: 'Which store locations had the most revenue in 2025?' }, fails('no AI model', 'ask_dql'), { label: 'no model' });
   } finally {
     await mcp.close();

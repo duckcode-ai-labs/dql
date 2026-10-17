@@ -16,6 +16,7 @@
 
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import type { WarehouseCatalogSnapshotV1 } from '@zlens/core';
 
 export interface DbtColumn {
   name: string;
@@ -450,4 +451,40 @@ function collectionValues(value: unknown): unknown[] {
   if (Array.isArray(value)) return value;
   if (value && typeof value === 'object') return Object.values(value as Record<string, unknown>);
   return [];
+}
+
+/**
+ * Present a warehouse catalog snapshot (`zlens sync warehouse`, a project
+ * without dbt) in the shape the shared SQL grounding reads. A warehouse
+ * relation is queried by its own name, so its "ref form" is the relation
+ * itself; there is no dbt lineage, so join keys come only from shared key
+ * columns (suggestions, never join authorization).
+ */
+export function artifactsFromWarehouseCatalog(snapshot: WarehouseCatalogSnapshotV1): DbtArtifacts {
+  return {
+    projectName: undefined,
+    models: snapshot.relations.map((relation) => ({
+      uniqueId: relation.id,
+      name: relation.name,
+      resourceType: 'model' as const,
+      schema: relation.schema,
+      database: relation.database,
+      qualifiedRelation: relation.relation,
+      refForm: relation.relation,
+      description: relation.comment,
+      materialized: relation.kind,
+      tags: [],
+      dependsOn: [],
+      columns: relation.columns.map((column) => ({ name: column.name, type: column.type, description: column.comment })),
+      meta: relation.primaryKey?.length ? { primary_key: relation.primaryKey } : {},
+      config: {},
+    })),
+    sources: [],
+    exposures: [],
+    catalogColumns: new Map(),
+    runCounts: new Map(),
+    hasSemantic: false,
+    semanticMetrics: [],
+    semanticModels: new Map(),
+  };
 }
