@@ -15,7 +15,7 @@ Fixes ship in the latest `1.x` release. We do not back-port to older lines.
 
 **Do not open a public GitHub issue for security vulnerabilities.**
 
-Report security issues privately by emailing **security@duckcode.ai**. Include:
+Report security issues privately by emailing **security@zlens.app**. Include:
 
 1. A description of the vulnerability and its potential impact
 2. Steps to reproduce (minimal example preferred)
