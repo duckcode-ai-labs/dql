@@ -51,9 +51,9 @@ describe('inspect_metadata_context stays inside what a client accepts', () => {
     expect(compact.retrievalDiagnostics.selectedJoinPaths).toEqual(pack.retrievalDiagnostics.selectedJoinPaths);
     expect(compact.retrievalDiagnostics).not.toHaveProperty('meaningEvidence');
     expect(compact.retrievalDiagnostics.counts).toMatchObject({ meaningEvidence: 500 });
-    expect(compact.objects).toHaveLength(60);
-    expect(compact.objectsOmitted).toBe(40);
-    expect(compact.edgesOmitted).toBe(140);
+    expect(compact.objects).toHaveLength(30);
+    expect(compact.objectsOmitted).toBe(70);
+    expect(compact.edgesOmitted).toBe(180);
     expect(JSON.stringify(compact).length).toBeLessThan(JSON.stringify(pack).length / 5);
   });
 });

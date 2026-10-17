@@ -134,9 +134,10 @@ export async function inspectMetadataContext(
 }
 
 /** Objects returned with their full payload; the rest keep key, type, name and snippet. */
-const FULL_PAYLOAD_OBJECTS = 15;
-const MAX_OBJECTS = 60;
-const MAX_EDGES = 60;
+const FULL_PAYLOAD_OBJECTS = 3;
+const MAX_OBJECTS = 30;
+const MAX_EDGES = 20;
+const MAX_LIST = 25;
 
 /**
  * The full pack runs to hundreds of KB on a real project (the retrieval
@@ -160,6 +161,8 @@ export function compactContextPack<T extends object>(input: T): T {
       : { objectKey: object.objectKey, objectType: object.objectType, name: object.name, ...(object.status ? { status: object.status } : {}), ...(object.snippet ? { snippet: object.snippet } : {}) })),
     ...(objects.length > MAX_OBJECTS ? { objectsOmitted: objects.length - MAX_OBJECTS } : {}),
     edges: edges.slice(0, MAX_EDGES),
+    ...(Array.isArray(pack.evidenceRoles) ? { evidenceRoles: (pack.evidenceRoles as unknown[]).slice(0, MAX_LIST) } : {}),
+    ...(Array.isArray(pack.citations) ? { citations: (pack.citations as unknown[]).slice(0, MAX_LIST) } : {}),
     ...(edges.length > MAX_EDGES ? { edgesOmitted: edges.length - MAX_EDGES } : {}),
     retrievalDiagnostics: {
       ...(diagnostics.strategy !== undefined ? { strategy: diagnostics.strategy } : {}),

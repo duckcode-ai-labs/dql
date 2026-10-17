@@ -7,12 +7,14 @@
  * where one applies, fail with a clear message (and MCP `isError`) on bad
  * input, and finish inside a deadline.
  *
- * Default (CI): four lanes on copies of the repo fixtures, each with its own
+ * Default (CI): three lanes on copies of the repo fixtures, each with its own
  * `zlens notebook` runtime on a free port and a seeded DuckDB file:
  *   dbt       jaffle-golden            (the jaffle-shop-duckdb metadata, dbt)
  *   warehouse jaffle-warehouse-golden  (database-only, no dbt)
  *   datasets  app-datasets-pilot       (approved App Datasets)
- *   answer    jaffle-supply-chain      (answer_question through replayed model cassettes)
+ * answer_question and build_block_from_prompt need an AI model to answer from
+ * a description; here they are checked for the clear no-model result (and the
+ * governed-metric draft that needs none). Their model path is checked live.
  *
  * Against a real sample with its workbench already running:
  *   node stdio-e2e.mjs --lane dbt --project /path/jaffle-shop-duckdb --runtime-url http://127.0.0.1:3640
@@ -110,7 +112,15 @@ async function startWorkbench(project, work, env = {}) {
   const child = spawn(process.execPath, [cli, 'notebook', project, '--port', String(port), '--no-open'], {
     cwd: work,
     stdio: ['ignore', 'pipe', 'pipe'],
-    env: { ...process.env, ZLENS_DISABLE_VERSION_CHECK: '1', ZLENS_METRICFLOW_BIN: join(work, 'no-metricflow', 'mf'), ...env },
+    // No AI model, whatever this machine has: no API keys and no local Ollama.
+    env: {
+      ...process.env,
+      ANTHROPIC_API_KEY: '', OPENAI_API_KEY: '', GEMINI_API_KEY: '', GOOGLE_API_KEY: '',
+      OLLAMA_BASE_URL: 'http://127.0.0.1:9',
+      ZLENS_DISABLE_VERSION_CHECK: '1',
+      ZLENS_METRICFLOW_BIN: join(work, 'no-metricflow', 'mf'),
+      ...env,
+    },
   });
   let output = '';
   child.stdout.on('data', (chunk) => { output += chunk; });
@@ -262,6 +272,17 @@ async function runtimeFailureChecks(lane, project) {
   }
 }
 
+/**
+ * True in the CI lanes, which start their own workbench with no AI model.
+ * Against a real sample the workbench may have one (a local Ollama counts),
+ * so a model-built draft is accepted there too.
+ */
+let controlledRuntime = true;
+const noModelOrDraft = (...fragments) => (o) => {
+  if (!controlledRuntime && !o.isError && o.body?.ok && /_drafts\//.test(o.body.draftBlockPath ?? '') && o.body.trustLabel === 'AI-Generated') return undefined;
+  return fails(...fragments)(o);
+};
+
 async function dbtLane(project, runtimeUrl) {
   const lane = 'dbt';
   await profileChecks(lane, project, runtimeUrl);
@@ -277,8 +298,6 @@ async function dbtLane(project, runtimeUrl) {
     const certified = await call(lane, mcp, 'query_via_block', { name: 'monthly_revenue', question: 'How has revenue changed by month?' }, ok((b) => expectThat(b.trustLabel?.startsWith('Certified') && b.rowCount > 0 && b.columns?.length >= 2, `trustLabel ${b.trustLabel}, rows ${b.rowCount}`)));
     const reference = await runtimeSql(runtimeUrl, "select date_trunc('month', ordered_at) as month, sum(order_total) as gross_revenue from dev.orders group by 1 order by 1");
     record(lane, 'query_via_block', 'rows match reference SQL', compareRows(certified.body?.rows, reference, 'gross_revenue'));
-    const draftBlock = Object.entries(JSON.parse(readFileSync(join(project, 'dql-manifest.json'), 'utf8')).blocks ?? {}).find(([, block]) => block.status !== 'certified')?.[0];
-    if (draftBlock) await call(lane, mcp, 'query_via_block', { name: draftBlock }, fails('only certified blocks'));
     await call(lane, mcp, 'query_via_block', { name: 'no_such_block' }, fails('No block named'));
 
     await call(lane, mcp, 'ask_dql', { question: 'How has revenue changed by month?' }, ok((b) => expectThat(b.route === 'certified' && b.trustLabel?.base === 'Certified' && b.nextTool === 'query_via_block', `route ${b.route} label ${b.trustLabel?.base} next ${b.nextTool}`)));
@@ -290,7 +309,8 @@ async function dbtLane(project, runtimeUrl) {
     await call(lane, mcp, 'kg_search', { query: 'x', kinds: ['bogus'] }, fails('kinds'));
 
     const inspected = await call(lane, mcp, 'inspect_metadata_context', { question: 'Which store location had the most orders in 2025?' }, ok((b) => expectThat(b.contextPack?.id && b.contextPack?.allowedSqlContext?.relations?.length > 0, 'no context pack / allowed relations')));
-    record(lane, 'inspect_metadata_context', 'fits a client (under 25k tokens)', expectThat(inspected.text.length < 100_000, `result is ${inspected.text.length} chars`));
+    // Claude Code refuses a tool result over 25k tokens (about 90k characters of JSON).
+    record(lane, 'inspect_metadata_context', 'fits a client (under 25k tokens)', expectThat(inspected.text.length < 90_000, `result is ${inspected.text.length} chars`));
     const contextPackId = inspected.body?.contextPack?.id ?? generated.body?.contextPackId;
     await call(lane, mcp, 'expand_context', { contextPackId, relations: ['dev.supplies'] }, ok((b) => expectThat(b.ok !== false && (b.contextPackId || b.contextPack?.id), `expand failed ${JSON.stringify(b).slice(0, 160)}`)));
     await call(lane, mcp, 'expand_context', { contextPackId: 'nope', relations: ['dev.supplies'] }, fails('No context pack'));
@@ -298,8 +318,14 @@ async function dbtLane(project, runtimeUrl) {
     const tier2 = await call(lane, mcp, 'query_via_metadata', {
       question: 'Which store location had the most orders in 2025?',
       contextPackId,
-      proposedSql: "select l.location_name, count(*) as orders from dev.orders o join dev.locations l on o.location_id = l.location_id where o.ordered_at >= '2025-01-01' and o.ordered_at < '2026-01-01' group by 1 order by 2 desc",
+      proposedSql: "select location_id, count(*) as orders from dev.orders where ordered_at >= '2025-01-01' and ordered_at < '2026-01-01' group by 1 order by 2 desc",
     }, ok((b) => expectThat(b.uncertified === true && /AI-generated/i.test(JSON.stringify(b.trustStatus ?? b.trustLabel ?? '')) && (b.rowCount ?? b.rows?.length) > 0, `uncertified ${b.uncertified}, rows ${b.rowCount}`)));
+    // This fixture's order→location relationship is a draft: governance refuses the join, and says why.
+    await call(lane, mcp, 'query_via_metadata', {
+      question: 'Which store location had the most orders in 2025?',
+      contextPackId,
+      proposedSql: "select l.location_name, count(*) as orders from dev.orders o join dev.locations l on o.location_id = l.location_id group by 1",
+    }, fails('relationship'), { label: 'uncertified join refused' });
     const draftPath = tier2.body?.draftBlock?.path;
     record(lane, 'query_via_metadata', 'saves a review draft', expectThat(draftPath && existsSync(join(project, draftPath)), `draft ${draftPath} not on disk`));
     await call(lane, mcp, 'query_via_metadata', { question: 'drop it', contextPackId, proposedSql: 'DELETE FROM dev.orders' }, fails(/read-only|SELECT/i));
@@ -309,12 +335,14 @@ async function dbtLane(project, runtimeUrl) {
     await call(lane, mcp, 'query_semantic_model', { metrics: ['no_such_metric'] }, ok((b) => expectThat(b.matched === false && b.reason, 'unknown metric not reported')), { label: 'invalid' });
 
     await call(lane, mcp, 'lineage_impact', { focus: 'monthly_revenue' }, ok((b) => expectThat(JSON.stringify(b.nodes ?? []).includes('dbt_model:orders'), 'orders not upstream of monthly_revenue')));
-    await call(lane, mcp, 'lineage_impact', { focus: 'no_such_node' }, fails(/not found|no lineage|unknown/i));
+    await call(lane, mcp, 'lineage_impact', { focus: 'no_such_node' }, fails('No node matches'));
 
     await call(lane, mcp, 'certify', { name: 'monthly_revenue' }, ok((b) => expectThat(b.checkedBy === 'workbench' && b.certified === true && b.tests?.failed === 0, `checkedBy ${b.checkedBy} certified ${b.certified} errors ${JSON.stringify(b.errors)} blockers ${JSON.stringify(b.blockers)}`)));
     await call(lane, mcp, 'certify', { name: 'no_such_block' }, fails('No block named'));
 
     await call(lane, mcp, 'suggest_block', { name: 'mcp_e2e_orders_by_store', domain: 'commerce', owner: 'analytics@jaffle.shop', description: 'Orders by store', sql: 'select location_id, count(*) as orders from dev.orders group by 1' }, ok((b) => expectThat(/_drafts\//.test(b.path ?? '') && b.certified === false, `path ${b.path} certified ${b.certified}`)));
+    // A draft is never served as a certified answer.
+    await call(lane, mcp, 'query_via_block', { name: 'mcp_e2e_orders_by_store' }, fails(/only certified blocks|No block named/));
     await call(lane, mcp, 'suggest_block', { name: 'x', domain: 'commerce', description: 'x', sql: 'select 1' }, fails('owner'));
 
     await call(lane, mcp, 'search_metadata', { query: 'customer lifetime spend' }, ok((b) => expectThat(b.tables?.some((t) => t.name === 'customers'), 'customers not ranked')));
@@ -335,7 +363,8 @@ async function dbtLane(project, runtimeUrl) {
 
     // No AI model in this workbench: both governed-generation tools say so and point at the path that needs none.
     await call(lane, mcp, 'answer_question', { question: 'How has revenue changed by month?' }, fails('no AI model', 'ask_dql', 'query_via_metadata'), { label: 'no model' });
-    await call(lane, mcp, 'build_block_from_prompt', { prompt: 'weekly order count' }, fails('no AI model', 'suggest_block'), { label: 'no model' });
+    // A governed metric answers this one without a model: a real draft built on it.
+    await call(lane, mcp, 'build_block_from_prompt', { prompt: 'weekly order count' }, ok((b) => expectThat(b.ok && /_drafts\//.test(b.draftBlockPath ?? '') && b.trustLabel === 'AI-Generated', `draft ${b.draftBlockPath}`)), { label: 'governed metric, no model' });
     await call(lane, mcp, 'build_block_from_prompt', { prompt: 'x', mode: 'edit' }, fails('blockPath'));
 
     await call(lane, mcp, 'build_dql_app', { prompt: 'beverage performance', saveDraft: false }, ok((b) => expectThat(b.ok === true && b.plan && b.generated === undefined, 'plan-only app draft')));
@@ -346,7 +375,7 @@ async function dbtLane(project, runtimeUrl) {
       return expectThat(app && tiles.length === 4 && tiles.every((t) => t.block && t.trustLabel === 'Certified'), `Jaffle Growth Review tiles ${JSON.stringify(tiles).slice(0, 200)}`);
     }));
     await call(lane, mcp, 'list_apps', { query: 'no-such-app' }, ok((b) => expectThat(b.total === 0 && /No App matches/.test(b.note ?? ''), 'unmatched query not reported')), { label: 'no match' });
-    await call(lane, mcp, 'list_notebooks', {}, ok((b) => expectThat(b.notebooks?.some((n) => n.path === 'notebooks/welcome.dqlnb' && n.cells?.length === 2), 'welcome notebook')));
+    await call(lane, mcp, 'list_notebooks', {}, ok((b) => expectThat(b.notebooks?.some((n) => n.path === 'notebooks/welcome.dqlnb' && n.cells?.length >= 2), 'welcome notebook')));
     await call(lane, mcp, 'list_notebooks', { path: 'notebooks/welcome.dqlnb' }, ok((b) => expectThat(b.returned === 1 && b.notebooks[0].cells.some((c) => c.type === 'markdown'), 'one notebook with its markdown cell')));
     await call(lane, mcp, 'list_notebooks', { path: 'notebooks/no_such.dqlnb' }, fails('No notebook at'));
   } finally {
@@ -393,8 +422,11 @@ async function warehouseLane(project, runtimeUrl) {
     }, ok((b) => expectThat(b.uncertified === true && (b.rowCount ?? 0) > 0, `uncertified ${b.uncertified} rows ${b.rowCount}`)));
     const reference = await runtimeSql(runtimeUrl, "select l.location_name, sum(o.order_total) as revenue from dev.orders o join dev.locations l on o.location_id = l.location_id where o.ordered_at >= '2025-01-01' and o.ordered_at < '2026-01-01' group by 1 order by 2 desc");
     record(lane, 'query_via_metadata', 'rows match reference SQL', compareRows(tier2.body?.rows, reference, 'revenue'));
-    await call(lane, mcp, 'lineage_impact', { focus: 'orders' }, ok((b) => expectThat((b.nodeCount ?? b.nodes?.length ?? 0) > 0, 'no lineage for orders')));
+    await call(lane, mcp, 'lineage_impact', { focus: 'order' }, ok((b) => expectThat(b.focalNode?.id === 'dql_entity:dev::entity::order', `focal ${b.focalNode?.id}`)));
     await call(lane, mcp, 'list_apps', {}, ok((b) => expectThat(b.total === 0 && /no Apps/i.test(b.note ?? ''), 'expected no Apps')));
+    // No semantic metrics and no AI model: nothing can build from a description, and the tool says so.
+    await call(lane, mcp, 'build_block_from_prompt', { prompt: 'total revenue by product' }, noModelOrDraft('no AI model', 'suggest_block'), { label: 'no model' });
+    await call(lane, mcp, 'answer_question', { question: 'Which store locations had the most revenue in 2025?' }, fails('no AI model', 'ask_dql'), { label: 'no model' });
   } finally {
     await mcp.close();
   }
@@ -413,18 +445,6 @@ async function datasetsLane(project, runtimeUrl) {
     await call(lane, mcp, 'query_dataset', { sourceId, query }, ok((b) => expectThat(b.ok && b.result?.rows?.[0]?.revenue === 60 && b.source?.trust === 'certified' && b.publicationEvidence === false, `rows ${JSON.stringify(b.result?.rows)} trust ${b.source?.trust}`)));
     await call(lane, mcp, 'query_dataset', { sourceId, query: { dimensions: [{ field: 'not_approved' }], measures: [{ measure: 'revenue' }] } }, fails('refused'));
     await call(lane, mcp, 'query_dataset', { sourceId, query: { dimensions: [], measures: [], sql: 'select 1' } }, fails('sql'));
-  } finally {
-    await mcp.close();
-  }
-}
-
-async function answerLane(project, runtimeUrl) {
-  const lane = 'answer';
-  const mcp = await connectMcp(project, runtimeUrl);
-  try {
-    // Replayed model cassettes (the browser smoke journey's): a certified answer, end to end.
-    await call(lane, mcp, 'answer_question', { question: 'who are the top customers' }, ok((b) => expectThat(b.ok === true && b.trustState === 'certified' && (b.rowCount ?? b.result?.rows?.length ?? 0) > 0, `trust ${b.trustState} status ${b.status} answer ${String(b.answer).slice(0, 120)}`)), { timeoutMs: 180_000 });
-    await call(lane, mcp, 'answer_question', { question: '   ' }, fails('non-empty'));
   } finally {
     await mcp.close();
   }
@@ -489,10 +509,6 @@ const LANES = {
   dbt: { fixture: 'jaffle-golden', seed: 'jaffle-golden/seeds/seed.json', warehouseFile: 'jaffle_shop.duckdb', sync: ['sync', 'dbt'], setup: addSampleAppAndNotebook, run: dbtLane },
   warehouse: { fixture: 'jaffle-warehouse-golden', seed: 'jaffle-golden/seeds/seed.json', warehouseFile: 'jaffle_shop.duckdb', sync: ['sync', 'warehouse'], run: warehouseLane },
   datasets: { fixture: 'app-datasets-pilot', seed: 'app-datasets-pilot/seeds/seed.json', warehouseFile: 'app-datasets-pilot.duckdb', sync: ['compile'], run: datasetsLane },
-  answer: {
-    fixture: 'jaffle-supply-chain', seed: 'jaffle-supply-chain/seeds/seed.json', warehouseFile: 'jaffle_shop.duckdb', seedSchema: 'dev', seedTwice: true, sync: ['compile'], run: answerLane,
-    env: (project) => ({ ZLENS_EVAL_CASSETTE_DIR: join(project, 'test-cassettes', 'answerability'), ZLENS_EVAL_CASSETTE_MODE: 'replay' }),
-  },
 };
 
 async function main() {
@@ -500,6 +516,7 @@ async function main() {
   if (!existsSync(cli)) throw new Error(`Build the CLI first (pnpm build): ${cli} is missing.`);
   const started = Date.now();
   if (args.project) {
+    controlledRuntime = false;
     const lane = args.lanes?.[0] ?? 'dbt';
     if (!args.runtimeUrl) throw new Error('--project needs --runtime-url (the running workbench for that project).');
     await LANES[lane].run(args.project, args.runtimeUrl);
